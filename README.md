@@ -1,10 +1,139 @@
 ---
 title: Microduck Arena
-emoji: 💻
-colorFrom: indigo
-colorTo: indigo
+emoji: 🦆
+colorFrom: gray
+colorTo: yellow
 sdk: docker
+app_port: 7860
 pinned: false
+short_description: Race Microduck policies on a clock you can trust
 ---
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+# microduck-arena
+
+Race a Microduck policy against every other policy, on a clock you can trust.
+
+Submitted policies are evaluated **server-side** on a fixed course over five
+perturbed seeds, at every commanded speed in the event's declared sweep, and the
+best result is recorded. A time reported by a browser is a number in devtools;
+this one is reproducible, and you can download any published policy and check it
+yourself.
+
+It runs two ways, and both are first-class:
+
+- **Locally**, with no Hugging Face account, no OAuth and no network. The run log
+  is a directory on your disk.
+- **As a private Space** (this repo is one). Same code path, same numbers.
+
+## Deploying to the Space
+
+`git push` does not work here: the Hub rejects binary files pushed through plain
+git and asks for Xet instead, and this repo vendors a GLB, forty-odd STLs and an
+ONNX policy. So deploys go through the Hub API, which speaks Xet natively:
+
+```bash
+uv run python scripts/deploy_space.py            # publishes the working tree
+uv run python scripts/deploy_space.py --dry-run  # shows what would go
+```
+
+The Space rebuilds itself on each upload. Its own Docker build re-measures the
+golden run and fails if the physics does not reproduce, so a broken build is
+better than a silently wrong leaderboard.
+
+## Running as a Space
+
+The container filesystem is ephemeral, so a Space needs somewhere durable to
+keep the run log. Set two things in **Settings → Variables and secrets**:
+
+| name | kind | value |
+| --- | --- | --- |
+| `ARENA_DATASET` | variable | the dataset repo that holds the log, e.g. `pollen-robotics/microduck-arena-runs` |
+| `HF_TOKEN` | **secret** | a token with write access to that dataset |
+
+Without both, the Space still boots and the board still works — but every
+published run and uploaded policy is lost the next time it restarts or wakes
+from sleep. `GET /api/health` reports `"durable": true` once it is configured,
+and the startup log says `EPHEMERAL` in capitals when it is not.
+
+Two things this deployment does NOT have yet:
+
+- **No OAuth.** Everyone who publishes is recorded as `guest`, so the board
+  ranks by policy name rather than by person. Real usernames need the HF OAuth
+  flow, which is a separate piece of work.
+- **Submissions are synchronous and CPU-bound.** One entry is 33 simulated runs
+  — about 3 s on a developer laptop, and proportionally longer on a shared
+  2-vCPU Space. It works; it is not instant, and there is no queue.
+
+## Run it
+
+```bash
+uv sync
+cd app && npm install && npm run build && cd ..
+uv run arena serve --store ~/arena-board --user $USER
+```
+
+Open <http://127.0.0.1:8000>.
+
+## From the command line
+
+```bash
+uv run arena events
+
+# The repo vendors one reference policy, so this works with no setup:
+REF=arena/assets/policies/BEST_alpha_walking.onnx
+uv run arena score $REF --event sprint-2m
+uv run arena score $REF --event sprint-2m --user me --name reference --store ~/arena-board
+uv run arena board --event sprint-2m --store ~/arena-board
+```
+
+## What a policy has to be
+
+One ONNX file with a **61-D observation input** and a **14-D action output** — the
+same contract `robotd` enforces on the real robot, so a policy the Arena accepts
+will load there too. A wrong shape is rejected with the reason:
+
+```
+observation width is 51, expected 61
+```
+
+## The events
+
+| Event | Rig | Course | Command |
+| --- | --- | --- | --- |
+| `sprint-2m` | legs | 2 m flat | 0.25 m/s forward |
+| `roller-sprint-2m` | rollers | 2 m flat | 0.6 m/s forward |
+| `hill-climb-1m5` | legs | 1.5 m at 8° | 0.25 m/s forward |
+
+Locally the board shows **one row per policy**, so your own `v1` and `v2` race each other;
+resubmitting the same name only improves that row. A deployed multi-user Space sets
+`ARENA_RANK_BY=user` to show one row per person instead, and `arena board --rank-by user`
+does the same from the command line.
+
+An entry is scored as the **mean finish time over five perturbed starts**, with
+any failure to finish counted at the event's time limit — so a policy that is
+quick four times and falls once ranks below a steady one. The replay you watch is
+the median finishing run, not the best.
+
+Two things about the shipped reference policy are worth knowing before reading
+too much into a time: it tracks about 44% of its commanded velocity, and below
+roughly 0.2 m/s commanded it does not walk at all. Both are measured; see the
+design doc's calibration table.
+
+## Developing
+
+```bash
+uv run --extra dev pytest        # engine + API
+cd app && npm test               # frontend units
+cd app && npm run dev            # UI on :5173, proxying /api to :8000
+```
+
+`app/src/rig.js` and the vendored `app/public/robot/` assets come from
+[the Microduck sandbox Space](https://huggingface.co/spaces/pollen-robotics/microduck-simulator)
+at a pinned commit — see `arena/assets/PROVENANCE.md`. Re-vendoring can change
+what a policy scores, so `RUNNER_VERSION` in `arena/constants.py` must be bumped
+in the same commit.
+
+## Design
+
+- `docs/superpowers/specs/2026-09-03-microduck-arena-design.md` — the design and every decision behind it
+- `docs/probe-results.md` — measured cost of an evaluation

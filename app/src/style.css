@@ -1,0 +1,480 @@
+/* Microduck Arena — a trackside timing board.
+ *
+ * Palette and text levels are the simulator Space's own tokens (INK, ORANGE and
+ * its two white alphas), so the two read as the same family. The one loud
+ * element is the finishing time; everything else is hairlines and quiet.
+ *
+ * No web fonts: the display face is whatever condensed heavy is present, which
+ * keeps the page working with no network. */
+
+:root {
+  color-scheme: dark;
+  --ink: #08080c;
+  --paper: #101015;
+  --rule: #23232b;
+  --orange: #ff7a2f;
+  --chalk: rgba(255, 255, 255, 0.85);
+  --dim: rgba(255, 255, 255, 0.45);
+  --dnf: #ff522f;
+
+  --display: "Anton", "Oswald", "Liberation Sans Narrow", "Ubuntu Condensed",
+    "Arial Narrow", Impact, sans-serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--chalk);
+  font: 15px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app { max-width: 1080px; margin: 0 auto; padding: 28px 20px 72px; }
+
+/* ── the wordmark ─────────────────────────────────────────────────────── */
+
+/* The simulator's own title device: two stacked lines, the second hollow and
+   smaller, with a mistracked-VHS offset behind the solid one. */
+.wordmark {
+  margin: 0;
+  font: 400 clamp(2.6rem, 9vw, 5rem) / 0.82 var(--display);
+  text-transform: uppercase;
+  letter-spacing: 0.005em;
+}
+.wordmark span { display: block; }
+.wordmark__solid {
+  color: var(--orange);
+  text-shadow:
+    0.035em 0.035em 0 var(--ink),
+    -0.012em 0 0 rgba(80, 200, 255, 0.5),
+    0.012em 0 0 rgba(255, 60, 120, 0.45);
+}
+.wordmark__hollow {
+  font-size: 0.6em;
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--orange);
+  letter-spacing: 0.02em;
+}
+.wordmark--compact { font-size: clamp(1.05rem, 2.6vw, 1.4rem); line-height: 0.86; }
+.wordmark--compact .wordmark__hollow { -webkit-text-stroke-width: 1px; }
+
+/* ── the programme ────────────────────────────────────────────────────── */
+
+.hero { padding: 26px 0 34px; }
+.hero__blurb {
+  color: var(--dim);
+  max-width: 52ch;
+  margin: 18px 0 0;
+  font-size: 1rem;
+}
+
+.programme { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+
+.fixture {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1.1fr) minmax(8rem, 1.4fr) auto;
+  gap: 18px;
+  align-items: baseline;
+  padding: 20px 4px;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+  color: inherit;
+}
+.fixture:hover { background: var(--paper); }
+.fixture:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
+.fixture__name { font-size: 1.15rem; }
+.fixture__spec { color: var(--dim); font-size: 0.9rem; }
+.fixture__standing { text-align: right; display: flex; gap: 12px; align-items: baseline; justify-content: flex-end; }
+.fixture__time {
+  font: 400 1.55rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+  color: var(--chalk);
+}
+.fixture__who { color: var(--dim); font-size: 0.85rem; }
+.fixture__standing--open { color: var(--dim); font-size: 0.9rem; }
+
+/* ── race page chrome ─────────────────────────────────────────────────── */
+
+.racehead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 0 18px;
+}
+.back { color: var(--dim); text-decoration: none; font-size: 0.9rem; }
+.back:hover { color: var(--orange); }
+.back::before { content: "\2039\00a0"; }
+
+.racetitle { font: 500 1.45rem/1.2 var(--sans); margin: 0 0 4px; }
+
+.facts { display: flex; gap: 26px; flex-wrap: wrap; margin: 14px 0 18px; }
+.facts div { display: flex; flex-direction: column; gap: 1px; }
+.facts dt { color: var(--dim); font-size: 0.72rem; }
+.facts dd { margin: 0; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+
+.racegrid { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 18px; align-items: start; }
+@media (max-width: 760px) { .racegrid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── the entry column ─────────────────────────────────────────────────── */
+
+.entry {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.drop {
+  border: 1px dashed #3a3a46;
+  border-radius: 6px;
+  padding: 22px 14px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--paper);
+}
+.drop:hover, .drop:focus-visible { border-color: var(--orange); outline: none; }
+.drop--over { border-color: var(--orange); background: rgba(255, 122, 47, 0.07); }
+.drop__line { margin: 0 0 4px; font-size: 0.92rem; overflow-wrap: anywhere; }
+.drop__or { margin: 0; color: var(--dim); font-size: 0.85rem; }
+.drop code { color: var(--dim); }
+
+button.link {
+  font: inherit;
+  color: var(--orange);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.entry__name { display: flex; flex-direction: column; gap: 5px; color: var(--dim); font-size: 0.82rem; }
+.entry__name input {
+  font: inherit;
+  font-size: 0.92rem;
+  padding: 7px 9px;
+  color: var(--chalk);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.entry__actions { display: flex; gap: 8px; }
+.entry__actions button {
+  flex: 1;
+  font: 600 0.9rem/1 var(--sans);
+  padding: 9px 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 0;
+  background: var(--orange);
+  color: var(--ink);
+}
+.entry__actions button.ghost {
+  background: transparent;
+  color: var(--chalk);
+  border: 1px solid var(--rule);
+  font-weight: 500;
+}
+.entry__actions button.ghost:hover { border-color: var(--orange); }
+.entry__actions button:disabled { opacity: 0.5; cursor: progress; }
+.entry__status { margin: 0; color: var(--dim); font-size: 0.85rem; min-height: 1.2em; }
+.entry__status.bad { color: var(--dnf); }
+
+.failed { color: var(--dnf); padding: 30px 0; }
+
+/* ── stage ────────────────────────────────────────────────────────────── */
+
+.stage {
+  position: relative;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--paper);
+}
+.stage canvas { display: block; width: 100%; height: 44vh; min-height: 260px; }
+
+.controls { display: flex; gap: 8px; align-items: center; margin: 12px 0 26px; }
+.controls button {
+  font: 500 0.85rem/1 var(--sans);
+  padding: 7px 13px;
+  cursor: pointer;
+  color: var(--chalk);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+.controls button:hover { border-color: #33333d; }
+.controls .hint { color: var(--dim); font-size: 0.88rem; }
+
+/* ── the board ────────────────────────────────────────────────────────── */
+
+table.board { width: 100%; border-collapse: collapse; margin-top: 22px; }
+
+table.board th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 0.72rem;
+  color: var(--dim);
+  padding: 0 10px 7px;
+  border-bottom: 1px solid var(--rule);
+}
+table.board td { padding: 11px 10px; border-bottom: 1px solid var(--rule); }
+
+/* the lane tab: a filled bar for a duck on the stage, hollow otherwise */
+table.board .tab { width: 34px; padding-left: 0; padding-right: 4px; }
+table.board td.tab {
+  border-left: 3px solid transparent;
+  border-left-color: var(--lane, transparent);
+}
+table.board td.tab input { accent-color: var(--lane, var(--dim)); cursor: pointer; }
+
+table.board .rank { width: 3.5rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+table.board .seeds { width: 5rem; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+/* The speed the sweep found for this policy. Deliberately quiet next to the
+   time: it explains the time, it is not competing with it. */
+table.board .speed {
+  width: 4.5rem;
+  text-align: right;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+table.board tr.dnf .speed { color: var(--dim); }
+
+/* the one loud thing on the page */
+table.board .time {
+  width: 8.5rem;
+  text-align: right;
+  font: 400 1.7rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+table.board tbody tr:first-child .time { color: var(--orange); }
+table.board tr.dnf .time { font-size: 1.05rem; color: var(--dnf); }
+table.board tr.dnf { color: var(--dim); }
+
+table.board tr.provisional td.tab { border-left-style: dashed; }
+table.board tr.provisional .time { color: var(--chalk); }
+.unpublished {
+  display: block;
+  color: var(--dim);
+  font-size: 0.72rem;
+  margin-top: 1px;
+}
+
+.empty { color: var(--dim); margin-top: 22px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* ══ 90s pass ═══════════════════════════════════════════════════════════
+ *
+ * The page is an arcade attract screen and its high-score table. Devices are
+ * borrowed from the two sources rather than from retro-in-general: the dot
+ * grid, scanlines and vignette are the simulator's own CSS recipe, the
+ * star-separated marquee is the Pollen microduck page's, and the second accent
+ * is the cyan already sitting in the simulator's VHS chroma ghost.
+ *
+ * Deliberately NOT borrowed: the simulator's BIOS boot sequence. It is its most
+ * characteristic device and the most tempting, but a boot screen in front of a
+ * tool you open fifty times a day is friction.
+ */
+
+:root { --cyan: #50c8ff; }
+
+body {
+  /* The simulator's dot grid, at its exact values. */
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1.5px);
+  background-size: 21px 21px;
+}
+
+/* ── the marquee ──────────────────────────────────────────────────────── */
+
+.marquee {
+  overflow: hidden;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin: 26px 0 0;
+  padding: 7px 0;
+  background: var(--paper);
+}
+.marquee__track {
+  display: inline-flex;
+  gap: 0;
+  white-space: nowrap;
+  animation: marquee 34s linear infinite;
+}
+.marquee__run {
+  font: 400 0.92rem/1 var(--display);
+  letter-spacing: 0.03em;
+  color: var(--dim);
+  padding-right: 0;
+}
+.marquee__run b { color: var(--chalk); font-weight: 400; }
+.marquee__star { color: var(--cyan); padding: 0 0.85em; }
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee__track { animation: none; }
+}
+
+/* ── the stage is a screen ────────────────────────────────────────────── */
+
+.stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* the canvas still gets the drag for orbiting */
+  /* Lighter than the first pass on both counts. The scanlines were laying a
+     dark screen door over the whole scene and the vignette was closing in from
+     55%, and together they cost more light than the CRT reading was worth. */
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.09) 0 1px,
+      transparent 1px 3px
+    ),
+    radial-gradient(130% 100% at 50% 50%, transparent 72%, rgba(0, 0, 0, 0.26) 100%);
+}
+
+/* ── high-score table ─────────────────────────────────────────────────── */
+
+table.board .rank {
+  font: 400 1.1rem/1 var(--display);
+  color: var(--dim);
+}
+table.board tbody tr:first-child .rank { color: var(--orange); }
+.unpublished { color: var(--cyan); }
+table.board tr.provisional td.tab { border-left-color: var(--cyan); }
+
+/* ── an empty race invites an entry ───────────────────────────────────── */
+
+.fixture__standing--open { display: flex; align-items: center; gap: 8px; }
+.fixture__standing--open img { width: 22px; height: 22px; opacity: 0.9; }
+
+/* ── which duck is which ──────────────────────────────────────────────── */
+
+/* The stage rings each duck in its tier's colour; this is the key to that,
+   and the table's rows carry the same three colours on their tab. */
+.key {
+  list-style: none;
+  display: flex;
+  gap: 18px;
+  margin: 0 0 24px;
+  padding: 0;
+  color: var(--dim);
+  font-size: 0.82rem;
+}
+.key li { display: flex; align-items: center; gap: 6px; }
+.key li::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+}
+.key--trial { color: var(--cyan); }
+.key--leader { color: var(--orange); }
+.key--ghost { color: #54545e; }
+
+table.board tr.tier-leader td.tab { border-left-color: var(--orange); }
+table.board tr.tier-leader .policy-name { color: var(--chalk); }
+table.board tr.tier-ghost { color: var(--dim); }
+table.board tr.tier-ghost .time { color: var(--dim); }
+
+/* ── the colour picker ────────────────────────────────────────────────── */
+
+.livery { border: 0; margin: 0; padding: 0; }
+.livery legend { color: var(--dim); font-size: 0.82rem; padding: 0 0 5px; }
+.livery__swatches { display: flex; gap: 8px; }
+
+.swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  border: 2px solid var(--rule);
+  background: var(--swatch);
+}
+.swatch:hover { border-color: var(--dim); }
+.swatch[aria-pressed="true"] {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 2px var(--ink), 0 0 0 3px var(--orange);
+}
+.swatch:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* ── stage brightness ─────────────────────────────────────────────────── */
+
+/* A control, not a constant: the right exposure depends on the screen, and
+   guessing it from outside the browser cost three passes. */
+.bright {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+.bright input[type="range"] { width: 96px; accent-color: var(--orange); }
+
+/* Trial speed picker. Sits with the entry controls, and says plainly that it
+   does not affect a publish — otherwise it reads as a way to game the board. */
+.entry__speed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font: 500 0.72rem/1 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.entry__speed select {
+  padding: 9px 10px;
+  background: var(--ink);
+  border: 1px solid var(--rule);
+  color: var(--chalk);
+  font: 400 0.9rem/1.2 var(--display);
+  letter-spacing: 0.02em;
+}
+.entry__speed select:focus-visible { outline: 2px solid var(--orange); outline-offset: 1px; }
+.entry__hint {
+  font: 400 0.68rem/1.3 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--dim);
+}
+
+/* Download column. Quiet by default and orange on hover: it is an offer, not
+   the point of the row. */
+table.board .grab { width: 4.5rem; text-align: right; }
+table.board .grab a {
+  color: var(--dim);
+  text-decoration: none;
+  font: 400 0.78rem/1 var(--display);
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid transparent;
+}
+table.board .grab a:hover,
+table.board .grab a:focus-visible { color: var(--orange); border-bottom-color: var(--orange); }
+
+/* What Publish costs you, said next to the button rather than buried. */
+.entry__consent {
+  margin: 2px 0 0;
+  font: 400 0.7rem/1.45 var(--display);
+  letter-spacing: 0.03em;
+  color: var(--dim);
+}
+.entry__consent code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95em;
+  color: var(--chalk);
+}

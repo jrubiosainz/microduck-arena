@@ -1,0 +1,155 @@
+"""The engine without a web layer.
+
+Everything the Space will do — validate, run, score, record, rank — is reachable
+from here, which is what makes the platform plan a thin shell over tested code
+rather than a place where behaviour is invented.
+"""
+
+import argparse
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+from . import trace as trace_codec
+from .evaluate import evaluate
+from .index import ENTRANTS, leaderboard
+from .manifest import ManifestError, all_events, load_event
+from .policy import PolicyError, load_policy
+from .store import LocalStore, RunRecord, new_run_id
+
+
+def _cmd_events(args) -> int:
+    for manifest in all_events():
+        print(f"{manifest.id:<20} {manifest.title:<16} rig={manifest.rig} "
+              f"seeds={len(manifest.seeds)} limit={manifest.time_limit_s}s")
+    return 0
+
+
+def _cmd_score(args) -> int:
+    manifest = load_event(args.event)
+    policy = load_policy(Path(args.onnx))
+    result = evaluate(manifest, policy)
+
+    print(f"sweep {len(result.scan)} commanded speeds "
+          f"{result.scan[0].command_vx:.2f}–{result.scan[-1].command_vx:.2f} m/s")
+    for point in result.scan:
+        timing = f"{point.time_s:.2f}s" if point.time_s is not None else \
+                 f"{point.status} at {point.progress_m:.2f}m"
+        print(f"  {point.command_vx:>5.2f} m/s  {timing}")
+    print(f"\nscored at {result.command_vx:.2f} m/s")
+
+    for seed_result in result.per_seed:
+        timing = f"{seed_result.time_s:.2f}s" if seed_result.time_s is not None else "—"
+        print(f"seed {seed_result.seed}: {seed_result.status:<8} {timing}")
+    print(f"\nscore {result.score:.3f}s · {result.seeds_finished}/"
+          f"{len(result.per_seed)} finished · replay from seed {result.trace_seed}")
+
+    if args.store:
+        record = RunRecord(
+            run_id=new_run_id(),
+            event_id=manifest.id,
+            submitted_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            user=args.user,
+            policy_name=args.name or Path(args.onnx).stem,
+            source={"kind": "local", "path": str(Path(args.onnx).resolve())},
+            model_sha256=policy.sha256,
+            score=result.score,
+            command_vx=result.command_vx,
+            model_stored=True,
+            seeds_finished=result.seeds_finished,
+            per_seed=result.per_seed,
+            trace_seed=result.trace_seed,
+            runner_version=result.runner_version,
+            livery=args.livery,
+        )
+        LocalStore(Path(args.store)).append(
+            record, trace_codec.encode(result.trace), Path(args.onnx).read_bytes()
+        )
+        print(f"recorded {record.run_id}")
+    return 0
+
+
+def _cmd_board(args) -> int:
+    manifest = load_event(args.event)
+    rows = leaderboard(
+        LocalStore(Path(args.store)).runs(manifest.id), entrant=ENTRANTS[args.rank_by]
+    )
+    if not rows:
+        print(f"no runs recorded for {manifest.id}")
+        return 0
+
+    print(f"{manifest.title}\n")
+    print(f"{'#':<4}{'who':<16}{'policy':<20}{'time':>10}{'seeds':>8}{'cmd':>10}")
+    for row in rows:
+        r = row.record
+        print(f"{row.rank:<4}{r.user:<16}{r.policy_name:<20}"
+              f"{r.score:>9.3f}s{r.seeds_finished:>5}/{len(r.per_seed)}"
+              f"{r.command_vx:>8.2f}m/s")
+    return 0
+
+
+def _cmd_serve(args) -> int:
+    import uvicorn
+
+    from .web.app import create_app
+    from .web.config import ArenaConfig
+
+    config = ArenaConfig.from_env(store_dir=args.store, dev_user=args.user)
+    config.ensure_store()
+    print(f"store  {config.store_description()}")
+    print(f"user   {config.dev_user}")
+    if config.frontend_dir is None:
+        print("frontend  NOT BUILT — run: cd app && npm install && npm run build")
+    else:
+        print(f"frontend  {config.frontend_dir}")
+    print(f"\n  http://{args.host}:{args.port}\n")
+    uvicorn.run(create_app(config), host=args.host, port=args.port, log_level="warning")
+    return 0
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(prog="arena", description=__doc__)
+    subs = parser.add_subparsers(dest="command", required=True)
+
+    subs.add_parser("events", help="list the events").set_defaults(func=_cmd_events)
+
+    score = subs.add_parser("score", help="score a policy on an event")
+    score.add_argument("onnx")
+    score.add_argument("--event", required=True)
+    score.add_argument("--user", default="local")
+    score.add_argument("--name", default=None)
+    score.add_argument("--store", default=None, help="record the run into this directory")
+    score.add_argument(
+        "--livery", default="classic", help="which colourway to race in"
+    )
+    score.set_defaults(func=_cmd_score)
+
+    board = subs.add_parser("board", help="print a leaderboard")
+    board.add_argument("--event", required=True)
+    board.add_argument("--store", required=True)
+    board.add_argument(
+        "--rank-by",
+        choices=sorted(ENTRANTS),
+        default="policy",
+        dest="rank_by",
+        help="one row per 'policy' (local default) or per 'user' (public boards)",
+    )
+    board.set_defaults(func=_cmd_board)
+
+    serve = subs.add_parser("serve", help="run the Arena locally in a browser")
+    serve.add_argument("--store", default=None, help="run log directory")
+    serve.add_argument("--user", default=None, help="name to attribute submissions to")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
+    serve.set_defaults(func=_cmd_serve)
+
+    args = parser.parse_args(argv)
+    try:
+        return args.func(args)
+    except (ManifestError, PolicyError) as exc:
+        print(f"{exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

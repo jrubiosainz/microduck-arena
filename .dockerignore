@@ -1,0 +1,11 @@
+# The image builds the frontend itself; a host build would be copied over it and
+# node_modules is 200 MB of layer for nothing.
+app/node_modules
+app/dist
+.venv
+.git
+__pycache__
+**/__pycache__
+*.pyc
+docs
+tests

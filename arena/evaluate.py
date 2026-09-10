@@ -1,0 +1,226 @@
+"""Score an entry: find the speed it is best at, then prove it over every seed.
+
+Two things are being measured and they pull apart. A single pinned command
+measures how faithfully a policy tracks THAT speed — the reference walker
+scores 18.46 s commanded at 0.25 m/s and 11.70 s at 0.40, and falls over past
+0.45. Which is faster is not a question a pinned command can answer, and "which
+is faster" is the entire point of a race.
+
+So the event declares a wide sweep and the harness runs it, in two stages:
+
+1. **Scan** every commanded speed on one seed. Cheap and broad — it locates the
+   policy's own optimum without anyone having to declare it, and it is wide
+   enough to hold a policy substantially faster than today's reference.
+2. **Score** the best few of those speeds over every seed, and keep the best
+   mean. One seed can flatter a speed that is actually flaky, so no speed
+   reaches the board on the strength of a single lucky run.
+
+A DNF still counts at the full time limit, which makes flakiness cost
+proportionally instead of hiding behind a best-of: a policy that is brilliant
+four times and falls once ranks below a steady one.
+"""
+
+import statistics
+from dataclasses import dataclass
+
+import numpy as np
+
+from .constants import RUNNER_VERSION
+from .course import compile_course
+from .manifest import Manifest
+from .runner import run_once
+
+
+@dataclass(frozen=True)
+class SeedResult:
+    seed: int
+    status: str
+    time_s: float | None
+
+
+@dataclass(frozen=True)
+class ScanPoint:
+    """One commanded speed, tried once. The stage-1 record."""
+
+    command_vx: float
+    status: str
+    time_s: float | None
+    progress_m: float
+
+
+@dataclass(frozen=True)
+class Evaluation:
+    event_id: str
+    score: float
+    # The speed the score was set at. Part of the result, not a detail: two
+    # entries with the same time did not necessarily do the same thing.
+    command_vx: float
+    seeds_finished: int
+    per_seed: tuple[SeedResult, ...]
+    scan: tuple[ScanPoint, ...]
+    trace: np.ndarray
+    trace_seed: int
+    runner_version: int
+
+
+def mean_finish_time(per_seed: tuple[SeedResult, ...], time_limit_s: float) -> float:
+    return statistics.fmean(
+        r.time_s if r.time_s is not None else time_limit_s for r in per_seed
+    )
+
+
+METRICS = {"mean_finish_time": mean_finish_time}
+
+
+def pick_trace_seed(per_seed: tuple[SeedResult, ...]) -> int:
+    """The lower-median finishing seed.
+
+    Median rather than best, so a replay lane shows typical behaviour and every
+    entry's replay is chosen the same way. With no finishers at all we keep the
+    first seed's trace: a failed entry should still be watchable.
+    """
+    finishers = sorted(
+        (r for r in per_seed if r.time_s is not None), key=lambda r: (r.time_s, r.seed)
+    )
+    if not finishers:
+        return per_seed[0].seed
+    return finishers[(len(finishers) - 1) // 2].seed
+
+
+def finalists(scan: tuple[ScanPoint, ...], count: int) -> list[float]:
+    """The speeds worth paying a full seed set for.
+
+    Fastest scan finishers first. Then — and this is not a nicety — the seed set
+    is topped up with the speeds that got FURTHEST without finishing.
+
+    The scan is one seed, so it is one coin toss per speed. Measured on the hill
+    climb, the reference walker finished exactly one of eighteen scanned speeds,
+    and that one turned out to be a fluke it could not repeat (1/5 seeds). A
+    shortlist of finishers alone would have scored the entry on that fluke and
+    never tried the speeds that got nearly as far and might well finish four
+    seeds out of five. Topping up costs nothing extra: the finalist budget is
+    already paid for, and leaving those slots empty buys no speed at all.
+
+    With nothing finishing anywhere the top-up is the whole shortlist, which is
+    also what decides the replay — a failed entry should still show its best
+    attempt.
+    """
+    finishers = sorted(
+        (p for p in scan if p.time_s is not None), key=lambda p: (p.time_s, p.command_vx)
+    )
+    shortlist = [p.command_vx for p in finishers[:count]]
+
+    # Ties on progress go to the LOWER command, matching how a tie on score is
+    # broken in evaluate(): same result for less asking is the steadier one.
+    nearly = sorted(scan, key=lambda p: (-p.progress_m, p.command_vx))
+    for point in nearly:
+        if len(shortlist) >= count:
+            break
+        if point.command_vx not in shortlist:
+            shortlist.append(point.command_vx)
+    return shortlist
+
+
+def evaluate_at(manifest: Manifest, policy, command_vx: float) -> Evaluation:
+    """Score a policy at ONE commanded speed, skipping the scan.
+
+    For trying a policy, not for the board. A submitter who wants to know how
+    their walker behaves at 0.6 m/s should not have to wait for 21 speeds to be
+    swept and then read it off a list — and five runs is under a second where
+    the full sweep is three. `scan` carries the single point so callers do not
+    have to special-case an empty tuple.
+
+    The board never uses this: a leaderboard where entrants chose their own
+    speed is a leaderboard of who guessed best, which is the failure mode the
+    sweep exists to remove.
+    """
+    model = compile_course(manifest)
+    command = manifest.command_at(command_vx)
+    outcomes = [
+        run_once(manifest, policy, seed, model=model, command=command)
+        for seed in manifest.seeds
+    ]
+    per_seed = tuple(
+        SeedResult(seed=o.seed, status=o.status, time_s=o.time_s) for o in outcomes
+    )
+    trace_seed = pick_trace_seed(per_seed)
+    first = outcomes[0]
+
+    return Evaluation(
+        event_id=manifest.id,
+        score=METRICS[manifest.metric](per_seed, manifest.time_limit_s),
+        command_vx=float(command_vx),
+        seeds_finished=sum(1 for r in per_seed if r.status == "finish"),
+        per_seed=per_seed,
+        scan=(
+            ScanPoint(
+                command_vx=float(command_vx),
+                status=first.status,
+                time_s=first.time_s,
+                progress_m=first.progress_m,
+            ),
+        ),
+        trace=next(o.trace for o in outcomes if o.seed == trace_seed),
+        trace_seed=trace_seed,
+        runner_version=RUNNER_VERSION,
+    )
+
+
+def evaluate(manifest: Manifest, policy) -> Evaluation:
+    model = compile_course(manifest)  # compiled once, reused for every run
+    sweep = manifest.sweep
+
+    # Stage 1: one seed, every speed. The first seed and not a random one, so a
+    # re-run of the same entry picks the same finalists.
+    scan_seed = manifest.seeds[0]
+    outcomes: dict[tuple[float, int], object] = {}
+    scan = []
+    for vx in sweep.speeds():
+        outcome = run_once(
+            manifest, policy, scan_seed, model=model, command=manifest.command_at(vx)
+        )
+        outcomes[(vx, scan_seed)] = outcome
+        scan.append(
+            ScanPoint(
+                command_vx=vx,
+                status=outcome.status,
+                time_s=outcome.time_s,
+                progress_m=outcome.progress_m,
+            )
+        )
+    scan = tuple(scan)
+
+    # Stage 2: the shortlist, over every seed. The scan's own run is reused, so
+    # a finalist costs four more runs and not five.
+    metric = METRICS[manifest.metric]
+    best = None
+    for vx in finalists(scan, sweep.finalists):
+        for seed in manifest.seeds:
+            if (vx, seed) not in outcomes:
+                outcomes[(vx, seed)] = run_once(
+                    manifest, policy, seed, model=model, command=manifest.command_at(vx)
+                )
+        per_seed = tuple(
+            SeedResult(seed=s, status=outcomes[(vx, s)].status, time_s=outcomes[(vx, s)].time_s)
+            for s in manifest.seeds
+        )
+        score = metric(per_seed, manifest.time_limit_s)
+        # Ties go to the lower command: same mean for less asking is the
+        # steadier of the two, and it keeps the winner reproducible.
+        if best is None or (score, vx) < (best[0], best[1]):
+            best = (score, vx, per_seed)
+
+    score, command_vx, per_seed = best
+    trace_seed = pick_trace_seed(per_seed)
+
+    return Evaluation(
+        event_id=manifest.id,
+        score=score,
+        command_vx=command_vx,
+        seeds_finished=sum(1 for r in per_seed if r.status == "finish"),
+        per_seed=per_seed,
+        scan=scan,
+        trace=outcomes[(command_vx, trace_seed)].trace,
+        trace_seed=trace_seed,
+        runner_version=RUNNER_VERSION,
+    )

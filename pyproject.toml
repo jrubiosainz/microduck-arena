@@ -1,0 +1,59 @@
+[project]
+name = "microduck-arena"
+version = "0.1.0"
+# Pinned to one minor version for the same reason the physics packages are.
+# The golden run was measured on 3.13, and numpy 2.5.2 does not build for 3.11
+# at all — so an image on python:3.11-slim quietly resolved a different numpy.
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    # PINNED EXACTLY, and this is not fussiness. Every recorded time is a
+    # measurement made by these three, and MuJoCo's solver changes between
+    # minor versions: measured on the reference walker at the sprint's old
+    # pinned command, 3.12.0 gives 18.2 s and 3.13.0 gives 44.9 s. The same
+    # policy, the same course, the same code — it barely walks under 3.13.
+    #
+    # An unpinned range let a Docker build resolve 3.13 and produce a Space
+    # whose leaderboard was silently incomparable with every other one.
+    # RUNNER_VERSION says runs from different physics are never compared; it
+    # cannot help if nothing notices the physics moved. arena/golden.py is what
+    # notices, and these pins are what stop it happening in the first place.
+    #
+    # Moving any of these is a decision to re-baseline the golden run and bump
+    # RUNNER_VERSION in the same commit.
+    "mujoco==3.12.0",
+    "onnxruntime==1.29.0",
+    "numpy==2.5.2",
+    # Not physics: these touch no recorded number, so they keep ranges.
+    "huggingface-hub>=0.24",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+# onnx is only used by tests, to build deliberately malformed model fixtures.
+dev = ["pytest>=8.0", "ruff>=0.6", "onnx>=1.16", "httpx>=0.27"]
+
+[project.scripts]
+arena = "arena.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["arena"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's File(...)/Form(...)/Depends(...) as argument defaults is the
+# framework's documented idiom, not the mutable-default-argument bug B008
+# looks for: FastAPI calls these once per request via its DI system, so
+# nothing is shared across requests. Ruff's own docs recommend this exact
+# allowlist for FastAPI code.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Form"]

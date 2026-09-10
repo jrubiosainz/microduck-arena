@@ -1,0 +1,36 @@
+id           = "sprint-2m"
+title        = "2 m Sprint"
+rig          = "legs"
+time_limit_s = 50.0
+metric       = "mean_finish_time"
+seeds        = [1, 2, 3, 4, 5]
+
+[course]
+kind          = "lane"
+length_m      = 2.0
+width_m       = 0.8
+wall_height_m = 0.15
+slope_deg     = 0.0
+
+[command]
+vel  = [0.25, 0.0, 0.0]
+head = [0.0, 0.0, 0.0, 0.0]
+body = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+[start]
+keyframe = "STAND"
+settle_s = 0.5
+
+[start.perturbation]
+joint_rad = 0.01
+yaw_deg   = 2.0
+
+[termination]
+fall_gravity_z = -0.5
+fall_hold_s    = 0.3
+
+[sweep]
+lo        = 0.20
+hi        = 1.20
+step      = 0.05
+finalists = 3
