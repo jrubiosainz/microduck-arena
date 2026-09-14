@@ -42,11 +42,26 @@ def by_policy(record: RunRecord) -> tuple[str, str]:
 ENTRANTS = {"user": by_user, "policy": by_policy}
 
 
-def leaderboard(records, runner_version: int = RUNNER_VERSION, entrant=by_user) -> list[Row]:
+def leaderboard(
+    records,
+    runner_version: int = RUNNER_VERSION,
+    entrant=by_user,
+    withdrawn: frozenset[str] = frozenset(),
+) -> list[Row]:
+    """`withdrawn` is the set of run ids their authors have taken off the board.
+
+    Filtered here rather than deleted from the log, because the log is
+    append-only: a withdrawal is one more immutable write, and the run it
+    withdraws stays on disk. A withdrawn run also loses to nothing — it is not
+    merely outranked, it is absent — so it cannot keep a better run of the same
+    entrant off the board.
+    """
     best: dict = {}
     for record in records:
         if record.runner_version != runner_version:
             continue  # a different physics; never comparable
+        if record.run_id in withdrawn:
+            continue
         key = entrant(record)
         current = best.get(key)
         if current is None or sort_key(record) < sort_key(current):

@@ -25,7 +25,14 @@ const DOWNLOAD_ICON =
 //            multiplayer peers
 export const TIERS = { TRIAL: "trial", LEADER: "leader", GHOST: "ghost" };
 
-export function buildRows(rows) {
+// A cross, not a bin: this takes the entry off the board, it does not delete
+// the policy — which stays in its author's own Hub repo.
+const WITHDRAW_ICON =
+  '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">' +
+  '<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
+  'd="M4 4l8 8M12 4l-8 8"/></svg>';
+
+export function buildRows(rows, { me = null } = {}) {
   let lanes = 0;
   // The leader is the best PUBLISHED finisher — not simply rank 1, because a
   // trial can outrank it and you still want to see what you are chasing.
@@ -54,6 +61,10 @@ export function buildRows(rows) {
         !row.provisional && row.offers_download && row.run_id
           ? row.policy_url || `/api/runs/${row.run_id}/policy`
           : null,
+      // Shown only on your own published rows. The server refuses anyone
+      // else's regardless, so this is about not offering a button that would
+      // be rejected — not about security, which lives server-side.
+      mine: Boolean(me && row.run_id && !row.provisional && row.user === me),
       runId: row.run_id,
       dnf,
       selected,
@@ -70,8 +81,12 @@ export function buildRows(rows) {
   });
 }
 
-export function renderBoard(container, { event, rows }, { onSelectionChange } = {}) {
-  const built = buildRows(rows);
+export function renderBoard(
+  container,
+  { event, rows },
+  { onSelectionChange, onWithdraw, me = null } = {},
+) {
+  const built = buildRows(rows, { me });
   container.innerHTML = "";
 
   if (built.length === 0) {
@@ -87,7 +102,8 @@ export function renderBoard(container, { event, rows }, { onSelectionChange } = 
   table.innerHTML =
     "<thead><tr><th class='tab'></th><th class='rank'>place</th><th>who</th>" +
     "<th>policy</th><th class='time'>time</th><th class='speed'>m/s</th>" +
-    "<th class='seeds'>seeds</th><th class='grab'></th></tr></thead>";
+    "<th class='seeds'>seeds</th><th class='grab'></th>" +
+    "<th class='mine'></th></tr></thead>";
   const body = document.createElement("tbody");
 
   for (const row of built) {
@@ -147,6 +163,19 @@ export function renderBoard(container, { event, rows }, { onSelectionChange } = 
       grab.append(link);
     }
 
+    const own = document.createElement("td");
+    own.className = "mine";
+    if (row.mine && onWithdraw) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "withdraw";
+      button.innerHTML = WITHDRAW_ICON;
+      button.title = `Take ${row.policy} off the board`;
+      button.setAttribute("aria-label", `Take ${row.policy} off the board`);
+      button.addEventListener("click", () => onWithdraw(row.runId, row.policy));
+      own.append(button);
+    }
+
     tr.append(
       laneCell,
       cell(row.rank, "rank"),
@@ -156,6 +185,7 @@ export function renderBoard(container, { event, rows }, { onSelectionChange } = 
       cell(row.speed, "speed"),
       cell(row.seeds, "seeds"),
       grab,
+      own,
     );
     body.append(tr);
   }

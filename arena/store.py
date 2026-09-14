@@ -142,6 +142,50 @@ class RunRecord:
         )
 
 
+@dataclass(frozen=True)
+class Withdrawal:
+    """An author taking one of their entries off the board.
+
+    An ADDED record, not a deleted one. The log is append-only — that is what
+    makes two simultaneous submissions unable to contend, and what makes
+    durability mean "it is a git repo" — so a withdrawal is one more immutable
+    write, never a rewrite of history. The row leaves the board; the run that
+    produced it stays on disk, still readable, still explicable.
+
+    `repo_id` and `revision` are carried when the run came from the Hub, because
+    recovery reasons in those terms: without them a withdrawn entry would be
+    re-raced and put straight back at the next restart.
+    """
+
+    run_id: str
+    event_id: str
+    user: str
+    withdrawn_at: str
+    repo_id: str | None = None
+    revision: str | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "run_id": self.run_id,
+            "event_id": self.event_id,
+            "user": self.user,
+            "withdrawn_at": self.withdrawn_at,
+            "repo_id": self.repo_id,
+            "revision": self.revision,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "Withdrawal":
+        return cls(
+            run_id=raw["run_id"],
+            event_id=raw["event_id"],
+            user=raw["user"],
+            withdrawn_at=raw["withdrawn_at"],
+            repo_id=raw.get("repo_id"),
+            revision=raw.get("revision"),
+        )
+
+
 class Store(Protocol):
     def append(
         self, record: RunRecord, trace_blob: bytes, model_blob: bytes | None = None
@@ -149,6 +193,8 @@ class Store(Protocol):
     def runs(self, event_id: str) -> list[RunRecord]: ...
     def trace(self, run_id: str) -> bytes: ...
     def model(self, sha256: str) -> bytes: ...
+    def withdraw(self, withdrawal: Withdrawal) -> None: ...
+    def withdrawals(self) -> list[Withdrawal]: ...
 
 
 class LocalStore:
@@ -212,6 +258,25 @@ class LocalStore:
 
     def model(self, sha256: str) -> bytes:
         return self._model_path(sha256).read_bytes()
+
+    def _withdrawal_path(self, run_id: str) -> Path:
+        return self.root / "withdrawn" / f"{run_id}.json"
+
+    def withdraw(self, withdrawal: Withdrawal) -> None:
+        path = self._withdrawal_path(withdrawal.run_id)
+        # Idempotent on purpose: withdrawing twice is a double-click, not an
+        # error worth showing someone.
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(withdrawal.to_dict(), indent=2))
+
+    def withdrawals(self) -> list[Withdrawal]:
+        directory = self.root / "withdrawn"
+        if not directory.is_dir():
+            return []
+        return [
+            Withdrawal.from_dict(json.loads(p.read_text()))
+            for p in sorted(directory.glob("*.json"))
+        ]
 
 
 class HubStore:

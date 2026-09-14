@@ -326,3 +326,43 @@ describe("the download control", () => {
     expect(link.hasAttribute("download")).toBe(true);
   });
 });
+
+describe("taking your own entry off the board", () => {
+  const rendered = (over, opts) => {
+    const container = document.createElement("div");
+    renderBoard(container, { event: { title: "2 m Sprint" }, rows: [row(over)] }, opts);
+    return container;
+  };
+
+  it("offers the control on a row you published", () => {
+    const c = rendered({ user: "alice" }, { me: "alice", onWithdraw: () => {} });
+    const button = c.querySelector("button.withdraw");
+    expect(button).not.toBeNull();
+    expect(button.getAttribute("aria-label")).toContain("off the board");
+  });
+
+  it("does not offer it on someone else's row", () => {
+    const c = rendered({ user: "bob" }, { me: "alice", onWithdraw: () => {} });
+    expect(c.querySelector("button.withdraw")).toBeNull();
+  });
+
+  it("does not offer it when nobody is signed in", () => {
+    const c = rendered({ user: "alice" }, { onWithdraw: () => {} });
+    expect(c.querySelector("button.withdraw")).toBeNull();
+  });
+
+  it("does not offer it on a trial, which is on no board to leave", () => {
+    const c = rendered(
+      { user: "alice", provisional: true, run_id: null },
+      { me: "alice", onWithdraw: () => {} },
+    );
+    expect(c.querySelector("button.withdraw")).toBeNull();
+  });
+
+  it("hands the run id to the handler when clicked", () => {
+    const calls = [];
+    const c = rendered({ user: "alice" }, { me: "alice", onWithdraw: (id) => calls.push(id) });
+    c.querySelector("button.withdraw").click();
+    expect(calls).toEqual(["01AAA"]);
+  });
+});

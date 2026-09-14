@@ -77,3 +77,7 @@ export async function tryPolicy(eventId, file, name, livery, commandVx) {
   const bytes = Uint8Array.from(atob(body.trace_b64), (c) => c.charCodeAt(0));
   return { ...body, trace: new Float32Array(bytes.buffer) };
 }
+
+/** Take one of your own entries off the board. Not a delete — see the server. */
+export const withdrawRun = (runId) =>
+  json(`/api/runs/${runId}/withdraw`, { method: "POST" });

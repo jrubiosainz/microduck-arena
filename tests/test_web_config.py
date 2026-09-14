@@ -1,4 +1,5 @@
 import os
+
 import pytest
 
 from arena.store import HubStore, LocalStore

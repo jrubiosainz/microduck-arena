@@ -119,7 +119,7 @@ def already_recorded(records, repo_id: str, revision: str) -> bool:
     return False
 
 
-def plan(found, events, runs_for_event) -> list[tuple[Candidate, object]]:
+def plan(found, events, runs_for_event, withdrawn=()) -> list[tuple[Candidate, object]]:
     """The (candidate, event) pairs that are missing and would have to be raced.
 
     `runs_for_event(event_id)` returns the records already stored for it. This is
@@ -127,8 +127,18 @@ def plan(found, events, runs_for_event) -> list[tuple[Candidate, object]]:
     empty list, which is why running it at every boot costs one Hub listing and
     nothing else.
     """
+    # Keyed on (repo_id, revision), the same key already_recorded uses. So a
+    # withdrawal suppresses exactly the revision it withdrew: republishing the
+    # policy is a new commit, a new revision, and it comes back — which is what
+    # publishing again should mean.
+    suppressed = {
+        (w.repo_id, w.revision) for w in withdrawn if w.repo_id and w.revision
+    }
+
     work = []
     for candidate in found:
+        if (candidate.repo_id, candidate.revision) in suppressed:
+            continue
         for event in events_for(candidate, events):
             if not already_recorded(runs_for_event(event.id), candidate.repo_id, candidate.revision):
                 work.append((candidate, event))
@@ -194,7 +204,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
 
     list_repos, read_manifest = reader or hub_reader(on_event=on_event)
     found = candidates(list_repos, read_manifest, all_tagged=all_tagged)
-    work = plan(found, events, lambda event_id: store.runs(event_id))
+    work = plan(found, events, lambda event_id: store.runs(event_id), store.withdrawals())
 
     restored = []
     for candidate, event in work:

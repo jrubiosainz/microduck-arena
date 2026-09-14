@@ -1,6 +1,13 @@
 // One race: the stage, the file column beside it, the standing beneath.
 
-import { getLeaderboard, getMe, getTrace, submitPolicy, tryPolicy } from "./api.js";
+import {
+  getLeaderboard,
+  getMe,
+  getTrace,
+  submitPolicy,
+  tryPolicy,
+  withdrawRun,
+} from "./api.js";
 import { renderBoard, selectedRunIds, tiersByRunId } from "./board.js";
 import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
@@ -305,6 +312,12 @@ export async function renderRace(root, { event, state }) {
       : "Tick a lane below, or test a policy, to watch a replay.";
   }
 
+  // Declared before paint(), which closes over it. Assigned below, once
+  // getMe() resolves. As a `const` further down it worked only because every
+  // paint() call happens after that line — a future one moved above it would
+  // fail with a temporal-dead-zone error that reads like nothing.
+  let me = null;
+
   async function paint() {
     const { rows } = await getLeaderboard(event.id);
     for (const row of rows) liveries.set(row.run_id, row.livery ?? "classic");
@@ -313,12 +326,30 @@ export async function renderRace(root, { event, state }) {
     renderBoard(
       board,
       { event, rows: merged },
-      { onSelectionChange: (runIds) => race(runIds, tiers) },
+      {
+        onSelectionChange: (runIds) => race(runIds, tiers),
+        me: me?.user ?? null,
+        onWithdraw: async (runId, policy) => {
+          // Asked before doing, because it is someone's standing and the button
+          // sits on every row they own. `confirm` rather than a bespoke dialog:
+          // this is a rare, deliberate action, not a flow worth building UI for.
+          if (!window.confirm(`Take "${policy}" off the board? The policy stays in your Hub repo.`)) {
+            return;
+          }
+          try {
+            await withdrawRun(runId);
+            await paint();
+          } catch (error) {
+            status.textContent = error.message;
+            status.className = "entry__status bad";
+          }
+        },
+      },
     );
     await race(selectedRunIds(board), tiers);
   }
 
-  const me = await getMe();
+  me = await getMe();
   renderEntryPanel(entry, me, {
     event,
     onLiveryChange: (livery) => {

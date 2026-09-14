@@ -54,8 +54,11 @@ def list_events() -> dict:
 def event_leaderboard(event_id: str, request: Request) -> dict:
     manifest = _event_or_404(event_id)
     config = request.app.state.config
+    store = request.app.state.store
     rows = leaderboard(
-        request.app.state.store.runs(manifest.id), entrant=config.entrant
+        store.runs(manifest.id),
+        entrant=config.entrant,
+        withdrawn=frozenset(w.run_id for w in store.withdrawals()),
     )
     return {
         "event": event_summary(manifest),

@@ -517,3 +517,25 @@ table.board .grab a:focus-visible { outline: 2px solid var(--orange); outline-of
   font-size: 0.95em;
   color: var(--chalk);
 }
+
+/* Take-off-the-board control. Only ever rendered on your own rows, and kept
+   nearly invisible until you go looking: it is a rare, deliberate action, not
+   something to draw the eye down the board. */
+table.board .mine { width: 2.2rem; text-align: right; }
+table.board .withdraw {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: transparent;
+  cursor: pointer;
+}
+table.board tr:hover .withdraw { color: var(--dim); }
+table.board .withdraw:hover,
+table.board .withdraw:focus-visible { color: var(--dnf); background: rgba(255, 82, 47, 0.12); }
+table.board .withdraw:focus-visible { outline: 2px solid var(--dnf); outline-offset: 1px; }

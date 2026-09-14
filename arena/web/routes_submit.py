@@ -30,7 +30,7 @@ from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy
 from ..hub_publish import HubPublishError, publish_policy
 from ..manifest import ManifestError, load_event
 from ..policy import MAX_MODEL_BYTES, PolicyError, load_policy
-from ..store import RunRecord, new_run_id
+from ..store import RunRecord, Withdrawal, new_run_id
 from .routes_auth import current_user
 from .session import Session
 
@@ -350,3 +350,51 @@ async def submit(
         "per_seed": _seed_rows(result),
         "trace_seed": record.trace_seed,
     }
+
+
+@router.post("/runs/{run_id}/withdraw")
+def withdraw(run_id: str, request: Request) -> dict:
+    """Take one of YOUR OWN entries off the board.
+
+    Not a delete. The log is append-only, so this appends a withdrawal: the row
+    leaves the board, the run stays on disk, and the history is never rewritten.
+
+    It also stops recovery resurrecting the entry. Without that the button would
+    appear to work and the row would be back at the next restart, because the
+    policy is still published on the Hub and the boot reconciliation would
+    re-race it.
+
+    The policy repo itself is untouched. It belongs to its author, who can
+    delete it on the Hub if they want to — this Space asks only for
+    `contribute-repos`, and widening that to `manage-repos` for every visitor
+    would be a large permission to charge for a delete button.
+    """
+    from datetime import UTC, datetime
+
+    from .routes_read import _find_run
+
+    session = _require_session(request)
+    store = request.app.state.store
+    record = _find_run(store, run_id)
+
+    # Ownership is decided from the SESSION, never from anything the browser
+    # sent. A withdrawal is destructive to someone's standing, and the only
+    # thing that may authorise it is who the server believes you are.
+    if record.user != session.username:
+        raise HTTPException(
+            status_code=403,
+            detail=f"{run_id} was published by {record.user}, not you.",
+        )
+
+    source = record.source or {}
+    store.withdraw(
+        Withdrawal(
+            run_id=record.run_id,
+            event_id=record.event_id,
+            user=record.user,
+            withdrawn_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            repo_id=source.get("repo_id"),
+            revision=source.get("revision"),
+        )
+    )
+    return {"withdrawn": record.run_id, "event_id": record.event_id}
