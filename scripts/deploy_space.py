@@ -83,6 +83,12 @@ def main() -> int:
         repo_id=args.space,
         repo_type="space",
         ignore_patterns=IGNORE,
+        # Without this, upload_folder only ADDS and UPDATES: a file deleted or
+        # renamed here lingers on the Space forever. Two renamed event manifests
+        # is how this was found — the Space served nine events while the repo
+        # held seven, and the two ghosts were raceable pages for events that no
+        # longer existed.
+        delete_patterns=["*"],
         commit_message=f"Deploy {revision}",
     )
     print(f"\n  https://huggingface.co/spaces/{args.space}")
