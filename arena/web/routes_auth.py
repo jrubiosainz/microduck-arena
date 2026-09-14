@@ -11,6 +11,7 @@ which world it is in.
 """
 
 import hmac
+import re
 import secrets
 
 import httpx
@@ -21,6 +22,41 @@ from .oauth import OAuthError, authorize_url, exchange_code, userinfo
 from .session import COOKIE_NAME, Session, sign, unsign
 
 STATE_COOKIE = "arena_oauth_state"
+RETURN_COOKIE = "arena_oauth_return"
+
+# The route to come back to, and nothing else.
+#
+# The browser never sends a URL fragment to the server, so after signing in the
+# callback had no idea which race page you started from and always landed on the
+# menu. The page therefore has to say where it was — and a destination supplied
+# by the client is an open-redirect waiting to happen.
+#
+# So this accepts a ROUTE, never a URL: matched against the router's own shape,
+# and the redirect is then BUILT here as "/#" + route. Nothing the client sends
+# can name a host, because no part of what it sends reaches the host position.
+# "//evil.com", "https://evil.com" and "/\evil.com" all simply fail to match
+# and fall back to the menu.
+_SAFE_ROUTE = re.compile(r"^/e/[A-Za-z0-9._-]{1,64}/?$")
+
+
+def return_target(route: str | None) -> str:
+    """The URL to land on after signing in. Always same-origin by construction."""
+    route = (route or "").strip()
+    return f"/#{route}" if _SAFE_ROUTE.match(route) else "/"
+
+
+def _safe_landing(target: str | None) -> str:
+    """Re-checked on the way out, not trusted because we signed it going in.
+
+    The signature proves this server wrote the value; it does not prove the
+    value was ever sanitised, and a future edit to `login` could put something
+    else there. Cheap to check twice, and the failure mode of checking once is
+    an open redirect.
+    """
+    value = (target or "").strip()
+    if value == "/":
+        return "/"
+    return value if value.startswith("/#/") and _SAFE_ROUTE.match(value[2:]) else "/"
 
 # SameSite=None, and this is a deliberate, load-bearing choice.
 #
@@ -93,12 +129,24 @@ def me(request: Request, response: Response) -> dict:
 
 
 @router.get("/login")
-def login(request: Request) -> RedirectResponse:
+def login(request: Request, next: str = "") -> RedirectResponse:
     config = request.app.state.config
     if not config.oauth_enabled:
         raise HTTPException(status_code=404, detail="this deployment has no OAuth")
     state = secrets.token_urlsafe(24)
     response = RedirectResponse(authorize_url(config.oauth, state))
+    # Remembered in a signed cookie rather than carried through the OAuth
+    # `state` parameter: `state` has one job, proving this callback answers a
+    # login this server started, and giving it a second job makes both harder
+    # to reason about. Sanitised on the way in AND on the way out.
+    response.set_cookie(
+        RETURN_COOKIE,
+        sign(return_target(next), config.session_secret),
+        max_age=600,
+        httponly=True,
+        samesite=SAMESITE,
+        secure=True,
+    )
     # Signed, and short-lived: this is the only thing that ties the callback to
     # a login this server actually started.
     response.set_cookie(
@@ -131,7 +179,10 @@ def callback(request: Request, code: str = "", state: str = "") -> RedirectRespo
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     sid = request.app.state.sessions.create(username, token, config.session_ttl_s)
-    response = RedirectResponse("/")
+    # Unsigned first: an unsigned or tampered cookie is not a destination, it is
+    # someone editing their own cookie, and the answer to that is the menu.
+    wanted = unsign(request.cookies.get(RETURN_COOKIE, ""), config.session_secret)
+    response = RedirectResponse(_safe_landing(wanted))
     response.set_cookie(
         COOKIE_NAME,
         sign(sid, config.session_secret),
@@ -141,6 +192,7 @@ def callback(request: Request, code: str = "", state: str = "") -> RedirectRespo
         secure=True,
     )
     response.delete_cookie(STATE_COOKIE)
+    response.delete_cookie(RETURN_COOKIE)
     return response
 
 

@@ -193,3 +193,89 @@ def test_the_session_cookie_is_also_cross_site_and_secure(spaced, monkeypatch):
     assert "samesite=none" in session_cookie.lower()
     assert "secure" in session_cookie.lower()
     assert "httponly" in session_cookie.lower()
+
+
+# ── coming back to the page you signed in from ───────────────────────────
+
+def test_login_remembers_where_you_were(spaced):
+    api, _ = spaced
+    response = api.get("/login?next=%2Fe%2Fsprint-2m", follow_redirects=False)
+    assert response.status_code == 307
+    assert "arena_oauth_return" in response.cookies
+
+
+def test_signing_in_lands_back_on_the_race_page(spaced, monkeypatch):
+    api, _ = spaced
+    monkeypatch.setattr("arena.web.routes_auth._exchange", lambda s, c: "hf_tok")
+    monkeypatch.setattr("arena.web.routes_auth._username", lambda s, t: "alice")
+
+    api.get("/login?next=%2Fe%2Fsprint-2m", follow_redirects=False)
+    api.cookies.set("arena_oauth_state", sign("st4te", "csecret"))
+    # The state cookie the real /login set is overwritten above, so re-sign the
+    # return value the same way /login did.
+    api.cookies.set("arena_oauth_return", sign("/#/e/sprint-2m", "csecret"))
+    response = api.get("/login/callback?code=c&state=st4te", follow_redirects=False)
+    assert response.headers["location"] == "/#/e/sprint-2m"
+
+
+def test_signing_in_from_the_menu_still_lands_on_the_menu(spaced, monkeypatch):
+    api, _ = spaced
+    monkeypatch.setattr("arena.web.routes_auth._exchange", lambda s, c: "hf_tok")
+    monkeypatch.setattr("arena.web.routes_auth._username", lambda s, t: "alice")
+    api.cookies.set("arena_oauth_state", sign("st4te", "csecret"))
+    response = api.get("/login/callback?code=c&state=st4te", follow_redirects=False)
+    assert response.headers["location"] == "/"
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "//evil.com",
+        "https://evil.com",
+        "http://evil.com",
+        "/\\evil.com",
+        "/e/../../etc/passwd",
+        "javascript:alert(1)",
+        "/login",
+        "/e/x?a=b",
+        "/e/" + "x" * 200,
+    ],
+)
+def test_no_destination_from_the_client_can_name_a_host(spaced, hostile):
+    """An open redirect is the whole hazard of remembering where someone was.
+
+    The route never reaches the host position: the server matches it against the
+    router's own shape and BUILDS the URL itself, so anything that is not a race
+    route becomes the menu.
+    """
+    from arena.web.routes_auth import return_target
+
+    assert return_target(hostile) == "/"
+
+
+@pytest.mark.parametrize(
+    "forged",
+    ["//evil.com", "https://evil.com", "/#//evil.com", "/#/login", "/#/e/x?a=b"],
+)
+def test_a_forged_return_cookie_lands_on_the_menu(spaced, monkeypatch, forged):
+    """Checked again on the way out. The signature proves this server wrote the
+    value, not that the value was ever sanitised."""
+    api, _ = spaced
+    monkeypatch.setattr("arena.web.routes_auth._exchange", lambda s, c: "hf_tok")
+    monkeypatch.setattr("arena.web.routes_auth._username", lambda s, t: "alice")
+    api.cookies.set("arena_oauth_state", sign("st4te", "csecret"))
+    # Signed with the server's own key — i.e. the strongest thing an attacker
+    # could achieve short of the key itself.
+    api.cookies.set("arena_oauth_return", sign(forged, "csecret"))
+    response = api.get("/login/callback?code=c&state=st4te", follow_redirects=False)
+    assert response.headers["location"] == "/"
+
+
+def test_an_unsigned_return_cookie_is_ignored(spaced, monkeypatch):
+    api, _ = spaced
+    monkeypatch.setattr("arena.web.routes_auth._exchange", lambda s, c: "hf_tok")
+    monkeypatch.setattr("arena.web.routes_auth._username", lambda s, t: "alice")
+    api.cookies.set("arena_oauth_state", sign("st4te", "csecret"))
+    api.cookies.set("arena_oauth_return", "/#/e/sprint-2m")
+    response = api.get("/login/callback?code=c&state=st4te", follow_redirects=False)
+    assert response.headers["location"] == "/"
