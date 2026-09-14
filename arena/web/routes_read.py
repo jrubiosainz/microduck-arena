@@ -24,6 +24,7 @@ def event_summary(manifest: Manifest) -> dict:
         "id": manifest.id,
         "title": manifest.title,
         "rig": manifest.rig,
+        "status": manifest.status,
         "length_m": manifest.course.length_m,
         "width_m": manifest.course.width_m,
         "slope_deg": manifest.course.slope_deg,

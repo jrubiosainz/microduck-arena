@@ -1,10 +1,16 @@
-// The race programme: every event, with the time that currently stands.
+// The race programme: every event, as a card.
 //
-// A fixture list rather than a row of cards. Each line carries what makes one
-// race different from another and who holds it — the standing record is the
-// reason to open a race, so it belongs on the way in.
+// A grid rather than a fixture list. Each card carries a drawing of its own
+// course, what makes it different, and who holds it — the standing record is
+// the reason to open a race, so it belongs on the way in.
+//
+// Planned events are on the grid too, and marked. They have a course file and
+// a page, but their physics is still the sprint's, so the engine refuses to
+// race them: a time recorded under one of their names would be a sprint time
+// wearing it.
 
 import { getEvents, getLeaderboard } from "./api.js";
+import { courseArt } from "./coursecard.js";
 import { formatEventFacts, formatScore } from "./format.js";
 import { raceHref } from "./router.js";
 import { wordmark } from "./wordmark.js";
@@ -54,58 +60,83 @@ export async function renderMenu(root) {
   root.append(header);
   root.append(marquee());
 
-  const list = document.createElement("ul");
-  list.className = "programme";
-  root.append(list);
+  const grid = document.createElement("ul");
+  grid.className = "programme";
+  root.append(grid);
 
   const events = await getEvents();
+  // Only an open event has a board worth asking for. A planned one would
+  // answer with an empty list, at the cost of a request per card.
   const boards = await Promise.all(
-    events.map((event) => getLeaderboard(event.id).catch(() => ({ rows: [] }))),
+    events.map((event) =>
+      event.status === "planned"
+        ? Promise.resolve({ rows: [] })
+        : getLeaderboard(event.id).catch(() => ({ rows: [] })),
+    ),
   );
 
   events.forEach((event, i) => {
-    const rows = boards[i].rows;
-    const leader = rows.find((row) => row.seeds_finished > 0);
-
-    const item = document.createElement("li");
-    const link = document.createElement("a");
-    link.className = "fixture";
-    link.href = raceHref(event.id);
-
-    const name = document.createElement("span");
-    name.className = "fixture__name";
-    name.textContent = event.title;
-
-    const spec = document.createElement("span");
-    spec.className = "fixture__spec";
-    spec.textContent = formatEventFacts(event)
-      .filter((fact) => fact.label !== "commanded")
-      .map((fact) => fact.value)
-      .join(", ");
-
-    const standing = document.createElement("span");
-    standing.className = "fixture__standing";
-    if (leader) {
-      const time = document.createElement("span");
-      time.className = "fixture__time";
-      time.textContent = formatScore(leader.score, { finished: leader.seeds_finished });
-      const who = document.createElement("span");
-      who.className = "fixture__who";
-      who.textContent = leader.policy_name;
-      standing.append(time, who);
-    } else {
-      // An empty race is an invitation, not a blank.
-      standing.className += " fixture__standing--open";
-      const star = document.createElement("img");
-      star.src = "/star-yellow.webp";
-      star.alt = "";
-      const words = document.createElement("span");
-      words.textContent = rows.length ? "no finisher yet" : "be the first";
-      standing.append(star, words);
-    }
-
-    link.append(name, spec, standing);
-    item.append(link);
-    list.append(item);
+    grid.append(card(event, boards[i].rows));
   });
+}
+
+/** One programme card: its course, its name, and the time that stands on it. */
+export function card(event, rows) {
+  const planned = event.status === "planned";
+  const leader = rows.find((row) => row.seeds_finished > 0);
+
+  const item = document.createElement("li");
+  const box = document.createElement(planned ? "div" : "a");
+  box.className = planned ? "card card--planned" : "card";
+  if (!planned) box.href = raceHref(event.id);
+
+  const art = document.createElement("div");
+  art.className = "card__frame";
+  art.innerHTML = courseArt(event);
+
+  const name = document.createElement("h3");
+  name.className = "card__name";
+  name.textContent = event.title;
+
+  const spec = document.createElement("p");
+  spec.className = "card__spec";
+  spec.textContent = formatEventFacts(event)
+    .filter((fact) => fact.label !== "speed sweep")
+    .map((fact) => fact.value)
+    .join(" · ");
+
+  const standing = document.createElement("p");
+  standing.className = "card__standing";
+  if (planned) {
+    // Said plainly on the card, not only in a tooltip: the reason this one
+    // cannot be entered is that its course does not exist yet.
+    standing.className += " card__standing--planned";
+    standing.textContent = "course not built yet";
+  } else if (leader) {
+    const star = document.createElement("img");
+    star.src = "/star-yellow.webp";
+    star.alt = "";
+    star.className = "card__star";
+    const who = document.createElement("span");
+    who.className = "card__who";
+    who.textContent = leader.user;
+    const time = document.createElement("span");
+    time.className = "card__time";
+    time.textContent = formatScore(leader.score, { finished: leader.seeds_finished });
+    standing.append(star, who, time);
+  } else {
+    // An empty race is an invitation, not a blank.
+    standing.className += " card__standing--open";
+    const star = document.createElement("img");
+    star.src = "/star-yellow.webp";
+    star.alt = "";
+    star.className = "card__star";
+    const words = document.createElement("span");
+    words.textContent = rows.length ? "no finisher yet" : "be the first";
+    standing.append(star, words);
+  }
+
+  box.append(art, name, spec, standing);
+  item.append(box);
+  return item;
 }

@@ -188,3 +188,39 @@ def test_a_missing_sweep_section_is_rejected(tmp_path):
     ))
     with pytest.raises(ManifestError, match="sweep"):
         load_manifest(path)
+
+
+def test_every_event_declares_a_status_and_the_shipped_ones_are_valid():
+    from arena.manifest import STATUSES
+
+    for m in all_events():
+        assert m.status in STATUSES, f"{m.id}: {m.status!r}"
+
+
+def test_the_three_original_events_are_open():
+    assert {m.id for m in all_events() if m.status == "open"} == {
+        "sprint-2m",
+        "roller-sprint-2m",
+        "hill-climb-1m5",
+    }
+
+
+def test_the_four_new_ones_are_planned_rather_than_racing_a_borrowed_course():
+    """They copy the sprint's physics so they can exist on the programme. Open
+    would mean a time recorded under one of their names is a sprint time."""
+    assert {m.id for m in all_events() if m.status == "planned"} == {
+        "best-jump",
+        "roller-slide",
+        "rough-ground",
+        "push",
+    }
+
+
+def test_a_missing_status_defaults_to_open(tmp_path):
+    """Every manifest written before this field existed is a real event."""
+    assert load_manifest(write_manifest(tmp_path)).status == "open"
+
+
+def test_an_unknown_status_is_rejected(tmp_path):
+    with pytest.raises(ManifestError, match="status"):
+        load_manifest(write_manifest(tmp_path, root=GOOD["root"] + 'status="someday"\n'))

@@ -71,30 +71,7 @@ body {
   font-size: 1rem;
 }
 
-.programme { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
 
-.fixture {
-  display: grid;
-  grid-template-columns: minmax(9rem, 1.1fr) minmax(8rem, 1.4fr) auto;
-  gap: 18px;
-  align-items: baseline;
-  padding: 20px 4px;
-  border-bottom: 1px solid var(--rule);
-  text-decoration: none;
-  color: inherit;
-}
-.fixture:hover { background: var(--paper); }
-.fixture:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
-.fixture__name { font-size: 1.15rem; }
-.fixture__spec { color: var(--dim); font-size: 0.9rem; }
-.fixture__standing { text-align: right; display: flex; gap: 12px; align-items: baseline; justify-content: flex-end; }
-.fixture__time {
-  font: 400 1.55rem/1 var(--display);
-  font-variant-numeric: tabular-nums;
-  color: var(--chalk);
-}
-.fixture__who { color: var(--dim); font-size: 0.85rem; }
-.fixture__standing--open { color: var(--dim); font-size: 0.9rem; }
 
 /* ── race page chrome ─────────────────────────────────────────────────── */
 
@@ -387,8 +364,6 @@ table.board tr.provisional td.tab { border-left-color: var(--cyan); }
 
 /* ── an empty race invites an entry ───────────────────────────────────── */
 
-.fixture__standing--open { display: flex; align-items: center; gap: 8px; }
-.fixture__standing--open img { width: 22px; height: 22px; opacity: 0.9; }
 
 /* ── which duck is which ──────────────────────────────────────────────── */
 
@@ -546,3 +521,81 @@ table.board tr:hover .withdraw { color: var(--chalk); }
 table.board .withdraw:hover,
 table.board .withdraw:focus-visible { color: var(--dnf); background: rgba(255, 82, 47, 0.12); }
 table.board .withdraw:focus-visible { outline: 2px solid var(--dnf); outline-offset: 1px; }
+
+/* ── The programme, as a grid of cards ────────────────────────────────── */
+
+.programme {
+  display: grid;
+  /* Three across where there is room, and fewer without a media query: auto-fit
+     with a floor means a new event never has to be counted into a breakpoint. */
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  list-style: none;
+  margin: 26px 0 40px;
+  padding: 0;
+  max-width: 1100px;
+}
+@media (min-width: 1000px) {
+  .programme { grid-template-columns: repeat(3, 1fr); }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.14s ease, transform 0.14s ease;
+}
+a.card:hover,
+a.card:focus-visible { border-color: var(--orange); transform: translateY(-2px); }
+a.card:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
+.card__frame {
+  border-bottom: 1px solid var(--rule);
+  background: var(--ink);
+  color: var(--dim);
+}
+.card__art { display: block; width: 100%; height: auto; }
+
+.card__name {
+  margin: 12px 14px 0;
+  font: 400 1.15rem/1.15 var(--display);
+  letter-spacing: 0.01em;
+  color: var(--chalk);
+}
+.card__spec {
+  margin: 5px 14px 0;
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  color: var(--dim);
+  text-transform: lowercase;
+}
+.card__standing {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  /* margin-top:auto pins the standing to the bottom edge, so the times line up
+     across a row whatever the titles do. */
+  margin: auto 14px 13px;
+  padding-top: 12px;
+  font-size: 0.82rem;
+  color: var(--dim);
+}
+.card__star { width: 17px; height: 17px; }
+.card__who { color: var(--chalk); }
+.card__time {
+  margin-left: auto;
+  font: 400 1.25rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+  color: var(--orange);
+}
+.card__standing--open { color: var(--dim); font-style: italic; }
+
+/* A planned event is on the programme and cannot be entered. Dimmed rather
+   than hidden: seeing what is coming is the point of putting it there. */
+.card--planned { opacity: 0.6; border-style: dashed; }
+.card--planned .card__name { color: var(--dim); }
+.card__standing--planned { font-style: italic; }

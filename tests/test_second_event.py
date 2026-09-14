@@ -43,8 +43,10 @@ def test_the_hill_actually_slopes():
     assert load_event("hill-climb-1m5").course.slope_deg == 8.0
 
 
-def test_all_three_events_ship():
-    assert {m.id for m in all_events()} == {
+def test_the_raceable_events_are_the_three_with_their_own_courses():
+    """Asserts which events are OPEN rather than how many exist, so adding a
+    planned one to the programme does not fail a test about physics."""
+    assert {m.id for m in all_events() if m.status == "open"} == {
         "sprint-2m",
         "roller-sprint-2m",
         "hill-climb-1m5",

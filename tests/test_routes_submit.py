@@ -578,3 +578,28 @@ def test_a_policy_that_fails_validation_never_reaches_the_hub(spaced_api, tmp_pa
         )
     assert response.status_code == 400
     assert reached == []
+
+
+def test_a_planned_event_cannot_be_raced(api):
+    """Its course is the sprint's, so a time recorded under its name would be a
+    sprint time wearing another event's name — a false result on a shared board."""
+    with open(REFERENCE, "rb") as fh:
+        response = api.post("/api/events/best-jump/submit", files={"file": ("w.onnx", fh)})
+    assert response.status_code == 409
+    assert "not open yet" in response.json()["detail"]
+
+
+def test_a_planned_event_cannot_be_tried_either(api):
+    """Both paths go through the same door, so neither can forget the guard."""
+    response = try_it(api, event="best-jump")
+    assert response.status_code == 409
+
+
+def test_a_planned_event_records_nothing(api, store_dir):
+    with open(REFERENCE, "rb") as fh:
+        api.post("/api/events/push/submit", files={"file": ("w.onnx", fh)})
+    assert list(store_dir.rglob("*.json")) == []
+
+
+def test_an_open_event_is_unaffected(api):
+    assert submit(api).status_code == 200

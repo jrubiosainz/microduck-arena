@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from arena.manifest import all_events
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
 
@@ -14,7 +15,10 @@ def test_health_reports_the_user_and_event_count(tmp_path):
     assert body["ok"] is True
     assert body["user"] == "coralie"
     # Three events ship with the engine: sprint, roller sprint, hill climb.
-    assert body["events"] == 3
+    # The count of what is on the programme, not a fixed 3: health reports the
+    # size of the programme, and the programme grows.
+    assert body["events"] == len(all_events())
+    assert body["events"] >= 3
 
 
 def test_the_store_is_created_when_the_app_starts(tmp_path):

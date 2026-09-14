@@ -22,14 +22,21 @@ def record_run(app, **overrides):
     return record
 
 
-def test_events_lists_all_three(client):
+def test_events_lists_the_whole_programme_open_and_planned(client):
+    """Pinned on WHICH events are raceable, not on how many exist. A test that
+    counts events fails every time one is added, which teaches people to edit
+    the number rather than read the assertion."""
     api, _ = client
-    body = api.get("/api/events").json()
-    assert {e["id"] for e in body["events"]} == {
+    events = api.get("/api/events").json()["events"]
+    by_status = {e["id"]: e["status"] for e in events}
+
+    assert {i for i, s in by_status.items() if s == "open"} == {
         "sprint-2m",
         "roller-sprint-2m",
         "hill-climb-1m5",
     }
+    # Planned events are on the programme too — the menu draws them as cards.
+    assert {i for i, s in by_status.items() if s == "planned"}
 
 
 def test_an_event_carries_what_the_page_needs_to_describe_it(client):

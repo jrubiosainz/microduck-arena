@@ -14,6 +14,7 @@ from .constants import CMD_SIZE
 EVENTS_DIR = Path(__file__).parent / "events"
 
 RIGS = ("legs", "rollers")
+STATUSES = {"open", "planned"}
 METRICS = ("mean_finish_time",)
 COURSE_KINDS = ("lane",)
 
@@ -76,6 +77,12 @@ class Manifest:
     id: str
     title: str
     rig: str
+    # "open" or "planned". A planned event is real data — it appears on the
+    # programme and has a course — but it cannot be raced yet, because its
+    # physics is the sprint's and a time recorded under its name would be a
+    # false result on a board other people read. Flipping it to "open" is what
+    # makes it real, and is meant to happen alongside a real course.
+    status: str
     time_limit_s: float
     metric: str
     seeds: tuple[int, ...]
@@ -122,6 +129,9 @@ def load_manifest(path: Path) -> Manifest:
     with open(path, "rb") as fh:
         raw = tomllib.load(fh)
 
+    status = raw.get("status", "open")
+    if status not in STATUSES:
+        raise ManifestError(f"{path}: unknown status {status!r}, expected one of {STATUSES}")
     rig = _require(raw, "rig", str(path))
     if rig not in RIGS:
         raise ManifestError(f"{path}: unknown rig {rig!r}, expected one of {RIGS}")
@@ -162,6 +172,7 @@ def load_manifest(path: Path) -> Manifest:
         id=_require(raw, "id", str(path)),
         title=_require(raw, "title", str(path)),
         rig=rig,
+        status=status,
         time_limit_s=float(_require(raw, "time_limit_s", str(path))),
         metric=metric,
         seeds=seeds,
