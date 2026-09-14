@@ -114,7 +114,24 @@ body {
 .back:hover { color: var(--orange); }
 .back::before { content: "\2039\00a0"; }
 
-.racetitle { font: 500 1.45rem/1.2 var(--sans); margin: 0 0 4px; }
+/* The display face, as on the programme cards: this is the name of the race,
+   and it should read like one rather than like a form label. */
+.racetitle {
+  margin: 0 0 4px;
+  font: 400 clamp(1.9rem, 4.4vw, 2.8rem) / 1.05 var(--display);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  color: var(--chalk);
+  /* The wordmark's offset at a fraction of its strength — enough to belong to
+     the same page, not so much that it competes with the mark above it. */
+  text-shadow:
+    0.03em 0.03em 0 var(--ink),
+    -0.014em 0 0 var(--ghost-cyan),
+    0.014em 0 0 var(--ghost-pink);
+}
+
+.racehead__mark { display: flex; align-items: center; gap: 10px; }
+.duckhead--small { width: clamp(30px, 4.5vw, 42px); }
 
 .facts { display: flex; gap: 26px; flex-wrap: wrap; margin: 14px 0 10px; }
 .facts div { display: flex; flex-direction: column; gap: 1px; }

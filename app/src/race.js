@@ -17,7 +17,7 @@ import { panelState, signInHref } from "./session.js";
 import { insertProvisional } from "./standings.js";
 import { menuHref } from "./router.js";
 import { createViewer } from "./viewer.js";
-import { wordmark } from "./wordmark.js";
+import { duckHead, wordmark } from "./wordmark.js";
 
 /**
  * The entry column: a sign-in prompt, or the racing/publishing controls.
@@ -220,6 +220,22 @@ export function renderEventFacts(root, event) {
   return caveat;
 }
 
+/**
+ * The header's mark: the duck head, then the compact wordmark.
+ *
+ * Exported because renderRace builds a WebGL viewer and cannot run in the test
+ * suite — without this the only way to "test" the header is to rebuild it in
+ * the test, which asserts nothing about the page.
+ */
+export function headerMark() {
+  const mark = document.createElement("div");
+  mark.className = "racehead__mark";
+  const head = duckHead();
+  head.classList.add("duckhead--small");
+  mark.append(head, wordmark({ compact: true }));
+  return mark;
+}
+
 export async function renderRace(root, { event, state }) {
   root.innerHTML = `
     <header class="racehead">
@@ -250,7 +266,7 @@ export async function renderRace(root, { event, state }) {
     </div>
     <div id="board"></div>
   `;
-  document.querySelector("#racehead-mark").replaceWith(wordmark({ compact: true }));
+  document.querySelector("#racehead-mark").replaceWith(headerMark());
 
   renderEventFacts(root, event);
 
