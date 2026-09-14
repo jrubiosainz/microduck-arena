@@ -9,7 +9,7 @@ import re
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 
 from ..index import leaderboard
 from ..manifest import Manifest, ManifestError, all_events, load_event
@@ -71,6 +71,10 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
                 # before policies were kept, so the page shows nothing rather
                 # than a link that 404s.
                 "model_stored": row.record.model_stored,
+                # The single rule the board renders from: `model_stored` or a
+                # Hub-backed source. See RunRecord.offers_download.
+                "offers_download": row.record.offers_download,
+                "policy_url": (row.record.source or {}).get("url"),
                 "seeds_finished": row.record.seeds_finished,
                 "seeds_total": len(row.record.per_seed),
                 "run_id": row.record.run_id,
@@ -114,6 +118,8 @@ def run_detail(run_id: str, request: Request) -> dict:
         "submitted_at": record.submitted_at,
         "runner_version": record.runner_version,
         "frames": frames,
+        "offers_download": record.offers_download,
+        "policy_url": (record.source or {}).get("url"),
     }
 
 
@@ -151,6 +157,12 @@ def run_policy(run_id: str, request: Request) -> Response:
     """
     store = request.app.state.store
     record = _find_run(store, run_id)
+    source = record.source or {}
+    if source.get("kind") == "hub" and source.get("url"):
+        # The weights live with their author. Redirect rather than proxy: the
+        # Hub serves them faster than this Space can, and a proxied download
+        # would put every byte through a 2-vCPU container.
+        return RedirectResponse(source["url"])
     if not record.model_stored:
         raise HTTPException(
             status_code=404,

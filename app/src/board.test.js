@@ -216,20 +216,20 @@ describe("telling your run apart from the rest", () => {
 
 describe("policy downloads", () => {
   it("offers a download for a published row that has its weights", () => {
-    const [built] = buildRows([row({ model_stored: true })]);
+    const [built] = buildRows([row({ offers_download: true, policy_url: null })]);
     expect(built.policyUrl).toBe("/api/runs/01AAA/policy");
   });
 
   it("offers nothing for a run recorded before policies were kept", () => {
     // The log is append-only, so those files are never coming back. A link
     // here would 404.
-    const [built] = buildRows([row({ model_stored: false })]);
+    const [built] = buildRows([row({ offers_download: false })]);
     expect(built.policyUrl).toBeNull();
   });
 
   it("offers nothing for a trial, which is stored nowhere at all", () => {
     const [built] = buildRows([
-      row({ provisional: true, model_stored: true, run_id: null }),
+      row({ provisional: true, offers_download: true, run_id: null }),
     ]);
     expect(built.policyUrl).toBeNull();
   });
@@ -240,7 +240,7 @@ describe("policy downloads", () => {
     const container = document.createElement("div");
     renderBoard(container, {
       event: { title: "2 m Sprint" },
-      rows: [row({ model_stored: true, user: "alice", policy_name: "walker" })],
+      rows: [row({ offers_download: true, policy_url: null, user: "alice", policy_name: "walker" })],
     });
     const link = container.querySelector("td.grab a");
     expect(link).not.toBeNull();
@@ -253,9 +253,41 @@ describe("policy downloads", () => {
     const container = document.createElement("div");
     renderBoard(container, {
       event: { title: "2 m Sprint" },
-      rows: [row({ model_stored: false })],
+      rows: [row({ offers_download: false })],
     });
     expect(container.querySelector("td.grab")).not.toBeNull();
     expect(container.querySelector("td.grab a")).toBeNull();
+  });
+});
+
+describe("policy downloads across both hosting paths", () => {
+  it("links to the Hub when that is where the policy lives", () => {
+    const [built] = buildRows([
+      row({
+        offers_download: true,
+        policy_url: "https://huggingface.co/alice/microduck-walker/resolve/rev/policy.onnx",
+      }),
+    ]);
+    expect(built.policyUrl).toBe(
+      "https://huggingface.co/alice/microduck-walker/resolve/rev/policy.onnx",
+    );
+  });
+
+  it("links to this server for a locally stored policy", () => {
+    const [built] = buildRows([row({ offers_download: true, policy_url: null })]);
+    expect(built.policyUrl).toBe("/api/runs/01AAA/policy");
+  });
+
+  it("offers nothing when the server says there is nothing", () => {
+    // The rule lives in arena/store.py; the frontend must not re-derive it.
+    const [built] = buildRows([row({ offers_download: false })]);
+    expect(built.policyUrl).toBeNull();
+  });
+
+  it("offers nothing for a trial, which is stored nowhere at all", () => {
+    const [built] = buildRows([
+      row({ provisional: true, offers_download: true, run_id: null }),
+    ]);
+    expect(built.policyUrl).toBeNull();
   });
 });

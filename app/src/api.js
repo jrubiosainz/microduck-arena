@@ -25,6 +25,15 @@ export const getEvents = () => json("/api/events").then((b) => b.events);
 export const getLeaderboard = (eventId) => json(`/api/events/${eventId}/leaderboard`);
 export const getRun = (runId) => json(`/api/runs/${runId}`);
 
+/** Who the server thinks you are. Never throws: a failure means signed out. */
+export async function getMe() {
+  try {
+    return await json("/api/me");
+  } catch {
+    return null;
+  }
+}
+
 export async function getTrace(runId) {
   const response = await fetch(`/api/runs/${runId}/trace`);
   // Same contract as every other call: the server's own sentence, not a status.

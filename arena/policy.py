@@ -15,7 +15,11 @@ import onnxruntime as ort
 
 from .constants import NUM_JOINTS, OBS_SIZE
 
-MAX_MODEL_BYTES = 4 * 1024 * 1024
+# 64 MiB. Raised from 4 MiB, which rejected real community policies — the
+# roller-skating one on the Hub is 8.4 MB. Raised rather than removed: an
+# unbounded upload to a shared 2-vCPU Space is a denial-of-service vector, not
+# a feature.
+MAX_MODEL_BYTES = 64 * 1024 * 1024
 
 
 class PolicyError(Exception):

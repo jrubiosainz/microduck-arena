@@ -7,6 +7,9 @@ sdk: docker
 app_port: 7860
 pinned: false
 short_description: Race Microduck policies on a clock you can trust
+hf_oauth: true
+hf_oauth_scopes:
+  - contribute-repos
 ---
 
 # microduck-arena
@@ -51,15 +54,21 @@ keep the run log. Set two things in **Settings → Variables and secrets**:
 | `HF_TOKEN` | **secret** | a token with write access to that dataset |
 
 Without both, the Space still boots and the board still works — but every
-published run and uploaded policy is lost the next time it restarts or wakes
-from sleep. `GET /api/health` reports `"durable": true` once it is configured,
-and the startup log says `EPHEMERAL` in capitals when it is not.
+recorded run is lost the next time it restarts or wakes from sleep. A
+published policy's `.onnx` is not at risk from this: it lives in the
+publishing author's own Hub repo, not on the Space. `GET /api/health` reports
+`"durable": true` once it is configured, and the startup log says `EPHEMERAL`
+in capitals when it is not.
 
-Two things this deployment does NOT have yet:
+The Space signs users in with Hugging Face OAuth, scoped to `contribute-repos`
+— just enough to create and write to a repo it did not previously own, nothing
+wider. Publishing a policy creates (or reuses) `<your-user>/microduck-<slug>`
+under the signer's own account, public, and the board's `.onnx` link resolves
+straight to the Hub. A signed-in user whose token lacks Hub write access can
+still race and watch replays; only Publish is disabled for them.
 
-- **No OAuth.** Everyone who publishes is recorded as `guest`, so the board
-  ranks by policy name rather than by person. Real usernames need the HF OAuth
-  flow, which is a separate piece of work.
+One thing this deployment does NOT have yet:
+
 - **Submissions are synchronous and CPU-bound.** One entry is 33 simulated runs
   — about 3 s on a developer laptop, and proportionally longer on a shared
   2-vCPU Space. It works; it is not instant, and there is no queue.

@@ -84,6 +84,17 @@ class RunRecord:
     # that list here would buy a second source of truth for nothing.
     livery: str = "classic"
 
+    @property
+    def offers_download(self) -> bool:
+        """Whether the board should show a download link for this run.
+
+        `model_stored` says whether the SPACE holds the bytes, which stopped
+        being the same question when publishing moved to the author's own Hub
+        repo: those runs offer a download and store nothing here. Keeping the
+        rule in one place stops the API and the frontend disagreeing about it.
+        """
+        return bool(self.model_stored or (self.source or {}).get("kind") == "hub")
+
     def to_dict(self) -> dict:
         return {
             "run_id": self.run_id,

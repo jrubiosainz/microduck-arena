@@ -38,12 +38,13 @@ export function buildRows(rows) {
       // interesting column on the board.
       speed: formatSpeed(row.command_vx, { finished: row.seeds_finished }),
       seeds: formatSeeds(row.seeds_finished, row.seeds_total),
-      // Where this row's weights can be fetched, or null. A published run has
-      // them; a trial never does, and nor does a run recorded before policies
-      // were kept — so this is null rather than a link that 404s.
+      // Whether a download exists is the SERVER's decision (see
+      // RunRecord.offers_download): a Hub-published policy offers one while the
+      // Space stores nothing. Re-deriving that here would give the two sides a
+      // chance to disagree.
       policyUrl:
-        !row.provisional && row.model_stored && row.run_id
-          ? `/api/runs/${row.run_id}/policy`
+        !row.provisional && row.offers_download && row.run_id
+          ? row.policy_url || `/api/runs/${row.run_id}/policy`
           : null,
       runId: row.run_id,
       dnf,

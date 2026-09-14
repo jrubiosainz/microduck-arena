@@ -110,3 +110,37 @@ def test_blank_environment_variables_count_as_unset(tmp_path, monkeypatch):
     assert config.dataset_repo is None
     assert config.hf_token is None
     assert isinstance(config.build_store(), LocalStore)
+
+
+def test_oauth_is_absent_by_default(tmp_path, monkeypatch):
+    for key in ("OAUTH_CLIENT_ID", "OAUTH_CLIENT_SECRET", "SPACE_HOST"):
+        monkeypatch.delenv(key, raising=False)
+    config = ArenaConfig.from_env(store_dir=tmp_path)
+    assert config.oauth is None
+    assert config.oauth_enabled is False
+
+
+def test_oauth_is_picked_up_from_the_spaces_variables(tmp_path, monkeypatch):
+    monkeypatch.setenv("OAUTH_CLIENT_ID", "cid")
+    monkeypatch.setenv("OAUTH_CLIENT_SECRET", "csecret")
+    monkeypatch.setenv("SPACE_HOST", "example.hf.space")
+    monkeypatch.setenv("OAUTH_SCOPES", "openid profile contribute-repos")
+    config = ArenaConfig.from_env(store_dir=tmp_path)
+    assert config.oauth_enabled is True
+    assert config.oauth.redirect_uri == "https://example.hf.space/login/callback"
+
+
+def test_the_session_secret_is_random_when_nothing_supplies_one(tmp_path, monkeypatch):
+    monkeypatch.delenv("OAUTH_CLIENT_SECRET", raising=False)
+    a = ArenaConfig.from_env(store_dir=tmp_path).session_secret
+    b = ArenaConfig.from_env(store_dir=tmp_path).session_secret
+    # Random per config, so cookies from a previous process are worthless.
+    assert a != b
+    assert len(a) >= 32
+
+
+def test_the_session_secret_prefers_the_oauth_client_secret(tmp_path, monkeypatch):
+    """So a Space's cookies survive its own workers, without a new secret to set."""
+    monkeypatch.setenv("OAUTH_CLIENT_SECRET", "csecret")
+    config = ArenaConfig.from_env(store_dir=tmp_path)
+    assert config.session_secret == "csecret"

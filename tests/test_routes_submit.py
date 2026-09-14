@@ -17,7 +17,26 @@ def store_dir(tmp_path):
 @pytest.fixture
 def api(store_dir):
     config = ArenaConfig.from_env(store_dir=store_dir, dev_user="coralie")
-    return TestClient(create_app(config))
+    return TestClient(create_app(config), base_url="https://testserver")
+
+
+@pytest.fixture
+def spaced_api(store_dir, monkeypatch):
+    """A Space-like app: OAuth configured, so nobody is signed in by default."""
+    monkeypatch.setenv("OAUTH_CLIENT_ID", "cid")
+    monkeypatch.setenv("OAUTH_CLIENT_SECRET", "csecret")
+    monkeypatch.setenv("SPACE_HOST", "example.hf.space")
+    config = ArenaConfig.from_env(store_dir=store_dir, dev_user="coralie")
+    return TestClient(create_app(config), base_url="https://testserver")
+
+
+def sign_in(api, username="alice", token=None):
+    """Put a real session in the app's table and hand the client its cookie."""
+    from arena.web.session import COOKIE_NAME, sign
+
+    app = api.app
+    sid = app.state.sessions.create(username, token, 3600)
+    api.cookies.set(COOKIE_NAME, sign(sid, app.state.config.session_secret))
 
 
 def submit(api, path=REFERENCE, event="sprint-2m", name="walker"):
@@ -317,3 +336,229 @@ def test_publishing_always_sweeps_and_ignores_a_pinned_speed(api):
     # 0.25 would have scored 18.2s. The sweep's answer is what got recorded.
     assert body["command_vx"] == pytest.approx(0.40)
     assert body["score"] == pytest.approx(11.724, rel=0.02)
+
+
+def test_testing_a_policy_signed_out_is_refused(spaced_api):
+    response = try_it(spaced_api)
+    assert response.status_code == 401
+    assert "sign in" in response.json()["detail"].lower()
+
+
+def test_publishing_signed_out_is_refused(spaced_api):
+    with open(REFERENCE, "rb") as fh:
+        response = spaced_api.post(
+            "/api/events/sprint-2m/submit", files={"file": ("w.onnx", fh)}
+        )
+    assert response.status_code == 401
+
+
+def test_a_signed_out_publish_is_refused_and_records_nothing(spaced_api, store_dir):
+    """`try` never persists anything either way, so it can't tell this test
+    apart from a gate that was never wired in. `submit` does persist, so this
+    has to go through `submit` to be a claim that can actually fail."""
+    with open(REFERENCE, "rb") as fh:
+        response = spaced_api.post(
+            "/api/events/sprint-2m/submit", files={"file": ("w.onnx", fh)}
+        )
+    assert response.status_code == 401
+    assert list(store_dir.rglob("*.json")) == []
+    assert list(store_dir.rglob("*.npz")) == []
+
+
+def test_a_signed_in_run_is_recorded_under_the_hub_username(spaced_api):
+    sign_in(spaced_api, username="alice")
+    with open(REFERENCE, "rb") as fh:
+        body = spaced_api.post(
+            "/api/events/sprint-2m/submit",
+            files={"file": ("w.onnx", fh)},
+            data={"name": "walker"},
+        ).json()
+    # Not "guest", and not anything the browser supplied.
+    assert body["user"] == "alice"
+
+
+def test_the_local_path_still_needs_no_session_at_all(api):
+    """With no OAuth configured, ARENA_DEV_USER races. This is the local run."""
+    response = submit(api)
+    assert response.status_code == 200
+    assert response.json()["user"] == "coralie"
+
+
+def test_a_hub_published_run_stores_no_weights_and_records_a_link(spaced_api, store_dir, monkeypatch):
+    from arena.hub_publish import PublishedPolicy
+
+    published = PublishedPolicy(
+        repo_id="alice/microduck-walker",
+        filename="policy.onnx",
+        revision="rev123",
+        url="https://huggingface.co/alice/microduck-walker/resolve/rev123/policy.onnx",
+    )
+    monkeypatch.setattr(
+        "arena.web.routes_submit._publish_to_hub", lambda *a, **k: published
+    )
+    sign_in(spaced_api, username="alice", token="hf_tok")
+    with open(REFERENCE, "rb") as fh:
+        body = spaced_api.post(
+            "/api/events/sprint-2m/submit",
+            files={"file": ("w.onnx", fh)},
+            data={"name": "walker"},
+        ).json()
+
+    assert body["policy_url"] == published.url
+    # The whole point: the Space holds no weights on this path.
+    assert not (store_dir / "models").exists()
+
+    rows = spaced_api.get("/api/events/sprint-2m/leaderboard").json()["rows"]
+    assert rows[0]["offers_download"] is True
+    assert rows[0]["policy_url"] == published.url
+
+
+def test_a_failed_hub_write_records_nothing_at_all(spaced_api, store_dir, monkeypatch):
+    """A board row pointing at a repo that does not exist is worse than an error."""
+    from arena.hub_publish import HubPublishError
+
+    def boom(*args, **kwargs):
+        raise HubPublishError("could not create alice/microduck-walker: 403 Forbidden")
+
+    monkeypatch.setattr("arena.web.routes_submit._publish_to_hub", boom)
+    sign_in(spaced_api, username="alice", token="hf_tok")
+    with open(REFERENCE, "rb") as fh:
+        response = spaced_api.post(
+            "/api/events/sprint-2m/submit", files={"file": ("w.onnx", fh)}
+        )
+    assert response.status_code == 502
+    assert "403 Forbidden" in response.json()["detail"]
+    assert list(store_dir.rglob("*.json")) == []
+
+
+def _fetched(path=REFERENCE, repo_id="alice/walker", filename="policy.onnx", revision="rev1"):
+    from arena.hub_fetch import FetchedPolicy
+
+    return FetchedPolicy(
+        repo_id=repo_id,
+        filename=filename,
+        revision=revision,
+        path=path,
+        url=f"https://huggingface.co/{repo_id}/resolve/{revision}/{filename}",
+    )
+
+
+def test_a_repo_id_races_without_uploading_anything(api, store_dir, monkeypatch):
+    """The whole point: give a reference, upload nothing, and it still scores."""
+    fetched = _fetched()
+    monkeypatch.setattr(
+        "arena.web.routes_submit._fetch_from_hub", lambda repo_id: fetched
+    )
+    response = api.post(
+        "/api/events/sprint-2m/submit",
+        data={"repo_id": "alice/walker", "name": "someone else's walker"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["score"] == pytest.approx(11.724, rel=0.02)
+    assert body["model_stored"] is False
+    assert body["offers_download"] is True
+    assert body["policy_url"] == fetched.url
+
+    # Nothing was written to the store's model cache: the weights already
+    # live with their author.
+    assert not (store_dir / "models").exists()
+
+    rows = api.get("/api/events/sprint-2m/leaderboard").json()["rows"]
+    assert rows[0]["offers_download"] is True
+    assert rows[0]["policy_url"] == fetched.url
+
+
+def test_a_trial_can_race_a_repo_id_too(api, monkeypatch):
+    fetched = _fetched()
+    monkeypatch.setattr(
+        "arena.web.routes_submit._fetch_from_hub", lambda repo_id: fetched
+    )
+    response = api.post(
+        "/api/events/sprint-2m/try",
+        data={"repo_id": "alice/walker"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["score"] == pytest.approx(11.724, rel=0.02)
+    # A trial keeps nothing regardless of where the policy came from.
+    assert body["policy_name"] == "policy"
+
+
+def test_sending_both_a_file_and_a_repo_id_is_refused(api):
+    with open(REFERENCE, "rb") as fh:
+        response = api.post(
+            "/api/events/sprint-2m/submit",
+            files={"file": ("p.onnx", fh)},
+            data={"repo_id": "alice/walker"},
+        )
+    assert response.status_code == 400
+    assert "not both and not neither" in response.json()["detail"]
+
+
+def test_sending_neither_a_file_nor_a_repo_id_is_refused(api):
+    response = api.post("/api/events/sprint-2m/submit")
+    assert response.status_code == 400
+    assert "not both and not neither" in response.json()["detail"]
+
+
+def test_an_unresolvable_repo_id_is_refused_with_its_reason(api, store_dir, monkeypatch):
+    from arena.hub_fetch import FetchError
+
+    def boom(repo_id):
+        raise FetchError(f"{repo_id} has no .onnx file")
+
+    monkeypatch.setattr("arena.web.routes_submit._fetch_from_hub", boom)
+    response = api.post(
+        "/api/events/sprint-2m/submit",
+        data={"repo_id": "alice/empty"},
+    )
+    assert response.status_code == 400
+    assert "has no .onnx file" in response.json()["detail"]
+    assert api.get("/api/events/sprint-2m/leaderboard").json()["rows"] == []
+
+
+def test_a_signed_in_repo_id_race_never_republishes_to_the_hub(spaced_api, monkeypatch):
+    """A signed-in user with a Hub token, racing someone ELSE's repo id, must
+    not have that policy republished into their own namespace — the weights
+    already live with their author, at `fetched`'s repo."""
+    fetched = _fetched()
+    calls = []
+    monkeypatch.setattr(
+        "arena.web.routes_submit._fetch_from_hub", lambda repo_id: fetched
+    )
+    monkeypatch.setattr(
+        "arena.web.routes_submit._publish_to_hub",
+        lambda *a, **k: calls.append(a) or (_ for _ in ()).throw(
+            AssertionError("_publish_to_hub must not be called for a repo_id entry")
+        ),
+    )
+    sign_in(spaced_api, username="alice", token="hf_tok")
+    response = spaced_api.post(
+        "/api/events/sprint-2m/submit",
+        data={"repo_id": "alice/walker", "name": "someone else's walker"},
+    )
+    assert response.status_code == 200, response.text
+    assert calls == []
+    body = response.json()
+    # The recorded source names the FETCHED repo, not a republished one.
+    assert body["policy_url"] == fetched.url
+
+
+def test_a_policy_that_fails_validation_never_reaches_the_hub(spaced_api, tmp_path, monkeypatch):
+    """Race first, publish second: nothing is written to someone's namespace
+    until the harness has confirmed the file is a working policy."""
+    reached = []
+    monkeypatch.setattr(
+        "arena.web.routes_submit._publish_to_hub",
+        lambda *a, **k: reached.append(True),
+    )
+    sign_in(spaced_api, username="alice", token="hf_tok")
+    junk = tmp_path / "junk.onnx"
+    junk.write_bytes(b"not an onnx file")
+    with open(junk, "rb") as fh:
+        response = spaced_api.post(
+            "/api/events/sprint-2m/submit", files={"file": ("junk.onnx", fh)}
+        )
+    assert response.status_code == 400
+    assert reached == []

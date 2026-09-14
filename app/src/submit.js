@@ -7,7 +7,7 @@
 import { submitPolicy } from "./api.js";
 import { formatScore, formatSeeds, formatSpeed } from "./format.js";
 
-const MAX_BYTES = 4 * 1024 * 1024; // mirrors arena.policy.MAX_MODEL_BYTES
+const MAX_BYTES = 64 * 1024 * 1024; // mirrors arena.policy.MAX_MODEL_BYTES
 
 export function validateFile(file) {
   if (!file) return "Choose a .onnx policy file first.";

@@ -153,3 +153,17 @@ def test_a_record_written_before_policies_were_kept_still_loads():
     raw = make_record(model_stored=True).to_dict()
     del raw["model_stored"]
     assert RunRecord.from_dict(raw).model_stored is False
+
+
+def test_offers_download_covers_both_hosting_paths():
+    """`model_stored` stopped matching its name once policies moved to the Hub:
+    a Hub run offers a download while storing nothing here. One rule, one place."""
+    assert make_record(model_stored=True).offers_download is True
+    assert make_record(model_stored=False).offers_download is False
+    assert (
+        make_record(
+            model_stored=False,
+            source={"kind": "hub", "repo_id": "a/b", "url": "https://x/y"},
+        ).offers_download
+        is True
+    )

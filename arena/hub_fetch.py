@@ -1,0 +1,147 @@
+"""Fetch a policy that is already on the Hub.
+
+13 of the 14 repos tagged `microduck-policy` ship an `.onnx`, and 11 call it
+`policy.onnx` at the root — so that name is preferred, a single differently
+named `.onnx` is accepted, and anything ambiguous is refused rather than
+guessed. Racing the wrong file out of a repo that holds two would be a silent
+wrong answer on a leaderboard.
+
+`info` and `download` are handed in so the selection rules are testable without
+a network.
+
+The 64 MiB cap (`arena.policy.MAX_MODEL_BYTES`) is checked against the size
+the Hub itself declares for the chosen file, BEFORE `download` is ever
+called — a repo can hold anything, and the constraint is "the cap applies to
+a fetched policy too," not "eventually, after paying for the download." A
+repo that declines to report a size (`None`) is not refused on that account —
+an unknown size is not evidence of a large file — and `load_policy` remains
+the backstop that catches an oversized file downstream if the declared size
+was ever missing or wrong.
+"""
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from .policy import MAX_MODEL_BYTES
+
+PREFERRED = "policy.onnx"
+
+
+class FetchError(Exception):
+    """The reference cannot be resolved, with a reason fit to show a human."""
+
+
+@dataclass(frozen=True)
+class FetchedPolicy:
+    repo_id: str
+    filename: str
+    revision: str
+    path: Path
+    url: str
+
+
+def parse_repo_ref(text: str) -> tuple[str, str | None]:
+    """`owner/name`, optionally `owner/name:path/to/file.onnx`. URLs allowed."""
+    raw = str(text or "").strip()
+    for prefix in ("https://huggingface.co/", "http://huggingface.co/", "hf.co/"):
+        raw = raw.removeprefix(prefix)
+    # A pasted URL may carry /tree/main, /blob/main or /resolve/main. /tree/
+    # names a directory, so it is simply dropped. /blob/ and /resolve/ name a
+    # FILE — the whole point of the paste — so that filename is kept, with the
+    # revision segment right after the marker skipped over.
+    url_filename = None
+    if "/tree/" in raw:
+        raw = raw.split("/tree/", 1)[0]
+    else:
+        for marker in ("/blob/", "/resolve/"):
+            if marker in raw:
+                repo_part, rest = raw.split(marker, 1)
+                _revision, _, path = rest.partition("/")
+                raw = repo_part
+                url_filename = path or None
+                break
+    repo, _, filename = raw.partition(":")
+    filename = filename or url_filename
+    parts = [p for p in repo.strip("/").split("/") if p]
+    if len(parts) != 2 or any(p in (".", "..") for p in parts):
+        raise FetchError(
+            f"{text!r} is not a repo id — expected owner/name, "
+            "optionally owner/name:policy.onnx"
+        )
+    return "/".join(parts), ((filename or "").strip() or None)
+
+
+def _default_info(repo_id: str):
+    from huggingface_hub import HfApi
+
+    # files_metadata=True is what makes each sibling carry `.size` — without
+    # it the Hub returns the file list alone, and there is nothing to check
+    # the cap against before downloading.
+    info = HfApi().model_info(repo_id, files_metadata=True)
+    siblings = info.siblings or []
+    files = [s.rfilename for s in siblings]
+    sizes = {s.rfilename: s.size for s in siblings}
+    return files, info.sha, sizes
+
+
+def _default_download(repo_id: str, filename: str, revision: str):
+    from huggingface_hub import hf_hub_download
+
+    return hf_hub_download(repo_id, filename, revision=revision)
+
+
+def _pick(files: list[str], wanted: str | None, repo_id: str) -> str:
+    onnx = [f for f in files if f.endswith(".onnx")]
+    if wanted:
+        if wanted not in files:
+            raise FetchError(f"{repo_id} has no {wanted}")
+        return wanted
+    if not onnx:
+        raise FetchError(f"{repo_id} has no .onnx file")
+    if PREFERRED in onnx:
+        return PREFERRED
+    if len(onnx) == 1:
+        return onnx[0]
+    listed = ", ".join(sorted(onnx)[:6])
+    raise FetchError(
+        f"{repo_id} has several .onnx files — say which one, "
+        f"as {repo_id}:<file>. Found: {listed}"
+    )
+
+
+def fetch_policy(
+    repo_ref: str, download=_default_download, info=_default_info
+) -> FetchedPolicy:
+    repo_id, wanted = parse_repo_ref(repo_ref)
+    try:
+        files, revision, sizes = info(repo_id)
+    except FetchError:
+        raise
+    except Exception as exc:
+        raise FetchError(f"could not read {repo_id}: {exc}") from exc
+
+    filename = _pick(list(files), wanted, repo_id)
+
+    # Refused BEFORE downloading anything: a declared size over the cap costs
+    # nothing to reject. A missing (None) size is not evidence of a large
+    # file, so it is not grounds for refusal — `load_policy` still checks the
+    # actual bytes once they exist, downstream.
+    size = (sizes or {}).get(filename)
+    if size is not None and size > MAX_MODEL_BYTES:
+        raise FetchError(
+            f"{repo_id}/{filename} is {size} bytes, larger than the "
+            f"{MAX_MODEL_BYTES} byte limit"
+        )
+
+    try:
+        path = Path(download(repo_id, filename, revision))
+    except Exception as exc:
+        raise FetchError(f"could not download {repo_id}/{filename}: {exc}") from exc
+
+    return FetchedPolicy(
+        repo_id=repo_id,
+        filename=filename,
+        revision=revision or "main",
+        path=path,
+        url=f"https://huggingface.co/{repo_id}/resolve/{revision or 'main'}/{filename}",
+    )

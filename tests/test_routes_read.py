@@ -212,3 +212,32 @@ def test_a_download_filename_is_capped():
     name = policy_filename("x" * 500, "alice")
     assert len(name) <= 65
     assert name.endswith(".onnx")
+
+
+def test_the_download_route_redirects_to_the_hub_for_a_hub_record(client):
+    api, app = client
+    record = make_record(
+        user="alice",
+        source={
+            "kind": "hub",
+            "repo_id": "alice/microduck-walker",
+            "filename": "policy.onnx",
+            "revision": "rev123",
+            "url": "https://huggingface.co/alice/microduck-walker/resolve/rev123/policy.onnx",
+        },
+    )
+    app.state.store.append(record, encode(np.zeros((5, 21), "f4")))
+
+    response = api.get(f"/api/runs/{record.run_id}/policy", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == record.source["url"]
+
+
+def test_a_local_upload_record_is_still_served_from_the_store(client):
+    """The CLI and every pre-existing run. Both paths keep working."""
+    api, app = client
+    record = make_record(user="alice", model_stored=True)
+    app.state.store.append(record, encode(np.zeros((5, 21), "f4")), b"the-onnx")
+    response = api.get(f"/api/runs/{record.run_id}/policy")
+    assert response.status_code == 200
+    assert response.content == b"the-onnx"

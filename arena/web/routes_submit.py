@@ -26,11 +26,39 @@ from fastapi.concurrency import run_in_threadpool
 
 from .. import trace as trace_codec
 from ..evaluate import evaluate, evaluate_at
+from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy
+from ..hub_publish import HubPublishError, publish_policy
 from ..manifest import ManifestError, load_event
 from ..policy import MAX_MODEL_BYTES, PolicyError, load_policy
 from ..store import RunRecord, new_run_id
+from .routes_auth import current_user
+from .session import Session
 
 router = APIRouter(prefix="/api")
+
+
+def _publish_to_hub(token: str, username: str, name: str, blob: bytes, rig: str):
+    """Wrapped so tests replace one function rather than the Hub client."""
+    from huggingface_hub import HfApi
+
+    return publish_policy(HfApi(token=token), username, name, blob, rig)
+
+
+def _fetch_from_hub(repo_id: str) -> FetchedPolicy:
+    """Wrapped so tests replace one function rather than the Hub client."""
+    return fetch_policy(repo_id)
+
+
+def _require_session(request: Request) -> Session:
+    """Racing costs CPU and publishing writes to a namespace. Both need a name.
+
+    Watching does not: the board, the replays and the downloads are open to
+    anyone who can open the page.
+    """
+    session = current_user(request)
+    if session is None:
+        raise HTTPException(status_code=401, detail="Please sign in to race a policy.")
+    return session
 
 
 def _load_and_evaluate(path: Path, manifest, command_vx: float | None = None):
@@ -65,15 +93,48 @@ def _speed(manifest, value: str | None) -> float | None:
     return min(manifest.sweep.hi, max(manifest.sweep.lo, vx))
 
 
-async def _race(event_id: str, file: UploadFile, command_vx: str | None = None):
-    """Validate an upload and evaluate it. Shared by both paths.
+async def _race(
+    event_id: str,
+    file: UploadFile | None,
+    repo_id: str | None = None,
+    command_vx: str | None = None,
+):
+    """Validate a policy and evaluate it. Shared by both paths, and both sources.
 
-    Returns `(manifest, policy, evaluation, payload)`, or raises the HTTP error
-    a submitter should see. The payload comes back because `submit` stores the
-    weights so others can download and race them, and re-reading the upload
-    after it has been consumed is not possible.
+    Exactly one of `file` (an upload) and `repo_id` (already on the Hub) is
+    given — the routes enforce that before calling in. Returns `(manifest,
+    policy, evaluation, payload, fetched)`, or raises the HTTP error a
+    submitter should see.
+
+    `payload` comes back because `submit` stores an upload's weights so others
+    can download and race them, and re-reading the upload after it has been
+    consumed is not possible. `fetched` comes back instead, for the Hub path:
+    the policy already lives with its author, so there is nothing here to
+    store — `submit` records a link built from it rather than a blob.
     """
     manifest = _event_or_404(event_id)
+
+    if repo_id:
+        try:
+            # Offloaded to a worker thread: this is a network call.
+            fetched = await run_in_threadpool(_fetch_from_hub, repo_id)
+        except FetchError as exc:
+            # 400, not 500: the reference is the problem, and the message is
+            # written to be read by the person who typed it.
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        try:
+            # Offloaded to a worker thread. Both steps are CPU-bound — an ONNX
+            # session load plus five simulated runs, about a second in total —
+            # and these are `async def` handlers, so doing them inline would
+            # block the whole event loop. This is also where the 64 MiB cap is
+            # enforced for a fetched policy: `load_policy` checks every path
+            # alike, whichever source it came from.
+            policy, result = await run_in_threadpool(
+                _load_and_evaluate, fetched.path, manifest, _speed(manifest, command_vx)
+            )
+        except PolicyError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return manifest, policy, result, None, fetched
 
     payload = await file.read()
     if len(payload) > MAX_MODEL_BYTES:
@@ -100,7 +161,7 @@ async def _race(event_id: str, file: UploadFile, command_vx: str | None = None):
             # to be read by the person who uploaded it.
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    return manifest, policy, result, payload
+    return manifest, policy, result, payload, None
 
 
 def _seed_rows(result):
@@ -123,10 +184,21 @@ def _label(name: str | None, filename: str | None) -> str:
     return ((name or "").strip() or Path(filename or "policy.onnx").stem)[:80]
 
 
+def _require_exactly_one(file: UploadFile | None, repo_id: str | None) -> None:
+    """A policy comes from an upload or a Hub repo id, never both, never neither."""
+    if (file is None) == (not repo_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Send either a .onnx file or a repo id, not both and not neither.",
+        )
+
+
 @router.post("/events/{event_id}/try")
 async def try_policy(
     event_id: str,
-    file: UploadFile = File(...),
+    request: Request,
+    file: UploadFile | None = File(default=None),
+    repo_id: str | None = Form(default=None),
     name: str | None = Form(default=None),
     livery: str | None = Form(default=None),
     command_vx: str | None = Form(default=None),
@@ -139,10 +211,15 @@ async def try_policy(
     `command_vx` pins the commanded speed for this trial. Omit it for the full
     sweep — the same measurement the board uses. Pinning is five runs instead of
     thirty-odd, so it is also the quick way to look at one behaviour.
+
+    `repo_id` races a policy already on the Hub, by reference — nothing is
+    uploaded, and exactly one of `file` and `repo_id` must be given.
     """
-    _, _, result, _payload = await _race(event_id, file, command_vx)
+    _require_session(request)
+    _require_exactly_one(file, repo_id)
+    _, _, result, _payload, fetched = await _race(event_id, file, repo_id, command_vx)
     return {
-        "policy_name": _label(name, file.filename),
+        "policy_name": _label(name, file.filename if file else fetched.filename),
         "livery": _livery(livery),
         "score": result.score,
         "command_vx": result.command_vx,
@@ -160,18 +237,62 @@ async def try_policy(
 async def submit(
     event_id: str,
     request: Request,
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(default=None),
+    repo_id: str | None = Form(default=None),
     name: str | None = Form(default=None),
     livery: str | None = Form(default=None),
 ) -> dict:
+    # Gated before any of the expensive work: validating and racing a policy for
+    # someone who is not signed in would burn CPU on a shared Space for a
+    # request that cannot be recorded.
+    session = _require_session(request)
+    _require_exactly_one(file, repo_id)
+
     # NO command_vx here, deliberately, even though `try` accepts one. A board
     # where entrants pick their own commanded speed ranks whoever guessed best,
     # which is the exact failure the sweep was built to remove. A published time
     # is always the full sweep.
-    manifest, policy, result, payload = await _race(event_id, file)
+    manifest, policy, result, payload, fetched = await _race(event_id, file, repo_id)
 
-    config = request.app.state.config
     store = request.app.state.store
+    label = _label(name, file.filename if file else fetched.filename)
+
+    # Race first, publish second, record third. Nothing is written into
+    # someone's Hub namespace until the harness above has confirmed the file
+    # is a working policy — a validation failure never reaches the Hub.
+    #
+    # A `repo_id` entry never goes through this: the policy already lives with
+    # its author, in that repo, so there is nothing here to publish.
+    published = None
+    if fetched is None and session.token:
+        try:
+            published = _publish_to_hub(
+                session.token, session.username, label, payload, manifest.rig
+            )
+        except HubPublishError as exc:
+            # 502, not 500: the Hub refused, and the message is the Hub's. And
+            # nothing is recorded — a row pointing at a repo that does not
+            # exist is worse than an error.
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if fetched is not None:
+        source = {
+            "kind": "hub",
+            "repo_id": fetched.repo_id,
+            "filename": fetched.filename,
+            "revision": fetched.revision,
+            "url": fetched.url,
+        }
+    elif published is not None:
+        source = {
+            "kind": "hub",
+            "repo_id": published.repo_id,
+            "filename": published.filename,
+            "revision": published.revision,
+            "url": published.url,
+        }
+    else:
+        source = {"kind": "upload", "filename": file.filename}
 
     record = RunRecord(
         run_id=new_run_id(),
@@ -179,9 +300,9 @@ async def submit(
         # Zero-padded ISO-8601 ending in Z. arena/index.py breaks a full tie by
         # comparing this as a STRING, so an isoformat() offset would misorder it.
         submitted_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        user=config.dev_user,
-        policy_name=_label(name, file.filename),
-        source={"kind": "upload", "filename": file.filename},
+        user=session.username,
+        policy_name=label,
+        source=source,
         model_sha256=policy.sha256,
         score=result.score,
         command_vx=result.command_vx,
@@ -189,14 +310,16 @@ async def submit(
         per_seed=result.per_seed,
         trace_seed=result.trace_seed,
         runner_version=result.runner_version,
-        # Publishing shares the weights. This is stated on the page next to the
-        # button, because it changes what "Publish" means: a time nobody can
-        # reproduce is a claim, and the whole value of the board is that anyone
-        # can download an entry and race it themselves.
-        model_stored=True,
+        # Publishing shares the weights, either kept here, in the author's own
+        # Hub repo, or — for a `repo_id` entry — nowhere, because they were
+        # already there. This is stated on the page next to the button,
+        # because it changes what "Publish" means: a time nobody can
+        # reproduce is a claim, and the whole value of the board is that
+        # anyone can download an entry and race it themselves.
+        model_stored=published is None and fetched is None,
         livery=_livery(livery),
     )
-    store.append(record, trace_codec.encode(result.trace), payload)
+    store.append(record, trace_codec.encode(result.trace), payload if published is None else None)
 
     return {
         "run_id": record.run_id,
@@ -206,6 +329,8 @@ async def submit(
         "score": record.score,
         "command_vx": record.command_vx,
         "model_stored": record.model_stored,
+        "offers_download": record.offers_download,
+        "policy_url": (record.source or {}).get("url"),
         "seeds_finished": record.seeds_finished,
         "seeds_total": len(record.per_seed),
         "per_seed": _seed_rows(result),

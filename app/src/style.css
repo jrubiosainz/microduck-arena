@@ -111,10 +111,14 @@ body {
 
 .racetitle { font: 500 1.45rem/1.2 var(--sans); margin: 0 0 4px; }
 
-.facts { display: flex; gap: 26px; flex-wrap: wrap; margin: 14px 0 18px; }
+.facts { display: flex; gap: 26px; flex-wrap: wrap; margin: 14px 0 10px; }
 .facts div { display: flex; flex-direction: column; gap: 1px; }
 .facts dt { color: var(--dim); font-size: 0.72rem; }
 .facts dd { margin: 0; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+
+/* Context, not a warning: quieter than the facts it sits under, so it reads
+   as part of what the board is rather than a caution stapled onto it. */
+.racecaveat { color: var(--dim); font-size: 0.82rem; max-width: 60ch; margin: 0 0 18px; }
 
 .racegrid { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 18px; align-items: start; }
 @media (max-width: 760px) { .racegrid { grid-template-columns: minmax(0, 1fr); } }
@@ -184,6 +188,32 @@ button.link {
 .entry__actions button:disabled { opacity: 0.5; cursor: progress; }
 .entry__status { margin: 0; color: var(--dim); font-size: 0.85rem; min-height: 1.2em; }
 .entry__status.bad { color: var(--dnf); }
+
+/* The signed-out panel: a lead line and one link, nothing to fill with. */
+.entry__lead { margin: 0; font-size: 0.92rem; color: var(--chalk); }
+.entry__signin {
+  display: block;
+  text-align: center;
+  font: 600 0.9rem/1 var(--sans);
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: var(--orange);
+  color: var(--ink);
+  text-decoration: none;
+}
+.entry__signin:hover, .entry__signin:focus-visible { filter: brightness(1.08); }
+
+/* Whose entry this is, once signed in. */
+.entry__user { margin: 0; font-size: 0.82rem; color: var(--dim); }
+.entry__user strong { color: var(--chalk); }
+
+/* The no-hub state: Publish is disabled above this, so say why right here. */
+.entry__nohub {
+  margin: 0;
+  font: 400 0.78rem/1.45 var(--display);
+  letter-spacing: 0.02em;
+  color: var(--dim);
+}
 
 .failed { color: var(--dnf); padding: 30px 0; }
 

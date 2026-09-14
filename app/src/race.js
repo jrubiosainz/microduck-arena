@@ -1,15 +1,201 @@
 // One race: the stage, the file column beside it, the standing beneath.
 
-import { getLeaderboard, getTrace, submitPolicy, tryPolicy } from "./api.js";
+import { getLeaderboard, getMe, getTrace, submitPolicy, tryPolicy } from "./api.js";
 import { renderBoard, selectedRunIds, tiersByRunId } from "./board.js";
 import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { MAX, MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
+import { panelState, signInHref } from "./session.js";
 import { insertProvisional } from "./standings.js";
 import { menuHref } from "./router.js";
 import { createViewer } from "./viewer.js";
 import { wordmark } from "./wordmark.js";
+
+/**
+ * The entry column: a sign-in prompt, or the racing/publishing controls.
+ *
+ * Kept as its own function, and NOT wired into the stage or the board, so it
+ * can be rendered and exercised in a test without a WebGL viewer or a leaderboard
+ * fetch. All of its element references are captured here, after `innerHTML` is
+ * set — never before, and never by the caller — so a re-render can never leave a
+ * handler pointing at a detached node.
+ *
+ * `onTry` / `onPublish` do the actual work (the API call, updating the trial,
+ * repainting the board); this function only owns the form and the button state.
+ */
+export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiveryChange } = {}) {
+  const state = panelState(me);
+
+  if (state === "signed-out") {
+    container.innerHTML = `
+      <p class="entry__lead">Sign in to race a policy.</p>
+      <a class="entry__signin" href="${signInHref()}" target="_blank" rel="noopener">
+        Sign in with Hugging Face
+      </a>
+      <p class="entry__consent">
+        Watching costs nothing — the board, the replays and the downloads are
+        open. Signing in is only needed to test or publish.
+      </p>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <p class="entry__user">Racing as <strong id="entry-user"></strong></p>
+    <div id="dropzone"></div>
+    <label class="entry__name">Name
+      <input type="text" id="policy-name" placeholder="optional" />
+    </label>
+    <fieldset class="livery">
+      <legend>Colour</legend>
+      <div class="livery__swatches" id="liveries"></div>
+    </fieldset>
+    <label class="entry__speed">Test speed
+      <select id="speed"></select>
+      <span class="entry__hint">Publishing always sweeps.</span>
+    </label>
+    <div class="entry__actions">
+      <button id="try" class="ghost">Test it</button>
+      <button id="publish" ${state === "no-hub" ? "disabled" : ""}>Publish</button>
+    </div>
+    ${
+      state === "no-hub"
+        ? `<p class="entry__nohub">
+             Publish is off: this session has no Hub write access, so an
+             entry can't be uploaded. Testing still works.
+           </p>`
+        : ""
+    }
+    <p class="entry__consent">
+      Publishing shares your <code>.onnx</code> so anyone can download it
+      and race it. Testing shares nothing.
+    </p>
+    <p class="entry__status" id="entry-status"></p>
+  `;
+  container.querySelector("#entry-user").textContent = me.user;
+
+  const status = container.querySelector("#entry-status");
+  const tryButton = container.querySelector("#try");
+  const publishButton = container.querySelector("#publish");
+  const nameInput = container.querySelector("#policy-name");
+
+  // The four colourways the real robot comes in. Picking one shows it on your
+  // duck straight away, before you have raced anything.
+  let livery = "classic";
+  const swatches = container.querySelector("#liveries");
+  for (const [name, hex] of Object.entries(VARIANT_SWATCH_HEX)) {
+    const swatch = document.createElement("button");
+    swatch.type = "button";
+    swatch.className = "swatch";
+    swatch.dataset.livery = name;
+    swatch.style.setProperty("--swatch", hex);
+    swatch.title = name;
+    swatch.setAttribute("aria-label", name);
+    swatch.setAttribute("aria-pressed", String(name === livery));
+    swatch.addEventListener("click", () => {
+      livery = name;
+      for (const other of swatches.children) {
+        other.setAttribute("aria-pressed", String(other.dataset.livery === livery));
+      }
+      onLiveryChange?.(livery);
+    });
+    swatches.append(swatch);
+  }
+
+  // The trial speed picker, built from the event's own sweep. Default is the
+  // sweep itself: the trial should measure the same thing the board does unless
+  // you deliberately ask for one speed.
+  const speed = container.querySelector("#speed");
+  for (const choice of speedChoices(event)) {
+    const option = document.createElement("option");
+    option.value = choice.value;
+    option.textContent = choice.label;
+    speed.append(option);
+  }
+
+  const dropzone = createDropzone(container.querySelector("#dropzone"), {
+    onFile: () => {
+      status.textContent = "";
+      status.className = "entry__status";
+    },
+  });
+
+  async function run(kind) {
+    // Belt and braces: the button is already disabled and unwired in the
+    // no-hub state, but a publish must never fire even if that ever drifts.
+    if (kind === "publish" && state === "no-hub") return;
+    const file = dropzone.file;
+    if (!file) {
+      status.textContent = "Choose a .onnx policy first.";
+      status.className = "entry__status bad";
+      return;
+    }
+    tryButton.disabled = true;
+    publishButton.disabled = true;
+    status.className = "entry__status";
+    // Say what is actually taking the time: a sweep is dominated by the number
+    // of speeds, a pinned trial by the seeds.
+    const pinned = kind === "try" ? speed.value : "";
+    status.textContent = pinned
+      ? `Racing ${event.seeds} seeds at ${pinned} m/s…`
+      : `Sweeping ${event.sweep_count} speeds × ${event.seeds} seeds…`;
+    try {
+      if (kind === "try") {
+        await onTry({ file, name: nameInput.value, livery, commandVx: pinned });
+        status.textContent = "Tested. Nothing published yet.";
+      } else {
+        const published = await onPublish({ file, name: nameInput.value, livery });
+        status.textContent = `Published as ${published.policy_name}.`;
+      }
+    } catch (error) {
+      // The server's own wording — the sentence the robot's daemon would give.
+      status.textContent = error.message;
+      status.className = "entry__status bad";
+    } finally {
+      tryButton.disabled = false;
+      // A no-hub session never regains publish rights mid-page, so leave it off.
+      publishButton.disabled = state === "no-hub";
+    }
+  }
+
+  tryButton.addEventListener("click", () => run("try"));
+  publishButton.addEventListener("click", () => run("publish"));
+}
+
+/**
+ * The event facts, and the caveat that belongs right under them.
+ *
+ * Split out from `renderRace` so it can be exercised without a WebGL viewer
+ * or an API round-trip: give it a container with a `#facts` node and an
+ * event, and check what lands in the DOM.
+ *
+ * The caveat is earned, not decorative: a policy tuned on a different course,
+ * friction or physics build can score worse here without being worse, and
+ * saying so plainly is the difference between a board people trust and one
+ * they think is broken.
+ */
+export function renderEventFacts(root, event) {
+  const facts = root.querySelector("#facts");
+  for (const fact of formatEventFacts(event)) {
+    const pair = document.createElement("div");
+    const dt = document.createElement("dt");
+    dt.textContent = fact.label;
+    const dd = document.createElement("dd");
+    dd.textContent = fact.value;
+    pair.append(dt, dd);
+    facts.append(pair);
+  }
+
+  const caveat = document.createElement("p");
+  caveat.className = "racecaveat";
+  caveat.textContent =
+    "Times are measured on this course, with this friction and this " +
+    "physics build. A policy tuned elsewhere can do worse here without " +
+    "being worse.";
+  facts.after(caveat);
+  return caveat;
+}
 
 export async function renderRace(root, { event, state }) {
   root.innerHTML = `
@@ -37,91 +223,16 @@ export async function renderRace(root, { event, state }) {
           <li class="key--ghost">the rest</li>
         </ul>
       </div>
-      <aside class="entry">
-        <div id="dropzone"></div>
-        <label class="entry__name">Name
-          <input type="text" id="policy-name" placeholder="optional" />
-        </label>
-        <fieldset class="livery">
-          <legend>Colour</legend>
-          <div class="livery__swatches" id="liveries"></div>
-        </fieldset>
-        <label class="entry__speed">Test speed
-          <select id="speed"></select>
-          <span class="entry__hint">Publishing always sweeps.</span>
-        </label>
-        <div class="entry__actions">
-          <button id="try" class="ghost">Test it</button>
-          <button id="publish">Publish</button>
-        </div>
-        <p class="entry__consent">
-          Publishing shares your <code>.onnx</code> so anyone can download it
-          and race it. Testing shares nothing.
-        </p>
-        <p class="entry__status" id="entry-status"></p>
-      </aside>
+      <aside class="entry" id="entry"></aside>
     </div>
     <div id="board"></div>
   `;
   document.querySelector("#racehead-mark").replaceWith(wordmark({ compact: true }));
 
-  const facts = root.querySelector("#facts");
-  for (const fact of formatEventFacts(event)) {
-    const pair = document.createElement("div");
-    const dt = document.createElement("dt");
-    dt.textContent = fact.label;
-    const dd = document.createElement("dd");
-    dd.textContent = fact.value;
-    pair.append(dt, dd);
-    facts.append(pair);
-  }
+  renderEventFacts(root, event);
 
   const board = root.querySelector("#board");
-  const status = root.querySelector("#entry-status");
-  const tryButton = root.querySelector("#try");
-  const publishButton = root.querySelector("#publish");
-  const nameInput = root.querySelector("#policy-name");
-  // The four colourways the real robot comes in. Picking one shows it on your
-  // duck straight away, before you have raced anything.
-  let livery = "classic";
-  const swatches = root.querySelector("#liveries");
-  for (const [name, hex] of Object.entries(VARIANT_SWATCH_HEX)) {
-    const swatch = document.createElement("button");
-    swatch.type = "button";
-    swatch.className = "swatch";
-    swatch.dataset.livery = name;
-    swatch.style.setProperty("--swatch", hex);
-    swatch.title = name;
-    swatch.setAttribute("aria-label", name);
-    swatch.setAttribute("aria-pressed", String(name === livery));
-    swatch.addEventListener("click", () => {
-      livery = name;
-      for (const other of swatches.children) {
-        other.setAttribute("aria-pressed", String(other.dataset.livery === livery));
-      }
-      // Repaint whatever is on the stage now, so the choice is visible at once.
-      race(selectedRunIds(board), lastTiers);
-    });
-    swatches.append(swatch);
-  }
-
-  // The trial speed picker, built from the event's own sweep. Default is the
-  // sweep itself: the trial should measure the same thing the board does unless
-  // you deliberately ask for one speed.
-  const speed = root.querySelector("#speed");
-  for (const choice of speedChoices(event)) {
-    const option = document.createElement("option");
-    option.value = choice.value;
-    option.textContent = choice.label;
-    speed.append(option);
-  }
-
-  const dropzone = createDropzone(root.querySelector("#dropzone"), {
-    onFile: () => {
-      status.textContent = "";
-      status.className = "entry__status";
-    },
-  });
+  const entry = root.querySelector("#entry");
 
   const viewer = await createViewer(root.querySelector("#stage"), {
     // The event declares its rig, and the roller rig is a different kinematic
@@ -147,6 +258,7 @@ export async function renderRace(root, { event, state }) {
 
   let trial = null; // the unpublished run, if one has been tested
   let lastTiers = new Map();
+  let currentLivery = "classic"; // mirrors the entry panel's swatch pick
   const traces = new Map();
   const liveries = new Map(); // run id -> the colourway it raced in
 
@@ -167,7 +279,9 @@ export async function renderRace(root, { event, state }) {
     }));
     // The trial wears whatever is selected right now, so changing the swatch
     // repaints it immediately.
-    if (trial) lanes.unshift({ runId: null, trace: trial.trace, tier: "trial", livery });
+    if (trial) {
+      lanes.unshift({ runId: null, trace: trial.trace, tier: "trial", livery: currentLivery });
+    }
     viewer.setLanes(lanes, event);
     root.querySelector("#playpause").textContent = "Pause";
     root.querySelector("#stage-hint").textContent = lanes.length
@@ -188,46 +302,24 @@ export async function renderRace(root, { event, state }) {
     await race(selectedRunIds(board), tiers);
   }
 
-  async function run(kind) {
-    const file = dropzone.file;
-    if (!file) {
-      status.textContent = "Choose a .onnx policy first.";
-      status.className = "entry__status bad";
-      return;
-    }
-    tryButton.disabled = true;
-    publishButton.disabled = true;
-    status.className = "entry__status";
-    // The wait is dominated by the sweep, not the seed count, so say what is
-    // actually taking the time.
-    // Say what is actually taking the time: a sweep is dominated by the number
-    // of speeds, a pinned trial by the seeds.
-    const pinned = kind === "try" ? speed.value : "";
-    status.textContent = pinned
-      ? `Racing ${event.seeds} seeds at ${pinned} m/s…`
-      : `Sweeping ${event.sweep_count} speeds × ${event.seeds} seeds…`;
-    try {
-      if (kind === "try") {
-        trial = await tryPolicy(event.id, file, nameInput.value, livery, pinned);
-        status.textContent = "Tested. Nothing published yet.";
-      } else {
-        const published = await submitPolicy(event.id, file, nameInput.value, livery);
-        trial = null;
-        status.textContent = `Published as ${published.policy_name}.`;
-      }
+  const me = await getMe();
+  renderEntryPanel(entry, me, {
+    event,
+    onLiveryChange: (livery) => {
+      currentLivery = livery;
+      race(selectedRunIds(board), lastTiers);
+    },
+    onTry: async ({ file, name, livery, commandVx }) => {
+      trial = await tryPolicy(event.id, file, name, livery, commandVx);
       await paint();
-    } catch (error) {
-      // The server's own wording — the sentence the robot's daemon would give.
-      status.textContent = error.message;
-      status.className = "entry__status bad";
-    } finally {
-      tryButton.disabled = false;
-      publishButton.disabled = false;
-    }
-  }
-
-  tryButton.addEventListener("click", () => run("try"));
-  publishButton.addEventListener("click", () => run("publish"));
+    },
+    onPublish: async ({ file, name, livery }) => {
+      const published = await submitPolicy(event.id, file, name, livery);
+      trial = null;
+      await paint();
+      return published;
+    },
+  });
 
   await paint();
 }

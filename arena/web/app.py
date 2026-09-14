@@ -11,8 +11,10 @@ from fastapi.staticfiles import StaticFiles
 
 from ..manifest import all_events
 from .config import ArenaConfig
+from .routes_auth import router as auth_router
 from .routes_read import router as read_router
 from .routes_submit import router as submit_router
+from .session import Sessions
 
 NO_BUNDLE = (
     "The frontend has not been built yet.\n\n"
@@ -25,6 +27,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app = FastAPI(title="Microduck Arena", docs_url="/api/docs")
     app.state.config = config
     app.state.store = config.build_store()
+    app.state.sessions = Sessions()
 
     @app.get("/api/health")
     def health() -> dict:
@@ -39,6 +42,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
 
     app.include_router(read_router)
     app.include_router(submit_router)
+    app.include_router(auth_router)
 
     if config.frontend_dir is None:
         @app.get("/")

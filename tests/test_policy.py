@@ -99,6 +99,21 @@ def test_a_one_dimensional_input_does_not_crash_the_loader(tmp_path):
         load_policy(model)
 
 
+def test_the_cap_admits_the_largest_real_community_policy():
+    """Measured: juicenv/duckwing-v80-roller-skating is 8.4 MB, and the old
+    4 MiB cap rejected it. The cap is raised, not removed — an unbounded upload
+    to a shared 2-vCPU Space is a denial-of-service vector."""
+    assert MAX_MODEL_BYTES == 64 * 1024 * 1024
+    assert MAX_MODEL_BYTES > 8_409_525
+
+
+def test_an_oversize_model_is_still_refused_with_its_size(tmp_path):
+    fat = tmp_path / "fat.onnx"
+    fat.write_bytes(b"\0" * (MAX_MODEL_BYTES + 1))
+    with pytest.raises(PolicyError, match="larger than"):
+        load_policy(fat)
+
+
 def _make_onnx(path, obs_width, action_width, dynamic_batch=False, flat_input=False):
     """A minimal valid ONNX graph with the given input/output widths."""
     import onnx

@@ -15,14 +15,14 @@ describe("validateFile", () => {
   });
 
   it("refuses an oversize file before uploading it", () => {
-    // The server enforces this too; catching it here saves a 4 MB round trip.
-    expect(validateFile({ name: "big.onnx", size: 5 * 1024 * 1024 })).toMatch(/larger/i);
+    // The server enforces this too; catching it here saves a 64 MB round trip.
+    expect(validateFile({ name: "big.onnx", size: 65 * 1024 * 1024 })).toMatch(/larger/i);
   });
 
   it("accepts a file of exactly the limit and refuses one byte more", () => {
     // Pins the boundary against the server's `> MAX_MODEL_BYTES`. A `>=` here
     // would reject a file the server would have accepted.
-    const limit = 4 * 1024 * 1024;
+    const limit = 64 * 1024 * 1024;
     expect(validateFile({ name: "edge.onnx", size: limit })).toBeNull();
     expect(validateFile({ name: "edge.onnx", size: limit + 1 })).toMatch(/larger/i);
   });

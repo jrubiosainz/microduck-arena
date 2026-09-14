@@ -6,11 +6,13 @@ Arena must not require an account, a token or a network.
 """
 
 import os
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..index import ENTRANTS
 from ..store import HubStore, LocalStore
+from .oauth import OAuthSettings
 
 DEFAULT_STORE = Path("arena-board")
 DEFAULT_USER = "local"
@@ -19,6 +21,9 @@ DEFAULT_USER = "local"
 # which makes the head-to-head replay — the whole point of running it locally —
 # impossible to use. A deployed, multi-user Space sets this to "user".
 DEFAULT_RANK_BY = "policy"
+# HF's own default is 8 hours. Matching it means the cookie and the token expire
+# together, so there is no window where the session outlives its own token.
+DEFAULT_SESSION_TTL_S = 8 * 60 * 60
 
 
 @dataclass(frozen=True)
@@ -35,6 +40,13 @@ class ArenaConfig:
     # token that can write to it.
     dataset_repo: str | None = None
     hf_token: str | None = None
+    oauth: OAuthSettings | None = None
+    # Signs the session cookie. Defaults to the OAuth client secret, which every
+    # Space already has and never changes across its workers; falls back to a
+    # per-process random value locally, so cookies from a previous process are
+    # worthless rather than replayable.
+    session_secret: str = ""
+    session_ttl_s: float = DEFAULT_SESSION_TTL_S
 
     @classmethod
     def from_env(
@@ -62,6 +74,9 @@ class ArenaConfig:
                 f"ARENA_RANK_BY must be one of {sorted(ENTRANTS)}, got {ranking!r}"
             )
 
+        oauth = OAuthSettings.from_env(dict(os.environ), os.environ.get("SPACE_HOST"))
+        secret = (os.environ.get("OAUTH_CLIENT_SECRET") or "").strip() or secrets.token_urlsafe(32)
+
         return cls(
             store_dir=store,
             dev_user=user,
@@ -69,12 +84,18 @@ class ArenaConfig:
             rank_by=ranking,
             dataset_repo=(os.environ.get("ARENA_DATASET") or "").strip() or None,
             hf_token=(os.environ.get("HF_TOKEN") or "").strip() or None,
+            oauth=oauth,
+            session_secret=secret,
         )
 
     @property
     def entrant(self):
         """The dedup key this deployment ranks by."""
         return ENTRANTS[self.rank_by]
+
+    @property
+    def oauth_enabled(self) -> bool:
+        return self.oauth is not None
 
     def ensure_store(self) -> Path:
         self.store_dir.mkdir(parents=True, exist_ok=True)

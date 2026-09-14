@@ -41,6 +41,37 @@ def test_run_detail_reports_the_per_seed_breakdown(client):
     assert [s["status"] for s in body["per_seed"]] == ["finish", "fall"]
     assert body["per_seed"][0]["time_s"] == 18.46
     assert body["per_seed"][1]["time_s"] is None
+    # This record's source is a plain "repo" reference with no url and
+    # model_stored defaults to False, so it offers no download.
+    assert body["offers_download"] is False
+    assert body["policy_url"] is None
+
+
+def test_run_detail_reports_whether_the_policy_can_be_downloaded(client):
+    """The board's download link is driven by these two keys. Checked for both
+    a run that offers a download (a Hub-hosted policy) and one that does not
+    (recorded before policies were kept, or a plain reference with no url)."""
+    api, app = client
+
+    hub_record = make_record(
+        model_stored=False,
+        source={
+            "kind": "hub",
+            "repo_id": "alice/microduck-walker",
+            "filename": "policy.onnx",
+            "url": "https://huggingface.co/alice/microduck-walker/resolve/rev1/policy.onnx",
+        },
+    )
+    app.state.store.append(hub_record, encode(a_trace()))
+    body = api.get(f"/api/runs/{hub_record.run_id}").json()
+    assert body["offers_download"] is True
+    assert body["policy_url"] == hub_record.source["url"]
+
+    bare_record = make_record(model_stored=False, source=None)
+    app.state.store.append(bare_record, encode(a_trace()))
+    body = api.get(f"/api/runs/{bare_record.run_id}").json()
+    assert body["offers_download"] is False
+    assert body["policy_url"] is None
 
 
 def test_the_trace_round_trips_as_float32(client):
