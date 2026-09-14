@@ -1,3 +1,4 @@
+import os
 import pytest
 
 from arena.store import HubStore, LocalStore
@@ -162,3 +163,33 @@ def test_the_recovery_switch_reads_only_affirmative_values(tmp_path, monkeypatch
     """"maybe" must not enable a network call. Anything not clearly a yes is a no."""
     monkeypatch.setenv("ARENA_RECOVER", value)
     assert ArenaConfig.from_env(store_dir=tmp_path).recover_on_boot is expected
+
+
+def test_a_missing_token_names_the_other_secrets_it_can_see(tmp_path, monkeypatch):
+    """The realistic failure is a token that exists under another name. Telling
+    the owner only "HF_TOKEN is not set" while they are looking at the secret
+    they just created is true and useless."""
+    monkeypatch.setenv("ARENA_DATASET", "someone/runs")
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setenv("microduck_token", "hf_pretend")
+    described = ArenaConfig.from_env(store_dir=tmp_path).store_description()
+    assert "microduck_token" in described
+    assert "rename it to HF_TOKEN" in described
+
+
+def test_the_hint_never_prints_a_secret_value(tmp_path, monkeypatch):
+    """Names only. A startup banner is logged, and logs get shared."""
+    monkeypatch.setenv("ARENA_DATASET", "someone/runs")
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setenv("microduck_token", "hf_thismustnotappear")
+    assert "hf_thismustnotappear" not in ArenaConfig.from_env(store_dir=tmp_path).store_description()
+
+
+def test_no_hint_when_there_is_nothing_token_shaped_to_suggest(tmp_path, monkeypatch):
+    monkeypatch.setenv("ARENA_DATASET", "someone/runs")
+    for key in list(os.environ):
+        if "TOKEN" in key.upper() or "SECRET" in key.upper():
+            monkeypatch.delenv(key, raising=False)
+    described = ArenaConfig.from_env(store_dir=tmp_path).store_description()
+    assert "EPHEMERAL" in described
+    assert "rename it" not in described

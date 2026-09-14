@@ -114,10 +114,25 @@ class ArenaConfig:
         if self.dataset_repo and self.hf_token:
             return f"dataset {self.dataset_repo} (durable)"
         if self.dataset_repo:
+            # Name what else is set, because the realistic failure is a token
+            # that EXISTS under another name. Saying only "HF_TOKEN is not set"
+            # is true and useless when the owner has just added `microduck_token`
+            # and is looking at it. Names only — never values.
+            others = sorted(
+                key
+                for key in os.environ
+                if key != "HF_TOKEN" and ("TOKEN" in key.upper() or "SECRET" in key.upper())
+            )
+            hint = (
+                f" This deployment does have {', '.join(others)} — if one of those holds "
+                "the token, rename it to HF_TOKEN."
+                if others
+                else ""
+            )
             return (
                 f"{self.store_dir} — EPHEMERAL: ARENA_DATASET is set to "
                 f"{self.dataset_repo!r} but HF_TOKEN is not, so nothing can be written "
-                "to it. Published runs will be lost on restart."
+                f"to it. Published runs will be lost on restart.{hint}"
             )
         return f"{self.store_dir} (local filesystem)"
 
