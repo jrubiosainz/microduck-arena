@@ -10,7 +10,6 @@
 // wearing it.
 
 import { getEvents, getLeaderboard } from "./api.js";
-import { courseArt } from "./coursecard.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { formatEventFacts, formatScore } from "./format.js";
 import { raceHref } from "./router.js";
@@ -59,7 +58,7 @@ export async function renderMenu(root) {
   const stills = await renderThumbnails(events);
   events.forEach((event, i) => {
     const url = stills.get(event.id);
-    if (!url) return; // no WebGL, or this rig failed — the diagram stands
+    if (!url) return; // no WebGL, or this rig failed — the frame stays black
     const frame = cards[i].querySelector(".card__frame");
     const img = document.createElement("img");
     img.className = "card__art";
@@ -79,9 +78,12 @@ export function card(event, rows) {
   box.className = planned ? "card card--planned" : "card";
   if (!planned) box.href = raceHref(event.id);
 
+  // Deliberately empty. A drawn placeholder lived here and was visible for the
+  // moment before the real render landed, which read as the card changing its
+  // mind. Black holds the space instead; the frame keeps its aspect ratio in
+  // CSS so nothing moves when the still arrives.
   const art = document.createElement("div");
   art.className = "card__frame";
-  art.innerHTML = courseArt(event);
 
   const name = document.createElement("h3");
   name.className = "card__name";

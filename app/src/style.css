@@ -560,8 +560,11 @@ a.card:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 
 .card__frame {
   border-bottom: 1px solid var(--rule);
-  background: var(--ink);
-  color: var(--dim);
+  background: #000;
+  /* The still's own proportions (480x198). Declared so the frame holds its
+     shape while empty: without it an unfilled card is zero pixels tall and the
+     whole grid jumps when the renders land. */
+  aspect-ratio: 480 / 198;
 }
 .card__art { display: block; width: 100%; height: auto; }
 

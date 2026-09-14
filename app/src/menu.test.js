@@ -17,11 +17,17 @@ const planned = { ...open, id: "best-jump", title: "Best Jump", status: "planned
 const held = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
 
 describe("a programme card", () => {
-  it("links into the race and carries its course drawing", () => {
+  it("links into the race", () => {
     const el = card(open, held);
-    const box = el.querySelector("a.card");
-    expect(box.getAttribute("href")).toBe("#/e/sprint-2m");
-    expect(box.querySelector("svg.card__art")).not.toBeNull();
+    expect(el.querySelector("a.card").getAttribute("href")).toBe("#/e/sprint-2m");
+  });
+
+  it("leaves the frame empty, to be black until the still lands", () => {
+    // A drawn placeholder was visible for the moment before the render
+    // arrived, which read as the card changing its mind.
+    const frame = card(open, held).querySelector(".card__frame");
+    expect(frame).not.toBeNull();
+    expect(frame.childElementCount).toBe(0);
   });
 
   it("shows who holds it and in what time", () => {
@@ -60,7 +66,7 @@ describe("a planned event's card", () => {
     expect(el.textContent).not.toContain("be the first");
   });
 
-  it("still draws its course, so the programme reads as one grid", () => {
-    expect(card(planned, []).querySelector("svg.card__art")).not.toBeNull();
+  it("has the same empty frame, so the programme reads as one grid", () => {
+    expect(card(planned, []).querySelector(".card__frame")).not.toBeNull();
   });
 });
