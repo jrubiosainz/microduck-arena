@@ -370,3 +370,23 @@ class HubStore:
 
     def model(self, sha256: str) -> bytes:
         return self.snapshot().model(sha256)
+
+    def withdraw(self, withdrawal: Withdrawal) -> None:
+        from huggingface_hub import CommitOperationAdd
+
+        self.api.create_commit(
+            repo_id=self.repo_id,
+            repo_type="dataset",
+            commit_message=f"withdraw {withdrawal.run_id} ({withdrawal.user})",
+            operations=[
+                CommitOperationAdd(
+                    path_in_repo=f"withdrawn/{withdrawal.run_id}.json",
+                    path_or_fileobj=json.dumps(withdrawal.to_dict(), indent=2).encode(),
+                )
+            ],
+        )
+        # The board must show the withdrawal immediately, not after the TTL.
+        self._snapshot = None
+
+    def withdrawals(self) -> list[Withdrawal]:
+        return self.snapshot().withdrawals()

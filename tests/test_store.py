@@ -167,3 +167,28 @@ def test_offers_download_covers_both_hosting_paths():
         ).offers_download
         is True
     )
+
+
+def test_every_store_implements_the_whole_protocol():
+    """Shipped broken once, and this is why.
+
+    `Store` is a typing Protocol, so Python enforces nothing at runtime: adding
+    `withdraw`/`withdrawals` to the Protocol and to LocalStore left HubStore
+    silently incomplete, every test passed because they all use LocalStore, and
+    the deployed Space returned 500 on every leaderboard request.
+
+    This asserts the shape of each implementation against the Protocol itself,
+    so the next method added to `Store` fails here rather than in production.
+    """
+    from arena.store import HubStore, Store
+
+    required = [
+        name
+        for name in dir(Store)
+        if not name.startswith("_") and callable(getattr(Store, name, None))
+    ]
+    assert "withdraw" in required and "withdrawals" in required, required
+
+    for implementation in (LocalStore, HubStore):
+        missing = [name for name in required if not hasattr(implementation, name)]
+        assert missing == [], f"{implementation.__name__} is missing {missing}"
