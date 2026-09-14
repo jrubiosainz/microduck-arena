@@ -518,9 +518,12 @@ table.board .grab a:focus-visible { outline: 2px solid var(--orange); outline-of
   color: var(--chalk);
 }
 
-/* Take-off-the-board control. Only ever rendered on your own rows, and kept
-   nearly invisible until you go looking: it is a rare, deliberate action, not
-   something to draw the eye down the board. */
+/* Take-off-the-board control. Only ever rendered on your own rows.
+   It WAS transparent until the row was hovered, on the theory that a rare
+   destructive action should not draw the eye. That produced a button nobody
+   could find — the first person to look for it asked where it was. Quiet is a
+   dim colour, not an invisible one: a control you cannot see is not discreet,
+   it is missing. */
 table.board .mine { width: 2.2rem; text-align: right; }
 table.board .withdraw {
   display: inline-flex;
@@ -532,10 +535,14 @@ table.board .withdraw {
   border: 0;
   border-radius: 3px;
   background: none;
-  color: transparent;
+  /* --dim, the same weight as the download icon beside it. --rule (#23232b on
+     a #101015 ground) was the first attempt and is barely distinguishable from
+     transparent — which is the mistake this comment exists to stop repeating. */
+  color: var(--dim);
   cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
 }
-table.board tr:hover .withdraw { color: var(--dim); }
+table.board tr:hover .withdraw { color: var(--chalk); }
 table.board .withdraw:hover,
 table.board .withdraw:focus-visible { color: var(--dnf); background: rgba(255, 82, 47, 0.12); }
 table.board .withdraw:focus-visible { outline: 2px solid var(--dnf); outline-offset: 1px; }
