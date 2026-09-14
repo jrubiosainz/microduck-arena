@@ -99,21 +99,40 @@ export async function renderThumbnails(events, { width = WIDTH, height = HEIGHT 
   return out;
 }
 
+/**
+ * Stand a still's duck ON the course, wherever the course is tilted to.
+ *
+ * Parented to the COURSE, not the scene, so the slope arrives once and for
+ * free: local x is distance along the ramp, local y is height above its
+ * surface, and the lean comes from the parent. Positioning it in world space
+ * instead meant computing the ramp's height by hand — and the first version did
+ * not, so on the hill climb the duck stood at height zero while the ramp under
+ * it had already climbed, sinking it into the surface.
+ *
+ * This is the still's counterpart to viewer.js's placeLane, and the opposite
+ * mistake: a replay's frames are already world coordinates, so the replay must
+ * NOT inherit the tilt, while a still has no frames and must.
+ */
+export function standOnCourse(rig, course, alongM, laneZ) {
+  rig.placer.position.set(alongM, 0, laneZ);
+  rig.placer.rotation.set(0, 0, 0);
+  course.add(rig.placer);
+}
+
 function still(renderer, environment, { kinematics, geometries }, event, width, height) {
   const scene = new Scene();
   scene.environment = environment;
   scene.background = new Color(0x0c0c11);
   light(scene);
-  scene.add(buildCourse(event, 2));
+  const course = buildCourse(event, 2);
+  scene.add(course);
 
   PAIR.forEach((livery, lane) => {
     const rig = buildRigTree(kinematics);
     attachMeshes(rig, kinematics, geometries, { livery });
-    rig.placer.position.z = laneOffsetZ(lane, 2, LANE_SPACING);
     // A little way down the lane, so the start line is visible behind them.
-    rig.placer.position.x = (Number(event.length_m) || 1) * (0.22 + lane * 0.1);
-    if (event.slope_deg) rig.placer.rotation.z = (event.slope_deg * Math.PI) / 180;
-    scene.add(rig.placer);
+    const along = (Number(event.length_m) || 1) * (0.22 + lane * 0.1);
+    standOnCourse(rig, course, along, laneOffsetZ(lane, 2, LANE_SPACING));
   });
 
   const { position, target } = cameraFor(event.length_m);

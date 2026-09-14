@@ -62,6 +62,28 @@ const RIM = 0.5;
 const HEMI = 0.12;
 const GHOST_OPACITY = 0.5;
 
+/**
+ * Put one lane's rig where its trace says it is.
+ *
+ * Lateral offset ONLY. It is tempting to also tilt the placer by the course's
+ * slope so the duck "sits on the hill", and that line was here — but a trace
+ * frame carries WORLD coordinates that already include the slope, so tilting
+ * the placer applies it a SECOND time and the duck climbs away from the ramp it
+ * is walking on. Measured on hill-climb-1m5: the physics puts the trunk 0.1182 m
+ * above the ramp; the extra rotation drew it at 0.1515 m, the gap widening with
+ * distance.
+ *
+ * The duck's lean was never the problem either: its orientation comes from the
+ * trace's quaternion, not from the course.
+ *
+ * Extracted from createViewer so the rule has somewhere to be tested — the
+ * viewer itself needs WebGL and has none in the suite.
+ */
+export function placeLane(rig, laneZ) {
+  rig.placer.position.z = laneZ;
+  rig.placer.rotation.set(0, 0, 0);
+}
+
 // The GLB is one 1.3 MB download shared by every rig, so it is memoised on its
 // own and never re-fetched when you move between a walking race and a roller
 // race.
@@ -205,8 +227,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
         opacity: tier === "ghost" ? GHOST_OPACITY : 1,
       });
       const z = laneOffsetZ(i, entries.length, LANE_SPACING);
-      rig.placer.position.z = z;
-      if (course) rig.placer.rotation.z = course.rotation.z; // sit on the slope
+      placeLane(rig, z);
       scene.add(rig.placer);
 
       // The follow-spot, parented to the course so it climbs a slope with it.
