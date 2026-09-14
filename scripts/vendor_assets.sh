@@ -40,8 +40,11 @@ mkdir -p app/public/robot/meshes
 for mesh in ankle_l_v1.stl ankle_r_v1.stl rim.stl roller_blade.stl tire.stl; do
   cp "$MJLAB/meshes/$mesh" app/public/robot/meshes/
 done
-# One sticker, used as the empty-state invitation on a race with no entries.
+# Two stickers: the star is the empty-state invitation on a race with no
+# entries, and the duck head is the mark in the page header — the same one the
+# Pollen microduck page carries in its corner.
 cp "$SRC/app/public/assets/stickers/star-yellow.webp" app/public/
+cp "$SRC/app/public/assets/duck-head-mark.webp"       app/public/
 
 cat > "$DEST/PROVENANCE.md" <<EOF
 # Vendored assets

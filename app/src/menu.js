@@ -14,13 +14,16 @@ import { courseArt } from "./coursecard.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { formatEventFacts, formatScore } from "./format.js";
 import { raceHref } from "./router.js";
-import { wordmark } from "./wordmark.js";
+import { duckHead, wordmark } from "./wordmark.js";
 
 export async function renderMenu(root) {
   root.innerHTML = "";
   const header = document.createElement("header");
   header.className = "hero";
-  header.append(wordmark());
+  const top = document.createElement("div");
+  top.className = "hero__top";
+  top.append(wordmark(), duckHead());
+  header.append(top);
   const blurb = document.createElement("p");
   blurb.className = "hero__blurb";
   blurb.textContent =

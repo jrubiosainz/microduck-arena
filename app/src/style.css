@@ -36,30 +36,58 @@ body {
 
 /* ── the wordmark ─────────────────────────────────────────────────────── */
 
-/* The simulator's own title device: two stacked lines, the second hollow and
-   smaller, with a mistracked-VHS offset behind the solid one. */
+/* The Pollen microduck page's own title treatment, values taken from it:
+   a hard black drop, a cyan ghost left, a magenta ghost right, and a soft
+   glow — an offset-print plate that did not quite register. Its heading is
+   tilted -1.5deg; ours takes the same tilt. */
 .wordmark {
   margin: 0;
-  font: 400 clamp(2.6rem, 9vw, 5rem) / 0.82 var(--display);
+  font: 400 clamp(2.6rem, 9vw, 5rem) / 0.88 var(--display);
   text-transform: uppercase;
   letter-spacing: 0.005em;
+  transform: rotate(-1.5deg);
+  transform-origin: left center;
 }
 .wordmark span { display: block; }
-.wordmark__solid {
-  color: var(--orange);
+.wordmark__solid,
+.wordmark__arena {
   text-shadow:
-    0.035em 0.035em 0 var(--ink),
-    -0.012em 0 0 rgba(80, 200, 255, 0.5),
-    0.012em 0 0 rgba(255, 60, 120, 0.45);
+    0.06em 0.06em 0 var(--ink),
+    -0.035em 0 0 var(--ghost-cyan),
+    0.035em 0 0 var(--ghost-pink),
+    0 4px 32px rgba(8, 8, 12, 0.55);
 }
-.wordmark__hollow {
-  font-size: 0.6em;
-  color: transparent;
-  -webkit-text-stroke: 1.5px var(--orange);
-  letter-spacing: 0.02em;
+.wordmark__solid { color: var(--duck-yellow); }
+.wordmark__arena { color: var(--orange); }
+
+.wordmark--compact {
+  font-size: clamp(1.05rem, 2.6vw, 1.4rem);
+  line-height: 0.9;
+  /* Upright in the race-page header: a tilted mark beside a title and a back
+     link reads as a rendering fault rather than a device. */
+  transform: none;
 }
-.wordmark--compact { font-size: clamp(1.05rem, 2.6vw, 1.4rem); line-height: 0.86; }
-.wordmark--compact .wordmark__hollow { -webkit-text-stroke-width: 1px; }
+.wordmark--compact .wordmark__solid,
+.wordmark--compact .wordmark__arena {
+  text-shadow:
+    0.045em 0.045em 0 var(--ink),
+    -0.022em 0 0 var(--ghost-cyan),
+    0.022em 0 0 var(--ghost-pink);
+}
+
+/* The mark from the corner of the Pollen page. */
+.duckhead {
+  width: clamp(72px, 11vw, 124px);
+  height: auto;
+  flex: none;
+  filter: drop-shadow(0 6px 18px rgba(8, 8, 12, 0.6));
+}
+.hero__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
 
 /* ── the programme ────────────────────────────────────────────────────── */
 
@@ -294,7 +322,15 @@ table.board tr.provisional .time { color: var(--chalk); }
  * tool you open fifty times a day is friction.
  */
 
-:root { --cyan: #50c8ff; }
+:root {
+  --cyan: #50c8ff;
+  /* Read off pollen-robotics.com/microduck, not matched by eye: its heading is
+     #FFD23F with a #2FF0E6 ghost left and a #FF2FA8 ghost right. Our --orange
+     was already its #FF7A2F exactly. */
+  --duck-yellow: #ffd23f;
+  --ghost-cyan: #2ff0e6;
+  --ghost-pink: #ff2fa8;
+}
 
 body {
   /* The simulator's dot grid, at its exact values. */
