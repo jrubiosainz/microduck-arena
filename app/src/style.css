@@ -487,14 +487,23 @@ table.board tr.tier-ghost .time { color: var(--dim); }
    the point of the row. */
 table.board .grab { width: 4.5rem; text-align: right; }
 table.board .grab a {
+  /* inline-flex, so the glyph centres in the cell rather than sitting on the
+     text baseline it no longer has. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
   color: var(--dim);
   text-decoration: none;
-  font: 400 0.78rem/1 var(--display);
-  letter-spacing: 0.08em;
-  border-bottom: 1px solid transparent;
 }
 table.board .grab a:hover,
-table.board .grab a:focus-visible { color: var(--orange); border-bottom-color: var(--orange); }
+table.board .grab a:focus-visible {
+  color: var(--orange);
+  background: rgba(255, 122, 47, 0.12);
+}
+table.board .grab a:focus-visible { outline: 2px solid var(--orange); outline-offset: 1px; }
 
 /* What Publish costs you, said next to the button rather than buried. */
 .entry__consent {

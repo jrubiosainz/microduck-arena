@@ -322,18 +322,34 @@ def test_an_unparseable_speed_falls_back_to_the_sweep(api):
     assert body["command_vx"] == pytest.approx(0.40)
 
 
-def test_publishing_always_sweeps_and_ignores_a_pinned_speed(api):
-    """The board's integrity rule. A submitter who pins a speed they happen to
-    be good at must not get that number recorded."""
+def test_publishing_honours_a_pinned_speed(api):
+    """Reversed deliberately. This test previously asserted the opposite — that a
+    published time is always the full sweep — on the reasoning that letting
+    entrants choose a speed ranks whoever guessed best.
+
+    The arithmetic does not support that fear: the sweep already keeps the BEST
+    time across every speed in the range, including the one you would have
+    pinned, so pinning can only match or lose to sweeping. It is self-penalising.
+    Here, 0.25 m/s scores ~18.2 s where the sweep finds 11.7 s at 0.40 — the
+    submitter is recorded slower for having pinned, which is the whole point."""
     with open(REFERENCE, "rb") as fh:
         response = api.post(
             "/api/events/sprint-2m/submit",
             files={"file": ("w.onnx", fh)},
-            data={"name": "sneaky", "command_vx": "0.25"},
+            data={"name": "pinned", "command_vx": "0.25"},
         )
     assert response.status_code == 200, response.text
     body = response.json()
-    # 0.25 would have scored 18.2s. The sweep's answer is what got recorded.
+    assert body["command_vx"] == pytest.approx(0.25)
+    assert body["score"] == pytest.approx(18.216, rel=0.02)
+    assert body["score"] > 11.724, "pinning must not be able to beat the sweep here"
+
+
+def test_publishing_without_a_speed_still_sweeps(api):
+    """The default is unchanged, and it is the comparable measurement."""
+    response = submit(api, name="swept")
+    assert response.status_code == 200, response.text
+    body = response.json()
     assert body["command_vx"] == pytest.approx(0.40)
     assert body["score"] == pytest.approx(11.724, rel=0.02)
 

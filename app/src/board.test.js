@@ -291,3 +291,38 @@ describe("policy downloads across both hosting paths", () => {
     expect(built.policyUrl).toBeNull();
   });
 });
+
+describe("the download control", () => {
+  const rendered = (over) => {
+    const container = document.createElement("div");
+    renderBoard(container, { event: { title: "2 m Sprint" }, rows: [row(over)] });
+    return container.querySelector("td.grab a");
+  };
+
+  it("is an icon, not the word .onnx", () => {
+    const link = rendered({ offers_download: true });
+    expect(link.querySelector("svg")).not.toBeNull();
+    expect(link.textContent.trim()).toBe("");
+  });
+
+  it("keeps an accessible name, since the glyph carries none", () => {
+    // An icon with no label is a button nobody can read. Both the hover title
+    // and the screen-reader name must still say whose policy this is.
+    const link = rendered({ offers_download: true, user: "alice", policy_name: "walker" });
+    expect(link.getAttribute("aria-label")).toContain("alice");
+    expect(link.getAttribute("aria-label")).toContain("walker");
+    expect(link.title).toContain("alice");
+  });
+
+  it("hides the glyph itself from screen readers", () => {
+    // Otherwise the assistive name is announced twice — once from aria-label,
+    // once from the svg.
+    const link = rendered({ offers_download: true });
+    expect(link.querySelector("svg").getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("still downloads rather than navigating", () => {
+    const link = rendered({ offers_download: true });
+    expect(link.hasAttribute("download")).toBe(true);
+  });
+});

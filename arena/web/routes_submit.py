@@ -241,6 +241,7 @@ async def submit(
     repo_id: str | None = Form(default=None),
     name: str | None = Form(default=None),
     livery: str | None = Form(default=None),
+    command_vx: str | None = Form(default=None),
 ) -> dict:
     # Gated before any of the expensive work: validating and racing a policy for
     # someone who is not signed in would burn CPU on a shared Space for a
@@ -248,11 +249,24 @@ async def submit(
     session = _require_session(request)
     _require_exactly_one(file, repo_id)
 
-    # NO command_vx here, deliberately, even though `try` accepts one. A board
-    # where entrants pick their own commanded speed ranks whoever guessed best,
-    # which is the exact failure the sweep was built to remove. A published time
-    # is always the full sweep.
-    manifest, policy, result, payload, fetched = await _race(event_id, file, repo_id)
+    # `command_vx` pins the commanded speed for this entry; omit it for the full
+    # sweep, which stays the default.
+    #
+    # An earlier version refused it here, on the reasoning that a board where
+    # entrants choose their own speed ranks whoever guessed best. That objection
+    # does not survive the arithmetic: the sweep already keeps the BEST time
+    # across every speed in the range, including whichever one you would have
+    # pinned. Pinning can therefore only match or lose to sweeping — it is
+    # self-penalising, not exploitable.
+    #
+    # One honest caveat. The sweep's shortlist is chosen from a ONE-SEED scan, so
+    # it can miss a speed that would have won over five. A pinned entry can
+    # occasionally beat the sweep's answer for the same policy by a hair. The
+    # board shows each row's commanded speed, so this is visible rather than
+    # hidden.
+    manifest, policy, result, payload, fetched = await _race(
+        event_id, file, repo_id, command_vx
+    )
 
     store = request.app.state.store
     label = _label(name, file.filename if file else fetched.filename)

@@ -199,3 +199,38 @@ describe("renderEventFacts: the caveat under the facts", () => {
   });
 });
 
+
+describe("the speed picker applies to publishing too", () => {
+  it("passes the selected speed to onPublish, not only to onTry", async () => {
+    // Reversed deliberately. This used to be forbidden, on the reasoning that
+    // letting entrants choose a speed ranks whoever guessed best. The sweep
+    // already keeps the BEST time across every speed, so pinning one can only
+    // match or lose to it — self-penalising, not exploitable.
+    const onPublish = vi.fn(async () => ({ policy_name: "walker" }));
+    const container = document.createElement("div");
+    renderEntryPanel(
+      container,
+      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true },
+      { event, onTry: vi.fn(async () => {}), onPublish },
+    );
+
+    chooseFile(container);
+    container.querySelector("#speed").value = "0.35";
+    container.querySelector("#publish").click();
+    await flush();
+
+    expect(onPublish).toHaveBeenCalledTimes(1);
+    expect(onPublish.mock.calls[0][0].commandVx).toBe("0.35");
+  });
+
+  it("still sweeps when no speed is chosen", () => {
+    // The default must stay the comparable measurement.
+    const container = document.createElement("div");
+    renderEntryPanel(
+      container,
+      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true },
+      { event, onTry: vi.fn(), onPublish: vi.fn() },
+    );
+    expect(container.querySelector("#speed").value).toBe("");
+  });
+});

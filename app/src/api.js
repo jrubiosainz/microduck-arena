@@ -54,19 +54,19 @@ function policyForm(file, name, livery, commandVx) {
 }
 
 /** Race it and publish it to the board. */
-export function submitPolicy(eventId, file, name, livery) {
+export function submitPolicy(eventId, file, name, livery, commandVx) {
   return json(`/api/events/${eventId}/submit`, {
     method: "POST",
-    body: policyForm(file, name, livery),
+    body: policyForm(file, name, livery, commandVx),
   });
 }
 
 /**
  * Race it and keep nothing. The trace comes back inline.
  *
- * `commandVx` pins the commanded speed for this trial; omit it to sweep. There
- * is deliberately no such parameter on submitPolicy — a published time is
- * always the full sweep, or the board ranks whoever guessed their speed best.
+ * `commandVx` pins the commanded speed; omit it to sweep. Both paths accept it:
+ * the sweep already keeps the best time across the whole range, so pinning can
+ * only match or lose to it.
  */
 export async function tryPolicy(eventId, file, name, livery, commandVx) {
   const body = await json(`/api/events/${eventId}/try`, {

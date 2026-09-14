@@ -60,9 +60,9 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
       <legend>Colour</legend>
       <div class="livery__swatches" id="liveries"></div>
     </fieldset>
-    <label class="entry__speed">Test speed
+    <label class="entry__speed">Speed
       <select id="speed"></select>
-      <span class="entry__hint">Publishing always sweeps.</span>
+      <span class="entry__hint">Sweeping tries every speed and keeps your best.</span>
     </label>
     <div class="entry__actions">
       <button id="try" class="ghost">Test it</button>
@@ -144,8 +144,10 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
     publishButton.disabled = true;
     status.className = "entry__status";
     // Say what is actually taking the time: a sweep is dominated by the number
-    // of speeds, a pinned trial by the seeds.
-    const pinned = kind === "try" ? speed.value : "";
+    // of speeds, a pinned run by the seeds. The picker now applies to BOTH
+    // buttons: pinning cannot inflate a published score, because the sweep
+    // already keeps the best time across every speed it tries.
+    const pinned = speed.value;
     status.textContent = pinned
       ? `Racing ${event.seeds} seeds at ${pinned} m/s…`
       : `Sweeping ${event.sweep_count} speeds × ${event.seeds} seeds…`;
@@ -154,7 +156,12 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
         await onTry({ file, name: nameInput.value, livery, commandVx: pinned });
         status.textContent = "Tested. Nothing published yet.";
       } else {
-        const published = await onPublish({ file, name: nameInput.value, livery });
+        const published = await onPublish({
+          file,
+          name: nameInput.value,
+          livery,
+          commandVx: pinned,
+        });
         status.textContent = `Published as ${published.policy_name}.`;
       }
     } catch (error) {
@@ -322,8 +329,8 @@ export async function renderRace(root, { event, state }) {
       trial = await tryPolicy(event.id, file, name, livery, commandVx);
       await paint();
     },
-    onPublish: async ({ file, name, livery }) => {
-      const published = await submitPolicy(event.id, file, name, livery);
+    onPublish: async ({ file, name, livery, commandVx }) => {
+      const published = await submitPolicy(event.id, file, name, livery, commandVx);
       trial = null;
       await paint();
       return published;

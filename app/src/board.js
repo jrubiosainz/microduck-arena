@@ -9,6 +9,14 @@ import { LANE_CSS } from "./course.js";
 
 export const DEFAULT_LANES = 3;
 
+// Inline, not an <img>: it inherits currentColor, so it picks up the row's hover
+// and focus states for free and costs no extra request.
+const DOWNLOAD_ICON =
+  '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">' +
+  '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" ' +
+  'stroke-linejoin="round" d="M8 1.75v8.5m0 0L4.75 7M8 10.25 11.25 7M2.25 12.5v1.25' +
+  'a.5.5 0 0 0 .5.5h10.5a.5.5 0 0 0 .5-.5V12.5"/></svg>';
+
 // Three ways a duck can appear on the stage, so you can tell at a glance which
 // one is yours:
 //   trial  — the run you just tested, published nowhere
@@ -128,7 +136,12 @@ export function renderBoard(container, { event, rows }, { onSelectionChange } = 
     if (row.policyUrl) {
       const link = document.createElement("a");
       link.href = row.policyUrl;
-      link.textContent = ".onnx";
+      // A glyph, not the word ".onnx": the column is narrow, and an arrow into
+      // a tray reads as "download" without being read at all. The accessible
+      // name lives on aria-label and title, so screen readers and hover both
+      // get the full sentence the text used to carry.
+      link.innerHTML = DOWNLOAD_ICON;
+      link.setAttribute("aria-label", `Download ${row.user}'s ${row.policy} as .onnx`);
       link.title = `Download ${row.user}'s ${row.policy} and race it yourself`;
       link.setAttribute("download", "");
       grab.append(link);
