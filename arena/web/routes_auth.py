@@ -21,6 +21,26 @@ from .oauth import OAuthError, authorize_url, exchange_code, userinfo
 from .session import COOKIE_NAME, Session, sign, unsign
 
 STATE_COOKIE = "arena_oauth_state"
+
+# SameSite=None, and this is a deliberate, load-bearing choice.
+#
+# A Space is served to the browser as an IFRAME: huggingface.co embeds a page
+# from <owner>-<name>.hf.space. Those are different registrable domains, so
+# everything this app sets is a THIRD-PARTY cookie, and a browser never sends a
+# Lax cookie in that context. With samesite="lax" the state cookie set by
+# /login would simply not come back on /login/callback, and signing in would
+# fail with "the OAuth state did not match" — or, worse, appear to succeed and
+# leave the panel signed out forever.
+#
+# The trade is real and worth naming: SameSite=None means the cookie travels on
+# cross-site requests, which is the surface SameSite exists to narrow. It is
+# acceptable here because the cookie is NOT what defends this flow. The OAuth
+# `state` parameter is — a random value this server issued, held in its own
+# signed cookie, and compared with hmac.compare_digest in the callback. That is
+# precisely the attack `state` was designed for. `secure=True` and
+# `httponly=True` stay, so the cookie is https-only and unreachable from
+# JavaScript.
+SAMESITE = "none"
 router = APIRouter()
 
 
@@ -86,7 +106,7 @@ def login(request: Request) -> RedirectResponse:
         sign(state, config.session_secret),
         max_age=600,
         httponly=True,
-        samesite="lax",
+        samesite=SAMESITE,
         secure=True,
     )
     return response
@@ -117,7 +137,7 @@ def callback(request: Request, code: str = "", state: str = "") -> RedirectRespo
         sign(sid, config.session_secret),
         max_age=int(config.session_ttl_s),
         httponly=True,
-        samesite="lax",
+        samesite=SAMESITE,
         secure=True,
     )
     response.delete_cookie(STATE_COOKIE)

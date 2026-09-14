@@ -164,3 +164,32 @@ def test_a_cookie_naming_an_unknown_session_is_simply_signed_out(spaced):
     api, _ = spaced
     api.cookies.set(COOKIE_NAME, sign("no-such-session", "csecret"))
     assert api.get("/api/me").json()["signed_in"] is False
+
+
+def test_both_cookies_survive_the_spaces_iframe(spaced):
+    """A Space is embedded from huggingface.co as an iframe over <name>.hf.space —
+    two different registrable domains, so every cookie this app sets is a
+    third-party one. A Lax cookie is never sent in that context, so the state
+    cookie would not come back on the callback and signing in could not work at
+    all. Asserted on both cookies, and on Secure staying with them: SameSite=None
+    without Secure is rejected outright by browsers."""
+    api, _ = spaced
+
+    login = api.get("/login", follow_redirects=False)
+    state_cookie = login.headers["set-cookie"]
+    assert "samesite=none" in state_cookie.lower()
+    assert "secure" in state_cookie.lower()
+    assert "httponly" in state_cookie.lower()
+
+
+def test_the_session_cookie_is_also_cross_site_and_secure(spaced, monkeypatch):
+    api, _ = spaced
+    monkeypatch.setattr("arena.web.routes_auth._exchange", lambda s, c: "hf_tok")
+    monkeypatch.setattr("arena.web.routes_auth._username", lambda s, t: "alice")
+    api.cookies.set("arena_oauth_state", sign("st4te", "csecret"))
+    response = api.get("/login/callback?code=c&state=st4te", follow_redirects=False)
+
+    session_cookie = response.headers["set-cookie"]
+    assert "samesite=none" in session_cookie.lower()
+    assert "secure" in session_cookie.lower()
+    assert "httponly" in session_cookie.lower()

@@ -29,16 +29,22 @@ function chooseFile(container, name = "policy.onnx") {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("renderEntryPanel: signed-out", () => {
-  it("offers a sign-in link, opened in a new tab, and no racing controls", () => {
+  it("offers a sign-in link that navigates in place, and no racing controls", () => {
     const container = document.createElement("div");
     renderEntryPanel(container, { signed_in: false, oauth_enabled: true }, { event });
 
     const link = container.querySelector(".entry__signin");
     expect(link).not.toBeNull();
     expect(link.getAttribute("href")).toBe("/login");
-    // Per Hugging Face's own warning: a Space runs in an iframe, and some
-    // browsers drop the OAuth cookie without target="_blank".
-    expect(link.getAttribute("target")).toBe("_blank");
+    // NOT target="_blank", though Hugging Face's own docs suggest it for the
+    // iframe/cookie reason — that advice assumes a PUBLIC Space. This one is
+    // private, so the Hub gateway 404s any request to <space>.hf.space without
+    // its auth, and a fresh top-level tab carries none: huggingface.co and
+    // hf.space are separate domains sharing no cookies. Opening in a new tab
+    // produced a Hugging Face 404 and nothing else. Navigating the iframe keeps
+    // the auth it already has; the cookies are SameSite=None so they survive
+    // that third-party context.
+    expect(link.hasAttribute("target")).toBe(false);
 
     expect(container.querySelector("#dropzone")).toBeNull();
     expect(container.querySelector("#try")).toBeNull();
@@ -192,3 +198,4 @@ describe("renderEventFacts: the caveat under the facts", () => {
     expect(facts.textContent).toMatch(/legs/);
   });
 });
+

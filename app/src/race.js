@@ -28,9 +28,18 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
   const state = panelState(me);
 
   if (state === "signed-out") {
+    // NO target="_blank", though Hugging Face's own docs suggest one for the
+    // iframe/cookie reason. That advice assumes a PUBLIC Space. This one is
+    // private, so the Hub gateway 404s any request to <space>.hf.space that
+    // does not carry its auth — and a fresh top-level tab carries none of it,
+    // because huggingface.co and hf.space are separate domains that share no
+    // cookies. Opening the link in a new tab produced a Hugging Face 404 and
+    // nothing else. Navigating the iframe itself keeps the auth it already
+    // has; the cookies are set SameSite=None so they survive that third-party
+    // context (see arena/web/routes_auth.py).
     container.innerHTML = `
       <p class="entry__lead">Sign in to race a policy.</p>
-      <a class="entry__signin" href="${signInHref()}" target="_blank" rel="noopener">
+      <a class="entry__signin" href="${signInHref()}">
         Sign in with Hugging Face
       </a>
       <p class="entry__consent">
