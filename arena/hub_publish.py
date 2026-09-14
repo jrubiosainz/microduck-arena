@@ -51,7 +51,7 @@ def slugify(name: str) -> str:
     return slug or "policy"
 
 
-def policy_manifest(name: str, rig: str) -> dict:
+def policy_manifest(name: str, rig: str, event_id: str | None = None) -> dict:
     """The contract, in the shape the community already declares it."""
     return {
         "schema_version": 2,
@@ -67,6 +67,12 @@ def policy_manifest(name: str, rig: str) -> dict:
             "control_hz": round(1.0 / CTRL_DT),
         },
         "published_by": "microduck-arena",
+        # Which event this policy was raced on when it was published. Recovery
+        # (arena/recover.py) uses it to restore an entry onto exactly the event
+        # it held, instead of fanning it out across every event its rig can
+        # enter — the fallback it must use for manifests written before this
+        # field existed.
+        "arena": {"event": event_id} if event_id else {},
     }
 
 
@@ -83,7 +89,9 @@ def _readme(name: str, slug: str) -> bytes:
     ).encode()
 
 
-def publish_policy(api, username: str, name: str, blob: bytes, rig: str) -> PublishedPolicy:
+def publish_policy(
+    api, username: str, name: str, blob: bytes, rig: str, event_id: str | None = None
+) -> PublishedPolicy:
     from huggingface_hub import CommitOperationAdd
 
     slug = slugify(name)
@@ -95,7 +103,7 @@ def publish_policy(api, username: str, name: str, blob: bytes, rig: str) -> Publ
     except Exception as exc:  # the Hub's own wording is the useful part
         raise HubPublishError(f"could not create {repo_id}: {exc}") from exc
 
-    manifest = json.dumps(policy_manifest(name, rig), indent=2).encode()
+    manifest = json.dumps(policy_manifest(name, rig, event_id), indent=2).encode()
     try:
         result = api.create_commit(
             repo_id=repo_id,

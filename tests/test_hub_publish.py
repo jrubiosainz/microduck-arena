@@ -161,3 +161,24 @@ def test_a_commit_with_no_revision_is_an_error_not_a_dangling_url():
 
     with pytest.raises(HubPublishError, match="revision"):
         publish_policy(NoOid(), "alice", "walker", b"onnx", rig="legs")
+
+
+def test_the_manifest_records_which_event_the_policy_raced_on():
+    """So recovery can restore an entry onto exactly the event it held, instead
+    of fanning it across every event its rig can enter."""
+    api = FakeApi()
+    publish_policy(api, "alice", "walker", b"onnx", rig="legs", event_id="sprint-2m")
+    _, _, operations, _ = api.commits[0]
+    manifest_op = next(op for op in operations if op.path_in_repo == "manifest.json")
+    manifest = json.loads(bytes(manifest_op.path_or_fileobj).decode())
+    assert manifest["arena"]["event"] == "sprint-2m"
+
+
+def test_an_unnamed_event_leaves_the_field_out_rather_than_writing_null():
+    """A null would be indistinguishable from a value recovery could trust."""
+    api = FakeApi()
+    publish_policy(api, "alice", "walker", b"onnx", rig="legs")
+    _, _, operations, _ = api.commits[0]
+    manifest_op = next(op for op in operations if op.path_in_repo == "manifest.json")
+    manifest = json.loads(bytes(manifest_op.path_or_fileobj).decode())
+    assert manifest["arena"] == {}

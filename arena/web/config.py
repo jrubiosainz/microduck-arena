@@ -40,6 +40,13 @@ class ArenaConfig:
     # token that can write to it.
     dataset_repo: str | None = None
     hf_token: str | None = None
+    # Reconcile the board against the Hub at startup: race whatever has been
+    # published there and is missing here.
+    #
+    # OFF by default, and that is a spec requirement, not caution: the engine and
+    # the web layer must both work on a developer machine with no Hugging Face
+    # account and NO NETWORK. A deployment opts in with ARENA_RECOVER=1.
+    recover_on_boot: bool = False
     oauth: OAuthSettings | None = None
     # Signs the session cookie. Defaults to the OAuth client secret, which every
     # Space already has and never changes across its workers; falls back to a
@@ -84,6 +91,7 @@ class ArenaConfig:
             rank_by=ranking,
             dataset_repo=(os.environ.get("ARENA_DATASET") or "").strip() or None,
             hf_token=(os.environ.get("HF_TOKEN") or "").strip() or None,
+            recover_on_boot=(os.environ.get("ARENA_RECOVER") or "").strip() in {"1", "true", "yes"},
             oauth=oauth,
             session_secret=secret,
         )

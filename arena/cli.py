@@ -88,6 +88,27 @@ def _cmd_board(args) -> int:
     return 0
 
 
+def _cmd_recover(args) -> int:
+    """Rebuild the board from what is published on the Hub.
+
+    The run log can be lost — a Space without a dataset repo keeps it on a
+    filesystem every redeploy wipes — but the policies are not: each one lives
+    in its author's own repo. This re-races them and re-derives the board.
+    """
+    from .recover import recover
+
+    store = LocalStore(Path(args.store))
+    events = [load_event(args.event)] if args.event else all_events()
+    restored = recover(
+        store,
+        events,
+        all_tagged=args.all_tagged,
+        on_event=lambda message: print(f"  {message}"),
+    )
+    print(f"\n{len(restored)} run(s) restored")
+    return 0
+
+
 def _cmd_serve(args) -> int:
     import uvicorn
 
@@ -139,6 +160,18 @@ def main(argv=None) -> int:
     serve = subs.add_parser("serve", help="run the Arena locally in a browser")
     serve.add_argument("--store", default=None, help="run log directory")
     serve.add_argument("--user", default=None, help="name to attribute submissions to")
+    recover = subs.add_parser(
+        "recover", help="rebuild the board by re-racing policies published on the Hub"
+    )
+    recover.add_argument("--store", required=True)
+    recover.add_argument("--event", help="one event; default is every event")
+    recover.add_argument(
+        "--all-tagged",
+        action="store_true",
+        help="every microduck-policy repo on the Hub, not only ones published here",
+    )
+    recover.set_defaults(func=_cmd_recover)
+
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
     serve.set_defaults(func=_cmd_serve)

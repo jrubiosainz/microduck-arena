@@ -67,6 +67,31 @@ under the signer's own account, public, and the board's `.onnx` link resolves
 straight to the Hub. A signed-in user whose token lacks Hub write access can
 still race and watch replays; only Publish is disabled for them.
 
+## Recovering the board
+
+The run log can be lost — without `ARENA_DATASET` and `HF_TOKEN` it lives on a
+container filesystem that every redeploy wipes. The **policies** are not lost
+with it: publishing writes each one into its author's own public repo, tagged
+`microduck-policy` and carrying a `manifest.json`. So the board is re-derivable.
+
+```bash
+uv run arena recover --store ~/arena-board                    # every event
+uv run arena recover --store ~/arena-board --event sprint-2m
+uv run arena recover --store ~/arena-board --all-tagged       # the whole ecosystem
+```
+
+With `ARENA_RECOVER=1` the same reconciliation runs at every startup, in a
+background thread so it never blocks the Space coming up. It re-races only what
+is **missing**, keyed on the Hub revision, so on a durable store it costs one
+listing and finds nothing to do — measured: a second pass over a full store
+restores 0 runs in 6 s. It is off by default because the local path must keep
+working with no account and no network.
+
+Two limits worth knowing. It restores only what reached the Hub — a `Test` run,
+or anything published before policies went to the Hub, left nothing to recover.
+And times are **re-measured**, never read back: a ranking you cannot re-verify
+is not one worth restoring.
+
 One thing this deployment does NOT have yet:
 
 - **Submissions are synchronous and CPU-bound.** One entry is 33 simulated runs

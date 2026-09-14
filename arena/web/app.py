@@ -5,6 +5,8 @@ command needed and the local setup is the same code path that will run in a
 Space later.
 """
 
+import threading
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,6 +41,31 @@ def create_app(config: ArenaConfig) -> FastAPI:
             # expose and the first thing to check on a Space that lost its runs.
             "durable": bool(config.dataset_repo and config.hf_token),
         }
+
+    if config.recover_on_boot:
+        @app.on_event("startup")
+        def _recover_from_the_hub() -> None:
+            """In a daemon thread, because a recovery races policies.
+
+            Each one is a full sweep — seconds of CPU — and a Space that blocked
+            its own startup on them would fail its health check before serving a
+            single page. The board fills in as they land; it is never empty
+            because of this, only incomplete for a moment.
+            """
+            from ..recover import recover
+
+            def run() -> None:
+                try:
+                    restored = recover(
+                        app.state.store, all_events(), on_event=lambda m: print(f"recover: {m}")
+                    )
+                    print(f"recover: {len(restored)} run(s) restored from the Hub")
+                except Exception as exc:  # noqa: BLE001
+                    # A failed recovery must never take the app down with it —
+                    # the board simply stays as it was.
+                    print(f"recover: aborted ({type(exc).__name__}: {exc})")
+
+            threading.Thread(target=run, name="arena-recover", daemon=True).start()
 
     app.include_router(read_router)
     app.include_router(submit_router)

@@ -54,3 +54,22 @@ def test_the_index_is_never_cached(tmp_path):
     (bundle / "index.html").write_text("<!doctype html><title>arena</title>")
     response = client_for(tmp_path, frontend_dir=bundle).get("/")
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_a_local_app_starts_without_reaching_for_the_hub(tmp_path, monkeypatch):
+    """The whole local contract in one test: no account, no OAuth, no network.
+
+    If a startup hook ever begins calling the Hub unconditionally, this fails —
+    `arena.recover.recover` is replaced by something that records the attempt,
+    and a local boot must not make it.
+    """
+    import arena.recover
+
+    monkeypatch.delenv("ARENA_RECOVER", raising=False)
+    attempts = []
+    monkeypatch.setattr(arena.recover, "recover", lambda *a, **k: attempts.append(True))
+
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
+    with TestClient(create_app(config)) as client:
+        assert client.get("/api/health").status_code == 200
+    assert attempts == []

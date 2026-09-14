@@ -37,11 +37,11 @@ from .session import Session
 router = APIRouter(prefix="/api")
 
 
-def _publish_to_hub(token: str, username: str, name: str, blob: bytes, rig: str):
+def _publish_to_hub(token: str, username: str, name: str, blob: bytes, rig: str, event_id=None):
     """Wrapped so tests replace one function rather than the Hub client."""
     from huggingface_hub import HfApi
 
-    return publish_policy(HfApi(token=token), username, name, blob, rig)
+    return publish_policy(HfApi(token=token), username, name, blob, rig, event_id)
 
 
 def _fetch_from_hub(repo_id: str) -> FetchedPolicy:
@@ -281,7 +281,7 @@ async def submit(
     if fetched is None and session.token:
         try:
             published = _publish_to_hub(
-                session.token, session.username, label, payload, manifest.rig
+                session.token, session.username, label, payload, manifest.rig, manifest.id
             )
         except HubPublishError as exc:
             # 502, not 500: the Hub refused, and the message is the Hub's. And

@@ -1,3 +1,5 @@
+import pytest
+
 from arena.store import HubStore, LocalStore
 from arena.web.config import ArenaConfig
 
@@ -144,3 +146,19 @@ def test_the_session_secret_prefers_the_oauth_client_secret(tmp_path, monkeypatc
     monkeypatch.setenv("OAUTH_CLIENT_SECRET", "csecret")
     config = ArenaConfig.from_env(store_dir=tmp_path)
     assert config.session_secret == "csecret"
+
+
+def test_recovery_is_off_unless_a_deployment_asks_for_it(tmp_path, monkeypatch):
+    """A spec requirement, not caution: the engine and the web layer must both
+    work on a developer machine with no Hugging Face account and NO NETWORK.
+    A boot that reached out to the Hub by default would break every local run."""
+    monkeypatch.delenv("ARENA_RECOVER", raising=False)
+    assert ArenaConfig.from_env(store_dir=tmp_path).recover_on_boot is False
+
+
+@pytest.mark.parametrize("value,expected", [("1", True), ("true", True), ("yes", True),
+                                            ("0", False), ("", False), ("maybe", False)])
+def test_the_recovery_switch_reads_only_affirmative_values(tmp_path, monkeypatch, value, expected):
+    """"maybe" must not enable a network call. Anything not clearly a yes is a no."""
+    monkeypatch.setenv("ARENA_RECOVER", value)
+    assert ArenaConfig.from_env(store_dir=tmp_path).recover_on_boot is expected
