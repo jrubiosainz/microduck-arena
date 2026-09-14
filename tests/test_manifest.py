@@ -209,10 +209,10 @@ def test_the_four_new_ones_are_planned_rather_than_racing_a_borrowed_course():
     """They copy the sprint's physics so they can exist on the programme. Open
     would mean a time recorded under one of their names is a sprint time."""
     assert {m.id for m in all_events() if m.status == "planned"} == {
-        "best-jump",
+        "highest-jump",
         "roller-slide",
         "rough-ground",
-        "push",
+        "hold-your-ground",
     }
 
 
@@ -224,3 +224,30 @@ def test_a_missing_status_defaults_to_open(tmp_path):
 def test_an_unknown_status_is_rejected(tmp_path):
     with pytest.raises(ManifestError, match="status"):
         load_manifest(write_manifest(tmp_path, root=GOOD["root"] + 'status="someday"\n'))
+
+
+def test_the_programme_has_a_declared_order_with_the_sprint_first():
+    """Declared, not derived: neither alphabetical nor filesystem order is the
+    order a person wants to read a race card in."""
+    programme = sorted(all_events(), key=lambda m: (m.order, m.title))
+    assert [m.id for m in programme[:3]] == [
+        "sprint-2m",
+        "roller-sprint-2m",
+        "hill-climb-1m5",
+    ]
+    # Everything raceable comes before everything that is not.
+    statuses = [m.status for m in programme]
+    assert statuses == sorted(statuses, key=lambda s: s != "open")
+
+
+def test_an_event_without_an_order_sorts_last_rather_than_first():
+    """A new manifest that forgets the field must not jump the queue."""
+    m = load_manifest(write_manifest(tmp_path_for_order()))
+    assert m.order == 100
+
+
+def tmp_path_for_order():
+    import tempfile
+    from pathlib import Path
+
+    return Path(tempfile.mkdtemp())

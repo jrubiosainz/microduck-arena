@@ -12,6 +12,7 @@
 # Making it real: build the course, then set status = "open".
 
 status       = "planned"
+order        = 120
 id           = "roller-slide"
 title        = "Roller Slide"
 rig          = "rollers"

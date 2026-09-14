@@ -584,20 +584,20 @@ def test_a_planned_event_cannot_be_raced(api):
     """Its course is the sprint's, so a time recorded under its name would be a
     sprint time wearing another event's name — a false result on a shared board."""
     with open(REFERENCE, "rb") as fh:
-        response = api.post("/api/events/best-jump/submit", files={"file": ("w.onnx", fh)})
+        response = api.post("/api/events/highest-jump/submit", files={"file": ("w.onnx", fh)})
     assert response.status_code == 409
     assert "not open yet" in response.json()["detail"]
 
 
 def test_a_planned_event_cannot_be_tried_either(api):
     """Both paths go through the same door, so neither can forget the guard."""
-    response = try_it(api, event="best-jump")
+    response = try_it(api, event="highest-jump")
     assert response.status_code == 409
 
 
 def test_a_planned_event_records_nothing(api, store_dir):
     with open(REFERENCE, "rb") as fh:
-        api.post("/api/events/push/submit", files={"file": ("w.onnx", fh)})
+        api.post("/api/events/hold-your-ground/submit", files={"file": ("w.onnx", fh)})
     assert list(store_dir.rglob("*.json")) == []
 
 

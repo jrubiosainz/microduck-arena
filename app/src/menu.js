@@ -11,41 +11,10 @@
 
 import { getEvents, getLeaderboard } from "./api.js";
 import { courseArt } from "./coursecard.js";
+import { renderThumbnails } from "./thumbnail.js";
 import { formatEventFacts, formatScore } from "./format.js";
 import { raceHref } from "./router.js";
 import { wordmark } from "./wordmark.js";
-
-// The rules of the competition, repeated the way a cabinet's marquee repeats
-// them. Content, not filler: these three sentences are what makes a time here
-// worth comparing to another.
-const MARQUEE = [
-  "Five perturbed starts per entry",
-  "The server does the timing",
-  "Nothing is published until you say so",
-];
-
-function marquee() {
-  const box = document.createElement("div");
-  box.className = "marquee";
-  const track = document.createElement("div");
-  track.className = "marquee__track";
-  // Twice through, so the translate can loop at -50% with no visible seam.
-  for (let pass = 0; pass < 2; pass += 1) {
-    for (const phrase of MARQUEE) {
-      const run = document.createElement("span");
-      run.className = "marquee__run";
-      const text = document.createElement("b");
-      text.textContent = phrase;
-      const star = document.createElement("span");
-      star.className = "marquee__star";
-      star.textContent = "\u2605";
-      run.append(text, star);
-      track.append(run);
-    }
-  }
-  box.append(track);
-  return box;
-}
 
 export async function renderMenu(root) {
   root.innerHTML = "";
@@ -58,7 +27,6 @@ export async function renderMenu(root) {
     "Enter a policy in a race. It runs on our clock, over five perturbed starts, and the time you get is the time everyone gets.";
   header.append(blurb);
   root.append(header);
-  root.append(marquee());
 
   const grid = document.createElement("ul");
   grid.className = "programme";
@@ -75,8 +43,26 @@ export async function renderMenu(root) {
     ),
   );
 
+  const cards = events.map((event, i) => {
+    const el = card(event, boards[i].rows);
+    grid.append(el);
+    return el;
+  });
+
+  // Rendered AFTER the grid is on screen, not before: the cards appear with
+  // their diagrams immediately and the stills replace them when they are ready.
+  // Waiting on WebGL and a 1.3 MB GLB before showing anything would trade a
+  // whole page for a picture.
+  const stills = await renderThumbnails(events);
   events.forEach((event, i) => {
-    grid.append(card(event, boards[i].rows));
+    const url = stills.get(event.id);
+    if (!url) return; // no WebGL, or this rig failed — the diagram stands
+    const frame = cards[i].querySelector(".card__frame");
+    const img = document.createElement("img");
+    img.className = "card__art";
+    img.src = url;
+    img.alt = "";
+    frame.replaceChildren(img);
   });
 }
 

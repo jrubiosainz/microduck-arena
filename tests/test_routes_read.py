@@ -248,3 +248,15 @@ def test_a_local_upload_record_is_still_served_from_the_store(client):
     response = api.get(f"/api/runs/{record.run_id}/policy")
     assert response.status_code == 200
     assert response.content == b"the-onnx"
+
+
+def test_the_programme_is_served_in_its_declared_order(client):
+    """Sorted once on the server, so every client reads the same programme."""
+    api, _ = client
+    events = api.get("/api/events").json()["events"]
+    assert [e["id"] for e in events[:3]] == [
+        "sprint-2m",
+        "roller-sprint-2m",
+        "hill-climb-1m5",
+    ]
+    assert [e["order"] for e in events] == sorted(e["order"] for e in events)

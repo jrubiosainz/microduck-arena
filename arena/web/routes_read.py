@@ -25,6 +25,7 @@ def event_summary(manifest: Manifest) -> dict:
         "title": manifest.title,
         "rig": manifest.rig,
         "status": manifest.status,
+        "order": manifest.order,
         "length_m": manifest.course.length_m,
         "width_m": manifest.course.width_m,
         "slope_deg": manifest.course.slope_deg,
@@ -48,7 +49,10 @@ def _event_or_404(event_id: str) -> Manifest:
 
 @router.get("/events")
 def list_events() -> dict:
-    return {"events": [event_summary(m) for m in all_events()]}
+    # Sorted here, once, rather than in the page: the order is a property of
+    # the programme, and every client should read it the same way.
+    programme = sorted(all_events(), key=lambda m: (m.order, m.title))
+    return {"events": [event_summary(m) for m in programme]}
 
 
 @router.get("/events/{event_id}/leaderboard")

@@ -12,6 +12,7 @@
 # Making it real: build the course, then set status = "open".
 
 status       = "planned"
+order        = 130
 id           = "rough-ground"
 title        = "Rough Ground"
 rig          = "legs"

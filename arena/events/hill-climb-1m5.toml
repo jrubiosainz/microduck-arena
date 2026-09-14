@@ -1,4 +1,5 @@
 id           = "hill-climb-1m5"
+order        = 30
 title        = "1.5 m Hill Climb"
 rig          = "legs"
 time_limit_s = 60.0

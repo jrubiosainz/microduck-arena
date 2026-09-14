@@ -83,6 +83,10 @@ class Manifest:
     # false result on a board other people read. Flipping it to "open" is what
     # makes it real, and is meant to happen alongside a real course.
     status: str
+    # Where this sits on the programme. Declared rather than derived, because
+    # neither alphabetical nor filesystem order is the order a person wants to
+    # read a race card in. Lower is earlier; ties fall back to the title.
+    order: int
     time_limit_s: float
     metric: str
     seeds: tuple[int, ...]
@@ -129,6 +133,7 @@ def load_manifest(path: Path) -> Manifest:
     with open(path, "rb") as fh:
         raw = tomllib.load(fh)
 
+    order = int(raw.get("order", 100))
     status = raw.get("status", "open")
     if status not in STATUSES:
         raise ManifestError(f"{path}: unknown status {status!r}, expected one of {STATUSES}")
@@ -173,6 +178,7 @@ def load_manifest(path: Path) -> Manifest:
         title=_require(raw, "title", str(path)),
         rig=rig,
         status=status,
+        order=order,
         time_limit_s=float(_require(raw, "time_limit_s", str(path))),
         metric=metric,
         seeds=seeds,

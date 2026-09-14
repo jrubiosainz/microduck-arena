@@ -1,4 +1,5 @@
 id           = "roller-sprint-2m"
+order        = 20
 title        = "2 m Roller Sprint"
 rig          = "rollers"
 time_limit_s = 40.0
