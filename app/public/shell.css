@@ -8,6 +8,10 @@
 
 * { box-sizing: border-box; }
 
+/* The attribute wins over any display the components set, or a hidden
+   scoreboard is a visible one. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--paper);

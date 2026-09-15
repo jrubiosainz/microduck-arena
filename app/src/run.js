@@ -7,9 +7,9 @@
 import { getMe, getRun, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { LANE_CSS } from "./course.js";
-import { formatScore } from "./format.js";
+import { formatScore, formatSpeed } from "./format.js";
 import { CTRL_DT, frameCount } from "./replay.js";
-import { climbPlan, reveal, revealFor } from "./reveal.js";
+import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
 import { playerHref, raceHref, runHref } from "./router.js";
 import { signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
@@ -33,7 +33,7 @@ function el(tag, className, text) {
 }
 
 /** The lanes on the stage: this run first, then the rows ranked just under it. */
-export function lanesFor(run) {
+function lanesFor(run) {
   const at = run.board.findIndex((row) => row.you);
   return [run.board[at], ...run.board.slice(at + 1, at + 1 + RIVALS)];
 }
@@ -43,7 +43,7 @@ function replayLine(run) {
   const finishers = run.per_seed.filter((s) => s.status === "finish").length;
   const which =
     finishers > 1 ? "median finisher" : finishers === 1 ? "the one finisher" : "first seed";
-  return `${run.command_vx.toFixed(2)} m/s · replay: seed ${run.trace_seed}, ${which}`;
+  return `${formatSpeed(run.command_vx, { finished: run.seeds_finished })} m/s · replay: seed ${run.trace_seed}, ${which}`;
 }
 
 function receiptLabel(receipt, eventTitle) {
@@ -56,7 +56,7 @@ function receiptLabel(receipt, eventTitle) {
   return `+${receipt.points} ${what}`;
 }
 
-export function pegRow(row) {
+function pegRow(row) {
   const link = el("a", row.you ? "pegboard-row pegboard-row-you" : "pegboard-row");
   link.href = runHref(row.run_id);
   const name = el("span", "pegboard-name", `@${row.user}`);
@@ -79,6 +79,8 @@ export async function renderRun(root, runId, state) {
   const dnf = run.seeds_finished === 0;
 
   const page = el("main", "hall run");
+  // Which beat the page is in. Read by nothing yet: it is the hook a screenshot
+  // or a test waits on, as in Duck Jam.
   page.dataset.act = revealing ? "race" : "rest";
   page.innerHTML = `
     <p class="eyebrow">Publication</p>
@@ -120,9 +122,7 @@ export async function renderRun(root, runId, state) {
   // The pegboard, in its starting order when revealing: you at the bottom.
   const pegRows = new Map(plan.end.map((row) => [row.run_id, pegRow(row)]));
   const order = revealing ? plan.start : plan.end;
-  for (const row of order) {
-    pegRows.get(row.run_id).querySelector(".pegboard-rank").textContent = String(row.rank);
-  }
+  setRanks(pegRows, order);
   $("pegboard").append(...order.map((row) => pegRows.get(row.run_id)));
 
   const stickers = run.receipts.map((r) =>
@@ -196,10 +196,11 @@ export async function renderRun(root, runId, state) {
     $("legend").append(item);
   });
   let crossed;
-  const raced = new Promise((resolve) => {
-    crossed = resolve;
-  });
-  const line = (frameCount(traces[0]) - 1) * CTRL_DT;
+  const raced = revealing
+    ? new Promise((resolve) => {
+        crossed = resolve;
+      })
+    : null;
   viewer.setLanes(
     lanes.map((lane, i) => ({
       runId: lane.run_id,
@@ -209,9 +210,21 @@ export async function renderRun(root, runId, state) {
       opacity: 1,
     })),
     run.event,
-    revealing ? { loop: false, onTick: (t) => t >= line && crossed() } : {},
+    revealing
+      ? { loop: false, onTick: (t) => t >= (frameCount(traces[0]) - 1) * CTRL_DT && crossed() }
+      : {},
   );
-  if (!revealing) return;
+  if (!revealing) {
+    // No theatre — but the author has still seen their result.
+    if (me?.user === run.user && !run.seen) {
+      markSeen(run.run_id).catch(() => {});
+      if (me.unseen <= 1) root.querySelector(".profile-chip")?.classList.remove("unread");
+    }
+    return;
+  }
+  // The chip stays on screen so the stickers have somewhere to fly to.
+  root.querySelector(".signage").classList.add("signage--pinned");
+  const startPoints = me.points - earned;
   // Leaving mid-race must not park `reveal()` on `await raced` forever.
   theatre.signal.addEventListener("abort", () => crossed(), { once: true });
 
@@ -220,7 +233,7 @@ export async function renderRun(root, runId, state) {
   loadSounds();
   const chip = root.querySelector(".profile-chip");
   const chipFlip = chip.querySelector(".flip");
-  chipFlip.replaceChildren(...flipTiles(me.points - earned));
+  chipFlip.replaceChildren(...flipTiles(startPoints));
   document.addEventListener(
     "keydown",
     (event) => {
@@ -252,7 +265,7 @@ export async function renderRun(root, runId, state) {
       plan,
       receipts: run.receipts,
       raced,
-      startPoints: me.points - earned,
+      startPoints,
       onSeen: () => {
         markSeen(run.run_id).catch(() => {});
         if (me.unseen <= 1) chip.classList.remove("unread");

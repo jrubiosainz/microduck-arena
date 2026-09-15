@@ -772,6 +772,9 @@ table.board .withdraw:focus-visible,
 
 /* ── a publication: the run page ─────────────────────────────────────── */
 
+/* During a reveal the strip stays put, so the chip the receipts fly to is on screen. */
+.signage--pinned { position: sticky; top: 0; z-index: 2; background: var(--paper); }
+
 .run-byline { margin: 0 0 14px; color: var(--ink-70); }
 .run-byline a { color: var(--sky-inked); }
 .run-byline .sticker { font-size: 0.7rem; padding: 2px 8px; }

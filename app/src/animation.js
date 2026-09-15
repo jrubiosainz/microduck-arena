@@ -55,7 +55,7 @@ export async function slam(node, { support = null, contact = () => {}, signal } 
 }
 
 /** Seeded, so the confetti falls the same way every time. */
-export function spread(count) {
+function spread(count) {
   let state = 7;
   const random = () => (state = (state * 16807) % 2147483647) / 2147483647;
   return Array.from({ length: count }, () => ({
@@ -153,6 +153,7 @@ export async function fly(sticker, target, signal) {
   const ghost = sticker.cloneNode(true);
   ghost.classList.add("fly");
   ghost.setAttribute("aria-hidden", "true");
+  ghost.inert = true;
   Object.assign(ghost.style, {
     position: "fixed",
     left: `${from.left}px`,

@@ -34,7 +34,7 @@ export function climbPlan(board) {
   return { start, end: board };
 }
 
-function setRanks(pegRows, order) {
+export function setRanks(pegRows, order) {
   for (const row of order) {
     pegRows.get(row.run_id).querySelector(".pegboard-rank").textContent = String(row.rank);
   }
@@ -82,6 +82,7 @@ export async function reveal(parts, show, signal) {
 
     act("verdict");
     score.hidden = false;
+    score.scrollIntoView({ block: "center", behavior: "smooth" });
     await slam(stamp, { support: crt, signal, contact: () => cue("stamp") });
     if (signal.aborted) return;
 
@@ -95,6 +96,7 @@ export async function reveal(parts, show, signal) {
     boardBox.hidden = false;
     if (plan.start !== plan.end) {
       act("climb");
+      boardBox.scrollIntoView({ block: "center", behavior: "smooth" });
       cue("climb");
       cue("chirp");
       setRanks(pegRows, plan.end);
@@ -105,12 +107,15 @@ export async function reveal(parts, show, signal) {
 
     act("points");
     pointsBox.hidden = false;
+    pointsBox.scrollIntoView({ block: "center", behavior: "smooth" });
     for (const [i, sticker] of stickers.entries()) {
       sticker.hidden = false;
       await fly(sticker, chip, signal);
       if (signal.aborted) return;
       total += receipts[i].points;
       chipFlip.replaceChildren(...flipTiles(total));
+      // The class was removed one iteration ago; fly()'s measurement in between
+      // flushed that removal, which is what lets adding it again restart the beat.
       chip.classList.add("jolt");
       await Promise.all([ended(chip, "jolt", "", signal), rollCounter(chipFlip, signal)]);
       chip.classList.remove("jolt");
