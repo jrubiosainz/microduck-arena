@@ -19,7 +19,9 @@ from .store import RunRecord
 
 # Duck Jam's own numbers for the acts that transfer to an arena that never
 # closes an event: the "top three at close" bonus becomes "while you hold it".
-SCHEDULE = {"first_event": 100, "run": 10, "own_best": 25, "podium": (250, 150, 100)}
+SCHEDULE = {
+    "first_event": 100, "run": 10, "own_best": 25, "podium": (250, 150, 100), "ballot": 2,
+}
 RUNS_PER_DAY = 3
 
 
