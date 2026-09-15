@@ -9,7 +9,7 @@ import { castVote, getBallot, getBallotTrace, getMe } from "./api.js";
 import { LANE_COLORS, LANE_CSS } from "./course.js";
 import { raceHref } from "./router.js";
 import { signInHref } from "./session.js";
-import { signage } from "./signage.js";
+import { footer, signage } from "./signage.js";
 import { isMuted, play, toggleMuted } from "./sound.js";
 import { createViewer } from "./viewer.js";
 
@@ -249,7 +249,7 @@ export async function renderVote(root, { event, state }) {
     <div class="stage"><canvas id="stage"></canvas></div>
     <div id="booth"></div>
   `;
-  root.append(hall);
+  root.append(hall, footer());
 
   const viewer = await createViewer(root.querySelector("#stage"), { rig: event.rig });
   state.viewer = viewer;

@@ -7,7 +7,7 @@
 import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
 import { formatEventFacts, formatScore } from "./format.js";
 import { playerHref, raceHref } from "./router.js";
-import { signage } from "./signage.js";
+import { footer, signage } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { voteButton } from "./votebutton.js";
 
@@ -108,7 +108,7 @@ export async function renderHome(root) {
   const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
   root.replaceChildren(signage(me));
   const hall = el("main", "hall");
-  root.append(hall);
+  root.append(hall, footer());
 
   const door = el("section", "door");
   door.append(

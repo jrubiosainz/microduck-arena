@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avatar, chip, signage } from "./signage.js";
+import { avatar, chip, footer, signage } from "./signage.js";
 
 describe("avatar", () => {
   it("asks the Hub for the user's picture", () => {
@@ -59,5 +59,21 @@ describe("signage", () => {
     expect(home.getAttribute("href")).toBe("#/");
     expect(home.querySelector(".wordmark__solid").textContent).toBe("Microduck");
     expect(home.querySelector(".wordmark__arena").textContent).toBe("Arena");
+  });
+});
+
+describe("footer", () => {
+  it("is the strip on deep ink, with the flock and the store as stickers in a new tab", () => {
+    const el = footer();
+    expect(el.matches("footer.signage.signage-end")).toBe(true);
+    const [flock, store] = el.querySelectorAll(".signage-stickers a.sticker");
+    expect(flock.textContent).toBe("Join the flock");
+    expect(flock.href).toContain("discord.com/invite/pollen-community");
+    expect(store.textContent).toBe("Get your real microduck");
+    expect(store.href).toBe("https://store.pollen-robotics.com/products/microduck");
+    for (const link of el.querySelectorAll("a")) {
+      expect(link.target).toBe("_blank");
+      expect(link.rel).toBe("noopener");
+    }
   });
 });
