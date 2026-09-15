@@ -194,3 +194,12 @@ def test_no_hint_when_there_is_nothing_token_shaped_to_suggest(tmp_path, monkeyp
     described = ArenaConfig.from_env(store_dir=tmp_path).store_description()
     assert "EPHEMERAL" in described
     assert "rename it" not in described
+
+
+def test_a_local_deployment_keeps_its_ballots_beside_its_runs(tmp_path):
+    from arena.store import LocalBallots
+
+    config = ArenaConfig.from_env(store_dir=tmp_path)
+    ballots = config.build_ballots()
+    assert isinstance(ballots, LocalBallots)
+    assert ballots.root == tmp_path

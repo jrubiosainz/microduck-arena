@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..index import ENTRANTS
-from ..store import HubStore, LocalStore
+from ..store import HubBallots, HubStore, LocalBallots, LocalStore
 from .oauth import OAuthSettings
 
 DEFAULT_STORE = Path("arena-board")
@@ -148,3 +148,9 @@ class ArenaConfig:
         if self.dataset_repo and self.hf_token:
             return HubStore(self.dataset_repo, token=self.hf_token)
         return LocalStore(self.ensure_store())
+
+    def build_ballots(self):
+        """The ballot log this deployment writes to. Same repo, own snapshot."""
+        if self.dataset_repo and self.hf_token:
+            return HubBallots(self.dataset_repo, token=self.hf_token)
+        return LocalBallots(self.ensure_store())

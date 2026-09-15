@@ -29,6 +29,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app = FastAPI(title="Microduck Arena", docs_url="/api/docs")
     app.state.config = config
     app.state.store = config.build_store()
+    app.state.ballots = config.build_ballots()
     app.state.sessions = Sessions()
 
     @app.get("/api/health")

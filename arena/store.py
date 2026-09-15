@@ -13,6 +13,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
@@ -190,6 +191,105 @@ class Withdrawal:
             repo_id=raw.get("repo_id"),
             revision=raw.get("revision"),
         )
+
+
+@dataclass(frozen=True)
+class Ballot:
+    """One person's verdict on one drawn field of ducks.
+
+    `candidates` is IN LANE ORDER, which is why there is no colour field: lane i
+    wears the frontend's `LANE_CSS[i]`, and the draw shuffles the order. The
+    order IS the colour assignment, so there is nothing to keep in step.
+
+    Recording every candidate and not only the winner is what makes a raw vote
+    count honest: exposure — how often a duck was SHOWN — derives from the same
+    record, so the draw can equalise it without a second log.
+    """
+
+    ballot_id: str
+    event_id: str
+    voter: str
+    cast_at: str
+    candidates: tuple[str, ...]
+    choice: str
+
+    @property
+    def day(self) -> str:
+        """The UTC date it was cast on: its shard, and the unit of the quota."""
+        return self.cast_at[:10]
+
+    def to_dict(self) -> dict:
+        return {
+            "ballot_id": self.ballot_id,
+            "event_id": self.event_id,
+            "voter": self.voter,
+            "cast_at": self.cast_at,
+            "candidates": list(self.candidates),
+            "choice": self.choice,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "Ballot":
+        return cls(
+            ballot_id=raw["ballot_id"],
+            event_id=raw["event_id"],
+            voter=raw["voter"],
+            cast_at=raw["cast_at"],
+            candidates=tuple(raw["candidates"]),
+            choice=raw["choice"],
+        )
+
+
+class Ballots(Protocol):
+    def cast(self, ballot: Ballot) -> None: ...
+    def since(self, first_day: str) -> list[Ballot]: ...
+
+
+def days_from(first_day: str, today: str) -> list[str]:
+    """Every YYYY-MM-DD from `first_day` to `today`, inclusive.
+
+    The Hub reader needs them explicitly: `allow_patterns` takes paths, not a
+    range, and that restriction is what keeps a read the same size in a year as
+    it is today.
+    """
+    start, end = date.fromisoformat(first_day), date.fromisoformat(today)
+    out, day = [], start
+    while day <= end:
+        out.append(day.isoformat())
+        day += timedelta(days=1)
+    return out
+
+
+class LocalBallots:
+    """The ballot log on a local filesystem. One immutable file per ballot."""
+
+    def __init__(self, root: Path):
+        self.root = Path(root)
+
+    def _path(self, ballot: Ballot) -> Path:
+        return self.root / "votes" / ballot.day / f"{ballot.ballot_id}.json"
+
+    def cast(self, ballot: Ballot) -> None:
+        path = self._path(ballot)
+        # Refused rather than overwritten, exactly as a run is. The id is the
+        # seal's MAC, so this is the double-vote guard and not merely caution.
+        if path.exists():
+            raise FileExistsError(f"ballot {ballot.ballot_id} already cast at {path}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(ballot.to_dict(), indent=2))
+
+    def since(self, first_day: str) -> list[Ballot]:
+        root = self.root / "votes"
+        if not root.is_dir():
+            return []
+        out: list[Ballot] = []
+        for shard in sorted(root.iterdir()):
+            if not shard.is_dir() or shard.name < first_day:
+                continue
+            out.extend(
+                Ballot.from_dict(json.loads(p.read_text())) for p in sorted(shard.glob("*.json"))
+            )
+        return sorted(out, key=lambda b: (b.cast_at, b.ballot_id))
 
 
 class Store(Protocol):
@@ -396,3 +496,67 @@ class HubStore:
 
     def withdrawals(self) -> list[Withdrawal]:
         return self.snapshot().withdrawals()
+
+
+class HubBallots:
+    """The ballot log on the same dataset repo, read through its OWN snapshot.
+
+    Two things matter here and neither is an optimisation detail. The snapshot
+    is separate from the run store's, so casting a vote never invalidates the
+    board's cache — voting must not make the leaderboard slow. And it is
+    downloaded with `allow_patterns` over the window only, so a read costs the
+    same in a year as it does today. That is what lets the log stay append-only
+    with nothing ever pruned: the repo grows, reads do not.
+    """
+
+    def __init__(self, repo_id: str, token: str | None = None, snapshot_ttl_s: float = 10.0):
+        from huggingface_hub import HfApi
+
+        self.repo_id = repo_id
+        self.api = HfApi(token=token or os.environ.get("HF_TOKEN"))
+        self._snapshot_ttl_s = snapshot_ttl_s
+        self._snapshot: LocalBallots | None = None
+        self._snapshot_at = 0.0
+        self._patterns: tuple[str, ...] = ()
+
+    def cast(self, ballot: Ballot) -> None:
+        from huggingface_hub import CommitOperationAdd
+
+        path = f"votes/{ballot.day}/{ballot.ballot_id}.json"
+        if self.api.file_exists(self.repo_id, path, repo_type="dataset"):
+            raise FileExistsError(f"ballot {ballot.ballot_id} already cast in {self.repo_id}")
+        self.api.create_commit(
+            repo_id=self.repo_id,
+            repo_type="dataset",
+            commit_message=f"{ballot.event_id}: {ballot.voter} voted",
+            operations=[
+                CommitOperationAdd(
+                    path_in_repo=path,
+                    path_or_fileobj=json.dumps(ballot.to_dict(), indent=2).encode(),
+                )
+            ],
+        )
+        # Your own vote must be in the count the page shows you next.
+        self._snapshot = None
+
+    def since(self, first_day: str) -> list[Ballot]:
+        from huggingface_hub import snapshot_download
+
+        today = datetime.now(UTC).date().isoformat()
+        patterns = tuple(f"votes/{day}/*" for day in days_from(first_day, today))
+        stale = (
+            self._snapshot is None
+            or patterns != self._patterns
+            or time.monotonic() - self._snapshot_at >= self._snapshot_ttl_s
+        )
+        if stale:
+            self._snapshot = LocalBallots(
+                Path(
+                    snapshot_download(
+                        self.repo_id, repo_type="dataset", allow_patterns=list(patterns)
+                    )
+                )
+            )
+            self._snapshot_at = time.monotonic()
+            self._patterns = patterns
+        return self._snapshot.since(first_day)
