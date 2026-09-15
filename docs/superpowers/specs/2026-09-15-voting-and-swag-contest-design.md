@@ -291,6 +291,15 @@ the first person to enter would hold 250 points for having entered — which
 different currency: it pays only rows with `seeds_finished > 0`, because a place
 you reach without finishing is not a place held.
 
+The guard is **per row, not per board** — a zero-vote entry is unpaid even when
+others on the same board have votes. The tempting alternative is that once any
+vote exists the board is real, so second and third hold real places. It is wrong
+here for the reason the whole feature exists: among entries tied at zero votes
+the order is `standings`' publication-time tie-break, so paying it pays for
+**seniority** — and a window that slides exists precisely so that nothing is
+protected by age. This does not make the podium a score converted into points:
+`votes > 0` is a gate, not a rate, exactly as `seeds_finished > 0` is.
+
 One seam: `boards_by_user` ranks every event with the same function today. It
 must be given the ballot log and the set of voted event ids so it can choose.
 `points.py` stays pure — it is handed what it needs and fetches nothing.
