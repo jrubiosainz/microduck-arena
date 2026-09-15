@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { votePanel } from "./vote.js";
 
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 describe("the voting panel", () => {
   it("offers one button per lane, in the lane's own colour", () => {
     const picks = [];
@@ -53,8 +55,59 @@ describe("the voting panel", () => {
     );
   });
 
-  it("never names a duck, a policy or a person", () => {
-    const panel = votePanel({ state: "ballot", ballot: "t.m", lanes: 4, cast_today: 0, per_day: 20 });
-    expect(panel.textContent).not.toMatch(/@|policy|run_/i);
+  it("never leaks a handle, a policy name or a run id, even if the ballot carried one", () => {
+    // A real ballot never sends these — the server does not even serialise
+    // them — but the guard should hold even if a future change forgot that
+    // and started passing them along "to help the voter".
+    const leaks = {
+      user: "nicolasrabault",
+      policy_name: "swagbot-v3",
+      run_id: "01HZQKTVXBHJ8P0N5T8W3YFM2R",
+    };
+    const panel = votePanel({
+      state: "ballot",
+      ballot: "t.m",
+      lanes: 4,
+      cast_today: 0,
+      per_day: 20,
+      ...leaks,
+    });
+    // outerHTML, not textContent: a leak could just as well land in an
+    // attribute (aria-label, title, data-*) as in visible text.
+    for (const value of Object.values(leaks)) {
+      expect(panel.outerHTML).not.toContain(value);
+    }
+  });
+
+  it("shows the server's own message when a vote fails, and does not leave the buttons dead", async () => {
+    const onPick = vi
+      .fn()
+      .mockRejectedValue(new Error("That ballot is not valid any more. Ask for a new one."));
+    const panel = votePanel(
+      { state: "ballot", ballot: "t.m", lanes: 2, cast_today: 0, per_day: 20 },
+      onPick,
+    );
+    const button = panel.querySelector("button.vote-pick");
+    button.click();
+
+    // The rejection is handled asynchronously inside the click handler; give
+    // its microtasks a turn before asserting on the result.
+    await flush();
+
+    expect(panel.querySelector(".vote-status").textContent).toBe(
+      "That ballot is not valid any more. Ask for a new one.",
+    );
+    expect(button.disabled).toBe(false);
+  });
+
+  it("disables every pick while a vote is in flight, so a slow reload does not look dead", () => {
+    const onPick = vi.fn(() => new Promise(() => {})); // never resolves
+    const panel = votePanel(
+      { state: "ballot", ballot: "t.m", lanes: 3, cast_today: 0, per_day: 20 },
+      onPick,
+    );
+    const buttons = [...panel.querySelectorAll("button.vote-pick")];
+    buttons[0].click();
+    expect(buttons.every((b) => b.disabled)).toBe(true);
   });
 });

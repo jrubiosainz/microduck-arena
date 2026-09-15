@@ -542,8 +542,17 @@ table.board .withdraw:focus-visible {
   transform: scale(1.06);
 }
 
+.vote-pick:disabled {
+  cursor: progress;
+  opacity: 0.6;
+  transform: none;
+}
+
 .vote-count,
 .vote-empty {
   margin: 1rem 0 0;
   opacity: 0.8;
 }
+
+.vote-status { margin: 0.75rem 0 0; color: var(--ink-70); font-size: 0.85rem; min-height: 1.2em; }
+.vote-status.bad { color: var(--orange-inked); font-weight: 600; }

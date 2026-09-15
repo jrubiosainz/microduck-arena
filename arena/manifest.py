@@ -18,6 +18,13 @@ STATUSES = {"open", "planned"}
 METRICS = ("mean_finish_time", "votes")
 COURSE_KINDS = ("lane",)
 
+# The voting page has exactly this many colours to hand a lane: LANE_CSS (and
+# its 3D twin LANE_COLORS) in app/src/course.js. This is a second source of
+# truth on purpose — the frontend has no manifest to read at build time — so a
+# `ballot_max` above it is caught here, loudly, instead of shipping a ballot
+# where two lanes wear the same colour and nobody can vote for either.
+BALLOT_PALETTE_SIZE = 5
+
 
 class ManifestError(Exception):
     """A manifest is malformed, or names something that does not exist."""
@@ -206,6 +213,12 @@ def load_manifest(path: Path) -> Manifest:
             raise ManifestError(f"{path}: [vote] ballot_min must be at least 2")
         if vote.ballot_max < vote.ballot_min:
             raise ManifestError(f"{path}: [vote] ballot_max must not be below ballot_min")
+        if vote.ballot_max > BALLOT_PALETTE_SIZE:
+            raise ManifestError(
+                f"{path}: [vote] ballot_max must not exceed {BALLOT_PALETTE_SIZE} "
+                "(the voting page has only that many lane colours — see LANE_CSS "
+                "in app/src/course.js)"
+            )
         if vote.window_days < 1:
             raise ManifestError(f"{path}: [vote] window_days must be at least 1")
         if vote.per_day < 1:

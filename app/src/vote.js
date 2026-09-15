@@ -59,18 +59,41 @@ export function votePanel(ballot, onPick) {
   }
 
   const picks = el("div", "vote-picks");
+  const status = el("p", "vote-status");
+  const buttons = [];
   for (let lane = 0; lane < ballot.lanes; lane += 1) {
     const button = el("button", "vote-pick");
     button.type = "button";
     button.style.setProperty("--pick", LANE_CSS[lane % LANE_CSS.length]);
     button.setAttribute("aria-label", `Vote for lane ${lane + 1}`);
-    button.addEventListener("click", () => onPick?.(lane));
+    button.addEventListener("click", async () => {
+      // Disabled the instant the click lands, not after the await starts: a
+      // second click on the same tick would otherwise slip through before
+      // `busy` (in the caller) is even set.
+      status.textContent = "";
+      status.className = "vote-status";
+      for (const b of buttons) b.disabled = true;
+      try {
+        await onPick?.(lane);
+        // Success swaps this whole panel for the next one; leave the buttons
+        // disabled rather than flash them back on right before that happens.
+      } catch (error) {
+        // The server writes this sentence for a person to read (an expired
+        // ballot, a quota lost to another tab) — show it, and give the
+        // buttons back so the click was not a dead end.
+        status.textContent = error.message;
+        status.className = "vote-status bad";
+        for (const b of buttons) b.disabled = false;
+      }
+    });
+    buttons.push(button);
     picks.append(button);
   }
   panel.append(
     el("p", "vote-lead", "Which one has the swag?"),
     picks,
     el("p", "vote-count", `${ballot.cast_today} / ${ballot.per_day} today`),
+    status,
   );
   return panel;
 }

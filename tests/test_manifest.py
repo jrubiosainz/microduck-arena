@@ -303,6 +303,21 @@ def test_a_vote_section_is_validated_loudly(tmp_path):
             load_manifest(path)
 
 
+def test_ballot_max_cannot_outgrow_the_voting_page_s_colour_palette(tmp_path):
+    """The voting page has exactly 5 lane colours (LANE_CSS in course.js). A
+    ballot_max above that would put two lanes in the same colour, which is
+    unvotable in a feature whose whole premise is "pick a colour"."""
+    base = (EVENTS_DIR / "swag-contest.toml").read_text()
+    broken = "\n".join(
+        "ballot_max  = 6" if line.startswith("ballot_max") else line
+        for line in base.splitlines()
+    )
+    path = tmp_path / "broken.toml"
+    path.write_text(broken)
+    with pytest.raises(ManifestError, match="ballot_max"):
+        load_manifest(path)
+
+
 def test_ranking_on_votes_without_a_vote_section_is_refused(tmp_path):
     base = (EVENTS_DIR / "sprint-2m.toml").read_text()
     path = tmp_path / "no-rules.toml"
