@@ -10,6 +10,7 @@ import { LANE_COLORS, LANE_CSS } from "./course.js";
 import { raceHref } from "./router.js";
 import { signInHref } from "./session.js";
 import { signage } from "./signage.js";
+import { isMuted, play, toggleMuted } from "./sound.js";
 import { createViewer } from "./viewer.js";
 
 function el(tag, className, text) {
@@ -17,6 +18,116 @@ function el(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+function prefersReducedMotion() {
+  try {
+    return matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    // No `matchMedia` at all (jsdom has none) is treated the same as
+    // "reduce": the ceremony is decoration, so skipping it is always safe,
+    // never a lost vote.
+    return true;
+  }
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** The speaker toggle for the three cues in sound.js, labelled for a screen reader. */
+function muteToggle() {
+  const button = el("button", "vote-mute");
+  button.type = "button";
+  const sync = () => {
+    const muted = isMuted();
+    button.setAttribute("aria-pressed", String(muted));
+    button.setAttribute("aria-label", muted ? "Unmute vote sounds" : "Mute vote sounds");
+    button.textContent = muted ? "🔇" : "🔊";
+  };
+  sync();
+  button.addEventListener("click", () => {
+    toggleMuted();
+    sync();
+  });
+  return button;
+}
+
+// Timings from the spec, in ms, each measured from the step before it.
+const FLIGHT_TO_ENVELOPE = 150; // press → the envelope starts sliding up
+const ENVELOPE_TO_ARRIVE = 300; // → the post-it arrives inside (450ms from the click)
+const STAMP_TO_TOKENS = 150; // seal confirmed → the "+1"s appear and set off
+const TOKENS_TO_LAND = 100; // → they land on the chip (250ms from confirmation)
+const ENVELOPE_OUT = 300; // → the envelope finishes leaving (550ms from confirmation)
+
+/**
+ * The one-second ballot ceremony around a click.
+ *
+ * It lives on `document.body`, not inside this panel: `settle` (`onPick`'s
+ * own promise) can swap the whole booth out from under this button before
+ * the envelope has finished its flight — a fast server, or a caller with no
+ * delay at all — and the ceremony has to keep playing over whatever panel is
+ * now underneath it, not vanish with the one it started on.
+ *
+ * Every step here is best-effort decoration around `settle`, which the
+ * caller's own click handler already awaits to decide the vote's real
+ * outcome. This function only watches the same promise to choose which tail
+ * to play, and never lets a failure of its own reach the caller.
+ */
+async function runCeremony(lane, settle) {
+  let overlay = null;
+  try {
+    overlay = el("div", "vote-ceremony");
+    const postit = el("div", "vote-ceremony__postit");
+    postit.style.setProperty("--pick", LANE_CSS[lane % LANE_CSS.length]);
+    postit.append(el("span", "vote-ceremony__num", String(lane + 1)));
+    const envelope = el("div", "vote-ceremony__envelope");
+    envelope.append(el("div", "vote-ceremony__flap"));
+    overlay.append(envelope, postit);
+    document.body.append(overlay);
+
+    play("press");
+    postit.classList.add("vote-ceremony__postit--fly");
+    await wait(FLIGHT_TO_ENVELOPE);
+    envelope.classList.add("vote-ceremony__envelope--up");
+    await wait(ENVELOPE_TO_ARRIVE);
+    postit.classList.add("vote-ceremony__postit--in");
+
+    // Wait here for the server, exactly as long as it takes: closing the
+    // envelope and flying points before it answers would celebrate a vote
+    // that has not happened, and votes really do fail.
+    const ok = await Promise.resolve(settle).then(
+      () => true,
+      () => false,
+    );
+
+    if (ok) {
+      envelope.classList.add("vote-ceremony__envelope--sealed");
+      play("stamp");
+      await wait(STAMP_TO_TOKENS);
+      const chip = document.querySelector(".profile-chip")?.getBoundingClientRect();
+      for (let i = 0; i < 2; i += 1) {
+        const token = el("span", "vote-ceremony__token", "+1");
+        if (chip) {
+          token.style.setProperty("--tx", `${chip.left + chip.width / 2}px`);
+          token.style.setProperty("--ty", `${chip.top + chip.height / 2}px`);
+        }
+        overlay.append(token);
+      }
+      // A tick to let the tokens' resting state paint before the class that
+      // sends them flying, or the transition has no "from" to animate away.
+      await wait(0);
+      overlay.classList.add("vote-ceremony__token--go");
+      await wait(TOKENS_TO_LAND);
+      play("points");
+    }
+    envelope.classList.add("vote-ceremony__envelope--out");
+    await wait(ENVELOPE_OUT);
+  } catch {
+    // Decoration only — nothing here may affect whether the vote counted.
+  } finally {
+    overlay?.remove();
+  }
 }
 
 // The exact sentence `_open()` in routes_vote.py sends for an unknown or
@@ -92,8 +203,15 @@ export function votePanel(ballot, onPick, initialStatus) {
       status.textContent = "";
       status.className = "vote-status";
       for (const b of buttons) b.disabled = true;
+
+      const settle = onPick?.(lane);
+      // Fire-and-forget: the ceremony watches `settle` on its own timers and
+      // must never make the caller wait for it, or a slow browser turning
+      // theatre into lag would be worse than no ceremony at all.
+      if (!prefersReducedMotion()) runCeremony(lane, settle);
+
       try {
-        await onPick?.(lane);
+        await settle;
         // Success swaps this whole panel for the next one; leave the buttons
         // disabled rather than flash them back on right before that happens.
       } catch (error) {
@@ -108,8 +226,10 @@ export function votePanel(ballot, onPick, initialStatus) {
     buttons.push(button);
     picks.append(button);
   }
+  const headrow = el("div", "vote-headrow");
+  headrow.append(el("p", "vote-lead", "Which one has the swag?"), muteToggle());
   panel.append(
-    el("p", "vote-lead", "Which one has the swag?"),
+    headrow,
     picks,
     el("p", "vote-count", `${ballot.cast_today} / ${ballot.per_day} today`),
     status,

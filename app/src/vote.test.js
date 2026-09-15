@@ -1,7 +1,23 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { isMuted, setMuted } from "./sound.js";
 import { DEAD_BALLOT_MESSAGE, votePanel } from "./vote.js";
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const ballot = (lanes) => ({ state: "ballot", ballot: "t.m", lanes, cast_today: 0, per_day: 20 });
+
+// Node 25's own experimental `localStorage` global has no working `setItem`
+// under jsdom (see brightness.test.js) -- sound.js already survives that by
+// design, but a test that wants to see a mute choice actually stick needs a
+// store that works, not the broken one.
+function fakeStorage() {
+  const store = new Map();
+  return {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => store.set(key, String(value)),
+    removeItem: (key) => store.delete(key),
+  };
+}
 
 describe("the voting panel", () => {
   it("offers one button per lane, in the lane's own colour", () => {
@@ -137,5 +153,105 @@ describe("the voting panel", () => {
     const buttons = [...panel.querySelectorAll("button.vote-pick")];
     buttons[0].click();
     expect(buttons.every((b) => b.disabled)).toBe(true);
+  });
+});
+
+describe("the speaker toggle", () => {
+  beforeEach(() => vi.stubGlobal("localStorage", fakeStorage()));
+  afterEach(() => {
+    setMuted(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("is labelled for a screen reader and flips the mute flag", () => {
+    const panel = votePanel(ballot(2));
+    const toggle = panel.querySelector(".vote-mute");
+    expect(toggle.getAttribute("aria-label")).toBe("Mute vote sounds");
+    toggle.click();
+    expect(isMuted()).toBe(true);
+    expect(toggle.getAttribute("aria-label")).toBe("Unmute vote sounds");
+  });
+});
+
+describe("the ballot ceremony", () => {
+  // jsdom has no `matchMedia` at all, which vote.js's own fallback already
+  // reads as "reduced motion" -- see runCeremony's guard. These tests are
+  // about the animated path, so they say so explicitly rather than lean on
+  // that fallback; the "still votes under reduced motion" test below is the
+  // one that exercises the fallback's actual meaning.
+  const realMatchMedia = window.matchMedia;
+  let audioCalls;
+
+  beforeEach(() => {
+    audioCalls = [];
+    class FakeAudio {
+      constructor(src) {
+        this.src = src;
+      }
+      play() {
+        audioCalls.push(this.src);
+        return Promise.resolve();
+      }
+    }
+    vi.stubGlobal("Audio", FakeAudio);
+    vi.stubGlobal("localStorage", fakeStorage());
+    vi.useFakeTimers();
+    window.matchMedia = () => ({ matches: false });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    window.matchMedia = realMatchMedia;
+    setMuted(false);
+    document.body.replaceChildren();
+  });
+
+  it("still draws each pick as a numbered post-it", () => {
+    const panel = votePanel(ballot(4));
+    const picks = [...panel.querySelectorAll("button.vote-pick")];
+    expect(picks).toHaveLength(4);
+    expect(picks.map((p) => p.querySelector(".vote-pick__num").textContent)).toEqual([
+      "1",
+      "2",
+      "3",
+      "4",
+    ]);
+  });
+
+  it("plays press, then stamp, then points, in that order, once the server confirms the vote", async () => {
+    const onPick = vi.fn().mockResolvedValue(undefined);
+    const panel = votePanel(ballot(2), onPick);
+    panel.querySelector("button.vote-pick").click();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(audioCalls).toEqual(["/sound/press.wav", "/sound/stamp.wav", "/sound/points.wav"]);
+  });
+
+  it("plays press, and never stamp or points, when the vote fails", async () => {
+    const onPick = vi.fn().mockRejectedValue(new Error("nope"));
+    const panel = votePanel(ballot(2), onPick);
+    panel.querySelector("button.vote-pick").click();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(audioCalls).toEqual(["/sound/press.wav"]);
+  });
+
+  it("mutes every cue, on success, when sound is off", async () => {
+    setMuted(true);
+    const onPick = vi.fn().mockResolvedValue(undefined);
+    const panel = votePanel(ballot(2), onPick);
+    panel.querySelector("button.vote-pick").click();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(audioCalls).toEqual([]);
+  });
+
+  it("still votes under reduced motion, skipping the ceremony entirely", async () => {
+    window.matchMedia = () => ({ matches: true });
+    const onPick = vi.fn().mockResolvedValue(undefined);
+    const panel = votePanel(ballot(2), onPick);
+    panel.querySelector("button.vote-pick").click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onPick).toHaveBeenCalledWith(0);
+    expect(audioCalls).toEqual([]);
+    expect(document.querySelector(".vote-ceremony")).toBeNull();
   });
 });

@@ -548,48 +548,92 @@ table.board .withdraw:focus-visible,
   text-align: center;
 }
 
-.vote-lead {
+.vote-headrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   margin: 0 0 0.75rem;
-  font-size: 1.05rem;
+}
+
+.vote-lead { margin: 0; font-size: 1.05rem; }
+
+/* The speaker toggle for sound.js's three cues. Quiet, like the back link up
+   in .votehead: this row is the ballot, not the sound. */
+.vote-mute {
+  padding: 2px 7px;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ink-70);
+  background: none;
+  border: 2px solid transparent;
+}
+.vote-mute:hover { color: var(--ink); border-color: var(--ink); }
+.vote-mute:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 2px;
 }
 
 .vote-picks {
   display: flex;
   justify-content: center;
-  gap: 0.75rem;
+  gap: 0.9rem;
   flex-wrap: wrap;
 }
 
+/* The picks, as post-its stuck to the row rather than printed on it: square,
+   a soft shadow, one corner folded, tilted a couple of degrees each way so
+   the row reads as pressed on by hand. Heavy things sit square in this
+   charter and paper tilts — a post-it is paper. */
 .vote-pick {
+  position: relative;
   width: 4.5rem;
   height: 4.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid rgba(255, 255, 255, 0.25);
-  border-radius: 50%;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
   background: var(--pick);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
   cursor: pointer;
+  transition: translate 0.12s ease;
+}
+.vote-picks button:nth-child(odd) { rotate: var(--rotate-2-5); }
+.vote-picks button:nth-child(even) { rotate: calc(-1 * var(--rotate-2-5)); }
+
+/* The folded corner: a triangle of shadow at the bottom right, as if the
+   sticker were peeling there. */
+.vote-pick::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  border-style: solid;
+  border-width: 0 0 14px 14px;
+  border-color: transparent transparent rgba(16, 16, 24, 0.35) transparent;
 }
 
 /* Every swatch in LANE_CSS is light (orange, sky, lime, lavender, yellow), so
    dark ink reads on all five without a per-colour exception — a deuteranope
-   gets a shape and a number, not only a hue. */
+   gets a shape and a number, not only a hue. Bigger than before: this is what
+   makes a pick usable when its hue alone is not. */
 .vote-pick__num {
-  font: 700 1.4rem/1 var(--display);
+  font: 700 1.9rem/1 var(--display);
   color: #12131a;
 }
 
 .vote-pick:hover,
 .vote-pick:focus-visible {
   border-color: #fff;
-  transform: scale(1.06);
+  translate: 0 -2px;
 }
 
 .vote-pick:disabled {
   cursor: progress;
   opacity: 0.6;
-  transform: none;
+  translate: 0 0;
 }
 
 .vote-count,
@@ -600,3 +644,116 @@ table.board .withdraw:focus-visible,
 
 .vote-status { margin: 0.75rem 0 0; color: var(--ink-70); font-size: 0.85rem; min-height: 1.2em; }
 .vote-status.bad { color: var(--orange-inked); font-weight: 600; }
+
+/* ── the ballot ceremony ──────────────────────────────────────────────── */
+
+/* Everything below is `runCeremony`'s overlay (see vote.js): a post-it flies
+   to the bottom centre, an envelope rises to meet it and waits open for the
+   server, then either seals with a stamp and fires two "+1"s at the player
+   chip, or slides away empty. It lives on `document.body`, not in the
+   panel, so a vote that resolves fast can swap the panel out from under it
+   without cutting the ceremony off. Every state below is a class `vote.js`
+   adds by hand on real timers, not a CSS animation with a fixed length. */
+.vote-ceremony {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.vote-ceremony__postit {
+  position: fixed;
+  left: 50%;
+  bottom: 46%;
+  width: 3.4rem;
+  height: 3.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  translate: -50% 0;
+  scale: 1;
+  opacity: 0;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  background: var(--pick);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+  transition: bottom 0.15s var(--ease-hard), opacity 0.15s ease, scale 0.3s ease;
+}
+.vote-ceremony__postit .vote-ceremony__num {
+  font: 700 1.5rem/1 var(--display);
+  color: #12131a;
+}
+.vote-ceremony__postit--fly { opacity: 1; bottom: 18%; }
+.vote-ceremony__postit--in {
+  bottom: 6%;
+  scale: 0.35;
+  opacity: 0;
+  transition-duration: 0.3s;
+}
+
+.vote-ceremony__envelope {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  translate: -50% 100%;
+  width: min(80vw, 20rem);
+  height: 8rem;
+  border: 3px solid var(--ink);
+  border-bottom: 0;
+  background: var(--cream);
+  box-shadow: var(--shadow-card-max) var(--shadow-card-max) var(--shadow-blur) var(--ink);
+  overflow: hidden;
+  transition: translate 0.3s var(--ease-hard);
+}
+.vote-ceremony__envelope--up { translate: -50% 0; }
+.vote-ceremony__envelope--out { translate: -50% 100%; }
+
+/* The flap: hinged at the top, open until the vote is confirmed. */
+.vote-ceremony__flap {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4.5rem;
+  background: var(--warm-paper);
+  border-bottom: 3px solid var(--ink);
+  transform-origin: top center;
+  rotate: x -35deg;
+  transition: rotate 0.24s var(--ease-hard);
+}
+.vote-ceremony__envelope--sealed .vote-ceremony__flap { rotate: x 0deg; }
+
+/* The two "+1"s. Appended only once the vote is confirmed, resting at the
+   envelope until the next class sends them to the player chip -- see
+   vote.js, which sets --tx/--ty from .profile-chip's own position, falling
+   back to the chip's usual corner when it cannot find one. */
+.vote-ceremony__token {
+  position: fixed;
+  left: 50%;
+  bottom: 12%;
+  translate: -50% 0;
+  padding: 2px 8px;
+  font: 700 0.85rem/1 var(--display);
+  color: var(--ink);
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  opacity: 0;
+  transition: left 0.25s var(--ease-hard), top 0.25s var(--ease-hard), opacity 0.2s ease;
+}
+.vote-ceremony__token:nth-of-type(2) { transition-delay: 0.03s; }
+/* vote.js adds this modifier to the overlay itself, once both tokens have
+   had one frame at rest to paint -- see runCeremony's own comment on why. */
+.vote-ceremony.vote-ceremony__token--go > .vote-ceremony__token {
+  left: var(--tx, 92%);
+  top: var(--ty, 8%);
+  bottom: auto;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vote-pick,
+  .vote-ceremony__postit,
+  .vote-ceremony__envelope,
+  .vote-ceremony__flap,
+  .vote-ceremony__token {
+    transition: none;
+  }
+}
