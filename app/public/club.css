@@ -36,7 +36,6 @@ body {
 
 .signage { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
 .club-brand { display: flex; align-items: center; gap: 12px; }
-.club-brand .mono-label { display: block; }
 .club-duck { width: 52px; height: 52px; object-fit: contain; }
 .signage-title a { color: inherit; text-decoration: none; }
 .site-nav { display: flex; align-items: center; gap: var(--space-gutter-min); }
@@ -260,5 +259,4 @@ body {
 @media (max-width: 640px) {
   .signage { padding: 14px var(--space-gutter-min); gap: var(--space-gutter-min); }
   .club-duck { width: 36px; height: 36px; }
-  .club-brand .mono-label { max-width: 16ch; }
 }

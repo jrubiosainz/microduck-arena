@@ -58,18 +58,13 @@ export function signage(me) {
   duck.className = "club-duck";
   duck.src = "/duck-head-mark.webp";
   duck.alt = "";
-  const words = document.createElement("div");
   const title = document.createElement("h1");
   title.className = "signage-title";
   const home = document.createElement("a");
   home.href = menuHref;
   home.textContent = "Microduck Arena";
   title.append(home);
-  const line = document.createElement("span");
-  line.className = "mono-label";
-  line.textContent = "Sanctioned by absolutely no one";
-  words.append(title, line);
-  brand.append(duck, words);
+  brand.append(duck, title);
 
   const nav = document.createElement("nav");
   nav.className = "site-nav";

@@ -103,7 +103,7 @@ export async function renderHome(root) {
     el(
       "p",
       "lede",
-      "Enter a policy in a race. It runs on our clock, over five perturbed starts, and the time you get is the time everyone gets.",
+      "Enter a policy. The arena races it over five perturbed starts, on one clock no browser can argue with. Results are final. Falls are timed. The committee regrets nothing.",
     ),
   );
   hall.append(door);
