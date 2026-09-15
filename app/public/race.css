@@ -355,23 +355,16 @@ body {
   background-size: 21px 21px;
 }
 
-/* ── the stage is a screen ────────────────────────────────────────────── */
+/* ── the stage's vignette ─────────────────────────────────────────────── */
 
 .stage::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none; /* the canvas still gets the drag for orbiting */
-  /* Lighter than the first pass on both counts. The scanlines were laying a
-     dark screen door over the whole scene and the vignette was closing in from
-     55%, and together they cost more light than the CRT reading was worth. */
-  background:
-    repeating-linear-gradient(
-      to bottom,
-      rgba(0, 0, 0, 0.09) 0 1px,
-      transparent 1px 3px
-    ),
-    radial-gradient(130% 100% at 50% 50%, transparent 72%, rgba(0, 0, 0, 0.26) 100%);
+  /* The scanlines that used to sit over this are gone: on a small stage they
+     read as scratches across the picture. The vignette stays, from 72%. */
+  background: radial-gradient(130% 100% at 50% 50%, transparent 72%, rgba(0, 0, 0, 0.26) 100%);
 }
 
 /* ── high-score table ─────────────────────────────────────────────────── */
