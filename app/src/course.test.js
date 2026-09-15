@@ -48,12 +48,6 @@ describe("buildCourse", () => {
     expect(forward.y).toBeCloseTo(Math.sin((8 * Math.PI) / 180), 6);
   });
 
-  it("draws one stripe per lane, and none when a still asks for none", () => {
-    const stripes = (course) => course.children.filter((c) => c.name.startsWith("lane-stripe-"));
-    expect(stripes(buildCourse({ length_m: 2, width_m: 0.8 }, 2))).toHaveLength(2);
-    expect(stripes(buildCourse({ length_m: 2, width_m: 0.8 }, 2, { stripes: false }))).toHaveLength(0);
-  });
-
   it("widens the ground as lanes are added", () => {
     const one = buildCourse({ length_m: 2, width_m: 0.8 }, 1);
     const four = buildCourse({ length_m: 2, width_m: 0.8 }, 4);

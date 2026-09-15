@@ -124,7 +124,7 @@ function still(renderer, environment, { kinematics, geometries }, event, width, 
   scene.environment = environment;
   scene.background = new Color(0x0c0c11);
   light(scene);
-  const course = buildCourse(event, 2, { stripes: false });
+  const course = buildCourse(event, 2);
   scene.add(course);
 
   PAIR.forEach((livery, lane) => {
