@@ -55,13 +55,13 @@ describe("standings and players", () => {
   it("returns the ladder rows", async () => {
     respondWith({ body: { rows: [{ rank: 1, user: "ann", points: 360 }] } });
     expect(await getStandings()).toEqual([{ rank: 1, user: "ann", points: 360 }]);
-    expect(fetch).toHaveBeenCalledWith("/api/standings");
+    expect(fetch.mock.calls[0][0]).toBe("/api/standings");
   });
 
   it("returns a player", async () => {
     respondWith({ body: { user: "ann", points: 360, rank: 1, best: [] } });
     expect(await getPlayer("ann")).toEqual({ user: "ann", points: 360, rank: 1, best: [] });
-    expect(fetch).toHaveBeenCalledWith("/api/players/ann");
+    expect(fetch.mock.calls[0][0]).toBe("/api/players/ann");
   });
 
   it("returns null when nobody by that name has published", async () => {

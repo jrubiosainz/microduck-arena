@@ -16,7 +16,7 @@ async function detailFrom(response) {
 }
 
 async function json(url, options) {
-  const response = options ? await fetch(url, options) : await fetch(url);
+  const response = await fetch(url, options);
   if (!response.ok) throw new Error(await detailFrom(response));
   return response.json();
 }
