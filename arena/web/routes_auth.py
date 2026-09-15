@@ -27,16 +27,16 @@ RETURN_COOKIE = "arena_oauth_return"
 # The route to come back to, and nothing else.
 #
 # The browser never sends a URL fragment to the server, so after signing in the
-# callback had no idea which race page you started from and always landed on the
-# menu. The page therefore has to say where it was — and a destination supplied
-# by the client is an open-redirect waiting to happen.
+# callback had no idea which race or player page you started from and always
+# landed on the menu. The page therefore has to say where it was — and a
+# destination supplied by the client is an open-redirect waiting to happen.
 #
 # So this accepts a ROUTE, never a URL: matched against the router's own shape,
 # and the redirect is then BUILT here as "/#" + route. Nothing the client sends
 # can name a host, because no part of what it sends reaches the host position.
 # "//evil.com", "https://evil.com" and "/\evil.com" all simply fail to match
 # and fall back to the menu.
-_SAFE_ROUTE = re.compile(r"^/e/[A-Za-z0-9._-]{1,64}/?$")
+_SAFE_ROUTE = re.compile(r"^/(e|p)/[A-Za-z0-9._-]{1,64}/?$")
 
 
 def return_target(route: str | None) -> str:

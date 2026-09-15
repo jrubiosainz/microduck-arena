@@ -218,6 +218,26 @@ def test_signing_in_lands_back_on_the_race_page(spaced, monkeypatch):
     assert response.headers["location"] == "/#/e/sprint-2m"
 
 
+def test_return_target_also_accepts_a_player_page():
+    from arena.web.routes_auth import return_target
+
+    assert return_target("/p/coralie") == "/#/p/coralie"
+
+
+def test_signing_in_lands_back_on_the_player_page(spaced, monkeypatch):
+    api, _ = spaced
+    monkeypatch.setattr("arena.web.routes_auth._exchange", lambda s, c: "hf_tok")
+    monkeypatch.setattr("arena.web.routes_auth._username", lambda s, t: "alice")
+
+    api.get("/login?next=%2Fp%2Fcoralie", follow_redirects=False)
+    api.cookies.set("arena_oauth_state", sign("st4te", "csecret"))
+    # The state cookie the real /login set is overwritten above, so re-sign the
+    # return value the same way /login did.
+    api.cookies.set("arena_oauth_return", sign("/#/p/coralie", "csecret"))
+    response = api.get("/login/callback?code=c&state=st4te", follow_redirects=False)
+    assert response.headers["location"] == "/#/p/coralie"
+
+
 def test_signing_in_from_the_menu_still_lands_on_the_menu(spaced, monkeypatch):
     api, _ = spaced
     monkeypatch.setattr("arena.web.routes_auth._exchange", lambda s, c: "hf_tok")
@@ -239,6 +259,7 @@ def test_signing_in_from_the_menu_still_lands_on_the_menu(spaced, monkeypatch):
         "/login",
         "/e/x?a=b",
         "/e/" + "x" * 200,
+        "/p/a/b",
     ],
 )
 def test_no_destination_from_the_client_can_name_a_host(spaced, hostile):
