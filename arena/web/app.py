@@ -16,6 +16,7 @@ from .config import ArenaConfig
 from .routes_auth import router as auth_router
 from .routes_read import router as read_router
 from .routes_submit import router as submit_router
+from .routes_vote import BallotBook
 from .routes_vote import router as vote_router
 from .session import Sessions
 
@@ -31,6 +32,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.state.config = config
     app.state.store = config.build_store()
     app.state.ballots = config.build_ballots()
+    app.state.ballot_book = BallotBook()
     app.state.sessions = Sessions()
 
     @app.get("/api/health")

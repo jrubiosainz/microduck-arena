@@ -1,25 +1,35 @@
 """Issuing a ballot, and recording what it decided.
 
-The client never sees a run id. A ballot is a SEALED token, its traces are
-served through the ballot rather than through the runs, and a vote names a lane
-index. Without that, one look at devtools plus /api/runs/{id} would name the
-author, and the anonymity the draw builds would be decorative.
+The client never sees a run id. A ballot is an OPAQUE token: the run ids it
+names live only in server memory, in `BallotBook`, the same shape and the same
+documented trade as the session table two files away (`session.py`: "The
+table is in memory on purpose... not worth a database"). A restart now costs a
+ballot in flight, which is a 15-minute object rather than an 8-hour one.
 
-Nothing is remembered between the two calls. The token is signed with the same
-HMAC the session cookie uses, so there is no table to expire, no memory to grow,
-and a Space restart does not fail a vote in flight.
+An earlier version of this module sealed the run ids into a signed token
+instead. Review caught it in implementation: `sign()` is an HMAC, and an HMAC
+proves the server wrote a value — it does not hide it. The payload decoded in
+plain base64 (`atob()` plus /api/runs/{id} named every author), which is
+exactly the failure the lane-index API and the per-lane trace route exist to
+prevent. See the superseded row in the design doc's Decisions table.
+
+Its lanes' traces are served through the ballot rather than through the runs,
+and a vote names a lane index. A ballot is single-use: the table marks it
+`spent` the moment its vote is recorded, so a double-click — or the same
+ballot replayed either side of UTC midnight, where the log's own day-sharding
+cannot help — gets the same idempotent answer.
 """
 
-import base64
-import json
+import dataclasses
 import random
+import secrets
+import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import numpy as np
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from .. import votes
@@ -28,7 +38,6 @@ from ..points import SCHEDULE
 from ..store import Ballot
 from ..trace import decode
 from .routes_auth import current_user
-from .session import sign, unsign
 
 router = APIRouter(prefix="/api")
 
@@ -36,16 +45,59 @@ router = APIRouter(prefix="/api")
 # cannot vote for an entry withdrawn since.
 BALLOT_TTL_S = 15 * 60
 
-# Tests lower the daily cap rather than casting twenty ballots. None means "use
-# the manifest's own number", which is every real deployment.
-PER_DAY_OVERRIDE: int | None = None
-
 
 @dataclass(frozen=True)
-class Sealed:
+class BallotEntry:
+    """What one token stands for. Never serialised to the client."""
+
     event_id: str
     voter: str
     run_ids: tuple[str, ...]
+    issued_at: float
+    spent: bool = False
+
+
+class BallotBook:
+    """The ballot table: what a token stands for, held only in memory.
+
+    Modelled directly on `Sessions` (session.py) — same shape, same lock, same
+    trade. Signing cannot be patched into secrecy without a cipher this
+    project does not depend on, so the run ids stay server-side behind a
+    random opaque token instead of inside a signed payload.
+    """
+
+    def __init__(self) -> None:
+        self._by_token: dict[str, BallotEntry] = {}
+        self._lock = threading.Lock()
+
+    def issue(self, event_id: str, voter: str, run_ids, ttl_s: float = BALLOT_TTL_S) -> str:
+        # token_urlsafe, not a fresh id scheme of our own: its alphabet is
+        # exactly [A-Za-z0-9_-], which is what makes it safe to use as-is for
+        # both a URL path segment and (below) the ballot log's own filename.
+        token = secrets.token_urlsafe(32)
+        with self._lock:
+            self._by_token[token] = BallotEntry(event_id, voter, tuple(run_ids), time.time())
+        return token
+
+    def get(self, token: str) -> BallotEntry | None:
+        """The entry, or None. Never raises: this reads attacker-controlled input."""
+        with self._lock:
+            entry = self._by_token.get(token)
+            if entry is None:
+                return None
+            if time.time() - entry.issued_at > BALLOT_TTL_S:
+                # Evicted, not just reported stale, so a long-lived process
+                # does not accumulate dead ballots.
+                del self._by_token[token]
+                return None
+            return entry
+
+    def spend(self, token: str) -> None:
+        """Mark a ballot cast. It stays in the table — just no longer usable."""
+        with self._lock:
+            entry = self._by_token.get(token)
+            if entry is not None:
+                self._by_token[token] = dataclasses.replace(entry, spent=True)
 
 
 class VoteBody(BaseModel):
@@ -53,37 +105,12 @@ class VoteBody(BaseModel):
     lane: int
 
 
-def seal(event_id: str, voter: str, run_ids, issued_at: float, secret: str) -> str:
-    payload = base64.urlsafe_b64encode(
-        json.dumps(
-            {"e": event_id, "v": voter, "r": list(run_ids), "t": issued_at},
-            separators=(",", ":"),
-        ).encode()
-    ).decode().rstrip("=")
-    return sign(payload, secret)
-
-
-def unseal(token: str, secret: str, now: float, ttl_s: float = BALLOT_TTL_S) -> Sealed | None:
-    """The ballot, or None. Never raises: this reads attacker-controlled input."""
-    payload = unsign(str(token or ""), secret)
-    if payload is None:
-        return None
-    try:
-        raw = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
-        if not isinstance(raw, dict) or now - float(raw["t"]) > ttl_s:
-            return None
-        return Sealed(str(raw["e"]), str(raw["v"]), tuple(str(r) for r in raw["r"]))
-    except (KeyError, TypeError, ValueError):
-        return None
-
-
-def ballot_id(token: str) -> str:
-    """The seal's own MAC.
-
-    Not a fresh id, and that is the double-click guard: two POSTs of one ballot
-    address the same file, and the log already refuses to overwrite a file.
-    """
-    return token.rpartition(".")[2]
+# The quota's check and the ballot's write are one critical section. Reading
+# cast_today scans a week of shards — real seconds that grow with the
+# contest — and without a lock four concurrent votes against a cap of one
+# each read the same "0 so far" and all four land. Per-process is the right
+# scope: a Space is one container.
+_vote_lock = threading.Lock()
 
 
 def _votable(event_id: str) -> Manifest:
@@ -103,10 +130,6 @@ def _voter(request: Request) -> str:
     return session.username
 
 
-def _per_day(manifest: Manifest) -> int:
-    return PER_DAY_OVERRIDE if PER_DAY_OVERRIDE is not None else manifest.vote.per_day
-
-
 def _window(request: Request, manifest: Manifest, now: datetime) -> list[Ballot]:
     days = manifest.vote.window_days
     ballots = request.app.state.ballots
@@ -114,20 +137,23 @@ def _window(request: Request, manifest: Manifest, now: datetime) -> list[Ballot]
 
 
 @router.get("/events/{event_id}/ballot")
-def issue_ballot(event_id: str, request: Request) -> dict:
+def issue_ballot(event_id: str, request: Request, response: Response) -> dict:
     """A field to judge, or the reason there is none.
 
-    "Too few ducks" and "quota reached" answer 200 with a state, because neither
-    is an error: they are states of a voting session, and the page draws each as
-    a panel of its own.
+    "Too few ducks" and "quota reached" answer 200 with a state, because
+    neither is an error: they are states of a voting session, and the page
+    draws each as a panel of its own. The body is per-user (a fresh token,
+    your own cast_today), so — like /api/me — it must never be cached and
+    served to the next visitor.
     """
+    response.headers["Cache-Control"] = "no-store"
     manifest = _votable(event_id)
     voter = _voter(request)
     store = request.app.state.store
     now = datetime.now(UTC)
     kept = _window(request, manifest, now)
 
-    per_day = _per_day(manifest)
+    per_day = manifest.vote.per_day
     spent = votes.cast_today(kept, voter, event_id, now)
     if spent >= per_day:
         return {"state": "quota", "cast_today": spent, "per_day": per_day}
@@ -147,15 +173,10 @@ def issue_ballot(event_id: str, request: Request) -> dict:
     if picked is None:
         return {"state": "too-few", "have": len(field), "need": manifest.vote.ballot_min}
 
+    token = request.app.state.ballot_book.issue(event_id, voter, [r.run_id for r in picked])
     return {
         "state": "ballot",
-        "ballot": seal(
-            event_id,
-            voter,
-            [r.run_id for r in picked],
-            now.timestamp(),
-            request.app.state.config.session_secret,
-        ),
+        "ballot": token,
         # A COUNT, not a palette: lane i wears the frontend's own LANE_CSS[i],
         # and sending the hex codes would be a second copy of a list it has.
         "lanes": len(picked),
@@ -164,20 +185,25 @@ def issue_ballot(event_id: str, request: Request) -> dict:
     }
 
 
-def _open(token: str, request: Request, voter: str, lane: int) -> Sealed:
-    sealed = unseal(token, request.app.state.config.session_secret, time.time())
-    if sealed is None or sealed.voter != voter or not 0 <= lane < len(sealed.run_ids):
+def _open(token: str, request: Request, voter: str, lane: int) -> BallotEntry:
+    entry = request.app.state.ballot_book.get(token)
+    if entry is None or entry.voter != voter or not 0 <= lane < len(entry.run_ids):
         raise HTTPException(
             status_code=400, detail="That ballot is not valid any more. Ask for a new one."
         )
-    return sealed
+    return entry
 
 
 @router.get("/ballots/{token}/lanes/{lane}/trace")
 def ballot_trace(token: str, lane: int, request: Request) -> Response:
     """One lane's replay, addressed through the ballot so no run id is exposed."""
-    sealed = _open(token, request, _voter(request), lane)
-    trace = decode(request.app.state.store.trace(sealed.run_ids[lane]))
+    entry = _open(token, request, _voter(request), lane)
+    try:
+        trace = decode(request.app.state.store.trace(entry.run_ids[lane]))
+    except FileNotFoundError as exc:
+        # Mirrors routes_read.run_trace: 404 before ever assuming the bytes
+        # are there, never a 500 surfaced from a missing file.
+        raise HTTPException(status_code=404, detail="that lane has no replay") from exc
     return Response(
         content=np.ascontiguousarray(trace, dtype="<f4").tobytes(),
         media_type="application/octet-stream",
@@ -189,31 +215,43 @@ def ballot_trace(token: str, lane: int, request: Request) -> Response:
 def cast_vote(event_id: str, body: VoteBody, request: Request) -> dict:
     manifest = _votable(event_id)
     voter = _voter(request)
-    sealed = _open(body.ballot, request, voter, body.lane)
-    if sealed.event_id != event_id:
+    entry = _open(body.ballot, request, voter, body.lane)
+    if entry.event_id != event_id:
         raise HTTPException(status_code=400, detail="That ballot belongs to another event.")
 
+    book = request.app.state.ballot_book
     now = datetime.now(UTC)
-    kept = _window(request, manifest, now)
-    per_day = _per_day(manifest)
-    spent = votes.cast_today(kept, voter, event_id, now)
-    if spent >= per_day:
-        raise HTTPException(
-            status_code=429, detail=f"That is your {per_day} votes for today. Come back tomorrow."
-        )
+    with _vote_lock:
+        # Re-read under the lock: another request may have spent this very
+        # token, or moved today's count, in the time since _open() above ran
+        # outside it.
+        fresh = book.get(body.ballot)
+        spent = votes.cast_today(_window(request, manifest, now), voter, event_id, now)
+        if fresh is None or fresh.spent:
+            # A double-click, or this same ballot replayed either side of UTC
+            # midnight — not an error. The ballot is single-use, so there is
+            # nothing to say but so.
+            return {"points": 0, "cast_today": spent}
+        if spent >= manifest.vote.per_day:
+            raise HTTPException(
+                status_code=429,
+                detail=f"That is your {manifest.vote.per_day} votes for today. "
+                "Come back tomorrow.",
+            )
 
-    ballot = Ballot(
-        ballot_id=ballot_id(body.ballot),
-        event_id=event_id,
-        voter=voter,
-        cast_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        candidates=sealed.run_ids,
-        choice=sealed.run_ids[body.lane],
-    )
-    try:
-        request.app.state.ballots.cast(ballot)
-    except FileExistsError:
-        # A double-click, not an error. The id is the seal's MAC, so the second
-        # POST addressed the file the first one wrote — nothing to say but so.
-        return {"points": 0, "cast_today": spent}
-    return {"points": SCHEDULE["ballot"], "cast_today": spent + 1}
+        ballot = Ballot(
+            ballot_id=body.ballot,
+            event_id=event_id,
+            voter=voter,
+            cast_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            candidates=fresh.run_ids,
+            choice=fresh.run_ids[body.lane],
+        )
+        try:
+            request.app.state.ballots.cast(ballot)
+        except FileExistsError:
+            # Belt-and-braces only: `fresh.spent` above is what actually
+            # guards this now, since the log's own day-sharding cannot.
+            return {"points": 0, "cast_today": spent}
+        book.spend(body.ballot)
+        return {"points": SCHEDULE["ballot"], "cast_today": spent + 1}
