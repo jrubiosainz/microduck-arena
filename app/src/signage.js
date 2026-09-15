@@ -4,6 +4,7 @@
 // same strip on deep ink: Duck Jam's footer, with the two doors out of the
 // arena — the community, and the robot itself.
 
+import { flipTiles } from "./animation.js";
 import { menuHref, playerHref } from "./router.js";
 import { signInHref } from "./session.js";
 import { duckHead, wordmark } from "./wordmark.js";
@@ -29,7 +30,8 @@ export function avatar(user) {
 }
 
 /**
- * Who you are, top-right. Signed in: your page. Signed out: the door in.
+ * Who you are, top-right: your picture, your name, your points, and a dot while a result of yours waits to be opened.
+ * Signed in: your page. Signed out: the door in.
  * `me` is null when /api/me could not be reached, and then there is nothing
  * honest to show — a sign-in link to a server that is not answering is worse
  * than a blank.
@@ -44,11 +46,16 @@ export function chip(me) {
     return link;
   }
   const link = document.createElement("a");
-  link.className = "profile-chip";
+  link.className = me.unseen > 0 ? "profile-chip unread" : "profile-chip";
   link.href = playerHref(me.user);
   const name = document.createElement("span");
   name.textContent = me.user;
-  link.append(avatar(me.user), name);
+  // The points as split-flap tiles even at rest, so a reveal can roll them up
+  // in place. The star before them is the sheet's, not a tile.
+  const points = document.createElement("span");
+  points.className = "flip chip-points";
+  points.append(...flipTiles(me.points ?? 0));
+  link.append(avatar(me.user), name, points);
   return link;
 }
 

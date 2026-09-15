@@ -22,12 +22,19 @@ describe("avatar", () => {
 });
 
 describe("chip", () => {
-  it("links a signed-in player to their page, with picture and name", () => {
-    const el = chip({ signed_in: true, user: "cdeplanne", oauth_enabled: true });
+  it("links a signed-in player to their page, with picture, name and points", () => {
+    const el = chip({ signed_in: true, user: "cdeplanne", oauth_enabled: true, points: 385, unseen: 0 });
     expect(el.matches("a.profile-chip")).toBe(true);
     expect(el.getAttribute("href")).toBe("#/p/cdeplanne");
     expect(el.querySelector(".avatar img")).not.toBeNull();
     expect(el.textContent).toContain("cdeplanne");
+    expect([...el.querySelectorAll(".chip-points .flip-digit")].map((t) => t.textContent)).toEqual(["3", "8", "5"]);
+    expect(el.classList.contains("unread")).toBe(false);
+  });
+
+  it("wears a dot while a result waits to be opened", () => {
+    const el = chip({ signed_in: true, user: "cdeplanne", oauth_enabled: true, points: 10, unseen: 2 });
+    expect(el.classList.contains("unread")).toBe(true);
   });
 
   it("offers sign-in when signed out", () => {
