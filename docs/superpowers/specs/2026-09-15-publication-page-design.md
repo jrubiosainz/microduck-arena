@@ -115,10 +115,13 @@ swallowed.
 
 ### Viewer and player
 
-`Player` gains `{loop = true, onEnd}`; with `loop: false` it holds the last
-frame and calls `onEnd()` once. `viewer.setLanes(entries, event, playerOptions)`
-passes them through. Nothing else in the viewer changes: the camera follows
-the leader as it does today.
+`Player` gains a public `loop` flag (default true); with `loop: false` it
+holds the last frame and stops instead of restarting. The page detects the
+author's lane crossing the line from the `onTick` callback the Player already
+has, at that lane's last frame. `viewer.setLanes(entries, event, playerOptions)`
+passes the options through, and an entry may carry `opacity` to be drawn solid
+whatever its tier. Nothing else in the viewer changes: the camera follows the
+leader as it does today.
 
 ## The API
 
