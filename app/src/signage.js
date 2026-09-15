@@ -67,7 +67,7 @@ export function signage(me) {
   title.append(home);
   const line = document.createElement("span");
   line.className = "mono-label";
-  line.textContent = "Race on a clock you can trust";
+  line.textContent = "Sanctioned by absolutely no one";
   words.append(title, line);
   brand.append(duck, words);
 

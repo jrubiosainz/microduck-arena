@@ -98,8 +98,8 @@ export async function renderHome(root) {
 
   const door = el("section", "door");
   door.append(
-    el("p", "eyebrow", "The microduck arena"),
-    el("h2", "hero", "Race on a clock you can trust."),
+    el("p", "eyebrow", "Official competition"),
+    el("h2", "hero", "The pinnacle of bipedal duck athletics."),
     el(
       "p",
       "lede",
