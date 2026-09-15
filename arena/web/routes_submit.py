@@ -427,3 +427,26 @@ def withdraw(run_id: str, request: Request) -> dict:
         )
     )
     return {"withdrawn": record.run_id, "event_id": record.event_id}
+
+
+@router.post("/runs/{run_id}/seen")
+def mark_seen(run_id: str, request: Request) -> dict:
+    """The author has opened this run's page: the reveal has played, the dot goes out.
+
+    Owner-only, decided from the session exactly as a withdrawal is. Idempotent:
+    the store keeps the first visit and ignores the rest.
+    """
+    from .routes_read import _find_run
+
+    session = _require_session(request)
+    store = request.app.state.store
+    record = _find_run(store, run_id)
+    if record.user != session.username:
+        raise HTTPException(
+            status_code=403,
+            detail=f"{run_id} was published by {record.user}, not you.",
+        )
+    store.mark_seen(
+        record.run_id, record.user, datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    )
+    return {"seen": True}

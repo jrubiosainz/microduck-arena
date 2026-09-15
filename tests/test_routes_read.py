@@ -494,3 +494,24 @@ def test_voting_puts_points_on_the_ladder(client):
 
     rows = {r["user"]: r["points"] for r in api.get("/api/standings").json()["rows"]}
     assert rows["coralie"] == 2
+
+
+def test_a_run_detail_carries_its_place_its_receipts_and_its_event(client):
+    api, app = client
+    record_run(app, user="bob", score=10.0, submitted_at="2026-09-03T09:00:00Z")
+    mine = record_run(app, user="coralie", score=12.0, submitted_at="2026-09-03T10:00:00Z")
+
+    body = api.get(f"/api/runs/{mine.run_id}").json()
+    assert body["event"]["title"] == "2 m Sprint"
+    assert (body["rank"], body["on_board"], body["withdrawn"], body["seen"]) == (
+        2, True, False, False,
+    )
+    assert [(r["rank"], r["user"], r["you"]) for r in body["board"]] == [
+        (1, "bob", False),
+        (2, "coralie", True),
+    ]
+    # first entry 100 + run 10 + second place 150; no own_best, a lone run beats nothing.
+    assert sorted(r["act"] for r in body["receipts"]) == ["first_event", "podium", "run"]
+    assert sum(r["points"] for r in body["receipts"]) == 260
+    # Dropped: it cost a full trace decode, and the page loads the trace anyway.
+    assert "frames" not in body

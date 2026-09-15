@@ -31,13 +31,10 @@ def test_run_detail_reports_the_per_seed_breakdown(client):
             SeedResult(seed=2, status="fall", time_s=None),
         ),
     )
-    # 9, not the fixture's default: `frames` has to be derived from the stored
-    # trace, and a hardcoded default would pass an assertion on the default.
     app.state.store.append(record, encode(a_trace(frames=9)))
 
     body = api.get(f"/api/runs/{record.run_id}").json()
     assert body["user"] == "alice"
-    assert body["frames"] == 9
     assert [s["status"] for s in body["per_seed"]] == ["finish", "fall"]
     assert body["per_seed"][0]["time_s"] == 18.46
     assert body["per_seed"][1]["time_s"] is None

@@ -18,7 +18,9 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
+from ..points import receipts, standings
 from .oauth import OAuthError, authorize_url, exchange_code, userinfo
+from .routes_read import _all_runs, _withdrawn
 from .session import COOKIE_NAME, Session, sign, unsign
 
 STATE_COOKIE = "arena_oauth_state"
@@ -118,7 +120,7 @@ def me(request: Request, response: Response) -> dict:
     # The one response whose body varies per user. Behind any shared cache, a
     # cached copy would serve one person's identity to the next visitor.
     response.headers["Cache-Control"] = "no-store"
-    return {
+    body = {
         "signed_in": session is not None,
         "user": session.username if session else None,
         # Publishing to the author's own repo needs their OAuth token. The local
@@ -126,6 +128,21 @@ def me(request: Request, response: Response) -> dict:
         "can_publish_to_hub": bool(session and session.token),
         "oauth_enabled": config.oauth_enabled,
     }
+    if session:
+        # The chip's two numbers: the standing total, and how many of your own
+        # results you have never opened.
+        store = request.app.state.store
+        runs, withdrawn = _all_runs(store), _withdrawn(store)
+        card = next(
+            (c for c in standings(receipts(runs, withdrawn)) if c.user == session.username),
+            None,
+        )
+        seen = store.seen()
+        body["points"] = card.points if card else 0
+        body["unseen"] = sum(
+            1 for r in runs if r.user == session.username and r.run_id not in seen
+        )
+    return body
 
 
 @router.get("/login")

@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse, Response
 
 from .. import votes
 from ..course import wall_boxes
-from ..index import leaderboard
+from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, standings
 from ..store import RunRecord
@@ -238,25 +238,55 @@ def _find_run(store, run_id: str) -> RunRecord:
 
 @router.get("/runs/{run_id}")
 def run_detail(run_id: str, request: Request) -> dict:
+    """One run and everything its page shows: where it stands, what it earned,
+    whether its author has seen it. Placed by `index.standing`, priced by
+    `points.receipts` — nothing is decided here."""
     store = request.app.state.store
     record = _find_run(store, run_id)
-    frames = decode(store.trace(run_id)).shape[0]
+    runs, withdrawn = _all_runs(store), _withdrawn(store)
+    place = standing(store.runs(record.event_id), run_id, withdrawn=withdrawn)
     return {
         "run_id": record.run_id,
-        "event_id": record.event_id,
+        "event": event_summary(load_event(record.event_id)),
         "user": record.user,
         "policy_name": record.policy_name,
+        "livery": record.livery,
         "score": record.score,
+        "command_vx": record.command_vx,
         "seeds_finished": record.seeds_finished,
+        "seeds_total": len(record.per_seed),
         "per_seed": [
             {"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in record.per_seed
         ],
         "trace_seed": record.trace_seed,
         "submitted_at": record.submitted_at,
         "runner_version": record.runner_version,
-        "frames": frames,
         "offers_download": record.offers_download,
         "policy_url": (record.source or {}).get("url"),
+        "env_url": record.env_url,
+        "withdrawn": record.run_id in withdrawn,
+        "on_board": place.on_board,
+        "rank": place.rank,
+        "board": [
+            {
+                "rank": row.rank,
+                "user": row.record.user,
+                "policy_name": row.record.policy_name,
+                "score": row.record.score,
+                "seeds_finished": row.record.seeds_finished,
+                "run_id": row.record.run_id,
+                "livery": row.record.livery,
+                "you": row.record.run_id == record.run_id,
+            }
+            for row in place.board
+        ],
+        # Podium receipts are HELD, so this list can change between two reads.
+        "receipts": [
+            {"act": r.act, "points": r.points}
+            for r in receipts(runs, withdrawn)
+            if r.run_id == record.run_id
+        ],
+        "seen": record.run_id in store.seen(),
     }
 
 
