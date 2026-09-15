@@ -298,6 +298,18 @@ table.board tr.dnf { color: var(--ink-70); }
 
 table.board tr.provisional td.tab { border-left-style: dashed; border-left-color: var(--lavender-inked); }
 table.board tr.provisional .time { color: var(--ink); }
+
+/* A voted board's one loud column, in the exact slot .time takes on a timed
+   one -- the two never appear together, so they share the same weight. */
+table.board .votes {
+  width: 8.5rem;
+  text-align: right;
+  font: 400 1.7rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+table.board tbody tr:first-child .votes { color: var(--orange-inked); }
+table.board tr.provisional .votes { color: var(--ink); }
 .unpublished {
   display: block;
   color: var(--lavender-inked);
@@ -341,6 +353,7 @@ table.board tr.provisional .time { color: var(--ink); }
 table.board tr.tier-leader td.tab { border-left-color: var(--orange); }
 table.board tr.tier-ghost { color: var(--ink-70); }
 table.board tr.tier-ghost .time { color: var(--ink-70); }
+table.board tr.tier-ghost .votes { color: var(--ink-70); }
 
 /* ── the colour picker ────────────────────────────────────────────────── */
 

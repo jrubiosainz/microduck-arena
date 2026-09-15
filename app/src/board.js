@@ -72,6 +72,9 @@ export function buildRows(rows, { me = null } = {}) {
       // else's regardless, so this is about not offering a button that would
       // be rejected — not about security, which lives server-side.
       mine: Boolean(me && row.run_id && !row.provisional && row.user === me),
+      // Only meaningful on a voted board (event.metric === "votes"); ignored
+      // by renderBoard otherwise. The server puts it on every row of one.
+      votes: row.votes,
       // The server refuses anything but a few known hosts, so a link that
       // reaches here is one of those. Still opened with noopener/noreferrer.
       envUrl: row.env_url || null,
@@ -107,11 +110,18 @@ export function renderBoard(
     return;
   }
 
+  // A voted event is held by whoever collected the most votes, so that
+  // column reads "votes" and shows the count -- a finish time would be the
+  // wrong fact about it, and does not appear on this board at all.
+  const voted = event.metric === "votes";
+
   const table = document.createElement("table");
   table.className = "board";
   table.innerHTML =
     "<thead><tr><th class='tab'></th><th class='rank'>place</th><th>who</th>" +
-    "<th>policy</th><th class='time'>time</th><th class='speed'>m/s</th>" +
+    "<th>policy</th>" +
+    (voted ? "<th class='votes'>votes</th>" : "<th class='time'>time</th>") +
+    "<th class='speed'>m/s</th>" +
     "<th class='seeds'>seeds</th><th class='env'></th><th class='grab'></th>" +
     "<th class='mine'></th></tr></thead>";
   const body = document.createElement("tbody");
@@ -206,7 +216,11 @@ export function renderBoard(
       cell(row.rank, "rank"),
       cell(row.user),
       row.provisional ? policyCell(row.policy) : cell(row.policy),
-      cell(row.score, "time"),
+      // A provisional (unpublished trial) row has no votes by definition, so
+      // it reads as "—" rather than a misleading 0 alongside real counts.
+      voted
+        ? cell(row.provisional ? "—" : String(row.votes ?? 0), "votes")
+        : cell(row.score, "time"),
       cell(row.speed, "speed"),
       cell(row.seeds, "seeds"),
       env,

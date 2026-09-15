@@ -367,6 +367,55 @@ describe("taking your own entry off the board", () => {
   });
 });
 
+describe("a voted board shows votes, not a time", () => {
+  const votedEvent = { id: "swag-contest", title: "Swag Contest", metric: "votes" };
+
+  function render(rows) {
+    const container = document.createElement("div");
+    renderBoard(container, { event: votedEvent, rows }, {});
+    return container;
+  }
+
+  it("heads that column votes, not time", () => {
+    const container = render([row({ votes: 5 })]);
+    expect(container.querySelector("th.time")).toBeNull();
+    expect(container.querySelector("th.votes").textContent).toBe("votes");
+  });
+
+  it("shows the vote count, even when it is zero", () => {
+    const container = render([row({ votes: 0 })]);
+    expect(container.querySelector("td.votes").textContent).toBe("0");
+  });
+
+  it("says so for a provisional row, which has no votes by definition", () => {
+    const container = render([
+      { ...row(), provisional: true, run_id: null, votes: undefined },
+    ]);
+    expect(container.querySelector("td.votes").textContent).toBe("—");
+  });
+
+  it("never shows a finish time on a voted board -- that is the owner's explicit choice", () => {
+    const container = render([row({ votes: 12 })]);
+    expect(container.querySelector("td.time")).toBeNull();
+    expect(container.textContent).not.toContain("11.724s");
+  });
+});
+
+describe("a timed board is unaffected -- renders exactly as before", () => {
+  it("still heads the column time and shows the score, with no votes column at all", () => {
+    const container = document.createElement("div");
+    renderBoard(
+      container,
+      { event: { id: "sprint-2m", title: "2 m Sprint" }, rows: [row()] },
+      {},
+    );
+    expect(container.querySelector("th.time").textContent).toBe("time");
+    expect(container.querySelector("td.time").textContent).toBe("11.724s");
+    expect(container.querySelector("th.votes")).toBeNull();
+    expect(container.querySelector("td.votes")).toBeNull();
+  });
+});
+
 describe("the training-environment link", () => {
   const rendered = (over) => {
     const container = document.createElement("div");
