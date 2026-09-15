@@ -108,6 +108,14 @@ uv run arena serve --store ~/arena-board --user $USER
 
 Open <http://127.0.0.1:8000>.
 
+The home page is the club: `Season standings` ranks players by the points
+their publications earned (first publication on an event 100, each published
+run 10 capped at three a day, beating your own best 25 once per event, and
+250/150/100 while you hold a podium place), and `Pick your round` lists the
+events. The chip top-right opens your page, `#/p/<user>`; the standings link
+to everyone else's. Points are folded from the run log on every request, like
+the board — `GET /api/standings` and `GET /api/players/<user>`.
+
 ## From the command line
 
 ```bash
