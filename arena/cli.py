@@ -15,7 +15,7 @@ from .evaluate import evaluate
 from .index import ENTRANTS, leaderboard
 from .manifest import ManifestError, all_events, load_event
 from .policy import PolicyError, load_policy
-from .store import LocalStore, RunRecord, new_run_id
+from .store import LocalStore, RunRecord, new_id
 
 
 def _cmd_events(args) -> int:
@@ -46,7 +46,7 @@ def _cmd_score(args) -> int:
 
     if args.store:
         record = RunRecord(
-            run_id=new_run_id(),
+            run_id=new_id(),
             event_id=manifest.id,
             submitted_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             user=args.user,

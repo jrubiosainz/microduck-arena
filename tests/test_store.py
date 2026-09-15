@@ -2,12 +2,12 @@ import pytest
 
 from arena.constants import RUNNER_VERSION
 from arena.evaluate import SeedResult
-from arena.store import LocalStore, RunRecord, new_run_id
+from arena.store import LocalStore, RunRecord, new_id
 
 
 def make_record(**overrides) -> RunRecord:
     fields = {
-        "run_id": new_run_id(),
+        "run_id": new_id(),
         "event_id": "sprint-2m",
         "submitted_at": "2026-09-03T10:00:00Z",
         "user": "alice",
@@ -28,7 +28,7 @@ def make_record(**overrides) -> RunRecord:
 
 
 def test_run_ids_are_unique_and_sort_by_time():
-    ids = [new_run_id() for _ in range(50)]
+    ids = [new_id() for _ in range(50)]
     assert len(set(ids)) == 50
     assert ids == sorted(ids), "run ids must sort chronologically"
 

@@ -31,7 +31,7 @@ from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy
 from ..hub_publish import HubPublishError, publish_policy
 from ..manifest import ManifestError, load_event
 from ..policy import MAX_MODEL_BYTES, PolicyError, load_policy
-from ..store import RunRecord, Withdrawal, new_run_id
+from ..store import RunRecord, Withdrawal, new_id
 from .routes_auth import current_user
 from .session import Session
 
@@ -337,7 +337,7 @@ async def submit(
         source = {"kind": "upload", "filename": file.filename}
 
     record = RunRecord(
-        run_id=new_run_id(),
+        run_id=new_id(),
         event_id=manifest.id,
         # Zero-padded ISO-8601 ending in Z. arena/index.py breaks a full tie by
         # comparing this as a STRING, so an isoformat() offset would misorder it.

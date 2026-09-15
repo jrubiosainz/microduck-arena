@@ -200,7 +200,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
     from .evaluate import evaluate
     from .hub_fetch import fetch_policy
     from .policy import load_policy
-    from .store import RunRecord, new_run_id
+    from .store import RunRecord, new_id
 
     list_repos, read_manifest = reader or hub_reader(on_event=on_event)
     found = candidates(list_repos, read_manifest, all_tagged=all_tagged)
@@ -212,7 +212,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
             fetched = fetch_policy(candidate.repo_id)
             result = evaluate(event, load_policy(fetched.path))
             record = RunRecord(
-                run_id=new_run_id(),
+                run_id=new_id(),
                 event_id=event.id,
                 submitted_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 user=candidate.user,

@@ -25,8 +25,8 @@ _id_lock = threading.Lock()
 _id_state = {"stamp": -1, "rand": 0}
 
 
-def new_run_id() -> str:
-    """A time-ordered unique id, so run ids sort chronologically.
+def new_id() -> str:
+    """A time-ordered unique id, so records sort chronologically.
 
     Globally unique across events, which is why GET /api/runs/{run_id} needs no
     event in its path.
