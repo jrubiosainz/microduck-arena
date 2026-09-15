@@ -38,7 +38,42 @@ export function laneOffsetZ(i, n, spacing = LANE_SPACING) {
  * physics has them, but on screen they hide the robot, and the start and finish
  * lines are what actually make a race readable.
  */
-export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0 }, lanes = 1) {
+/**
+ * The lane walls the physics uses, drawn exactly where they are.
+ *
+ * `walls` comes from the server, computed by the same function that writes the
+ * MJCF, so nothing is recomputed here — the numbers are only converted from
+ * MJCF axes to three.js ones: MJCF +x is three +x, MJCF +y is three -z, MJCF +z
+ * is three +y. A box's half-extents map the same way, and three's BoxGeometry
+ * takes FULL extents, hence the doubling.
+ *
+ * Hidden by default. They exist so a robot cannot wander out of its lane, and
+ * showing them all the time would put two grey slabs around every replay — but
+ * leaving them undrawable meant a roller policy grazing something invisible,
+ * which is how this came up.
+ */
+export function buildWalls(walls = []) {
+  const group = new Group();
+  group.name = "walls";
+  group.visible = false;
+  for (const { pos, half } of walls) {
+    const mesh = new Mesh(
+      new BoxGeometry(half[0] * 2, half[2] * 2, half[1] * 2),
+      new MeshStandardMaterial({
+        color: 0x3a3a44,
+        roughness: 0.9,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.35,
+      }),
+    );
+    mesh.position.set(pos[0], pos[2], -pos[1]);
+    group.add(mesh);
+  }
+  return group;
+}
+
+export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = [] }, lanes = 1) {
   const course = new Group();
   course.name = "course";
   // Climbing toward +x is a positive rotation about z: it lifts +x into +y.
@@ -66,6 +101,7 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0 }, lanes = 
 
   course.add(line(0, span, 0xf5f5f5, "start"));
   course.add(line(length_m, span, 0xff7a2f, "finish"));
+  course.add(buildWalls(walls));
 
   // One stripe per lane, so a table row can point at its duck.
   //

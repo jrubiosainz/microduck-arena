@@ -27,6 +27,25 @@ RIG_XML = {
 WALL_THICKNESS_M = 0.05
 
 
+def wall_boxes(course) -> list[tuple[str, tuple[float, float, float], tuple[float, float, float]]]:
+    """The lane walls, as `(name, pos, half_extents)` in MJCF coordinates.
+
+    One function, two consumers: it writes the MJCF the physics runs, and it is
+    served to the page so the viewer can DRAW those walls rather than recompute
+    where they ought to be. The walls are invisible by default and the physics
+    is the only thing that feels them, so a second arithmetic in JavaScript
+    would be a drawing that could silently disagree with what the robot hits.
+    """
+    half_t = WALL_THICKNESS_M / 2
+    half_h = course.wall_height_m / 2
+    half_len = course.length_m / 2 + 0.5  # overrun past the finish line
+    y_off = course.width_m / 2 + half_t
+    return [
+        (name, (half_len - 0.5, y, half_h), (half_len, half_t, half_h))
+        for name, y in (("wall_left", y_off), ("wall_right", -y_off))
+    ]
+
+
 def ramp_dir(slope_deg: float) -> np.ndarray:
     """Unit vector up the lane. Progress along the course is a dot with this."""
     t = math.radians(slope_deg)
@@ -83,18 +102,14 @@ def _inject_lane(root: ET.Element, manifest: Manifest) -> None:
 
     _sub(lane, "geom", name="floor", type="plane", size="0 0 0.05", pos="0 0 0")
 
-    half_t = WALL_THICKNESS_M / 2
-    half_h = course.wall_height_m / 2
-    half_len = course.length_m / 2 + 0.5  # overrun past the finish line
-    y_off = course.width_m / 2 + half_t
-    for name, y in (("wall_left", y_off), ("wall_right", -y_off)):
+    for name, pos, size in wall_boxes(course):
         _sub(
             lane,
             "geom",
             name=name,
             type="box",
-            pos=f"{half_len - 0.5} {y} {half_h}",
-            size=f"{half_len} {half_t} {half_h}",
+            pos=" ".join(str(v) for v in pos),
+            size=" ".join(str(v) for v in size),
         )
 
 

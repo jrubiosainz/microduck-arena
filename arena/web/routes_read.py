@@ -11,6 +11,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 
+from ..course import wall_boxes
 from ..index import leaderboard
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..store import RunRecord
@@ -29,6 +30,13 @@ def event_summary(manifest: Manifest) -> dict:
         "length_m": manifest.course.length_m,
         "width_m": manifest.course.width_m,
         "slope_deg": manifest.course.slope_deg,
+        # The lane walls the PHYSICS uses, in MJCF coordinates, so the viewer can
+        # draw exactly what the robot can hit rather than recomputing where the
+        # walls ought to be. They are invisible unless you ask for them.
+        "walls": [
+            {"name": name, "pos": list(pos), "half": list(half)}
+            for name, pos, half in wall_boxes(manifest.course)
+        ],
         "time_limit_s": manifest.time_limit_s,
         "seeds": len(manifest.seeds),
         # The sweep, not a single command: the event no longer pins a speed,

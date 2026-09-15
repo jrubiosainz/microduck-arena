@@ -250,6 +250,7 @@ export async function renderRace(root, { event, state }) {
         <div class="controls">
           <button id="playpause">Pause</button>
           <button id="follow" hidden>Follow the leader</button>
+          <button id="walls" aria-pressed="false" title="The lane walls are in the physics whether or not they are drawn">Show walls</button>
           <span class="hint" id="stage-hint"></span>
           <label class="bright" title="Stage brightness">
             Light
@@ -288,6 +289,17 @@ export async function renderRace(root, { event, state }) {
   brightness.addEventListener("input", () => viewer.setBrightness(brightness.value));
 
   root.querySelector("#follow").addEventListener("click", () => viewer.follow());
+
+  // The walls are always there for the robot; this only decides whether you can
+  // see them. aria-pressed rather than a changing label alone, so the state is
+  // readable without reading the button's text.
+  const wallsButton = root.querySelector("#walls");
+  let wallsShown = false;
+  wallsButton.addEventListener("click", () => {
+    wallsShown = viewer.setWallsVisible(!wallsShown);
+    wallsButton.setAttribute("aria-pressed", String(wallsShown));
+    wallsButton.textContent = wallsShown ? "Hide walls" : "Show walls";
+  });
   root.querySelector("#playpause").addEventListener("click", () => {
     viewer.player.toggle();
     root.querySelector("#playpause").textContent = viewer.player.playing

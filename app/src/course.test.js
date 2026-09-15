@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Vector3 } from "three";
-import { LANE_SPACING, TIER_MARKER, buildCourse, buildMarker, laneOffsetZ } from "./course.js";
+import { LANE_SPACING, TIER_MARKER, buildCourse, buildMarker, laneOffsetZ, buildWalls } from "./course.js";
 
 describe("laneOffsetZ", () => {
   it("centres a single lane", () => {
@@ -83,5 +83,56 @@ describe("buildMarker", () => {
     const marker = buildMarker("leader");
     expect(marker.position.y).toBeGreaterThan(0);
     expect(marker.position.y).toBeLessThan(0.02);
+  });
+});
+
+describe("the lane walls", () => {
+  // Exactly what arena/course.py serves for sprint-2m, pinned there against the
+  // compiled MuJoCo model. Nothing here recomputes them.
+  const WALLS = [
+    { name: "wall_left", pos: [1.0, 0.425, 0.075], half: [1.5, 0.025, 0.075] },
+    { name: "wall_right", pos: [1.0, -0.425, 0.075], half: [1.5, 0.025, 0.075] },
+  ];
+
+  it("is hidden until asked for", () => {
+    // Two grey slabs around every replay would be worse than the problem.
+    expect(buildWalls(WALLS).visible).toBe(false);
+  });
+
+  it("converts MJCF axes to three.js ones", () => {
+    // MJCF +y is three -z. Getting this wrong draws the walls across the lane
+    // instead of along it, which would look deliberate and be wrong.
+    const [left, right] = buildWalls(WALLS).children;
+    expect(left.position.x).toBeCloseTo(1.0, 6);
+    expect(left.position.y).toBeCloseTo(0.075, 6); // MJCF z -> three y
+    expect(left.position.z).toBeCloseTo(-0.425, 6); // MJCF y -> three -z
+    expect(right.position.z).toBeCloseTo(0.425, 6);
+  });
+
+  it("doubles the half-extents, mapping them the same way", () => {
+    const [left] = buildWalls(WALLS).children;
+    const { width, height, depth } = left.geometry.parameters;
+    expect(width).toBeCloseTo(3.0, 6); // 2 * 1.5 along the lane
+    expect(height).toBeCloseTo(0.15, 6); // 2 * 0.075, the wall's height
+    expect(depth).toBeCloseTo(0.05, 6); // 2 * 0.025, its thickness
+  });
+
+  it("is the length of the lane plus its overrun, not the lane alone", () => {
+    // 3.0 for a 2 m course: the physics wall runs 0.5 m past the finish, and
+    // drawing it shorter would show a gap the robot cannot actually pass.
+    const [left] = buildWalls(WALLS).children;
+    expect(left.geometry.parameters.width).toBeGreaterThan(2.0);
+  });
+
+  it("draws nothing when an event serves no walls", () => {
+    expect(buildWalls().children).toHaveLength(0);
+    expect(buildWalls([]).children).toHaveLength(0);
+  });
+
+  it("rides with the course, so it tilts with a slope", () => {
+    const course = buildCourse({ length_m: 1.5, slope_deg: 8, walls: WALLS }, 1);
+    const group = course.children.find((c) => c.name === "walls");
+    expect(group).not.toBeNull();
+    expect(group.parent).toBe(course);
   });
 });

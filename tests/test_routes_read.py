@@ -260,3 +260,17 @@ def test_the_programme_is_served_in_its_declared_order(client):
         "hill-climb-1m5",
     ]
     assert [e["order"] for e in events] == sorted(e["order"] for e in events)
+
+
+def test_an_event_carries_the_walls_the_physics_uses(client):
+    """Drawn walls must be the ones the robot can hit, so the page is given the
+    geometry rather than the ingredients to recompute it."""
+    api, _ = client
+    sprint = next(e for e in api.get("/api/events").json()["events"] if e["id"] == "sprint-2m")
+    walls = sprint["walls"]
+    assert [w["name"] for w in walls] == ["wall_left", "wall_right"]
+    assert walls[0]["pos"] == pytest.approx([1.0, 0.425, 0.075])
+    assert walls[0]["half"] == pytest.approx([1.5, 0.025, 0.075])
+    # Mirrored across the lane, and nothing else differs.
+    assert walls[1]["pos"][1] == pytest.approx(-walls[0]["pos"][1])
+    assert walls[1]["half"] == walls[0]["half"]

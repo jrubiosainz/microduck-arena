@@ -120,3 +120,22 @@ def test_a_sloped_course_is_tilted_by_the_angle_it_declares():
     # surface, not buried in it.
     normal = rotation @ np.array([0.0, 0.0, 1.0])
     assert float(normal @ data.qpos[0:3]) == pytest.approx(SPAWN_HEIGHT_M, abs=1e-6)
+
+
+def test_the_served_walls_are_the_walls_the_physics_compiles():
+    """One arithmetic, two consumers. The viewer draws what this serves, so if
+    it ever disagreed with the compiled model the page would be showing a wall
+    where the robot hits nothing — or worse, nothing where it hits a wall."""
+    import mujoco
+
+    from arena.course import compile_course, wall_boxes
+    from arena.manifest import load_event
+
+    for event_id in ("sprint-2m", "roller-sprint-2m", "hill-climb-1m5"):
+        manifest = load_event(event_id)
+        model = compile_course(manifest)
+        for name, pos, half in wall_boxes(manifest.course):
+            geom = model.geom(name)
+            assert model.geom_pos[geom.id] == pytest.approx(pos), f"{event_id}/{name} pos"
+            assert model.geom_size[geom.id] == pytest.approx(half), f"{event_id}/{name} size"
+            assert model.geom_type[geom.id] == mujoco.mjtGeom.mjGEOM_BOX

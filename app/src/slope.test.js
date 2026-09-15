@@ -7,12 +7,12 @@
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { Euler, Vector3 } from "three";
+import { Euler, Group, Vector3 } from "three";
 import { buildCourse } from "./course.js";
 import { applyFrame } from "./replay.js";
 import { buildRigTree } from "./rig.js";
 import { standOnCourse } from "./thumbnail.js";
-import { placeLane } from "./viewer.js";
+import { attachCourse, placeLane } from "./viewer.js";
 
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
 const HILL = { length_m: 1.5, width_m: 0.8, slope_deg: 8, rig: "legs" };
@@ -110,5 +110,36 @@ describe("a still's duck on a slope", () => {
     const p = new Vector3().setFromMatrixPosition(rig.placer.matrixWorld);
     expect(p.y).toBeCloseTo(0, 6);
     expect(p.x).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe("the wall toggle across a re-race", () => {
+  const WALLS = [{ name: "wall_left", pos: [1, 0.425, 0.075], half: [1.5, 0.025, 0.075] }];
+  const EVENT = { length_m: 2, walls: WALLS };
+
+  it("a rebuilt course remembers that the walls were showing", () => {
+    // setLanes rebuilds the course on every re-race and a fresh wall group
+    // starts hidden, so this is the page's own builder being exercised — not a
+    // model of it rebuilt in the test.
+    const scene = new Group();
+    attachCourse(scene, EVENT, 1, true);
+    const rebuilt = attachCourse(scene, EVENT, 2, true);
+    expect(rebuilt.getObjectByName("walls").visible).toBe(true);
+  });
+
+  it("and remembers equally that they were hidden", () => {
+    const scene = new Group();
+    expect(attachCourse(scene, EVENT, 1, false).getObjectByName("walls").visible).toBe(false);
+  });
+
+  it("puts the course in the scene", () => {
+    const scene = new Group();
+    const course = attachCourse(scene, EVENT, 1, false);
+    expect(course.parent).toBe(scene);
+  });
+
+  it("does not fall over on an event with no walls at all", () => {
+    const scene = new Group();
+    expect(() => attachCourse(scene, { length_m: 2 }, 1, true)).not.toThrow();
   });
 });

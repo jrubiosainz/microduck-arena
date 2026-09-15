@@ -79,6 +79,24 @@ const GHOST_OPACITY = 0.5;
  * Extracted from createViewer so the rule has somewhere to be tested — the
  * viewer itself needs WebGL and has none in the suite.
  */
+/**
+ * Build the course for one race and put it in the scene, honouring the wall
+ * toggle.
+ *
+ * Exported for the same reason placeLane is: createViewer needs WebGL and
+ * cannot run in the suite, and the thing worth pinning here is that a REBUILT
+ * course remembers whether the walls were showing. setLanes rebuilds on every
+ * re-race, and a fresh wall group starts hidden — so without this the walls
+ * would silently vanish while the button still read "Hide walls".
+ */
+export function attachCourse(scene, event, lanes, wallsVisible) {
+  const course = buildCourse(event, lanes);
+  const walls = course.getObjectByName("walls");
+  if (walls) walls.visible = Boolean(wallsVisible);
+  scene.add(course);
+  return course;
+}
+
 export function placeLane(rig, laneZ) {
   rig.placer.position.z = laneZ;
   rig.placer.rotation.set(0, 0, 0);
@@ -195,6 +213,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
 
   let lanes = [];
   let course = null;
+  let wallsVisible = false;
   let player = new Player([]);
 
   function clearScene() {
@@ -212,8 +231,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   function setLanes(entries, event) {
     clearScene();
     if (event) {
-      course = buildCourse(event, Math.max(1, entries.length));
-      scene.add(course);
+      course = attachCourse(scene, event, Math.max(1, entries.length), wallsVisible);
     }
     lanes = entries.map((entry, i) => {
       const tier = entry.tier ?? "ghost";
@@ -240,6 +258,29 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     player = new Player(lanes.map((lane) => lane.trace));
     player.play();
   }
+
+  /**
+   * Show or hide the lane walls.
+   *
+   * They are in the physics whether or not they are drawn — a robot that
+   * drifts hits them either way. The toggle exists because a roller policy was
+   * grazing something invisible, and being unable to see it made that
+   * impossible to diagnose from the page.
+   */
+  function setWallsVisible(visible) {
+    // Remembered on the viewer, not only on the mesh: setLanes rebuilds the
+    // course on every re-race, and a fresh group starts hidden. Without this
+    // the walls would silently vanish while the button still said "Hide walls".
+    wallsVisible = Boolean(visible);
+    applyWallVisibility();
+    return wallsVisible;
+  }
+
+  function applyWallVisibility() {
+    const group = course?.getObjectByName("walls");
+    if (group) group.visible = wallsVisible;
+  }
+
 
   function follow() {
     chase = true;
@@ -291,6 +332,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   return {
     setLanes,
     follow,
+    setWallsVisible,
     setBrightness,
     get brightness() {
       return brightness;
