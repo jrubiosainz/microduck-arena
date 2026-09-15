@@ -1,0 +1,293 @@
+/* THE DUCK DOME — motion primitives and the reveal beats.
+ *
+ * Every beat of Art_Direction.md §7 as a class you add to an AD4 object: .flip-roll on a flip
+ * digit, .tape-stop then .crt-sync on a CRT screen, .stamp-slam on a stamp, .confetti-fall over a
+ * stage, .rank-climb and .rank-shuffle on pegboard rows. Load tokens.css, effects.css and
+ * components.css first. Spec: docs/specs/ad6-motion-reveal-beats.md.
+ *
+ * Every beat is a CSS animation on a token duration, so its cadence lives here and not in a
+ * timer; every beat fills forwards to the object's own resting style, so its end state is the
+ * object; and every beat fires animationend, at zero duration too, so a page sequences beats by
+ * waiting for the event. Under prefers-reduced-motion every duration and delay is 0 s: the same
+ * animations run, end in the same frame, and leave the same end state.
+ *
+ * The number is written before the theatre starts. A digit's text is its value before the roll
+ * plays over it; a rank is renumbered before the row moves. Nothing here blurs, nothing rotates
+ * past the charter's 4°, nothing is a colour tokens.css does not hold.
+ */
+
+:root {
+  /* Durations */
+  --t-clack: 90ms;                                 /* one flip-digit step; a row lifting off its peg */
+  --t-flip: 180ms;                                 /* a digit settling; a row dropping onto its peg; one shuffle */
+  --t-slam: 240ms;                                 /* the stamp coming down; the tape stop */
+  --t-roll: 480ms;                                 /* the pegboard slide; the CRT re-sync */
+  --t-scene: calc(var(--t-slam) + var(--t-roll));  /* the tape stop and the re-sync together: 720 ms */
+  --t-confetti: 2s;                                /* the fall, first strip in to last strip out */
+
+  /* Stamp contact at 40% of the existing beat; recovery fits inside the same 240 ms. */
+  --t-stamp-contact: calc(var(--t-slam) * 0.4);
+  --t-impact: calc(var(--t-slam) - var(--t-stamp-contact));
+  --stamp-lift: 1.35;
+  --stamp-anticipation: 1.42;
+  --impact-cell: 2px;
+  --impact-verdict: 5px;
+
+  /* Easings */
+  --ease-drop: cubic-bezier(0.4, 0, 1, 1);         /* anything falling or slamming: accelerates into the impact */
+  --ease-hard: cubic-bezier(0.2, 0, 0, 1);         /* anything arriving: fast, then stops */
+  --ease-tape: linear;                             /* tape, tear, confetti */
+}
+
+/* Registered so they animate: an integer for the split-flap's counter, two lengths a pegboard
+   row composes into one translate. */
+@property --flip-at { syntax: '<integer>'; inherits: false; initial-value: 0; }
+@property --peg-slide { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@property --peg-lift { syntax: '<length>'; inherits: false; initial-value: 0px; }
+
+/* ── The flip-digit roll — .flip-roll on a .flip-digit ─────────────────────── */
+
+/* Set the tile's text to its target, --flip-from to the digit it showed and --flip-to to that
+   plus the forward distance (a flip clock only turns one way), then add the class. The two
+   pseudo-elements become the two halves of a split-flap: each is a full ink face showing the
+   counter of --flip-at modulo ten, which steps from --flip-from to --flip-to one clack at a time;
+   the bottom half runs half a clack behind the top, which is the flap. Remove the class on the
+   bottom face's animationend: the text under it already reads what the faces landed on, in the
+   same place. */
+.flip-digit.flip-roll {
+  background: var(--deep-ink); /* the seam between the faces is the board showing through */
+  color: transparent;
+}
+
+.flip-digit.flip-roll::before,
+.flip-digit.flip-roll::after {
+  content: counter(flip);
+  counter-reset: flip calc(mod(var(--flip-at), 10));
+  position: absolute;
+  inset: 0;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink);
+  color: var(--paper);
+  animation: flip-roll calc((var(--flip-to) - var(--flip-from)) * var(--t-clack)) var(--ease-tape) both;
+}
+
+.flip-digit.flip-roll::before { clip-path: inset(0 0 calc(50% + 1px) 0); }
+
+.flip-digit.flip-roll::after {
+  clip-path: inset(calc(50% + 1px) 0 0 0);
+  animation-delay: calc(var(--t-clack) / 2);
+}
+
+@keyframes flip-roll {
+  from { --flip-at: var(--flip-from); }
+  to { --flip-at: var(--flip-to); }
+}
+
+/* ── The tape stop and the CRT re-sync — .tape-stop, then .crt-sync, on a .crt-screen ── */
+
+/* Add .tape-stop: the picture freezes and jolts, a 2 px tear of deep ink lies across it, then
+   for two frames of tape the screen is deep ink and stays so. On its animationend swap the
+   picture, remove .tape-stop and add .crt-sync in the same task: the cover holds for a few frames
+   more, then the new picture is there as a horizontal hold that snaps straight, with one line of
+   jitter. The scanlines are the glass: they ride ::after and never move. */
+.crt-screen.tape-stop::before,
+.crt-screen.crt-sync::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--deep-ink);
+  pointer-events: none;
+}
+
+.crt-screen.tape-stop * { animation-play-state: paused; }
+
+.crt-screen.tape-stop > * { translate: 3px 0; }
+
+.crt-screen.tape-stop::before { animation: tape-stop var(--t-slam) step-end forwards; }
+
+@keyframes tape-stop {
+  from, 66% { clip-path: inset(38% 0 calc(62% - 2px) 0); }
+  67%, to { clip-path: none; }
+}
+
+.crt-screen.crt-sync::before { animation: crt-sync var(--t-roll) step-end both; }
+
+@keyframes crt-sync {
+  from, 15% { visibility: visible; }
+  16%, to { visibility: hidden; }
+}
+
+.crt-screen.crt-sync > * { animation: crt-hold var(--t-roll) var(--ease-hard) both; }
+
+@keyframes crt-hold {
+  from, 15% { translate: 10% 0; transform: skewX(-4deg); }
+  70% { translate: 0 0; transform: none; }
+  82% { translate: 0 0; animation-timing-function: step-end; }
+  84% { translate: 0 -2px; animation-timing-function: step-end; }
+  86%, to { translate: 0 0; }
+}
+
+/* ── The stamp slam — .stamp-slam on a .stamp ──────────────────────────────── */
+
+/* The first 40% anticipates and falls; contact starts the support's damped recoil on the
+   same CSS timeline. stamp-contact exposes that boundary to the driver, including at 0 s. */
+.stamp-slam {
+  animation:
+    stamp-slam var(--t-slam) var(--ease-drop) both,
+    stamp-contact var(--t-stamp-contact) step-end;
+}
+
+@keyframes stamp-slam {
+  from { scale: var(--stamp-lift); }
+  12% { scale: var(--stamp-anticipation); }
+  40% { scale: 1; animation-timing-function: var(--ease-hard); }
+  55% { scale: 1.025; animation-timing-function: var(--ease-hard); }
+  to { scale: 1; }
+}
+
+@keyframes stamp-contact {
+  from, to { text-shadow: none; }
+}
+
+.jolt {
+  --impact-distance: var(--impact-cell);
+  animation: jolt var(--t-slam) linear both;
+}
+
+.crt-screen.jolt { --impact-distance: var(--impact-verdict); }
+.stamp-impact {
+  animation-duration: var(--t-impact);
+  animation-delay: var(--t-stamp-contact);
+}
+
+@keyframes jolt {
+  from { translate: 0 0; }
+  12% { translate: calc(var(--impact-distance) * -1) var(--impact-distance); }
+  35% { translate: calc(var(--impact-distance) * 0.65) calc(var(--impact-distance) * -0.5); }
+  58% { translate: calc(var(--impact-distance) * -0.3) calc(var(--impact-distance) * 0.2); }
+  80% { translate: calc(var(--impact-distance) * 0.1) 0; }
+  to { translate: 0 0; }
+}
+
+/* ── The confetti fall — .confetti-fall with .confetti-piece children ──────── */
+
+/* A layer of paper over the whole screen. Each strip takes its colour and its paper size from
+   its place in the layer, so a page cannot pick them, and three values from the page:
+   --confetti-x where it starts, --confetti-lag (0–1) how late, --confetti-sway how far it drifts.
+   It falls straight at tape speed, tumbling by turning about its own axis — a strip of paper
+   foreshortens, it does not tilt — past the bottom of the screen and out of sight; the page
+   removes the strips on their animationend. A layer with spread values is empty at --t-confetti.
+   In the air a strip leans at one of the charter's angles, alternating in sign with its
+   neighbour. */
+.confetti-fall {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  container-type: size;
+  pointer-events: none;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: 0;
+  left: var(--confetti-x);
+  width: 8px;
+  height: 16px;
+  background: var(--yellow);
+  rotate: calc(var(--fx-tilt-sign, 1) * var(--rotate-3-0));
+  animation:
+    confetti-fall calc(var(--t-confetti) * 0.6) var(--ease-tape)
+    calc(var(--confetti-lag) * var(--t-confetti) * 0.4) both;
+}
+
+.confetti-piece:nth-child(even) { --fx-tilt-sign: -1; }
+
+.confetti-piece:nth-child(3n) {
+  width: 6px;
+  height: 20px;
+  rotate: calc(var(--fx-tilt-sign, 1) * var(--rotate-1-5));
+}
+
+.confetti-piece:nth-child(7n + 2) { background: var(--magenta); }
+.confetti-piece:nth-child(7n + 3) { background: var(--cyan); }
+.confetti-piece:nth-child(7n + 4) { background: var(--orange); }
+.confetti-piece:nth-child(7n + 5) { background: var(--lavender); }
+.confetti-piece:nth-child(7n + 6) { background: var(--sky); }
+.confetti-piece:nth-child(7n) { background: var(--lime); }
+
+@keyframes confetti-fall {
+  from { translate: 0 -100%; scale: 1 1; }
+  12.5% { scale: -1 1; }
+  25% { scale: 1 1; }
+  37.5% { scale: -1 1; }
+  50% { scale: 1 1; }
+  62.5% { scale: -1 1; }
+  75% { scale: 1 1; }
+  87.5% { scale: -1 1; }
+  to { translate: var(--confetti-sway) calc(100cqh + 100%); scale: 1 1; }
+}
+
+/* ── The pegboard rank climb — .rank-climb and .rank-shuffle on .pegboard-rows ── */
+
+/* Move the player's row to its new place in the DOM, renumber every rank, and give each moved
+   row --peg-dy, where it was minus where it is. Then the climbing row lifts off its peg in a
+   clack, slides home in a roll and drops onto the peg in a flip, its shadow closing as it lands;
+   each displaced row drops one peg in a flip, one clack after the one before it, so they fall one
+   at a time behind the climber and the last has cleared its peg before the climber lands on it.
+   The end of the beat is the climber's peg-drop animationend. */
+.pegboard-row.rank-climb,
+.pegboard-row.rank-shuffle {
+  translate: 0 calc(var(--peg-slide) + var(--peg-lift));
+}
+
+.pegboard-row.rank-climb {
+  position: relative;
+  z-index: 1;
+  animation:
+    peg-lift var(--t-clack) var(--ease-hard) forwards,
+    peg-slide var(--t-roll) var(--ease-hard) var(--t-clack) both,
+    peg-drop var(--t-flip) var(--ease-drop) calc(var(--t-clack) + var(--t-roll)) forwards;
+}
+
+.pegboard-row.rank-shuffle {
+  animation: peg-slide var(--t-flip) var(--ease-drop) calc((var(--peg-order) + 1) * var(--t-clack)) both;
+}
+
+@keyframes peg-lift {
+  from { --peg-lift: 0px; box-shadow: 0 0 var(--shadow-blur) var(--ink); }
+  to { --peg-lift: -6px; box-shadow: var(--shadow-card-min) var(--shadow-card-min) var(--shadow-blur) var(--ink); }
+}
+
+@keyframes peg-slide {
+  from { --peg-slide: var(--peg-dy); }
+  to { --peg-slide: 0px; }
+}
+
+@keyframes peg-drop {
+  from { --peg-lift: -6px; box-shadow: var(--shadow-card-min) var(--shadow-card-min) var(--shadow-blur) var(--ink); }
+  to { --peg-lift: 0px; box-shadow: 0 0 var(--shadow-blur) var(--ink); }
+}
+
+/* ── Reduced motion — the same beats, every duration and delay at zero ─────── */
+
+/* The animations still run, still fill forwards and still fire animationend, so the end state
+   and the sequencing are identical by construction. */
+@media (prefers-reduced-motion: reduce) {
+  .flip-digit.flip-roll::before,
+  .flip-digit.flip-roll::after,
+  .crt-screen.tape-stop::before,
+  .crt-screen.crt-sync::before,
+  .crt-screen.crt-sync > *,
+  .stamp-slam,
+  .jolt,
+  .confetti-piece,
+  .pegboard-row.rank-climb,
+  .pegboard-row.rank-shuffle {
+    animation-duration: 0s;
+    animation-delay: 0s;
+  }
+}

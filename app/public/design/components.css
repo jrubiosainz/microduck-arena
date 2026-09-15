@@ -1,0 +1,604 @@
+/* THE DUCK DOME — the component inventory.
+ *
+ * Every UI element the Dome needs, as one physical object in the hall. Load tokens.css and
+ * effects.css first: every colour, size and effect parameter here is a token, and where an
+ * object takes a VHS effect by choice — a tilt, a shadow colour, grain — it takes the .fx-*
+ * primitive in its markup. Where an effect is mandatory on an object — scanlines on a CRT,
+ * aberration on the signage, the marquee and the FAIL stamp — the object carries it here, so a
+ * screen cannot forget it.
+ * Source: Art_Direction.md §5 "The component inventory". Sheet: design/components.html.
+ *
+ * Heavy things sit square: never an .fx-tilt-* on a cabinet, a scoreboard, a CRT, a button, a
+ * pegboard or a terminal. Paper and plastic tilt: stickers, flyers, stamps, trophies and confetti
+ * take an .fx-tilt-* class, alternating in sign from one sibling to the next.
+ */
+
+/* ── Two type levels several objects share ─────────────────────────────────── */
+
+/* The eyebrow is written in capitals and, on paper, in inked orange; the mono label is never
+   rewritten, so it keeps its case. */
+.eyebrow {
+  margin: 0;
+  color: var(--orange-inked);
+  font-family: var(--type-eyebrow-family);
+  font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size);
+  line-height: var(--type-eyebrow-line);
+  letter-spacing: var(--type-eyebrow-tracking);
+  text-transform: uppercase;
+}
+
+.mono-label {
+  font-family: var(--type-mono-label-family);
+  font-weight: var(--type-mono-label-weight);
+  font-size: var(--type-mono-label-size);
+  line-height: var(--type-mono-label-line);
+  letter-spacing: var(--type-mono-label-tracking);
+}
+
+/* The three lockups that always ghost, carried here so the markup cannot leave it off. The
+   recipe itself is effects.css's — every page that loads this file loads that one first — so a
+   fix to the aberration reaches these three as well. It used to be copied out here, and that is
+   how the ink shadow went on eating large titles after it had been noticed. */
+.signage-title,
+.marquee-title,
+.stamp-fail {
+  text-shadow: var(--fx-aberration-shadow);
+}
+
+/* ── Floor — gym floor: checkerboard, painted court lines ──────────────────── */
+
+/* Paper and warm-paper tiles on a 56 px checker — two tiles per period, as the DJ6 render draws
+   it; a 56 px tile is a pattern that fights the text, a 28 px one is a floor. Two diagonal
+   gradients half a period apart draw it without a conic gradient, which the Dome reserves for
+   its one ray fan. */
+.floor {
+  --floor-period: 56px;
+  position: relative;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(45deg, var(--warm-paper) 25%, transparent 25% 75%, var(--warm-paper) 75%),
+    linear-gradient(45deg, var(--warm-paper) 25%, transparent 25% 75%, var(--warm-paper) 75%);
+  background-size: var(--floor-period) var(--floor-period);
+  background-position: 0 0, calc(var(--floor-period) / 2) calc(var(--floor-period) / 2);
+}
+
+/* A court line is 10 px of one accent at 55 %: orange unless told otherwise. The screen says
+   where it runs — left, top — the line only says which way and which colour. */
+.court-line {
+  position: absolute;
+  background: var(--orange);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.court-line-down { top: 0; bottom: 0; width: 10px; }
+.court-line-across { left: 0; right: 0; height: 10px; }
+.court-line-sky { background: var(--sky); }
+.court-line-lavender { background: var(--lavender); }
+
+/* ── Signage — lettering on an ink strip over the door ─────────────────────── */
+
+.signage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-gutter-min) var(--space-gutter-max);
+  padding: 14px var(--space-gutter-max);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.signage-title {
+  margin: 0;
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: var(--type-card-title-size);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.signage .mono-label { color: var(--sky); }
+
+.signage-stickers {
+  display: flex;
+  gap: var(--space-gutter-min);
+  margin-left: auto;
+}
+
+/* The footer is the same strip on deep ink, reading END OF TAPE · BE KIND, REWIND. */
+.signage-end {
+  justify-content: space-between;
+  background: var(--deep-ink);
+}
+
+.signage-end .mono-label { color: var(--paper-60); }
+
+/* ── Cabinet marquee — backlit sign on the cabinet's crown ─────────────────── */
+
+/* Block, always: a marquee is also written as an <a> — the front's round list and the player's
+   chapters both link one — and an inline box paints its ink background as a sliver while the
+   heading inside it spills out alongside, which reads as a stray black rectangle beside the title. */
+.marquee {
+  position: relative;
+  display: block;
+  padding: var(--space-gutter-max) var(--space-title-to-grid-min) var(--space-card-padding-max);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.marquee .eyebrow { color: var(--sky); }
+
+.marquee-title {
+  margin: 6px 0 0;
+  font-family: var(--type-section-title-xl-family);
+  font-weight: var(--type-section-title-xl-weight);
+  font-size: var(--type-section-title-xl-size);
+  line-height: var(--type-section-title-xl-line);
+  letter-spacing: var(--type-section-title-xl-tracking);
+  text-transform: uppercase;
+  color: var(--yellow);
+}
+
+.marquee-corner {
+  position: absolute;
+  top: var(--space-card-padding-max);
+  right: var(--space-title-to-grid-min);
+  display: flex;
+  gap: var(--space-gutter-min);
+}
+
+/* ── Flip-digit scoreboard — gym scoreboard ────────────────────────────────── */
+
+.scoreboard {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--space-card-padding-min);
+  background: var(--deep-ink);
+  color: var(--paper);
+}
+
+.scoreboard .mono-label { color: var(--sky); }
+
+/* A row of digits. Anything in it that is not a tile — a point, a colon, a unit — is set in
+   paper between the tiles. The row's font size is the digit's; a ticker sets a smaller one. */
+.flip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--display);
+  font-size: var(--type-display-subtitle-size);
+  line-height: 1;
+}
+
+.flip-digit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.8em;
+  height: 1.15em;
+  background: var(--ink);
+}
+
+/* The split between the tile's two halves: 2 px of the board showing through, so it cuts the
+   digit the way a flip clock's seam does. Drawn in paper it read as a strikethrough. */
+.flip-digit::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% - 1px);
+  height: 2px;
+  background: var(--deep-ink);
+}
+
+.flip > :not(.flip-digit) { padding: 0 0.1em; }
+
+/* ── Pegboard row — leaderboard hung by hand ───────────────────────────────── */
+
+.pegboard {
+  background: var(--warm-paper);
+  border: 3px solid var(--ink);
+  color: var(--ink);
+}
+
+.pegboard-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  align-items: center;
+  gap: var(--space-gutter-min);
+  padding: 14px var(--space-card-padding-min);
+  border-top: 3px solid var(--ink);
+}
+
+.pegboard > :first-child { border-top: 0; }
+
+/* The peg: a 10 px square, since radius 0 forbids a round hole. */
+.pegboard-row::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background: var(--ink);
+}
+
+.pegboard-rank,
+.pegboard-score {
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: var(--type-card-title-size);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+}
+
+.pegboard-rank { min-width: 2ch; }
+.pegboard-row-champion .pegboard-rank { color: var(--orange-inked); }
+
+.pegboard-name {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.pegboard-repo {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--type-mono-label-size);
+  line-height: var(--type-mono-label-line);
+  letter-spacing: var(--mono-tracking-min);
+  color: var(--sky-inked);
+}
+
+.pegboard-pass {
+  display: block;
+  color: var(--lime-inked);
+}
+
+/* This row is you. */
+.pegboard-row-you { background: var(--lime); }
+.pegboard-row-you .pegboard-repo,
+.pegboard-row-you .pegboard-pass { color: var(--ink); }
+
+.pegboard-note {
+  padding: 12px var(--space-card-padding-min);
+  border-top: 3px solid var(--ink);
+}
+
+/* ── Flyer — photocopy taped up crooked ────────────────────────────────────── */
+
+.flyer {
+  position: relative;
+  width: 240px;
+  max-width: 100%;
+  padding: var(--space-card-padding-min);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
+  color: var(--ink);
+  font-size: var(--type-eyebrow-size); /* the photocopy's small print: the scale's smallest DM Sans size */
+  line-height: 1.4;
+}
+
+.flyer-tape {
+  position: absolute;
+  left: calc(50% - 32px);
+  top: -12px;
+  width: 64px;
+  height: 20px;
+  background: var(--cyan);
+  border: 2px solid var(--ink);
+}
+
+.flyer-title {
+  margin: 6px 0 0;
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: var(--type-card-title-size);
+  line-height: 1.05;
+  letter-spacing: var(--type-card-title-tracking);
+  text-transform: uppercase;
+}
+
+.flyer-list {
+  margin: 8px 0 0;
+  padding-left: 1.2em;
+}
+
+.flyer-foot {
+  display: block;
+  margin-top: 10px;
+}
+
+/* ── CRT replay frame — TV on a trolley ────────────────────────────────────── */
+
+.crt { position: relative; }
+
+/* 16:9 of deep ink in a 5 px ink bezel, with a card shadow in magenta — add .fx-shadow-cyan on
+   the .crt for the cold half of the pair, never both. */
+.crt-screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--deep-ink);
+  border: 5px solid var(--ink);
+  box-shadow: var(--shadow-card-max) var(--shadow-card-max) var(--shadow-blur) var(--fx-shadow-color, var(--magenta));
+  color: var(--paper);
+}
+
+/* Scanlines at the screen opacity are mandatory on every moving image, so the frame carries
+   them itself: the same recipe as .fx-scanlines-screen, and no class to forget. */
+.crt-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    var(--scanline-color) 0 var(--scanline-line),
+    transparent var(--scanline-line) var(--scanline-period)
+  );
+  opacity: var(--scanline-opacity-screen);
+}
+
+.crt-screen > svg,
+.crt-screen > img,
+.crt-screen > video,
+.crt-screen > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The on-screen display: REC top left in magenta, the ghost's name top right in sky, the clock
+   bottom right in paper. */
+.crt-osd {
+  position: absolute;
+  margin: 0;
+}
+
+.crt-osd-rec { left: 18px; top: 14px; color: var(--magenta); }
+.crt-osd-ghost { right: 18px; top: 14px; color: var(--sky); }
+.crt-osd-clock { right: 18px; bottom: 14px; }
+
+/* Stickers ride the bezel's bottom-left corner. */
+.crt-stickers {
+  position: absolute;
+  left: -12px;
+  bottom: -14px;
+  display: flex;
+  gap: 14px;
+}
+
+/* ── Trophy rank badge — plastic trophy ────────────────────────────────────── */
+
+/* An Anton digit on a plastic face over an ink base with the engraving. The plastic is paper
+   unless the rank is 1, 2 or 3. */
+.trophy {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 3.4em;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+  color: var(--ink);
+  text-align: center;
+  font-size: var(--type-card-title-size);
+}
+
+.trophy-1 { background: var(--yellow); }
+.trophy-2 { background: var(--sky); }
+.trophy-3 { background: var(--lavender); }
+
+.trophy-rank {
+  padding: 8px 12px 4px;
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+}
+
+.trophy-base {
+  padding: 2px 8px;
+  background: var(--ink);
+  color: var(--sky);
+}
+
+/* ── Sticker — vinyl sticker ───────────────────────────────────────────────── */
+
+/* Yellow unless told otherwise. A sticker may be an <a> or a <button>: pressing one pushes it
+   down onto its shadow. */
+.sticker {
+  display: inline-block;
+  padding: 6px 14px;
+  border: 2px solid var(--ink);
+  background: var(--yellow);
+  color: var(--ink);
+  font-family: var(--type-sticker-family);
+  font-weight: var(--type-sticker-weight);
+  font-size: var(--type-sticker-size);
+  line-height: var(--type-sticker-line);
+  letter-spacing: var(--type-sticker-tracking);
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+  cursor: pointer;
+}
+
+.sticker-lavender { background: var(--lavender); }
+.sticker-cyan { background: var(--cyan); }
+.sticker-lime { background: var(--lime); }
+.sticker-magenta { background: var(--magenta); color: var(--paper); }
+
+.sticker:active {
+  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
+  box-shadow: none;
+}
+
+/* ── The orange button — the cabinet's one big button ──────────────────────── */
+
+/* One per section. The secondary is yellow with the cold shadow. */
+.button {
+  display: inline-block;
+  padding: var(--space-button-padding-y) var(--space-button-padding-x);
+  border: 5px solid var(--ink);
+  background: var(--orange);
+  color: var(--ink);
+  font-family: var(--type-button-label-family);
+  font-weight: var(--type-button-label-weight);
+  font-size: var(--type-button-label-size);
+  line-height: var(--type-button-label-line);
+  letter-spacing: var(--type-button-label-tracking);
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: var(--shadow-card-max) var(--shadow-card-max) var(--shadow-blur) var(--magenta);
+  cursor: pointer;
+}
+
+.button-secondary {
+  background: var(--yellow);
+  box-shadow: var(--shadow-card-max) var(--shadow-card-max) var(--shadow-blur) var(--cyan);
+}
+
+.button:active {
+  translate: var(--shadow-card-max) var(--shadow-card-max);
+  box-shadow: none;
+}
+
+/* The focus ring is cyan, on everything that takes focus. */
+.button:focus-visible,
+.sticker:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+/* ── Mono terminal block — the club's laptop ───────────────────────────────── */
+
+.terminal {
+  background: var(--deep-ink);
+  border: 1px solid var(--sky-inked);
+  color: var(--sky);
+  font-family: var(--mono);
+}
+
+.terminal-bar {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--sky-inked);
+  color: var(--paper-60);
+}
+
+/* Commands are copied, not read as labels: no tracking, and the DJ6 render's size, between the
+   mono label and body. */
+.terminal-body {
+  margin: 0;
+  padding: 14px 16px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.7;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.terminal-comment {
+  color: var(--paper-60);
+  font-style: normal;
+}
+
+/* ── Key-figures row — typed spec sheet pinned to the wall ─────────────────── */
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--space-grid-narrow), 1fr));
+  gap: 12px;
+}
+
+.figure {
+  padding: 12px 14px;
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.figure-value {
+  display: block;
+  white-space: nowrap;
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: var(--type-card-title-size);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+}
+
+.figure .mono-label { color: var(--sky); }
+
+/* A tile turns lime when its figure is a go; a seed that failed keeps its ink and says so in
+   magenta. */
+.figure-go { background: var(--lime); color: var(--ink); }
+.figure-go .mono-label { color: var(--lime-inked); }
+.figure-fail .mono-label { color: var(--magenta); }
+
+/* ── FAIL / PASS stamp — rubber stamp ──────────────────────────────────────── */
+
+/* Section-XL Anton inside a 6 px border of its own colour, tilted by an .fx-tilt-2-5 to
+   .fx-tilt-4-0 in the markup. FAIL is magenta and ghosts; PASS is lime, and on paper the
+   inked lime, as any accent used as text. */
+.stamp {
+  display: inline-block;
+  padding: 0.05em 0.25em;
+  border: 6px solid currentColor;
+  font-family: var(--type-section-title-xl-family);
+  font-weight: var(--type-section-title-xl-weight);
+  font-size: var(--type-section-title-xl-size);
+  line-height: var(--type-section-title-xl-line);
+  letter-spacing: var(--type-section-title-xl-tracking);
+  text-transform: uppercase;
+}
+
+.stamp-fail { color: var(--magenta); }
+.stamp-pass { color: var(--lime); }
+.stamp-pass-inked { color: var(--lime-inked); }
+
+/* ── Narrow viewports ──────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .marquee-corner {
+    position: static;
+    margin-bottom: 12px;
+  }
+
+  .pegboard-row {
+    grid-template-columns: auto auto 1fr auto;
+    row-gap: 10px;
+  }
+
+  .pegboard-name { grid-column: 3 / 5; }
+  .pegboard-row .pegboard-score { grid-column: 3; grid-row: 2; }
+  .pegboard-row .sticker { grid-column: 4; grid-row: 2; justify-self: end; }
+
+  .crt-osd-ghost {
+    top: 36px;
+    right: auto;
+    left: 18px;
+  }
+}
+
+/* Duck families: one card per robot, with source details folded away. */
+.duck-family { padding: 20px; }
+.duck-family h3 { text-align: center; margin: 0 0 18px; }
+.duck-family-tree { display: flex; flex-direction: column; align-items: center; }
+.duck-family-card { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 12px 24px; border: 2px solid var(--ink); background: var(--paper); text-align: center; max-width: 260px; overflow-wrap: anywhere; }
+.duck-family-card strong { font-size: 24px; }
+.duck-family-avatar { font-size: 32px; line-height: 1.2; }
+.duck-family-label { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.duck-family-current { box-shadow: 4px 4px 0 var(--ink); }
+.duck-family-progress { font-size: 13px; font-weight: 700; padding: 4px 10px; border: 1px solid var(--ink); margin-top: 6px; }
+.duck-family-branch { width: 2px; height: 32px; background: var(--ink); }
+.duck-family-children { display: flex; justify-content: center; flex-wrap: wrap; gap: 24px; list-style: none; margin: 0; padding: 0; }
+.duck-family-children > li { position: relative; border-top: 2px solid var(--ink); padding-top: 24px; }
+.duck-family-children > li::before { content: ''; position: absolute; top: 0; left: 50%; height: 24px; width: 2px; background: var(--ink); }
+.duck-family-evidence { margin-top: 28px; font-size: 14px; overflow-wrap: anywhere; }
+.duck-family-evidence summary { cursor: pointer; text-align: center; }

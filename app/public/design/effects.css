@@ -1,0 +1,152 @@
+/* THE DUCK DOME — signature effect primitives.
+ *
+ * The VHS look is applied by adding a class. Every number here comes from design/tokens.css,
+ * with one exception carrying its own reason below — the ink shadow's ceiling, which answers a
+ * case the charter never draws. Nothing in this file re-derives a value from the charter.
+ * Load tokens.css first.
+ * Source: charte-microduck.svg, page 04 "LA SIGNATURE · EFFETS" — see design/effects.html,
+ * which shows each primitive beside the charter's own swatch of it.
+ *
+ * Where the charter gives a range rather than a value, a primitive takes the charter's own
+ * example — its maximum, which is what page 04 draws — and a surface that wants the tight end
+ * of the range sets the matching min token itself.
+ */
+
+/* Chromatic aberration — ink shadow on the diagonal, cyan ghost left, magenta ghost right.
+   The ghosts are in em, so a hero title and a sticker ghost by the same proportion: cyan and
+   magenta can be told from the letters they ride on at any width, and a wide ghost still reads
+   as a ghost.
+
+   The ink shadow is a third matter. The charter draws the aberration twice — the swatch on
+   page 04 at 46 px, and the cover's own MICRODUCK at 150 px — and both times over deep ink on a
+   yellow word, where the ink shadow is the same colour as the ground and cannot be seen at all.
+   It never draws one behind an ink word, and the Dome sets every large title in ink on paper.
+   There deep ink is sixteen away from ink out of a possible 441: the shadow is not behind the
+   word, it is inside it. Past a couple of pixels it stops adding a printed edge and starts
+   filling the channels the display face leaves between its strokes, and THE LADDERS welds into
+   one black slab. Measured on the widest words the Dome sets, those channels run from four to
+   eight pixels at the charter's two largest steps, once the pairs that already touch are set
+   aside. So the ink shadow keeps the charter's proportion up to a two-pixel ceiling and never
+   grows past it: at the sticker and at the card it is the charter's own offset to the pixel —
+   the ceiling only bites past 33 px — and at display size it is a hard edge that closes no
+   channel. design/check.mjs's shadow-closes-the-word measures exactly that.
+
+   The recipe is a custom property because components.css's three lockups carry it too, and a
+   fix to one that misses the others is how this defect shipped for weeks. */
+:root {
+  /* The one number here that tokens.css does not hold, because the charter has no value for it:
+     it never draws the aberration on an ink word, and this is what keeps that shadow behind the
+     word rather than inside it. */
+  --fx-aberration-shadow-ceiling: 2px;
+
+  --fx-aberration-ink-offset:
+    min(var(--aberration-shadow-offset), var(--fx-aberration-shadow-ceiling));
+
+  --fx-aberration-shadow:
+    var(--fx-aberration-ink-offset) var(--fx-aberration-ink-offset) 0 var(--deep-ink),
+    calc(-1 * var(--aberration-ghost-offset)) 0 0 var(--cyan),
+    var(--aberration-ghost-offset) 0 0 var(--magenta);
+}
+
+.fx-aberration {
+  text-shadow: var(--fx-aberration-shadow);
+}
+
+/* Offset shadow — equal x and y, zero blur, one colour of the magenta/cyan pair.
+   Two sizes: a sticker's and a card's. Add .fx-shadow-cyan for the cold half of the pair. */
+.fx-shadow-sticker,
+.fx-shadow-card {
+  box-shadow:
+    var(--fx-shadow-size) var(--fx-shadow-size) var(--shadow-blur)
+    var(--fx-shadow-color, var(--magenta));
+}
+
+.fx-shadow-sticker {
+  --fx-shadow-size: var(--shadow-sticker-max);
+}
+
+.fx-shadow-card {
+  --fx-shadow-size: var(--shadow-card-max);
+}
+
+.fx-shadow-magenta {
+  --fx-shadow-color: var(--magenta);
+}
+
+.fx-shadow-cyan {
+  --fx-shadow-color: var(--cyan);
+}
+
+/* Tilt — the charter's six values, never past 4°. Sign comes from --fx-tilt-sign, so the same
+   magnitude class can lean either way; .fx-tilt-alternate flips it from one child to the next. */
+.fx-tilt-0-75 { transform: rotate(calc(var(--fx-tilt-sign, 1) * var(--rotate-0-75))); }
+.fx-tilt-1-0  { transform: rotate(calc(var(--fx-tilt-sign, 1) * var(--rotate-1-0))); }
+.fx-tilt-1-5  { transform: rotate(calc(var(--fx-tilt-sign, 1) * var(--rotate-1-5))); }
+.fx-tilt-2-5  { transform: rotate(calc(var(--fx-tilt-sign, 1) * var(--rotate-2-5))); }
+.fx-tilt-3-0  { transform: rotate(calc(var(--fx-tilt-sign, 1) * var(--rotate-3-0))); }
+.fx-tilt-4-0  { transform: rotate(calc(var(--fx-tilt-sign, 1) * var(--rotate-4-0))); }
+
+.fx-tilt-alternate > * { --fx-tilt-sign: 1; }
+.fx-tilt-alternate > :nth-child(even) { --fx-tilt-sign: -1; }
+
+/* Scanlines and grain are overlays on their host: scanlines ride ::after, grain rides ::before,
+   so a surface that wants both — the charter asks for both over the whole page — can carry both.
+
+   One accepted exception to "over the whole page": the Dome's own pages, dome/web/index.html,
+   carry the grain and NOT the scanlines. The user decided it on 2026-09-08, looking at four
+   grounds side by side, because the tiled floor with its stripes made the page hard to read; the
+   scanlines stay at 18 % on every CRT, replay and clip through .fx-scanlines-screen, where they
+   read as tape rather than as texture under a paragraph. Do not put them back without asking:
+   docs/specs/dw1-shell-and-deploy.md §The ground. */
+.fx-scanlines,
+.fx-grain {
+  position: relative;
+}
+
+.fx-scanlines::after,
+.fx-grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Scanlines — one dark line every 4 px. Page opacity by default; .fx-scanlines-screen is the
+   stronger value the charter asks of a CRT and of every moving image. */
+.fx-scanlines::after {
+  background-image: repeating-linear-gradient(
+    var(--scanline-color) 0 var(--scanline-line),
+    transparent var(--scanline-line) var(--scanline-period)
+  );
+  opacity: var(--fx-scanline-opacity, var(--scanline-opacity-page));
+}
+
+.fx-scanlines-screen {
+  --fx-scanline-opacity: var(--scanline-opacity-screen);
+}
+
+/* Grain — a fractal-noise tile, drawn inline so no request and no build step stands between a
+   page and its grain. feTurbulence cannot read a custom property, so the tile repeats
+   --grain-base-frequency and --grain-octaves as literals: change them together.
+   The noise is desaturated to the neutral speckle the charter's swatch draws, then stretched
+   about its own mean — measured over the tile, fractalNoise carries barely one level of
+   variation, so at the charter's 4–6 % the grain would be there and yet invisible. The stretch
+   widens the speckle without moving the mean, so the surface underneath keeps the tint the
+   charter's own parameters give it.
+   The tile is laid on plain: multiply and overlay both measure as exactly nothing over paper and
+   over deep ink, the Dome's two grounds, and the charter asks for grain over all of it. */
+.fx-grain::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='3' intercept='-1'/%3E%3CfeFuncG type='linear' slope='3' intercept='-1'/%3E%3CfeFuncB type='linear' slope='3' intercept='-1'/%3E%3CfeFuncA type='discrete' tableValues='1 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: var(--grain-tile-max) var(--grain-tile-max);
+  opacity: var(--fx-grain-opacity, var(--grain-opacity-max));
+}
+
+/* Ray fan — a conic fan behind a page's main section. One per page, and tilted by its from
+   angle: never put a rotate() on it. */
+.fx-ray-fan {
+  background-image: repeating-conic-gradient(
+    from var(--ray-fan-from),
+    var(--ray-fan-color) 0 var(--ray-fan-width),
+    transparent var(--ray-fan-width) var(--ray-fan-period)
+  );
+}

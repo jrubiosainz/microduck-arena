@@ -1,0 +1,264 @@
+/* The club: the home and player pages, in Duck Jam's paper and ink.
+ *
+ * Every colour, size and face is a token from design/tokens.css; every object
+ * (eyebrow, mono label, signage, sticker, flyer tape and title, marquee title)
+ * is design/components.css's. This file only places them. It is enabled on
+ * the club views and disabled on the race pages, which wear race.css instead:
+ * the two sets define --ink and --paper with opposite meanings. */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  overflow-x: hidden;
+}
+
+.hall {
+  position: relative;
+  max-width: var(--space-content-column);
+  margin: 0 auto;
+  padding: var(--space-gutter-max) var(--space-gutter-min);
+  flex: 1;
+  width: 100%;
+}
+
+.failed { padding: var(--space-gutter-max); color: var(--orange-inked); }
+
+/* ── Signage: the brand left, the player top-right ─────────────────────────── */
+
+.signage { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.club-brand { display: flex; align-items: center; gap: 12px; }
+.club-brand .mono-label { display: block; }
+.club-duck { width: 52px; height: 52px; object-fit: contain; }
+.signage-title a { color: inherit; text-decoration: none; }
+.site-nav { display: flex; align-items: center; gap: var(--space-gutter-min); }
+
+.profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 14px 4px 4px;
+  border: 2px solid var(--paper);
+  background: var(--ink);
+  color: var(--paper);
+  text-decoration: none;
+  font-family: var(--type-sticker-family);
+  font-size: 1rem;
+  letter-spacing: var(--type-sticker-tracking);
+  text-transform: uppercase;
+}
+.profile-chip:hover { background: var(--deep-ink); }
+.profile-chip:focus-visible, .ladder-row:focus-visible, .challenge-link:focus-visible,
+.profile-results a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+
+/* The Hub's picture when it has one, a duck on lavender when it does not. */
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  background: var(--lavender);
+  font-size: 22px;
+  line-height: 1;
+}
+.avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* ── Door: the hero over the hall ──────────────────────────────────────────── */
+
+.door { padding: 0 0 var(--space-gutter-max); }
+
+.hero {
+  margin: 4px 0 0;
+  max-width: 14ch;
+  font-family: var(--type-hero-title-family);
+  font-weight: var(--type-hero-title-weight);
+  font-size: var(--type-section-title-size);
+  line-height: var(--type-hero-title-line);
+  letter-spacing: var(--type-hero-title-tracking);
+  text-transform: uppercase;
+}
+
+.lede {
+  max-width: 62ch;
+  margin: var(--space-gutter-min) 0 0;
+  font-family: var(--type-lede-family);
+  font-size: var(--type-lede-size);
+  line-height: var(--type-lede-line);
+}
+
+.chapter { margin-top: var(--space-gutter-max); }
+.chapter > .eyebrow { margin-bottom: var(--space-gutter-min); }
+
+/* ── Ladder: one rung per player ───────────────────────────────────────────── */
+
+.ladders {
+  max-width: 640px;
+  background: var(--warm-paper);
+  border: 3px solid var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+  color: var(--ink);
+}
+
+.ladder-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: var(--space-gutter-min);
+  padding: 12px var(--space-card-padding-min);
+  border-top: 3px solid var(--ink);
+  color: inherit;
+  text-decoration: none;
+}
+.ladder > .ladder-row:first-child { border-top: 0; }
+.ladder-row:hover { background: var(--cream); }
+
+.ladder-rank, .ladder-points {
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: var(--type-card-title-size);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+}
+.ladder-rank { min-width: 2ch; }
+
+.ladder-shell { width: 14px; height: 14px; border: 2px solid var(--ink); }
+.ladder-shell-cream { background: var(--cream); }
+.ladder-shell-graphite { background: var(--graphite); }
+.ladder-shell-lavender { background: var(--lavender); }
+.ladder-shell-sky { background: var(--sky); }
+
+.ladder-name { font-weight: 600; overflow-wrap: anywhere; }
+.ladder-empty { margin: 0; padding: 12px var(--space-card-padding-min); }
+
+/* ── Flyers: one per event, taped up crooked ───────────────────────────────── */
+
+.cabinets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-wide)), 1fr));
+  gap: var(--space-gutter-max);
+  align-items: stretch;
+  margin-top: var(--space-gutter-min);
+}
+
+.challenge-note {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--space-card-padding-min);
+  border: 2px solid var(--ink);
+  background: var(--yellow);
+  box-shadow: 5px 5px 0 var(--ink);
+  rotate: -1deg;
+}
+.challenge-note:nth-child(2n) { rotate: 1deg; }
+.challenge-note:nth-child(3n + 2) { background: var(--sky); }
+.challenge-note:nth-child(3n) { background: var(--cream); }
+.challenge-note--planned { background: var(--warm-paper); color: var(--ink-70); }
+
+.challenge-link {
+  display: block;
+  flex: 1;
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.challenge-link .eyebrow { color: var(--ink); }
+
+/* The frame keeps the still's 480×198 shape so nothing moves when it lands. */
+.challenge-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 480 / 198;
+  margin-top: var(--space-gutter-min);
+  border: 2px solid var(--ink);
+  background: var(--deep-ink);
+  overflow: hidden;
+}
+.challenge-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+.challenge-facts { margin: var(--space-gutter-min) 0 0; }
+.challenge-standing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-family: var(--type-mono-label-family);
+  font-weight: var(--type-mono-label-weight);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+}
+.challenge-star { width: 18px; height: 18px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .challenge-note { transition: transform 160ms ease; }
+  .challenge-note:has(.challenge-link):hover { transform: translateY(-3px); }
+}
+
+/* ── Profile: a paper scrapbook ────────────────────────────────────────────── */
+
+.profile { max-width: 1100px; margin-inline: auto; }
+.profile-header { display: flex; align-items: center; gap: clamp(1rem, 4vw, 3rem); }
+.profile-header > div { min-width: 0; flex: 1; }
+.profile-header .marquee-title { margin: 0; overflow-wrap: anywhere; }
+.profile-duck {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: clamp(4rem, 12vw, 8rem);
+  aspect-ratio: 1;
+  font-size: clamp(2.5rem, 8vw, 5rem);
+  background: var(--lavender);
+  border: 3px solid var(--ink);
+  box-shadow: var(--shadow-card-min) var(--shadow-card-min) 0 var(--ink);
+}
+.profile-duck .avatar { width: 100%; height: 100%; border: 0; font-size: inherit; }
+
+.profile-summary { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-block: 1.5rem; }
+.profile-summary .sticker { font-size: clamp(1.1rem, 3vw, 1.8rem); cursor: default; }
+.profile-summary .sticker:active {
+  translate: none;
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+}
+
+.profile-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 1rem;
+}
+.profile-results li { min-width: 0; }
+.profile-results a {
+  display: grid;
+  gap: 0.75rem;
+  height: 100%;
+  padding: 1.25rem;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.profile-results strong { font-size: 1.25rem; }
+.profile-results a:hover { background: var(--warm-paper); }
+.profile-empty a { color: var(--orange-inked); }
+
+@media (max-width: 640px) {
+  .signage { padding: 14px var(--space-gutter-min); gap: var(--space-gutter-min); }
+  .club-duck { width: 36px; height: 36px; }
+  .club-brand .mono-label { max-width: 16ch; }
+}
