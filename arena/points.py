@@ -108,20 +108,22 @@ def _receipt(record: RunRecord, act: str, points: int) -> Receipt:
 
 
 def _podium_finishers(rows: list) -> list:
-    """The board's rows that actually HOLD a podium place, whichever kind of
-    board `rows` came from.
+    """The rows that actually HOLD a podium place, whichever kind of board
+    `rows` came from.
 
     A place reached without finishing isn't held — the timed board's own rule
-    (`seeds_finished > 0`). On a voted board with NO ballots cast at all, every
-    row is tied at zero votes and `votes.standings` degenerates to its
-    publication-time tie-break, so the whole board is skipped: nobody has
-    voted, so nobody holds a place, which is different from a row that simply
-    did not personally attract a vote while others on the same, genuinely
-    voted board did (that row still holds the place it was voted into).
+    (`seeds_finished > 0`). On a voted board, a row with zero votes isn't held
+    either, PER ROW rather than per board: entries tied at zero votes are
+    ordered by `votes.standings`'s publication-time tie-break, so paying a
+    zero-vote row pays for seniority — exactly what a sliding window exists to
+    refuse. This is not the podium becoming a score converted into points:
+    `votes > 0` is a gate, not a rate, the same shape as `seeds_finished > 0`.
     """
-    if rows and isinstance(rows[0], votes.VotedRow) and not any(row.votes > 0 for row in rows):
-        return []
-    return [row for row in rows if row.record.seeds_finished > 0]
+    return [
+        row
+        for row in rows
+        if row.record.seeds_finished > 0 and (not isinstance(row, votes.VotedRow) or row.votes > 0)
+    ]
 
 
 def receipts(

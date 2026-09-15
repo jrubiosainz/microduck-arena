@@ -203,10 +203,45 @@ def test_a_voted_events_podium_is_paid_on_votes_not_on_time():
     rows = boards_by_user([quick, slow], frozenset(), ballots=loved, voted=rules, now=now)
     assert [r.record.user for r in rows["swag-contest"]] == ["bob", "ann"]
 
+    # bob is slow but voted-for; ann is quick but unvoted. bob takes the
+    # podium, ann does not — a zero-vote row is unpaid even where it ranks
+    # second only by publication-time tie-break, which is not a place held.
     podium = acts(
         receipts([quick, slow], frozenset(), ballots=loved, voted=rules, now=now), "podium"
     )
-    assert [(r.user, r.points) for r in podium] == [("bob", 250), ("ann", 150)]
+    assert [(r.user, r.points) for r in podium] == [("bob", 250)]
+
+
+def test_a_zero_vote_row_is_unpaid_even_beside_a_row_that_holds_votes():
+    """Pins the distinction a per-BOARD guard would miss: it is not enough for
+    the board to have SOME votes cast anywhere on it. Each row's own vote
+    count gates its own podium pay, so a voted entry and its unvoted rival on
+    the very same ballot do not both take a place."""
+    from datetime import UTC, datetime
+
+    from arena.manifest import Vote
+    from tests.test_ballots import make_ballot
+
+    now = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
+    rules = {"swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
+    voted_for = make_record(
+        user="bob", event_id="swag-contest", submitted_at="2026-09-14T09:00:00Z"
+    )
+    unvoted = make_record(
+        user="ann", event_id="swag-contest", submitted_at="2026-09-14T10:00:00Z"
+    )
+    ballots = [
+        make_ballot(
+            candidates=(voted_for.run_id, unvoted.run_id),
+            choice=voted_for.run_id,
+            cast_at="2026-09-15T09:00:00Z",
+        )
+    ]
+    podium = acts(
+        receipts([voted_for, unvoted], frozenset(), ballots=ballots, voted=rules, now=now),
+        "podium",
+    )
+    assert [(r.user, r.points) for r in podium] == [("bob", 250)]
 
 
 def test_a_voted_events_podium_pays_nothing_when_nobody_has_voted():
