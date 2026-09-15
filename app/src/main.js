@@ -1,9 +1,10 @@
-// Two views, chosen by the hash. Everything else lives in its view.
+// Three views, chosen by the hash. Everything else lives in its view.
 
 import { getEvents } from "./api.js";
-import { renderMenu } from "./menu.js";
+import { renderHome } from "./home.js";
+import { renderPlayer } from "./player.js";
 import { renderRace } from "./race.js";
-import { parseRoute } from "./router.js";
+import { parseRoute, themeFor } from "./router.js";
 
 const root = document.querySelector("#app");
 const state = { events: null, viewer: null };
@@ -13,6 +14,17 @@ async function events() {
   return state.events;
 }
 
+/**
+ * Enable one theme's stylesheets and disable the other's. The two sets define
+ * `--ink` and `--paper` with opposite meanings, so they never load together;
+ * flipping `disabled` is instant and keeps both cached.
+ */
+function dress(theme) {
+  for (const link of document.querySelectorAll("link[data-theme]")) {
+    link.disabled = link.dataset.theme !== theme;
+  }
+}
+
 async function show() {
   // Tear the old view's render loop down before building the next one, or two
   // viewers keep animating against the same canvas.
@@ -20,18 +32,20 @@ async function show() {
   state.viewer = null;
 
   const route = parseRoute(location.hash);
+  dress(themeFor(route.view));
   try {
-    const all = await events();
     if (route.view === "race") {
-      const event = all.find((e) => e.id === route.eventId);
+      const event = (await events()).find((e) => e.id === route.eventId);
       if (!event) {
         // A stale link should land on something useful, not an error.
         location.hash = "#/";
         return;
       }
       await renderRace(root, { event, state });
+    } else if (route.view === "player") {
+      await renderPlayer(root, route.user);
     } else {
-      await renderMenu(root);
+      await renderHome(root);
     }
   } catch (error) {
     root.innerHTML = `<p class="failed">Could not reach the API: ${error.message}</p>`;
