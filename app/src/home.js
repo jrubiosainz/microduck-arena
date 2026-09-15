@@ -6,7 +6,7 @@
 
 import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
 import { formatEventFacts, formatScore } from "./format.js";
-import { playerHref, raceHref } from "./router.js";
+import { playerHref, raceHref, voteHref } from "./router.js";
 import { signage } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
 
@@ -46,7 +46,7 @@ export function ladder(rows) {
   return box;
 }
 
-function standingLine(planned, rows) {
+function standingLine(event, planned, rows) {
   const line = el("p", "challenge-standing");
   if (planned) {
     line.textContent = "course not built yet";
@@ -56,15 +56,25 @@ function standingLine(planned, rows) {
   star.src = "/star-yellow.webp";
   star.alt = "";
   const leader = rows.find((row) => row.seeds_finished > 0);
-  if (leader) {
+  if (!leader) {
+    line.append(star, el("span", null, rows.length ? "no finisher yet" : "be the first"));
+    return line;
+  }
+  // A voted event is held by whoever collected the most votes THIS WEEK, so
+  // the line says votes. A time would be the wrong fact about it.
+  if (event.vote) {
     line.append(
       star,
       el("span", null, leader.user),
-      el("span", null, formatScore(leader.score, { finished: leader.seeds_finished })),
+      el("span", null, leader.votes ? `${leader.votes} votes` : "no votes yet"),
     );
-  } else {
-    line.append(star, el("span", null, rows.length ? "no finisher yet" : "be the first"));
+    return line;
   }
+  line.append(
+    star,
+    el("span", null, leader.user),
+    el("span", null, formatScore(leader.score, { finished: leader.seeds_finished })),
+  );
   return line;
 }
 
@@ -73,6 +83,11 @@ export function flyer(event, rows) {
   const planned = event.status === "planned";
   const note = el("article", planned ? "challenge-note challenge-note--planned" : "challenge-note");
   note.append(el("span", "flyer-tape"));
+  if (event.vote && !planned) {
+    const badge = el("a", "challenge-vote", "VOTE");
+    badge.href = voteHref(event.id);
+    note.append(badge);
+  }
   const link = el(planned ? "div" : "a", "challenge-link");
   if (!planned) link.href = raceHref(event.id);
   const facts = formatEventFacts(event)
@@ -84,7 +99,7 @@ export function flyer(event, rows) {
     el("h4", "flyer-title", event.title),
     el("div", "challenge-art"),
     el("p", "challenge-facts", facts),
-    standingLine(planned, rows),
+    standingLine(event, planned, rows),
   );
   note.append(link);
   return note;

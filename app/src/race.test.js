@@ -6,7 +6,7 @@
 // what would have caught that.
 
 import { describe, expect, it, vi } from "vitest";
-import { renderEntryPanel, renderEventFacts } from "./race.js";
+import { raceTitle, renderEntryPanel, renderEventFacts } from "./race.js";
 
 const event = {
   seeds: 5,
@@ -286,5 +286,21 @@ describe("the training-environment field", () => {
     container.querySelector("#try").click();
     await flush();
     expect(onTry.mock.calls[0][0].envUrl).toBeUndefined();
+  });
+});
+
+describe("the vote button", () => {
+  it("stands beside the title only when the event takes votes", () => {
+    const timed = document.createElement("div");
+    timed.append(raceTitle({ id: "sprint-2m", title: "2 m Sprint" }));
+    expect(timed.querySelector("a.racevote")).toBeNull();
+
+    const votedBox = document.createElement("div");
+    votedBox.append(
+      raceTitle({ id: "swag-contest", title: "Swag Contest", vote: { ballot_min: 2 } }),
+    );
+    const link = votedBox.querySelector("a.racevote");
+    expect(link.getAttribute("href")).toBe("#/v/swag-contest");
+    expect(link.textContent).toBe("Vote");
   });
 });

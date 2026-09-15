@@ -13,6 +13,7 @@ import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { MAX, MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
+import { voteHref } from "./router.js";
 import { panelState, signInHref } from "./session.js";
 import { signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
@@ -234,6 +235,29 @@ export function renderEventFacts(root, event) {
   return caveat;
 }
 
+/**
+ * The title, and the way into the booth when the event takes votes.
+ *
+ * Its own function so the rule is testable without a WebGL viewer or a
+ * leaderboard fetch: give it an event, check what comes back.
+ */
+export function raceTitle(event) {
+  const head = document.createElement("div");
+  head.className = "racehead";
+  const title = document.createElement("h2");
+  title.className = "racetitle";
+  title.textContent = event.title;
+  head.append(title);
+  if (event.vote) {
+    const link = document.createElement("a");
+    link.className = "racevote";
+    link.href = voteHref(event.id);
+    link.textContent = "Vote";
+    head.append(link);
+  }
+  return head;
+}
+
 export async function renderRace(root, { event, state }) {
   // Asked for first: the strip over the door carries this player's chip, and
   // the board below needs to know whose rows are their own.
@@ -243,7 +267,7 @@ export async function renderRace(root, { event, state }) {
   const hall = document.createElement("main");
   hall.className = "hall";
   hall.innerHTML = `
-    <h2 class="racetitle">${event.title}</h2>
+    <div id="racehead"></div>
     <dl class="facts" id="facts"></dl>
     <div class="racegrid">
       <div>
@@ -279,6 +303,7 @@ export async function renderRace(root, { event, state }) {
     </div>
   `;
   root.append(hall);
+  root.querySelector("#racehead").replaceWith(raceTitle(event));
 
   renderEventFacts(root, event);
 

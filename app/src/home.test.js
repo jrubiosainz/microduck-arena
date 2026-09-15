@@ -85,3 +85,34 @@ describe("a planned event's flyer", () => {
     expect(el.textContent).not.toContain("be the first");
   });
 });
+
+const voted = {
+  ...open,
+  id: "swag-contest",
+  title: "Swag Contest",
+  metric: "votes",
+  vote: { ballot_min: 2, ballot_max: 4, window_days: 7, per_day: 20 },
+};
+
+describe("a votable flyer", () => {
+  it("wears a VOTE sticker and links to the booth", () => {
+    const note = flyer(voted, []);
+    expect(note.querySelector(".challenge-vote").textContent).toBe("VOTE");
+    expect(note.querySelector(".challenge-vote").getAttribute("href")).toBe("#/v/swag-contest");
+  });
+
+  it("counts the week's votes instead of a time", () => {
+    const note = flyer(voted, [{ user: "cdeplanne", votes: 43, seeds_finished: 5 }]);
+    expect(note.querySelector(".challenge-standing").textContent).toContain("43 votes");
+  });
+
+  it("says so when nothing has been voted for yet", () => {
+    const note = flyer(voted, [{ user: "cdeplanne", votes: 0, seeds_finished: 5 }]);
+    expect(note.querySelector(".challenge-standing").textContent).toContain("no votes yet");
+  });
+
+  it("leaves a timed flyer alone", () => {
+    const note = flyer(open, held);
+    expect(note.querySelector(".challenge-vote")).toBeNull();
+  });
+});

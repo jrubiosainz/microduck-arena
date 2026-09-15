@@ -556,3 +556,20 @@ table.board .withdraw:focus-visible {
 
 .vote-status { margin: 0.75rem 0 0; color: var(--ink-70); font-size: 0.85rem; min-height: 1.2em; }
 .vote-status.bad { color: var(--orange-inked); font-weight: 600; }
+
+.racehead {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.racevote {
+  padding: 0.35rem 0.9rem;
+  border-radius: 0.25rem;
+  background: #c8ff2e;
+  color: #12131a;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
