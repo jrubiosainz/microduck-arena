@@ -15,7 +15,7 @@ EVENTS_DIR = Path(__file__).parent / "events"
 
 RIGS = ("legs", "rollers")
 STATUSES = {"open", "planned"}
-METRICS = ("mean_finish_time",)
+METRICS = ("mean_finish_time", "votes")
 COURSE_KINDS = ("lane",)
 
 
@@ -73,6 +73,23 @@ class Termination:
 
 
 @dataclass(frozen=True)
+class Vote:
+    """How an event collects ballots.
+
+    Separate from `metric` on purpose: collecting votes and RANKING on them are
+    different questions, and a future challenge may want to be timed and voted
+    at once. `ballot_max` is a target, not a promise — a ballot shrinks to
+    `ballot_min` while the field is small, so a contest works from its second
+    entry rather than its fourth.
+    """
+
+    ballot_min: int
+    ballot_max: int
+    window_days: int
+    per_day: int
+
+
+@dataclass(frozen=True)
 class Manifest:
     id: str
     title: str
@@ -99,6 +116,9 @@ class Manifest:
     # write corrupt the event for every later run in the same process — and
     # evaluate() runs five seeds in one process.
     command: tuple[float, ...]
+    # None unless the event takes votes. The frontend reads this to decide
+    # whether the VOTE badge and the vote button exist at all.
+    vote: Vote | None = None
 
     def command_at(self, vx: float) -> tuple[float, ...]:
         """This event's command, with the forward speed replaced.
@@ -173,6 +193,26 @@ def load_manifest(path: Path) -> Manifest:
     if sweep.finalists < 1:
         raise ManifestError(f"{path}: [sweep] finalists must be at least 1")
 
+    vote_raw = raw.get("vote")
+    vote = None
+    if vote_raw is not None:
+        vote = Vote(
+            ballot_min=int(_require(vote_raw, "ballot_min", "[vote]")),
+            ballot_max=int(_require(vote_raw, "ballot_max", "[vote]")),
+            window_days=int(_require(vote_raw, "window_days", "[vote]")),
+            per_day=int(_require(vote_raw, "per_day", "[vote]")),
+        )
+        if vote.ballot_min < 2:
+            raise ManifestError(f"{path}: [vote] ballot_min must be at least 2")
+        if vote.ballot_max < vote.ballot_min:
+            raise ManifestError(f"{path}: [vote] ballot_max must not be below ballot_min")
+        if vote.window_days < 1:
+            raise ManifestError(f"{path}: [vote] window_days must be at least 1")
+        if vote.per_day < 1:
+            raise ManifestError(f"{path}: [vote] per_day must be at least 1")
+    if metric == "votes" and vote is None:
+        raise ManifestError(f"{path}: metric 'votes' needs a [vote] section to rank by")
+
     return Manifest(
         id=_require(raw, "id", str(path)),
         title=_require(raw, "title", str(path)),
@@ -201,6 +241,7 @@ def load_manifest(path: Path) -> Manifest:
         ),
         sweep=sweep,
         command=_command(_require(raw, "command", str(path))),
+        vote=vote,
     )
 
 

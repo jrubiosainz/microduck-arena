@@ -43,11 +43,13 @@ def test_the_hill_actually_slopes():
     assert load_event("hill-climb-1m5").course.slope_deg == 8.0
 
 
-def test_the_raceable_events_are_the_three_with_their_own_courses():
+def test_the_raceable_events_are_the_three_originals_and_the_swag_contest():
     """Asserts which events are OPEN rather than how many exist, so adding a
-    planned one to the programme does not fail a test about physics."""
+    planned one to the programme does not fail a test about physics. The swag
+    contest races the sprint's own course rather than one of its own."""
     assert {m.id for m in all_events() if m.status == "open"} == {
         "sprint-2m",
         "roller-sprint-2m",
         "hill-climb-1m5",
+        "swag-contest",
     }

@@ -34,6 +34,7 @@ def test_events_lists_the_whole_programme_open_and_planned(client):
         "sprint-2m",
         "roller-sprint-2m",
         "hill-climb-1m5",
+        "swag-contest",
     }
     # Planned events are on the programme too — the menu draws them as cards.
     assert {i for i, s in by_status.items() if s == "planned"}
@@ -254,8 +255,9 @@ def test_the_programme_is_served_in_its_declared_order(client):
     """Sorted once on the server, so every client reads the same programme."""
     api, _ = client
     events = api.get("/api/events").json()["events"]
-    assert [e["id"] for e in events[:3]] == [
+    assert [e["id"] for e in events[:4]] == [
         "sprint-2m",
+        "swag-contest",
         "roller-sprint-2m",
         "hill-climb-1m5",
     ]
@@ -338,3 +340,15 @@ def test_a_withdrawn_run_leaves_the_player_page_and_the_ladder(client):
                                         withdrawn_at="2026-09-03T12:00:00Z"))
     assert api.get("/api/standings").json() == {"rows": []}
     assert api.get("/api/players/ann").status_code == 404
+
+
+def test_an_event_says_whether_it_takes_votes_and_how(client):
+    api, _ = client
+    events = {e["id"]: e for e in api.get("/api/events").json()["events"]}
+    assert events["sprint-2m"]["vote"] is None
+    assert events["sprint-2m"]["metric"] == "mean_finish_time"
+    swag = events["swag-contest"]
+    assert swag["metric"] == "votes"
+    assert swag["vote"] == {
+        "ballot_min": 2, "ballot_max": 4, "window_days": 7, "per_day": 20,
+    }

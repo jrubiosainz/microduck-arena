@@ -1,6 +1,6 @@
 import pytest
 
-from arena.manifest import ManifestError, all_events, load_event, load_manifest
+from arena.manifest import EVENTS_DIR, ManifestError, all_events, load_event, load_manifest
 
 # A well-formed manifest, as TOML sections. Tests override one entry to build a
 # specific malformation, so each test names only what it is breaking.
@@ -146,8 +146,15 @@ def test_sweep_speeds_span_the_declared_range_inclusive():
 
 
 def test_the_sweep_is_wide_enough_to_be_worth_running():
-    """A one-point sweep would quietly restore the pinned-command behaviour."""
+    """A one-point sweep would quietly restore the pinned-command behaviour.
+
+    Except for an event ranked on votes: there, the sweep is deliberately one
+    point, so every entrant is judged on the same commanded speed instead of
+    the fastest one it can reach.
+    """
     for m in all_events():
+        if m.metric == "votes":
+            continue
         speeds = m.sweep.speeds()
         assert len(speeds) >= 10, f"{m.id}: {len(speeds)} speeds is not a sweep"
         assert m.sweep.hi >= 2 * m.command[0], f"{m.id}: sweep tops out near the old pin"
@@ -197,11 +204,12 @@ def test_every_event_declares_a_status_and_the_shipped_ones_are_valid():
         assert m.status in STATUSES, f"{m.id}: {m.status!r}"
 
 
-def test_the_three_original_events_are_open():
+def test_the_open_events_are_the_three_originals_and_the_swag_contest():
     assert {m.id for m in all_events() if m.status == "open"} == {
         "sprint-2m",
         "roller-sprint-2m",
         "hill-climb-1m5",
+        "swag-contest",
     }
 
 
@@ -230,8 +238,9 @@ def test_the_programme_has_a_declared_order_with_the_sprint_first():
     """Declared, not derived: neither alphabetical nor filesystem order is the
     order a person wants to read a race card in."""
     programme = sorted(all_events(), key=lambda m: (m.order, m.title))
-    assert [m.id for m in programme[:3]] == [
+    assert [m.id for m in programme[:4]] == [
         "sprint-2m",
+        "swag-contest",
         "roller-sprint-2m",
         "hill-climb-1m5",
     ]
@@ -251,3 +260,52 @@ def tmp_path_for_order():
     from pathlib import Path
 
     return Path(tempfile.mkdtemp())
+
+
+def test_an_event_without_a_vote_section_has_no_vote_rules():
+    assert load_event("sprint-2m").vote is None
+
+
+def test_the_swag_contest_declares_its_ballot_and_its_window():
+    vote = load_event("swag-contest").vote
+    assert (vote.ballot_min, vote.ballot_max) == (2, 4)
+    assert (vote.window_days, vote.per_day) == (7, 20)
+
+
+def test_the_swag_contest_races_the_sprints_environment_at_one_pinned_speed():
+    swag, sprint = load_event("swag-contest"), load_event("sprint-2m")
+    assert swag.course == sprint.course
+    assert swag.command == sprint.command
+    assert swag.start == sprint.start
+    assert swag.termination == sprint.termination
+    assert swag.seeds == sprint.seeds
+    # lo == hi: everyone walks at the same commanded speed, so the judgement
+    # lands on style and not on who was asked to go faster.
+    assert swag.sweep.speeds() == (0.25,)
+    assert swag.metric == "votes"
+
+
+def test_a_vote_section_is_validated_loudly(tmp_path):
+    base = (EVENTS_DIR / "swag-contest.toml").read_text()
+    for bad, message in [
+        ("ballot_min  = 1", "ballot_min"),
+        ("ballot_max  = 1", "ballot_max"),
+        ("window_days = 0", "window_days"),
+        ("per_day     = 0", "per_day"),
+    ]:
+        key = bad.split()[0]
+        broken = "\n".join(
+            bad if line.startswith(key) else line for line in base.splitlines()
+        )
+        path = tmp_path / "broken.toml"
+        path.write_text(broken)
+        with pytest.raises(ManifestError, match=message):
+            load_manifest(path)
+
+
+def test_ranking_on_votes_without_a_vote_section_is_refused(tmp_path):
+    base = (EVENTS_DIR / "sprint-2m.toml").read_text()
+    path = tmp_path / "no-rules.toml"
+    path.write_text(base.replace('metric       = "mean_finish_time"', 'metric       = "votes"'))
+    with pytest.raises(ManifestError, match="votes"):
+        load_manifest(path)

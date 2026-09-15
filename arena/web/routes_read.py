@@ -27,6 +27,19 @@ def event_summary(manifest: Manifest) -> dict:
         "title": manifest.title,
         "rig": manifest.rig,
         "status": manifest.status,
+        "metric": manifest.metric,
+        # The whole vote configuration, or null. The page reads this to decide
+        # whether the VOTE badge, the vote button and the #/v/ route exist.
+        "vote": (
+            {
+                "ballot_min": manifest.vote.ballot_min,
+                "ballot_max": manifest.vote.ballot_max,
+                "window_days": manifest.vote.window_days,
+                "per_day": manifest.vote.per_day,
+            }
+            if manifest.vote
+            else None
+        ),
         "order": manifest.order,
         "length_m": manifest.course.length_m,
         "width_m": manifest.course.width_m,
