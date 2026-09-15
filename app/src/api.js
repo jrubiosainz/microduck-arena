@@ -16,7 +16,7 @@ async function detailFrom(response) {
 }
 
 async function json(url, options) {
-  const response = await fetch(url, options);
+  const response = options ? await fetch(url, options) : await fetch(url);
   if (!response.ok) throw new Error(await detailFrom(response));
   return response.json();
 }
@@ -24,6 +24,16 @@ async function json(url, options) {
 export const getEvents = () => json("/api/events").then((b) => b.events);
 export const getLeaderboard = (eventId) => json(`/api/events/${eventId}/leaderboard`);
 export const getRun = (runId) => json(`/api/runs/${runId}`);
+
+export const getStandings = () => json("/api/standings").then((b) => b.rows);
+
+/** One player's page, or null when nobody by that name has published. */
+export async function getPlayer(user) {
+  const response = await fetch(`/api/players/${encodeURIComponent(user)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(await detailFrom(response));
+  return response.json();
+}
 
 /** Who the server thinks you are. Never throws: a failure means signed out. */
 export async function getMe() {
