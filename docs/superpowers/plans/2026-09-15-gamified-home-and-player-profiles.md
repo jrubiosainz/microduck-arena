@@ -150,11 +150,11 @@ the ladder from the same records the board is built from, with the same
 filter, so a run either counts everywhere or nowhere.
 """
 
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass
 
 from .constants import RUNNER_VERSION
-from .index import by_user, leaderboard, sort_key
+from .index import sort_key
 from .store import RunRecord
 
 # Duck Jam's own numbers for the acts that transfer to an arena that never
@@ -329,7 +329,15 @@ Expected: `ImportError: cannot import name 'Card' from 'arena.points'`
 
 - [ ] **Step 3: Add `boards_by_user`, podium receipts, `Card` and `standings`**
 
-In `arena/points.py`, add after `Receipt`:
+In `arena/points.py`, widen the two imports the podium needs:
+
+```python
+from collections import Counter, defaultdict
+...
+from .index import by_user, leaderboard, sort_key
+```
+
+Then add after `Receipt`:
 
 ```python
 @dataclass(frozen=True)
