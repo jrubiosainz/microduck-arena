@@ -52,8 +52,8 @@ to its TOML, the way an event is already created without touching code.
   pool. Coherent with a window whose whole intent is that nothing is protected by
   age, but it must be stated on screen.
 - **The cap is reversible at zero cost.** Points are derived from the log on every
-  request, never stored, so changing `BALLOTS_PER_DAY` applies retroactively to
-  the whole history.
+  request, never stored, so changing each manifest's `per_day` applies
+  retroactively to the whole history.
 
 ## The ballot log
 
@@ -253,23 +253,43 @@ anyway — as a secondary fact, never as the rank.
 
 ### Points
 
-`points.py` gains one act:
-
-```python
-SCHEDULE = {…, "ballot": 2}
-BALLOTS_PER_DAY = 20
-```
+`points.py` gains one act: `SCHEDULE["ballot"] = 2`.
 
 A ballot pays **2 points to its voter**, capped at the first 20 of the UTC day
 **per votable event** — the cap lives in each manifest's `per_day`, so a second
 votable challenge grants its own twenty rather than sharing one pool. Same shape
 as the existing `run` cap. `receipts()` takes the ballot log as a new argument.
 
+**Ballot points are windowed, and each event's ballots are windowed by that
+event's own `window_days`.** Two consequences, and review found the code getting
+both wrong by accident before they were decided:
+
+- A ballot pays only while it is inside its event's window. So voting points
+  behave like the podium — held while you keep earning them, not banked — and
+  unlike `first_event`, `run` and `own_best`, which are permanent. That is a
+  real departure from "a point is a receipt for an act, and an act does not
+  un-happen", and it is taken deliberately: paying every ballot forever means
+  reading every ballot ever cast on every request, which is exactly the growth
+  the day-sharded `allow_patterns` read exists to avoid. **This is the one
+  decision here most worth revisiting** if the ladder feels wrong in use.
+- The window is per event. Reading them all against the WIDEST window any
+  votable event declares — which is what the board's fetch returns — would let a
+  one-day event pay for five-day-old ballots merely because some other event
+  declares thirty, and would retroactively restore everyone's lapsed points the
+  day such an event was added.
+
 The author earns nothing per vote, but earns the **podium**: `boards_by_user`
 already pays 250/150/100 for holding a place on any event, and that applies to
 the Swag Contest with no extra line once its board is ranked by votes. Leading
 the swag contest is worth what leading the sprint is worth, and it moves when the
 votes move.
+
+**A voted podium pays only rows that actually hold votes.** With no ballots cast,
+`votes.standings` falls back to its tie-break and ranks by publication time, so
+the first person to enter would hold 250 points for having entered — which
+`first_event` already pays them for. The timed podium has the same guard in a
+different currency: it pays only rows with `seeds_finished > 0`, because a place
+you reach without finishing is not a place held.
 
 One seam: `boards_by_user` ranks every event with the same function today. It
 must be given the ballot log and the set of voted event ids so it can choose.
