@@ -83,9 +83,13 @@ class Termination:
 class Vote:
     """How an event collects ballots.
 
-    Separate from `metric` on purpose: collecting votes and RANKING on them are
-    different questions, and a future challenge may want to be timed and voted
-    at once. `ballot_max` is a target, not a promise — a ballot shrinks to
+    Presence and `metric = "votes"` imply each other — `load_manifest` refuses
+    either alone. An earlier draft kept them as separate axes, so a future
+    challenge could be timed and voted at once; review found the cost instead:
+    `routes_read._voted()` keyed on this section while `event_leaderboard`
+    keyed on `metric`, so adding `[vote]` to a timed event's manifest alone
+    would leave its board ranking on time while its podium silently re-ranked
+    on votes. `ballot_max` is a target, not a promise — a ballot shrinks to
     `ballot_min` while the field is small, so a contest works from its second
     entry rather than its fourth.
     """
@@ -225,6 +229,8 @@ def load_manifest(path: Path) -> Manifest:
             raise ManifestError(f"{path}: [vote] per_day must be at least 1")
     if metric == "votes" and vote is None:
         raise ManifestError(f"{path}: metric 'votes' needs a [vote] section to rank by")
+    if vote is not None and metric != "votes":
+        raise ManifestError(f"{path}: [vote] section needs metric = 'votes' to rank by")
 
     return Manifest(
         id=_require(raw, "id", str(path)),

@@ -494,7 +494,8 @@ table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 .entry__speed select:focus-visible,
 table.board .grab a:focus-visible,
 table.board .env a:focus-visible,
-table.board .withdraw:focus-visible {
+table.board .withdraw:focus-visible,
+.votehead__back:focus-visible {
   outline: 3px solid var(--cyan);
   outline-offset: 2px;
 }
@@ -509,6 +510,18 @@ table.board .withdraw:focus-visible {
   gap: 1rem;
   flex-wrap: wrap;
 }
+
+/* Quiet on purpose, next to the title's display face: this is the way out,
+   not the point of the page. */
+.votehead__back {
+  font: var(--type-eyebrow-weight) var(--type-eyebrow-size) / var(--type-eyebrow-line) var(--type-eyebrow-family);
+  letter-spacing: var(--type-eyebrow-tracking);
+  text-transform: uppercase;
+  color: var(--ink-70);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.votehead__back:hover { color: var(--orange-inked); }
 
 .vote-panel {
   margin: 1.25rem 0 2rem;
@@ -530,10 +543,21 @@ table.board .withdraw:focus-visible {
 .vote-pick {
   width: 4.5rem;
   height: 4.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 3px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
   background: var(--pick);
   cursor: pointer;
+}
+
+/* Every swatch in LANE_CSS is light (orange, sky, lime, lavender, yellow), so
+   dark ink reads on all five without a per-colour exception — a deuteranope
+   gets a shape and a number, not only a hue. */
+.vote-pick__num {
+  font: 700 1.4rem/1 var(--display);
+  color: #12131a;
 }
 
 .vote-pick:hover,

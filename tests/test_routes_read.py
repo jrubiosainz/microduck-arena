@@ -386,6 +386,32 @@ def test_a_voted_board_ranks_on_votes_and_still_reports_the_time(client):
     assert rows[0]["score"] == 40.0
 
 
+def test_a_players_best_row_on_a_voted_event_carries_its_vote_count(client):
+    """`player_page` used to return a voted `rank` beside a timed `score` and
+    no votes, so the profile rendered `#1 · 18.46s` for the Swag Contest — a
+    vote rank next to a finish time, with nothing saying which is which."""
+    api, app = client
+    ann = record_run(app, user="ann", event_id="swag-contest", score=12.0)
+    bob = record_run(app, user="bob", event_id="swag-contest", score=40.0)
+    cast(app, bob.run_id, [ann.run_id, bob.run_id])
+
+    winner = api.get("/api/players/bob").json()
+    [swag] = [b for b in winner["best"] if b["event_id"] == "swag-contest"]
+    assert swag["votes"] == 1
+
+    runner_up = api.get("/api/players/ann").json()
+    [swag] = [b for b in runner_up["best"] if b["event_id"] == "swag-contest"]
+    assert swag["votes"] == 0
+
+
+def test_a_players_best_row_on_a_timed_event_carries_no_vote_count(client):
+    api, app = client
+    record_run(app, user="ann", event_id="sprint-2m", score=12.0)
+    body = api.get("/api/players/ann").json()
+    [sprint] = [b for b in body["best"] if b["event_id"] == "sprint-2m"]
+    assert sprint["votes"] is None
+
+
 def test_a_vote_cast_days_ago_but_still_inside_the_window_counts(client):
     """The seam where the two window stages meet: `since()` fetches whole DAY
     shards, `window()` then trims to the exact instant. This ballot is one
@@ -434,6 +460,20 @@ def test_a_vote_that_fell_out_of_the_window_no_longer_counts(client):
     edge = (datetime.now(UTC) - timedelta(days=7)).replace(microsecond=0)
     stamp = (edge - timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     cast(app, ann.run_id, [ann.run_id, bob.run_id], cast_at=stamp)
+
+    rows = api.get("/api/events/swag-contest/leaderboard").json()["rows"]
+    assert all(r["votes"] == 0 for r in rows)
+
+
+def test_the_leaderboard_only_counts_this_events_own_ballots(client):
+    """`points.boards_by_user` filters ballots to `b.event_id == event_id`;
+    `event_leaderboard` did not. Harmless only because run ids are globally
+    unique in practice — contrived here to name the same run id from another
+    event's ballot, which is exactly the leak the missing filter allowed."""
+    api, app = client
+    ann = record_run(app, user="ann", event_id="swag-contest", score=12.0)
+    bob = record_run(app, user="bob", event_id="swag-contest", score=40.0)
+    cast(app, ann.run_id, [ann.run_id, bob.run_id], event_id="some-other-votable-event")
 
     rows = api.get("/api/events/swag-contest/leaderboard").json()["rows"]
     assert all(r["votes"] == 0 for r in rows)

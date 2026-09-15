@@ -38,6 +38,39 @@ describe("a player's profile", () => {
   });
 });
 
+describe("a voted event's best row", () => {
+  it("says how many votes it earned, not a finish time", () => {
+    const player = {
+      user: "ann",
+      points: 100,
+      rank: 1,
+      best: [
+        { event_id: "swag-contest", event_title: "Swag Contest", rank: 1, score: 18.46,
+          seeds_finished: 5, seeds_total: 5, policy_name: "swagbot", run_id: "r9",
+          submitted_at: "2026-09-10T10:00:00Z", votes: 43 },
+      ],
+    };
+    const item = profile(player).querySelector(".profile-results a");
+    expect(item.textContent).toContain("#1 · 43 votes");
+    expect(item.textContent).not.toContain("18.46");
+  });
+
+  it("says 'no votes yet' rather than printing a bare zero", () => {
+    const player = {
+      user: "ann",
+      points: 0,
+      rank: 3,
+      best: [
+        { event_id: "swag-contest", event_title: "Swag Contest", rank: 2, score: 18.46,
+          seeds_finished: 5, seeds_total: 5, policy_name: "swagbot", run_id: "r9",
+          submitted_at: "2026-09-10T10:00:00Z", votes: 0 },
+      ],
+    };
+    const item = profile(player).querySelector(".profile-results a");
+    expect(item.textContent).toContain("#2 · no votes yet");
+  });
+});
+
 describe("a name nobody has published under", () => {
   it("says so and points home", () => {
     const el = noProfile("nobody");

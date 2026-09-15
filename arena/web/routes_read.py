@@ -146,7 +146,13 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
         now = datetime.now(UTC)
         days = manifest.vote.window_days
         ballots = request.app.state.ballots
-        kept = votes.window(ballots.since(votes.first_day(now, days)), now, days)
+        # Filtered to THIS event, like points.boards_by_user already does —
+        # ballots.since() returns every votable event's ballots inside the
+        # window, and without this an event's tally would read another
+        # event's votes too. Correct today only because run ids are globally
+        # unique, which made the leak invisible rather than absent.
+        own = [b for b in ballots.since(votes.first_day(now, days)) if b.event_id == event_id]
+        kept = votes.window(own, now, days)
         rows = votes.standings(votes.pool(records, withdrawn), kept)
         out = [_board_row(row) for row in rows]
         for shaped, row in zip(out, rows):
@@ -207,6 +213,11 @@ def player_page(user: str, request: Request) -> dict:
             "policy_name": row.record.policy_name,
             "run_id": row.record.run_id,
             "submitted_at": row.record.submitted_at,
+            # None off a timed board, a count off a voted one — so the page
+            # can tell a reader what the rank next to it was EARNED by. A
+            # bare "#1 · 18.46s" reads as a time on a board actually ranked
+            # by votes.
+            "votes": row.votes if manifest.metric == "votes" else None,
         })
     return {"user": user, "points": card.points, "rank": card.rank, "best": best}
 

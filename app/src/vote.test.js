@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { votePanel } from "./vote.js";
+import { DEAD_BALLOT_MESSAGE, votePanel } from "./vote.js";
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -19,6 +19,17 @@ describe("the voting panel", () => {
     ]);
     buttons[1].click();
     expect(picks).toEqual([1]);
+  });
+
+  it("carries the lane's number on every button, not just its colour", () => {
+    // The palette is colour-only otherwise — a deuteranope reading orange
+    // beside hi-vis lime gets nothing from `aria-label` either, in a feature
+    // whose whole premise is "pick a colour".
+    const panel = votePanel({ state: "ballot", ballot: "t.m", lanes: 4, cast_today: 0, per_day: 20 });
+    const buttons = [...panel.querySelectorAll("button.vote-pick")];
+    expect(buttons.map((b) => b.querySelector(".vote-pick__num").textContent)).toEqual([
+      "1", "2", "3", "4",
+    ]);
   });
 
   it("counts down the day's votes", () => {
@@ -98,6 +109,23 @@ describe("the voting panel", () => {
       "That ballot is not valid any more. Ask for a new one.",
     );
     expect(button.disabled).toBe(false);
+  });
+
+  it("can carry a message into a freshly drawn field, not only show one earned by a click", () => {
+    // This is what lets `renderVote`'s `next()` recover a dead ballot: it
+    // draws a fresh field and relays the reason, rather than leaving the
+    // visitor to click a booth that answers 400 forever.
+    const panel = votePanel(
+      { state: "ballot", ballot: "t.m", lanes: 2, cast_today: 0, per_day: 20 },
+      undefined,
+      DEAD_BALLOT_MESSAGE,
+    );
+    const status = panel.querySelector(".vote-status");
+    expect(status.textContent).toBe(DEAD_BALLOT_MESSAGE);
+    expect(status.className).toBe("vote-status bad");
+    // And the field itself is live — the recovery is a real ballot, not a
+    // dead end with an apology on it.
+    expect(panel.querySelectorAll("button.vote-pick")).toHaveLength(2);
   });
 
   it("disables every pick while a vote is in flight, so a slow reload does not look dead", () => {

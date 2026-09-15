@@ -34,9 +34,15 @@ export function profile(player) {
     const item = el("li");
     const link = el("a");
     link.href = raceHref(best.event_id);
+    // A voted event's rank is earned by votes, not by time — "#1 · 18.46s"
+    // beside a Swag Contest entry would read as a finish time that placed it,
+    // when the finish time never ranked anything there.
+    const earned = best.votes != null
+      ? (best.votes ? `${best.votes} votes` : "no votes yet")
+      : formatScore(best.score, { finished: best.seeds_finished });
     link.append(
       el("span", "eyebrow", best.event_title),
-      el("strong", null, `#${best.rank} · ${formatScore(best.score, { finished: best.seeds_finished })}`),
+      el("strong", null, `#${best.rank} · ${earned}`),
       el("span", "mono-label", best.policy_name),
     );
     item.append(link);

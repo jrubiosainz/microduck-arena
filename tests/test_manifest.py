@@ -324,3 +324,33 @@ def test_ranking_on_votes_without_a_vote_section_is_refused(tmp_path):
     path.write_text(base.replace('metric       = "mean_finish_time"', 'metric       = "votes"'))
     with pytest.raises(ManifestError, match="votes"):
         load_manifest(path)
+
+
+def test_a_vote_section_without_metric_votes_is_refused(tmp_path):
+    """`[vote]` and `metric = "votes"` imply each other, in both directions.
+
+    Without this direction, adding `[vote]` to a timed event's manifest alone
+    would leave `routes_read._voted()` (keyed on `[vote]`) treating it as
+    voted while `event_leaderboard` (keyed on `metric`) kept ranking it on
+    time — the two readings would diverge silently.
+    """
+    base = (EVENTS_DIR / "swag-contest.toml").read_text()
+    path = tmp_path / "vote-without-metric.toml"
+    path.write_text(base.replace('metric       = "votes"', 'metric       = "mean_finish_time"'))
+    with pytest.raises(ManifestError, match="vote"):
+        load_manifest(path)
+
+
+def test_every_shipped_events_metric_has_a_scoring_function():
+    """`manifest.py` validates which metric NAMES an event may declare;
+    `evaluate.py` holds a second registry mapping that name to the function
+    that computes a run's score. A manifest naming a metric with no entry
+    there is unreachable — `evaluate()` and `evaluate_at()` both raise
+    `KeyError` the instant anyone enters it — and nothing else catches this,
+    because every other test fabricates RunRecords directly rather than
+    running `evaluate()` against a real manifest.
+    """
+    from arena.evaluate import METRICS as SCORERS
+
+    for m in all_events():
+        assert m.metric in SCORERS, f"{m.id}: no evaluate.METRICS entry for {m.metric!r}"

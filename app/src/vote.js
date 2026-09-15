@@ -19,13 +19,24 @@ function el(tag, className, text) {
   return node;
 }
 
+// The exact sentence `_open()` in routes_vote.py sends for an unknown or
+// expired token, a lane out of range, or a voter mismatch. Unlike a lost
+// quota race or a wrong-event ballot, no retry of THIS ballot ever succeeds —
+// a booth left open past its TTL, or one that outlived a Space restart, looks
+// alive but answers every click the same way forever. That is the one
+// failure `renderVote`'s `next()` recovers from itself, by drawing a fresh
+// field instead of leaving the visitor to click a dead one.
+export const DEAD_BALLOT_MESSAGE = "That ballot is not valid any more. Ask for a new one.";
+
 /**
  * The controls under the stage, for whichever state the booth is in.
  *
  * Split out from `renderVote` so all four states are testable without WebGL,
- * a viewer or a fetch.
+ * a viewer or a fetch. `initialStatus` seeds the status line for a panel
+ * drawn to carry a message forward (a dead ballot recovered into a fresh
+ * field) rather than one reached by a click of its own.
  */
-export function votePanel(ballot, onPick) {
+export function votePanel(ballot, onPick, initialStatus) {
   const panel = el("div", "vote-panel");
 
   if (ballot.state === "signed-out") {
@@ -60,12 +71,20 @@ export function votePanel(ballot, onPick) {
 
   const picks = el("div", "vote-picks");
   const status = el("p", "vote-status");
+  if (initialStatus) {
+    status.textContent = initialStatus;
+    status.className = "vote-status bad";
+  }
   const buttons = [];
   for (let lane = 0; lane < ballot.lanes; lane += 1) {
     const button = el("button", "vote-pick");
     button.type = "button";
     button.style.setProperty("--pick", LANE_CSS[lane % LANE_CSS.length]);
     button.setAttribute("aria-label", `Vote for lane ${lane + 1}`);
+    // The palette is colour-only otherwise — orange next to hi-vis lime helps
+    // nobody who cannot tell them apart, in a feature whose whole premise is
+    // "pick a colour". The number is the shape and label a swatch alone is not.
+    button.append(el("span", "vote-pick__num", String(lane + 1)));
     button.addEventListener("click", async () => {
       // Disabled the instant the click lands, not after the await starts: a
       // second click on the same tick would otherwise slip through before
@@ -118,7 +137,7 @@ export async function renderVote(root, { event, state }) {
 
   let busy = false;
 
-  async function next() {
+  async function next(message) {
     const ballot = await getBallot(event.id);
     if (ballot.state !== "ballot") {
       viewer.setLanes([], event);
@@ -148,10 +167,19 @@ export async function renderVote(root, { event, state }) {
         try {
           await castVote(event.id, ballot.ballot, lane);
           await next();
+        } catch (error) {
+          if (error.message === DEAD_BALLOT_MESSAGE) {
+            // This ballot cannot be retried into working — draw a fresh
+            // field so the booth recovers itself, and carry the message
+            // into it so the visitor still learns why.
+            await next(error.message);
+            return;
+          }
+          throw error;
         } finally {
           busy = false;
         }
-      }),
+      }, message),
     );
   }
 

@@ -69,7 +69,15 @@ def mean_finish_time(per_seed: tuple[SeedResult, ...], time_limit_s: float) -> f
     )
 
 
-METRICS = {"mean_finish_time": mean_finish_time}
+METRICS = {
+    "mean_finish_time": mean_finish_time,
+    # A voted event is still SCORED on its finish time — `metric` says how the
+    # board RANKS, not how a run is measured. Without this entry, every
+    # submission to a voted event died on `KeyError: 'votes'` the moment
+    # evaluate() ran, because manifest.py accepted "votes" as a metric NAME
+    # while this registry had no function behind it.
+    "votes": mean_finish_time,
+}
 
 
 def pick_trace_seed(per_seed: tuple[SeedResult, ...]) -> int:

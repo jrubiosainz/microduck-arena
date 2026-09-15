@@ -239,6 +239,14 @@ def cast_vote(event_id: str, body: VoteBody, request: Request) -> dict:
         # Re-read under the lock: another request may have spent this very
         # token, or moved today's count, in the time since _open() above ran
         # outside it.
+        #
+        # The cliff this lock names: on a deployed Space it spans THREE Hub
+        # round trips — the snapshot_download inside _window() below, then
+        # file_exists and create_commit inside ballots.cast() further down —
+        # so every voter on every votable event queues behind whoever is
+        # mid-commit. Deliberate, not accidental: at twenty ballots a day per
+        # person it costs nothing, and a per-voter lock table is machinery
+        # this does not need yet. If it ever bites, this is where to look.
         fresh = book.get(body.ballot)
         spent = votes.cast_today(_window(request, manifest, now), voter, event_id, now)
         if fresh is None or fresh.spent:
