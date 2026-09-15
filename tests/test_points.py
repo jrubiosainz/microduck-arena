@@ -207,3 +207,68 @@ def test_a_voted_events_podium_is_paid_on_votes_not_on_time():
         receipts([quick, slow], frozenset(), ballots=loved, voted=rules, now=now), "podium"
     )
     assert [(r.user, r.points) for r in podium] == [("bob", 250), ("ann", 150)]
+
+
+def test_a_voted_events_podium_pays_nothing_when_nobody_has_voted():
+    from datetime import UTC, datetime
+
+    from arena.manifest import Vote
+
+    now = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
+    rules = {"swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
+    ann = make_record(user="ann", event_id="swag-contest", score=10.0)
+    bob = make_record(user="bob", event_id="swag-contest", score=20.0)
+    cid = make_record(user="cid", event_id="swag-contest", score=30.0)
+
+    podium = acts(
+        receipts([ann, bob, cid], frozenset(), ballots=[], voted=rules, now=now), "podium"
+    )
+    assert podium == []
+
+
+def test_a_ballot_outside_its_events_own_window_pays_nothing():
+    from datetime import UTC, datetime
+
+    from arena.manifest import Vote
+    from tests.test_ballots import make_ballot
+
+    now = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
+    rules = {"swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=1, per_day=20)}
+    stale = make_ballot(cast_at="2026-09-13T09:00:00Z")  # two days old; the window is one day
+
+    paid = acts(receipts([], frozenset(), ballots=[stale], voted=rules, now=now), "ballot")
+    assert paid == []
+
+
+def test_two_votable_events_each_pay_on_their_own_window_not_the_widest():
+    from datetime import UTC, datetime
+
+    from arena.manifest import Vote
+    from tests.test_ballots import make_ballot
+
+    now = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
+    rules = {
+        "swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=1, per_day=20),
+        "sprint-2m": Vote(ballot_min=2, ballot_max=4, window_days=30, per_day=20),
+    }
+    # Five days old: outside the one-day swag-contest window, inside sprint-2m's
+    # thirty-day one. A payment loop windowed against the WIDEST window any
+    # event declares would pay both; each event's own window pays only one.
+    old_on_the_short_event = make_ballot(
+        event_id="swag-contest", voter="ann", cast_at="2026-09-10T09:00:00Z"
+    )
+    old_on_the_long_event = make_ballot(
+        event_id="sprint-2m", voter="bob", cast_at="2026-09-10T09:00:00Z"
+    )
+
+    paid = acts(
+        receipts(
+            [],
+            frozenset(),
+            ballots=[old_on_the_short_event, old_on_the_long_event],
+            voted=rules,
+            now=now,
+        ),
+        "ballot",
+    )
+    assert {r.user for r in paid} == {"bob"}

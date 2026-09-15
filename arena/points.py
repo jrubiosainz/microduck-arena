@@ -26,10 +26,6 @@ SCHEDULE = {
     "first_event": 100, "run": 10, "own_best": 25, "podium": (250, 150, 100), "ballot": 2,
 }
 RUNS_PER_DAY = 3
-# The manifest's own number is what applies; this is the value events ship with.
-# Enforced HERE as well as at the gate, because a cap only a gate holds is a cap
-# that a row written another way walks around.
-BALLOTS_PER_DAY = 20
 
 
 @dataclass(frozen=True)
@@ -68,6 +64,8 @@ def boards_by_user(
     votes instead of on time, which is what makes the podium bonus follow the
     swag contest without a line of its own.
     """
+    if ballots and now is None:
+        raise ValueError("a sliding window needs a `now`; this module never reads a clock")
     voted = voted or {}
     by_event: dict[str, list[RunRecord]] = defaultdict(list)
     for run in counting(records, withdrawn, runner_version):
@@ -81,7 +79,8 @@ def boards_by_user(
                 runs, runner_version, entrant=by_user, withdrawn=withdrawn
             )
             continue
-        # `now` is only ever None when there are no ballots to window.
+        # `now` is None only when `ballots` is empty too (raised above otherwise),
+        # in which case there is nothing to window.
         kept = (
             votes.window([b for b in ballots if b.event_id == event_id], now, rules.window_days)
             if now is not None
@@ -106,6 +105,23 @@ def counting(
 
 def _receipt(record: RunRecord, act: str, points: int) -> Receipt:
     return Receipt(record.user, act, points, record.event_id, record.run_id, record.submitted_at)
+
+
+def _podium_finishers(rows: list) -> list:
+    """The board's rows that actually HOLD a podium place, whichever kind of
+    board `rows` came from.
+
+    A place reached without finishing isn't held — the timed board's own rule
+    (`seeds_finished > 0`). On a voted board with NO ballots cast at all, every
+    row is tied at zero votes and `votes.standings` degenerates to its
+    publication-time tie-break, so the whole board is skipped: nobody has
+    voted, so nobody holds a place, which is different from a row that simply
+    did not personally attract a vote while others on the same, genuinely
+    voted board did (that row still holds the place it was voted into).
+    """
+    if rows and isinstance(rows[0], votes.VotedRow) and not any(row.votes > 0 for row in rows):
+        return []
+    return [row for row in rows if row.record.seeds_finished > 0]
 
 
 def receipts(
@@ -141,11 +157,24 @@ def receipts(
         elif previous is None:
             best[key] = run
 
+    # A ballot pays only while it sits inside its OWN event's window — windowed
+    # per event, by that event's own `window_days`, never by the widest window
+    # any event declares. So voting points decay like the podium instead of
+    # banking like first_event/run/own_best: paying every ballot forever would
+    # mean reading every ballot ever cast on every request, which is exactly
+    # the growth the day-sharded ballot log's fetch exists to avoid.
+    kept_ballots: list = []
+    if now is not None:
+        for event_id, rules in voted.items():
+            kept_ballots.extend(
+                votes.window(
+                    [b for b in ballots if b.event_id == event_id], now, rules.window_days
+                )
+            )
+
     ballots_per_day: Counter = Counter()
-    for ballot in sorted(ballots, key=lambda b: (b.cast_at, b.ballot_id)):
-        rules = voted.get(ballot.event_id)
-        if rules is None:
-            continue
+    for ballot in sorted(kept_ballots, key=lambda b: (b.cast_at, b.ballot_id)):
+        rules = voted[ballot.event_id]
         spent = (ballot.voter, ballot.event_id, ballot.day)
         ballots_per_day[spent] += 1
         if ballots_per_day[spent] <= rules.per_day:
@@ -161,7 +190,7 @@ def receipts(
             )
 
     for rows in boards_by_user(runs, withdrawn, ballots, voted, now, runner_version).values():
-        finishers = [row for row in rows if row.record.seeds_finished > 0]
+        finishers = _podium_finishers(rows)
         for row, points in zip(finishers, SCHEDULE["podium"]):
             out.append(_receipt(row.record, "podium", points))
     return out

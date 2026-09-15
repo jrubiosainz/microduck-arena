@@ -80,12 +80,14 @@ def _voted() -> dict:
     return {m.id: m.vote for m in all_events() if m.vote is not None}
 
 
-def _ballots(request: Request) -> list:
-    """Every ballot inside the widest window any votable event declares."""
-    rules = _voted()
+def _ballots(request: Request, rules: dict, now: datetime) -> list:
+    """Every ballot inside the widest window any votable event declares.
+
+    Takes `rules` and `now` rather than computing them itself, so a request
+    that also needs them (every caller does) parses the event programme once.
+    """
     if not rules:
         return []
-    now = datetime.now(UTC)
     widest = max(v.window_days for v in rules.values())
     return request.app.state.ballots.since(votes.first_day(now, widest))
 
@@ -159,13 +161,14 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
 def player_standings(request: Request) -> dict:
     """One ladder across every event: the sum of each player's receipts, ranked."""
     store = request.app.state.store
+    rules, now = _voted(), datetime.now(UTC)
     cards = standings(
         receipts(
             _all_runs(store),
             _withdrawn(store),
-            ballots=_ballots(request),
-            voted=_voted(),
-            now=datetime.now(UTC),
+            ballots=_ballots(request, rules, now),
+            voted=rules,
+            now=now,
         )
     )
     return {"rows": [{"rank": c.rank, "user": c.user, "points": c.points} for c in cards]}
@@ -176,7 +179,8 @@ def player_page(user: str, request: Request) -> dict:
     """A player's total, rank, and best run on every event they entered."""
     store = request.app.state.store
     runs, withdrawn = _all_runs(store), _withdrawn(store)
-    ballots, rules, now = _ballots(request), _voted(), datetime.now(UTC)
+    rules, now = _voted(), datetime.now(UTC)
+    ballots = _ballots(request, rules, now)
     card = next(
         (
             c
