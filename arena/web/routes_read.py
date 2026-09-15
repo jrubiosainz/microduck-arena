@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse, Response
 from ..course import wall_boxes
 from ..index import leaderboard
 from ..manifest import Manifest, ManifestError, all_events, load_event
+from ..points import boards_by_user, receipts, standings
 from ..store import RunRecord
 from ..trace import decode
 
@@ -55,6 +56,15 @@ def _event_or_404(event_id: str) -> Manifest:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+def _withdrawn(store) -> frozenset[str]:
+    return frozenset(w.run_id for w in store.withdrawals())
+
+
+def _all_runs(store) -> list[RunRecord]:
+    """Every event's log, because points and ladders are across the programme."""
+    return [record for manifest in all_events() for record in store.runs(manifest.id)]
+
+
 @router.get("/events")
 def list_events() -> dict:
     # Sorted here, once, rather than in the page: the order is a property of
@@ -71,7 +81,7 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
     rows = leaderboard(
         store.runs(manifest.id),
         entrant=config.entrant,
-        withdrawn=frozenset(w.run_id for w in store.withdrawals()),
+        withdrawn=_withdrawn(store),
     )
     return {
         "event": event_summary(manifest),
@@ -100,6 +110,42 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
             for row in rows
         ],
     }
+
+
+@router.get("/standings")
+def player_standings(request: Request) -> dict:
+    """One ladder across every event: the sum of each player's receipts, ranked."""
+    store = request.app.state.store
+    cards = standings(receipts(_all_runs(store), _withdrawn(store)))
+    return {"rows": [{"rank": c.rank, "user": c.user, "points": c.points} for c in cards]}
+
+
+@router.get("/players/{user}")
+def player_page(user: str, request: Request) -> dict:
+    """A player's total, rank, and best run on every event they entered."""
+    store = request.app.state.store
+    runs, withdrawn = _all_runs(store), _withdrawn(store)
+    card = next((c for c in standings(receipts(runs, withdrawn)) if c.user == user), None)
+    if card is None:
+        raise HTTPException(status_code=404, detail=f"{user!r} has not published yet")
+    boards = boards_by_user(runs, withdrawn)
+    best = []
+    for manifest in sorted(all_events(), key=lambda m: (m.order, m.title)):
+        row = next((r for r in boards.get(manifest.id, []) if r.record.user == user), None)
+        if row is None:
+            continue
+        best.append({
+            "event_id": manifest.id,
+            "event_title": manifest.title,
+            "rank": row.rank,
+            "score": row.record.score,
+            "seeds_finished": row.record.seeds_finished,
+            "seeds_total": len(row.record.per_seed),
+            "policy_name": row.record.policy_name,
+            "run_id": row.record.run_id,
+            "submitted_at": row.record.submitted_at,
+        })
+    return {"user": user, "points": card.points, "rank": card.rank, "best": best}
 
 
 def _find_run(store, run_id: str) -> RunRecord:

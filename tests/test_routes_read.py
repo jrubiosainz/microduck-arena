@@ -274,3 +274,67 @@ def test_an_event_carries_the_walls_the_physics_uses(client):
     # Mirrored across the lane, and nothing else differs.
     assert walls[1]["pos"][1] == pytest.approx(-walls[0]["pos"][1])
     assert walls[1]["half"] == walls[0]["half"]
+
+
+def test_standings_rank_every_player_who_published(client):
+    api, app = client
+    record_run(app, user="ann", score=20.0, submitted_at="2026-09-03T09:00:00Z")
+    record_run(app, user="bob", score=22.0, submitted_at="2026-09-03T10:00:00Z")
+    rows = api.get("/api/standings").json()["rows"]
+    # ann: first_event 100 + run 10 + podium 250; bob: 100 + 10 + 150.
+    assert rows == [
+        {"rank": 1, "user": "ann", "points": 360},
+        {"rank": 2, "user": "bob", "points": 260},
+    ]
+
+
+def test_standings_are_empty_before_anyone_publishes(client):
+    api, _ = client
+    assert api.get("/api/standings").json() == {"rows": []}
+
+
+def test_a_player_page_carries_points_rank_and_the_best_run_per_event(client):
+    api, app = client
+    slow = record_run(app, user="ann", event_id="sprint-2m", score=30.0,
+                      policy_name="v1", submitted_at="2026-09-03T09:00:00Z")
+    fast = record_run(app, user="ann", event_id="sprint-2m", score=20.0,
+                      policy_name="v2", submitted_at="2026-09-03T10:00:00Z")
+    hill = record_run(app, user="ann", event_id="hill-climb-1m5", score=40.0,
+                      submitted_at="2026-09-03T11:00:00Z")
+    record_run(app, user="bob", event_id="hill-climb-1m5", score=35.0,
+               submitted_at="2026-09-03T12:00:00Z")
+
+    body = api.get("/api/players/ann").json()
+    assert body["user"] == "ann"
+    assert body["rank"] == 1
+    # sprint: first 100 + runs 10+10 + own_best 25 + podium 250; hill: first 100 + run 10 + podium 150.
+    assert body["points"] == 655
+    assert [(b["event_id"], b["rank"], b["run_id"]) for b in body["best"]] == [
+        ("sprint-2m", 1, fast.run_id),
+        ("hill-climb-1m5", 2, hill.run_id),
+    ]
+    sprint = body["best"][0]
+    assert sprint["event_title"] == "2 m Sprint"
+    assert sprint["policy_name"] == "v2"
+    assert sprint["score"] == 20.0
+    assert sprint["seeds_finished"] == 5
+    assert sprint["seeds_total"] == 1
+    assert sprint["submitted_at"] == "2026-09-03T10:00:00Z"
+    assert slow.run_id not in {b["run_id"] for b in body["best"]}
+
+
+def test_a_player_with_no_publication_is_404(client):
+    api, _ = client
+    response = api.get("/api/players/nobody")
+    assert response.status_code == 404
+    assert "nobody" in response.json()["detail"]
+
+
+def test_a_withdrawn_run_leaves_the_player_page_and_the_ladder(client):
+    api, app = client
+    from arena.store import Withdrawal
+    run = record_run(app, user="ann")
+    app.state.store.withdraw(Withdrawal(run_id=run.run_id, event_id="sprint-2m", user="ann",
+                                        withdrawn_at="2026-09-03T12:00:00Z"))
+    assert api.get("/api/standings").json() == {"rows": []}
+    assert api.get("/api/players/ann").status_code == 404
