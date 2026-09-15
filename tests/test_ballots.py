@@ -48,8 +48,10 @@ def test_an_empty_store_has_no_ballots(tmp_path):
 
 
 def test_casting_the_same_ballot_twice_is_refused(tmp_path):
-    """The id is the seal's own MAC, so a double-click addresses the same file.
-    The route turns this refusal into an idempotent success."""
+    """A double-click addresses the same file, since the ballot_id is its own
+    token. The real guard is the ballot table's single-use entry
+    (routes_vote.py); this refusal is a second line of defence, and the route
+    turns it into an idempotent success either way."""
     ballots = LocalBallots(tmp_path)
     ballot = make_ballot()
     ballots.cast(ballot)

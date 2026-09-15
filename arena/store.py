@@ -271,8 +271,10 @@ class LocalBallots:
 
     def cast(self, ballot: Ballot) -> None:
         path = self._path(ballot)
-        # Refused rather than overwritten, exactly as a run is. The id is the
-        # seal's MAC, so this is the double-vote guard and not merely caution.
+        # Refused rather than overwritten, exactly as a run is. The double-vote
+        # guard is the ballot table's single-use entry (routes_vote.py); this
+        # refusal is a second line of defence, kept for whatever reaches disk
+        # by some other path.
         if path.exists():
             raise FileExistsError(f"ballot {ballot.ballot_id} already cast at {path}")
         path.parent.mkdir(parents=True, exist_ok=True)

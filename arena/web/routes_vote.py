@@ -53,39 +53,53 @@ class BallotEntry:
     event_id: str
     voter: str
     run_ids: tuple[str, ...]
-    issued_at: float
+    expires_at: float
     spent: bool = False
 
 
 class BallotBook:
     """The ballot table: what a token stands for, held only in memory.
 
-    Modelled directly on `Sessions` (session.py) — same shape, same lock, same
-    trade. Signing cannot be patched into secrecy without a cipher this
-    project does not depend on, so the run ids stay server-side behind a
-    random opaque token instead of inside a signed payload.
+    Modelled on `Sessions` (session.py) — same shape, same lock — but NOT the
+    same eviction path. A session id is looked up on every request, so
+    `Sessions.get` sweeping the one row it was asked for is enough; a ballot
+    token is looked up only if its voter goes on to vote or open a lane, so
+    most entries are never touched again and would otherwise sit forever. So
+    `issue()` also sweeps every expired entry, under the same lock, before
+    adding the one it is about to mint.
     """
 
     def __init__(self) -> None:
         self._by_token: dict[str, BallotEntry] = {}
         self._lock = threading.Lock()
 
-    def issue(self, event_id: str, voter: str, run_ids, ttl_s: float = BALLOT_TTL_S) -> str:
+    def _sweep(self, now: float) -> None:
+        """Drop every entry past its own TTL. Called only under `_lock`."""
+        expired = [token for token, entry in self._by_token.items() if now > entry.expires_at]
+        for token in expired:
+            del self._by_token[token]
+
+    def issue(
+        self, event_id: str, voter: str, run_ids, ttl_s: float = BALLOT_TTL_S, now: float | None = None
+    ) -> str:
         # token_urlsafe, not a fresh id scheme of our own: its alphabet is
         # exactly [A-Za-z0-9_-], which is what makes it safe to use as-is for
         # both a URL path segment and (below) the ballot log's own filename.
         token = secrets.token_urlsafe(32)
+        moment = time.time() if now is None else now
         with self._lock:
-            self._by_token[token] = BallotEntry(event_id, voter, tuple(run_ids), time.time())
+            self._sweep(moment)
+            self._by_token[token] = BallotEntry(event_id, voter, tuple(run_ids), moment + ttl_s)
         return token
 
-    def get(self, token: str) -> BallotEntry | None:
+    def get(self, token: str, now: float | None = None) -> BallotEntry | None:
         """The entry, or None. Never raises: this reads attacker-controlled input."""
+        moment = time.time() if now is None else now
         with self._lock:
             entry = self._by_token.get(token)
             if entry is None:
                 return None
-            if time.time() - entry.issued_at > BALLOT_TTL_S:
+            if moment > entry.expires_at:
                 # Evicted, not just reported stale, so a long-lived process
                 # does not accumulate dead ballots.
                 del self._by_token[token]

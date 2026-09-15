@@ -75,6 +75,34 @@ def test_spending_a_ballot_marks_it_without_evicting_it():
     assert entry.spent is True
 
 
+def test_issuing_sweeps_every_expired_entry_first():
+    """A ballot a voter never returns to must not sit forever.
+
+    Unlike a session id, a ballot token is looked up again only if its voter
+    votes or opens a lane — most never are — so `get()`'s own per-token
+    eviction is not enough on its own. `issue()` sweeps the whole table.
+    """
+    book = BallotBook()
+    now = 1_000_000.0
+    for i in range(1000):
+        book.issue("swag-contest", f"voter-{i}", ["a", "b"], now=now)
+    assert len(book._by_token) == 1000
+
+    later = now + BALLOT_TTL_S + 1
+    fresh = book.issue("swag-contest", "late-voter", ["a", "b"], now=later)
+    assert len(book._by_token) == 1
+    assert book.get(fresh, now=later) is not None
+
+
+def test_issue_genuinely_honours_its_own_ttl():
+    """A parameter the body ignores is a lie; this pins that it is not one."""
+    book = BallotBook()
+    now = 1_000_000.0
+    token = book.issue("swag-contest", "ann", ["a", "b"], ttl_s=10.0, now=now)
+    assert book.get(token, now=now + 9) is not None
+    assert book.get(token, now=now + 11) is None
+
+
 # --- The routes --------------------------------------------------------
 
 
