@@ -99,11 +99,11 @@ export async function renderHome(root) {
   const door = el("section", "door");
   door.append(
     el("p", "eyebrow", "Official competition"),
-    el("h2", "hero", "The pinnacle of bipedal duck athletics."),
+    el("h2", "hero", "The pinnacle of Microducks athletics."),
     el(
       "p",
       "lede",
-      "Enter a policy. The arena races it over five perturbed starts, on one clock no browser can argue with. Results are final. Falls are timed. The committee regrets nothing.",
+      "Train your duck, compete, repeat.",
     ),
   );
   hall.append(door);
