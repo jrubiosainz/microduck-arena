@@ -303,6 +303,8 @@ class Store(Protocol):
     def model(self, sha256: str) -> bytes: ...
     def withdraw(self, withdrawal: Withdrawal) -> None: ...
     def withdrawals(self) -> list[Withdrawal]: ...
+    def mark_seen(self, run_id: str, user: str, seen_at: str) -> None: ...
+    def seen(self) -> frozenset[str]: ...
 
 
 class LocalStore:
@@ -385,6 +387,30 @@ class LocalStore:
             Withdrawal.from_dict(json.loads(p.read_text()))
             for p in sorted(directory.glob("*.json"))
         ]
+
+    def _seen_path(self, run_id: str) -> Path:
+        return self.root / "seen" / f"{run_id}.json"
+
+    def mark_seen(self, run_id: str, user: str, seen_at: str) -> None:
+        """The author has opened this run's page: the result has been revealed.
+
+        The first visit is the one that matters, so an existing file is left
+        alone rather than re-dated. Same shape as a withdrawal — one small file
+        in its own folder, never a change to the run's own record.
+        """
+        path = self._seen_path(run_id)
+        if path.exists():
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"run_id": run_id, "user": user, "seen_at": seen_at}, indent=2)
+        )
+
+    def seen(self) -> frozenset[str]:
+        directory = self.root / "seen"
+        if not directory.is_dir():
+            return frozenset()
+        return frozenset(p.stem for p in directory.glob("*.json"))
 
 
 class HubStore:
@@ -498,6 +524,32 @@ class HubStore:
 
     def withdrawals(self) -> list[Withdrawal]:
         return self.snapshot().withdrawals()
+
+    def mark_seen(self, run_id: str, user: str, seen_at: str) -> None:
+        from huggingface_hub import CommitOperationAdd
+
+        path = f"seen/{run_id}.json"
+        # The first visit stays, as on LocalStore; one round trip to know.
+        if self.api.file_exists(self.repo_id, path, repo_type="dataset"):
+            return
+        self.api.create_commit(
+            repo_id=self.repo_id,
+            repo_type="dataset",
+            commit_message=f"seen {run_id} ({user})",
+            operations=[
+                CommitOperationAdd(
+                    path_in_repo=path,
+                    path_or_fileobj=json.dumps(
+                        {"run_id": run_id, "user": user, "seen_at": seen_at}, indent=2
+                    ).encode(),
+                )
+            ],
+        )
+        # The dot must go out the moment the page is seen, not after the TTL.
+        self._snapshot = None
+
+    def seen(self) -> frozenset[str]:
+        return self.snapshot().seen()
 
 
 class HubBallots:
