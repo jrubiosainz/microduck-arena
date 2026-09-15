@@ -42,7 +42,7 @@ export function lanesFor(run) {
 function replayLine(run) {
   const finishers = run.per_seed.filter((s) => s.status === "finish").length;
   const which =
-    finishers > 1 ? "median finisher" : finishers === 1 ? "the one finisher" : "furthest attempt";
+    finishers > 1 ? "median finisher" : finishers === 1 ? "the one finisher" : "first seed";
   return `${run.command_vx.toFixed(2)} m/s · replay: seed ${run.trace_seed}, ${which}`;
 }
 
@@ -160,10 +160,32 @@ export async function renderRun(root, runId, state) {
 
   for (const box of [$("score"), $("board"), $("points")]) box.hidden = revealing;
 
+  // The reveal's lifetime opens before the loads it must survive leaving
+  // during: a first visit's GLB fetch and the trace downloads are both slow
+  // enough that navigating away mid-load must not fall through to the
+  // theatre and spend the one-shot reveal on a page nobody watched.
+  let theatre, lifetime;
+  if (revealing) {
+    theatre = new AbortController();
+    lifetime = new AbortController();
+    state.teardown = () => {
+      lifetime.abort();
+      theatre.abort("leave");
+    };
+  }
+
   // The stage: this run in lane one, the three under it beside, all solid.
   const viewer = await createViewer($("stage"), { rig: run.event.rig });
+  if (revealing && theatre.signal.aborted) {
+    viewer.dispose();
+    return;
+  }
   state.viewer = viewer;
   const traces = await Promise.all(lanes.map((lane) => getTrace(lane.run_id)));
+  if (revealing && theatre.signal.aborted) {
+    viewer.dispose();
+    return;
+  }
   lanes.forEach((lane, i) => {
     const item = el("li");
     item.style.setProperty("--lane", LANE_CSS[i % LANE_CSS.length]);
@@ -190,6 +212,8 @@ export async function renderRun(root, runId, state) {
     revealing ? { loop: false, onTick: (t) => t >= line && crossed() } : {},
   );
   if (!revealing) return;
+  // Leaving mid-race must not park `reveal()` on `await raced` forever.
+  theatre.signal.addEventListener("abort", () => crossed(), { once: true });
 
   // The reveal. The chip starts at the total BEFORE this run, since /api/me
   // already counts it; Space skips; leaving the page abandons without marking.
@@ -197,12 +221,6 @@ export async function renderRun(root, runId, state) {
   const chip = root.querySelector(".profile-chip");
   const chipFlip = chip.querySelector(".flip");
   chipFlip.replaceChildren(...flipTiles(me.points - earned));
-  const theatre = new AbortController();
-  const lifetime = new AbortController();
-  state.teardown = () => {
-    lifetime.abort();
-    theatre.abort("leave");
-  };
   document.addEventListener(
     "keydown",
     (event) => {
@@ -244,4 +262,6 @@ export async function renderRun(root, runId, state) {
     },
     theatre.signal,
   );
+  // The theatre is over: Space should scroll the page again, not skip it.
+  lifetime.abort();
 }
