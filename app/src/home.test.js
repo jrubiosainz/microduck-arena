@@ -1,0 +1,87 @@
+import { describe, expect, it } from "vitest";
+import { flyer, ladder, shellOf } from "./home.js";
+
+const open = {
+  id: "sprint-2m", title: "2 m Sprint", status: "open", rig: "legs", length_m: 2, slope_deg: 0,
+  sweep_lo: 0.2, sweep_hi: 1.2, sweep_step: 0.05, sweep_count: 21,
+};
+const planned = { ...open, id: "best-jump", title: "Best Jump", status: "planned" };
+const held = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
+
+describe("the ladder", () => {
+  it("hangs one rung per player, linking to their page", () => {
+    const el = ladder([
+      { rank: 1, user: "ann", points: 360 },
+      { rank: 2, user: "bob", points: 260 },
+    ]);
+    const rows = [...el.querySelectorAll("a.ladder-row")];
+    expect(rows.map((r) => r.getAttribute("href"))).toEqual(["#/p/ann", "#/p/bob"]);
+    expect(rows[0].querySelector(".ladder-rank").textContent).toBe("1");
+    expect(rows[0].querySelector(".ladder-name").textContent).toBe("@ann");
+    expect(rows[0].querySelector(".ladder-points").textContent).toBe("360 PTS");
+    expect(rows[0].querySelector(".ladder-shell").className).toMatch(/ladder-shell-(cream|graphite|lavender|sky)/);
+  });
+
+  it("says so when nobody has published", () => {
+    const el = ladder([]);
+    expect(el.querySelector("a.ladder-row")).toBeNull();
+    expect(el.querySelector(".ladder-empty").textContent).toBe("Nobody has published yet.");
+  });
+});
+
+describe("shellOf", () => {
+  it("is stable per name and one of the four shells", () => {
+    expect(shellOf("ann")).toBe(shellOf("ann"));
+    for (const user of ["ann", "bob", "cid", "dee", "eve"]) {
+      expect(["cream", "graphite", "lavender", "sky"]).toContain(shellOf(user));
+    }
+  });
+});
+
+describe("an open event's flyer", () => {
+  it("links into the race and names it", () => {
+    const el = flyer(open, held);
+    expect(el.matches("article.challenge-note")).toBe(true);
+    expect(el.querySelector("a.challenge-link").getAttribute("href")).toBe("#/e/sprint-2m");
+    expect(el.querySelector(".flyer-title").textContent).toBe("2 m Sprint");
+    expect(el.querySelector(".eyebrow").textContent).toBe("Race");
+  });
+
+  it("leaves the art frame empty until the still lands", () => {
+    const frame = flyer(open, held).querySelector(".challenge-art");
+    expect(frame).not.toBeNull();
+    expect(frame.childElementCount).toBe(0);
+  });
+
+  it("states the course facts without the sweep", () => {
+    expect(flyer(open, held).querySelector(".challenge-facts").textContent).toBe("2 m · flat · legs");
+  });
+
+  it("shows who holds it and in what time", () => {
+    const standing = flyer(open, held).querySelector(".challenge-standing");
+    expect(standing.querySelector(".challenge-star")).not.toBeNull();
+    expect(standing.textContent).toContain("cdeplanne");
+    expect(standing.textContent).toContain("9.456s");
+  });
+
+  it("invites an entry when nobody has finished", () => {
+    expect(flyer(open, []).textContent).toContain("be the first");
+    const dnf = [{ user: "a", policy_name: "p", score: 50, seeds_finished: 0 }];
+    expect(flyer(open, dnf).textContent).toContain("no finisher yet");
+  });
+});
+
+describe("a planned event's flyer", () => {
+  it("is on the wall but is not a link", () => {
+    const el = flyer(planned, []);
+    expect(el.querySelector("a.challenge-link")).toBeNull();
+    expect(el.querySelector("div.challenge-link")).not.toBeNull();
+    expect(el.classList.contains("challenge-note--planned")).toBe(true);
+  });
+
+  it("says why it cannot be entered and never invites one", () => {
+    const el = flyer(planned, []);
+    expect(el.textContent).toContain("course not built yet");
+    expect(el.textContent).not.toContain("be the first");
+  });
+});
