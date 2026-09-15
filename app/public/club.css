@@ -78,7 +78,7 @@ body {
 
 .hero {
   margin: 4px 0 0;
-  max-width: 26ch;
+  text-wrap: balance;
   font-family: var(--type-hero-title-family);
   font-weight: var(--type-hero-title-weight);
   font-size: var(--type-section-title-size);
