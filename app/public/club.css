@@ -192,21 +192,3 @@
 .profile-results strong { font-size: 1.25rem; }
 .profile-results a:hover { background: var(--warm-paper); }
 .profile-empty a { color: var(--orange-inked); }
-
-/* The VOTE sticker: this round is judged, not timed. Slapped on the corner of
-   the note like the tape above it, in the charter's hi-vis lime. */
-.challenge-vote {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
-  z-index: 2;
-  padding: 0.2rem 0.55rem;
-  border-radius: 0.2rem;
-  background: #c8ff2e;
-  color: #12131a;
-  font-weight: 700;
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
-  text-decoration: none;
-  transform: rotate(4deg);
-}

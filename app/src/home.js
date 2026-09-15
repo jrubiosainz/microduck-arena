@@ -6,9 +6,10 @@
 
 import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
 import { formatEventFacts, formatScore } from "./format.js";
-import { playerHref, raceHref, voteHref } from "./router.js";
+import { playerHref, raceHref } from "./router.js";
 import { signage } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
+import { voteButton } from "./votebutton.js";
 
 const SHELLS = ["cream", "graphite", "lavender", "sky"];
 const LADDER_ROWS = 10;
@@ -84,9 +85,7 @@ export function flyer(event, rows) {
   const note = el("article", planned ? "challenge-note challenge-note--planned" : "challenge-note");
   note.append(el("span", "flyer-tape"));
   if (event.vote && !planned) {
-    const badge = el("a", "challenge-vote", "VOTE");
-    badge.href = voteHref(event.id);
-    note.append(badge);
+    note.append(voteButton(event, { variant: "sticker" }));
   }
   const link = el(planned ? "div" : "a", "challenge-link");
   if (!planned) link.href = raceHref(event.id);

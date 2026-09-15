@@ -95,10 +95,10 @@ const voted = {
 };
 
 describe("a votable flyer", () => {
-  it("wears a VOTE sticker and links to the booth", () => {
+  it("wears a vote button and links to the booth", () => {
     const note = flyer(voted, []);
-    expect(note.querySelector(".challenge-vote").textContent).toBe("VOTE");
-    expect(note.querySelector(".challenge-vote").getAttribute("href")).toBe("#/v/swag-contest");
+    expect(note.querySelector(".vote-button--sticker").textContent).toBe("VOTE HERE");
+    expect(note.querySelector(".vote-button--sticker").getAttribute("href")).toBe("#/v/swag-contest");
   });
 
   it("counts the week's votes instead of a time", () => {
@@ -111,8 +111,13 @@ describe("a votable flyer", () => {
     expect(note.querySelector(".challenge-standing").textContent).toContain("no votes yet");
   });
 
+  it("hides the button on a planned round -- there is no booth to send anyone to yet", () => {
+    const note = flyer({ ...voted, status: "planned" }, []);
+    expect(note.querySelector(".vote-button")).toBeNull();
+  });
+
   it("leaves a timed flyer alone", () => {
     const note = flyer(open, held);
-    expect(note.querySelector(".challenge-vote")).toBeNull();
+    expect(note.querySelector(".vote-button")).toBeNull();
   });
 });

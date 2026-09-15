@@ -438,6 +438,70 @@
   box-shadow: none;
 }
 
+/* ── Vote button — a ballot box you can press ───────────────────────────────── */
+
+/* The one way into a voting booth (see votebutton.js): a flyer's corner
+   sticker, or the panel above a race's entry form. Pressable like the
+   sticker above it — a real shadow, a lift on hover, a press that flattens
+   it onto the shadow — because the old VOTE badge did not read as a button
+   at all. Shared here, not in club.css or race.css, because those two
+   sheets are never both enabled at once and this button appears on both. */
+.vote-button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 0.2rem;
+  background: var(--lime);
+  color: var(--ink);
+  font-family: var(--type-sticker-family);
+  font-weight: var(--type-sticker-weight);
+  font-size: var(--type-sticker-size);
+  letter-spacing: var(--type-sticker-tracking);
+  text-transform: uppercase;
+  text-decoration: none;
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+  cursor: pointer;
+}
+.vote-button:hover { translate: -1px -1px; }
+.vote-button:active {
+  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
+  box-shadow: none;
+}
+.vote-button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+
+/* Tucked into the flyer's corner like the tape above it, at the charter's lean. */
+.vote-button--sticker {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 2;
+  rotate: 4deg;
+  font-size: 0.62rem;
+  padding: 5px 9px;
+}
+
+/* Upright, in normal flow, above the race page's entry form. */
+.vote-button--panel { font-size: 0.78rem; }
+
+/* Once every 3 s, not continuously: the ballot twitches for the first ~12%
+   of the cycle and rests for the remaining ~2.6 s, so it reads as a nudge
+   rather than something spinning forever. */
+@media (prefers-reduced-motion: no-preference) {
+  .vote-button__ballot { animation: vote-wobble 3s ease-in-out infinite; }
+}
+
+@keyframes vote-wobble {
+  0% { rotate: 0deg; }
+  3% { rotate: -10deg; }
+  6% { rotate: 8deg; }
+  9% { rotate: -4deg; }
+  12% { rotate: 0deg; }
+  100% { rotate: 0deg; }
+}
+
 /* ── The orange button — the cabinet's one big button ──────────────────────── */
 
 /* One per section. The secondary is yellow with the cold shadow. */
