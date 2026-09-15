@@ -64,6 +64,11 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
     <label class="entry__name">Name
       <input type="text" id="policy-name" placeholder="optional" />
     </label>
+    <label class="entry__name">Training environment
+      <input type="url" id="policy-env"
+             placeholder="optional — github.com, gitlab.com or huggingface.co" />
+      <span class="entry__hint">A link to how this policy was trained. Shown on your row.</span>
+    </label>
     <fieldset class="livery">
       <legend>Colour</legend>
       <div class="livery__swatches" id="liveries"></div>
@@ -169,7 +174,10 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
           file,
           // Only on publish: a trial records nothing, so a link would have
           // nowhere to live and no row to sit on.
-          envUrl: envInput?.value ?? "",
+          // NOT optional-chained. When the markup and this reader disagreed,
+          // `envInput?.value ?? ""` silently published every policy with no
+          // link and nothing anywhere said so.
+          envUrl: envInput.value,
           name: nameInput.value,
           livery,
           commandVx: pinned,

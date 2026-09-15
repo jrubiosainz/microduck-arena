@@ -251,3 +251,57 @@ describe("the race page header", () => {
     expect(mark.children[1].className).toContain("wordmark--compact");
   });
 });
+
+describe("the training-environment field", () => {
+  const ready = () => {
+    const container = document.createElement("div");
+    renderEntryPanel(
+      container,
+      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true },
+      { event, onTry: vi.fn(), onPublish: vi.fn() },
+    );
+    return container;
+  };
+
+  it("is in the panel at all", () => {
+    // It was not, for a whole commit: a string replace missed its target, the
+    // reader used optional chaining, and every publish silently carried no link.
+    expect(ready().querySelector("#policy-env")).not.toBeNull();
+  });
+
+  it("says which hosts are accepted, rather than waiting for a refusal", () => {
+    const input = ready().querySelector("#policy-env");
+    expect(input.placeholder).toContain("github.com");
+    expect(input.placeholder).toContain("huggingface.co");
+  });
+
+  it("reaches onPublish with what was typed", async () => {
+    const onPublish = vi.fn(async () => ({ policy_name: "w" }));
+    const container = document.createElement("div");
+    renderEntryPanel(
+      container,
+      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true },
+      { event, onTry: vi.fn(), onPublish },
+    );
+    chooseFile(container);
+    container.querySelector("#policy-env").value = "https://github.com/me/env";
+    container.querySelector("#publish").click();
+    await flush();
+    expect(onPublish.mock.calls[0][0].envUrl).toBe("https://github.com/me/env");
+  });
+
+  it("is not sent on a trial, which records nothing", async () => {
+    const onTry = vi.fn(async () => {});
+    const container = document.createElement("div");
+    renderEntryPanel(
+      container,
+      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true },
+      { event, onTry, onPublish: vi.fn() },
+    );
+    chooseFile(container);
+    container.querySelector("#policy-env").value = "https://github.com/me/env";
+    container.querySelector("#try").click();
+    await flush();
+    expect(onTry.mock.calls[0][0].envUrl).toBeUndefined();
+  });
+});
