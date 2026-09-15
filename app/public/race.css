@@ -756,4 +756,15 @@ table.board .withdraw:focus-visible,
   .vote-ceremony__token {
     transition: none;
   }
+
+/* ── a receipt on its way to the chip ─────────────────────────────────── */
+
+/* The copy travels the vector the page measured and shrinks into the chip. */
+.sticker.fly {
+  z-index: 3;
+  pointer-events: none;
+  animation: fly-to-chip var(--t-roll) var(--ease-hard) both;
+}
+@keyframes fly-to-chip {
+  to { translate: var(--fly-x) var(--fly-y); scale: 0.3; opacity: 0.4; }
 }

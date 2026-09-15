@@ -14,3 +14,155 @@ export function flipTiles(value) {
     return span;
   });
 }
+
+/** Resolves when `name` ends on `node` (or its `pseudo` element), or when the signal aborts. */
+export const ended = (node, name, pseudo = "", signal) =>
+  new Promise((there) => {
+    const finish = () => {
+      node.removeEventListener("animationend", done);
+      signal?.removeEventListener("abort", finish);
+      there();
+    };
+    const done = (event) => {
+      if (event.target !== node || event.animationName !== name || event.pseudoElement !== pseudo) {
+        return;
+      }
+      finish();
+    };
+    if (signal?.aborted) return there();
+    node.addEventListener("animationend", done);
+    signal?.addEventListener("abort", finish, { once: true });
+  });
+
+/** The stamp comes down on its support; `contact` fires at the moment of impact. */
+export async function slam(node, { support = null, contact = () => {}, signal } = {}) {
+  node.hidden = false;
+  if (signal?.aborted) return;
+  // Subscribe before adding classes, including when reduced motion ends both phases at once.
+  const landed = ended(node, "stamp-contact", "", signal).then(() => {
+    if (!signal?.aborted) contact();
+  });
+  const settled = ended(node, "stamp-slam", "", signal);
+  const jolted = support === null ? null : ended(support, "jolt", "", signal);
+  node.classList.add("stamp-slam");
+  support?.classList.add("jolt", "stamp-impact");
+  try {
+    await Promise.all([landed, settled, jolted]);
+  } finally {
+    node.classList.remove("stamp-slam");
+    support?.classList.remove("jolt", "stamp-impact");
+  }
+}
+
+/** Seeded, so the confetti falls the same way every time. */
+export function spread(count) {
+  let state = 7;
+  const random = () => (state = (state * 16807) % 2147483647) / 2147483647;
+  return Array.from({ length: count }, () => ({
+    x: random(),
+    lag: random(),
+    sway: (random() - 0.5) * 2,
+  }));
+}
+
+export async function confetti(root, count = 48, signal) {
+  const layer = document.createElement("div");
+  layer.className = "confetti-fall";
+  layer.setAttribute("aria-hidden", "true");
+  const strips = spread(count).map((piece) => {
+    const strip = document.createElement("span");
+    strip.className = "confetti-piece";
+    strip.style.setProperty("--confetti-x", `${(piece.x * 100).toFixed(1)}%`);
+    strip.style.setProperty("--confetti-lag", piece.lag.toFixed(2));
+    strip.style.setProperty("--confetti-sway", `${Math.round(piece.sway * 40)}px`);
+    return strip;
+  });
+  layer.replaceChildren(...strips);
+  root.append(layer);
+  await Promise.all(strips.map((strip) => ended(strip, "confetti-fall", "", signal)));
+  layer.remove();
+}
+
+/**
+ * Roll every tile of a `.flip` to the digit it already shows. The number is in
+ * the DOM before the theatre starts; the roll is drawn on the tiles' faces.
+ */
+export async function rollCounter(flip, signal) {
+  if (signal?.aborted) return;
+  const tiles = [...flip.querySelectorAll(".flip-digit")];
+  const done = tiles.map((tile) => ended(tile, "flip-roll", "::after", signal));
+  for (const tile of tiles) {
+    const from = (Number(tile.textContent) + 1) % 10;
+    tile.style.setProperty("--flip-from", from);
+    tile.style.setProperty("--flip-to", from + 9);
+    tile.classList.add("flip-roll");
+  }
+  await Promise.all(done);
+  for (const tile of tiles) {
+    tile.classList.remove("flip-roll");
+    tile.style.removeProperty("--flip-from");
+    tile.style.removeProperty("--flip-to");
+  }
+}
+
+/**
+ * The pegboard climb, design/motion.css's `.rank-climb` beat.
+ *
+ * `rows` are the `.pegboard-row` elements in their FINAL order; `climber` is
+ * the one that moves up. Call with the DOM still in the starting order: this
+ * measures where each row was, reorders the DOM, measures where each is, and
+ * animates every moved row from the one to the other. Ends on the climber's
+ * peg-drop. A climber that does not move ends at once.
+ */
+export async function climb(pegboard, rows, climber, signal) {
+  const was = new Map(rows.map((row) => [row, row.getBoundingClientRect().top]));
+  pegboard.replaceChildren(...rows);
+  const moved = rows.filter((row) => row.getBoundingClientRect().top !== was.get(row));
+  if (signal?.aborted || !moved.includes(climber)) return;
+  // The displaced rows drop one peg each, bottom-most first, so the last to
+  // fall has cleared its peg before the climber lands on it.
+  const displaced = moved.filter((row) => row !== climber).reverse();
+  const landed = ended(climber, "peg-drop", "", signal);
+  for (const row of moved) {
+    row.style.setProperty("--peg-dy", `${was.get(row) - row.getBoundingClientRect().top}px`);
+  }
+  displaced.forEach((row, order) => {
+    row.style.setProperty("--peg-order", order);
+    row.classList.add("rank-shuffle");
+  });
+  climber.classList.add("rank-climb");
+  try {
+    await landed;
+  } finally {
+    for (const row of moved) {
+      row.classList.remove("rank-climb", "rank-shuffle");
+      row.style.removeProperty("--peg-dy");
+      row.style.removeProperty("--peg-order");
+    }
+  }
+}
+
+/**
+ * A copy of the sticker flies to the target and shrinks into it (race.css's
+ * `fly-to-chip`), then is gone. The sticker itself stays where it is.
+ */
+export async function fly(sticker, target, signal) {
+  if (signal?.aborted) return;
+  const from = sticker.getBoundingClientRect();
+  const to = target.getBoundingClientRect();
+  const ghost = sticker.cloneNode(true);
+  ghost.classList.add("fly");
+  ghost.setAttribute("aria-hidden", "true");
+  Object.assign(ghost.style, {
+    position: "fixed",
+    left: `${from.left}px`,
+    top: `${from.top}px`,
+    margin: "0",
+  });
+  ghost.style.setProperty("--fly-x", `${to.left + to.width / 2 - (from.left + from.width / 2)}px`);
+  ghost.style.setProperty("--fly-y", `${to.top + to.height / 2 - (from.top + from.height / 2)}px`);
+  const flown = ended(ghost, "fly-to-chip", "", signal);
+  document.body.append(ghost);
+  await flown;
+  ghost.remove();
+}
