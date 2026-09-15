@@ -4,8 +4,26 @@
  * its two white alphas), so the two read as the same family. The one loud
  * element is the finishing time; everything else is hairlines and quiet.
  *
- * No web fonts: the display face is whatever condensed heavy is present, which
- * keeps the page working with no network. */
+ * Anton is self-hosted from /design/fonts/, the same files the club theme
+ * uses, so the page still works with no network. */
+
+@font-face {
+  font-family: 'Anton';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/design/fonts/anton-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Anton';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/design/fonts/anton-400-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
 
 :root {
   color-scheme: dark;
@@ -82,24 +100,7 @@ body {
   flex: none;
   filter: drop-shadow(0 6px 18px rgba(8, 8, 12, 0.6));
 }
-.hero__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-/* ── the programme ────────────────────────────────────────────────────── */
-
 .hero { padding: 26px 0 34px; }
-.hero__blurb {
-  color: var(--dim);
-  max-width: 52ch;
-  margin: 18px 0 0;
-  font-size: 1rem;
-}
-
-
 
 /* ── race page chrome ─────────────────────────────────────────────────── */
 
@@ -543,87 +544,6 @@ table.board tr:hover .withdraw { color: var(--chalk); }
 table.board .withdraw:hover,
 table.board .withdraw:focus-visible { color: var(--dnf); background: rgba(255, 82, 47, 0.12); }
 table.board .withdraw:focus-visible { outline: 2px solid var(--dnf); outline-offset: 1px; }
-
-/* ── The programme, as a grid of cards ────────────────────────────────── */
-
-.programme {
-  display: grid;
-  /* Three across where there is room, and fewer without a media query: auto-fit
-     with a floor means a new event never has to be counted into a breakpoint. */
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 18px;
-  list-style: none;
-  margin: 26px 0 40px;
-  padding: 0;
-  max-width: 1100px;
-}
-@media (min-width: 1000px) {
-  .programme { grid-template-columns: repeat(3, 1fr); }
-}
-
-.card {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  border: 1px solid var(--rule);
-  background: var(--paper);
-  color: inherit;
-  text-decoration: none;
-  transition: border-color 0.14s ease, transform 0.14s ease;
-}
-a.card:hover,
-a.card:focus-visible { border-color: var(--orange); transform: translateY(-2px); }
-a.card:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
-
-.card__frame {
-  border-bottom: 1px solid var(--rule);
-  background: #000;
-  /* The still's own proportions (480x198). Declared so the frame holds its
-     shape while empty: without it an unfilled card is zero pixels tall and the
-     whole grid jumps when the renders land. */
-  aspect-ratio: 480 / 198;
-}
-.card__art { display: block; width: 100%; height: auto; }
-
-.card__name {
-  margin: 12px 14px 0;
-  font: 400 1.15rem/1.15 var(--display);
-  letter-spacing: 0.01em;
-  color: var(--chalk);
-}
-.card__spec {
-  margin: 5px 14px 0;
-  font-size: 0.76rem;
-  letter-spacing: 0.05em;
-  color: var(--dim);
-  text-transform: lowercase;
-}
-.card__standing {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  /* margin-top:auto pins the standing to the bottom edge, so the times line up
-     across a row whatever the titles do. */
-  margin: auto 14px 13px;
-  padding-top: 12px;
-  font-size: 0.82rem;
-  color: var(--dim);
-}
-.card__star { width: 17px; height: 17px; }
-.card__who { color: var(--chalk); }
-.card__time {
-  margin-left: auto;
-  font: 400 1.25rem/1 var(--display);
-  font-variant-numeric: tabular-nums;
-  color: var(--orange);
-}
-.card__standing--open { color: var(--dim); font-style: italic; }
-
-/* A planned event is on the programme and cannot be entered. Dimmed rather
-   than hidden: seeing what is coming is the point of putting it there. */
-.card--planned { opacity: 0.6; border-style: dashed; }
-.card--planned .card__name { color: var(--dim); }
-.card__standing--planned { font-style: italic; }
 
 /* ── which runs the board shows ───────────────────────────────────────── */
 
