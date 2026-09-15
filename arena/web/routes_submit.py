@@ -25,6 +25,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
 from .. import trace as trace_codec
+from ..envlink import EnvLinkError, normalise_env_url
 from ..evaluate import evaluate, evaluate_at
 from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy
 from ..hub_publish import HubPublishError, publish_policy
@@ -179,6 +180,18 @@ def _seed_rows(result):
     return [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in result.per_seed]
 
 
+def _env_url(value: str | None) -> str | None:
+    """The submitter's training-environment link, or a 400 saying why not.
+
+    400 rather than silently dropping it: someone who typed a link and got a row
+    with no button would have no idea which of the two happened.
+    """
+    try:
+        return normalise_env_url(value)
+    except EnvLinkError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 def _livery(value: str | None) -> str:
     """Capped, not validated against a list.
 
@@ -253,12 +266,16 @@ async def submit(
     name: str | None = Form(default=None),
     livery: str | None = Form(default=None),
     command_vx: str | None = Form(default=None),
+    env_url: str | None = Form(default=None),
 ) -> dict:
     # Gated before any of the expensive work: validating and racing a policy for
     # someone who is not signed in would burn CPU on a shared Space for a
     # request that cannot be recorded.
     session = _require_session(request)
     _require_exactly_one(file, repo_id)
+    # Checked before racing: a link this server will refuse should cost nobody
+    # thirty seconds of simulation first.
+    link = _env_url(env_url)
 
     # `command_vx` pins the commanded speed for this entry; omit it for the full
     # sweep, which stays the default.
@@ -342,6 +359,7 @@ async def submit(
         # reproduce is a claim, and the whole value of the board is that
         # anyone can download an entry and race it themselves.
         model_stored=published is None and fetched is None,
+        env_url=link,
         livery=_livery(livery),
     )
     store.append(record, trace_codec.encode(result.trace), payload if published is None else None)

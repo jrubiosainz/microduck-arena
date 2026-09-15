@@ -42,7 +42,7 @@ export async function getTrace(runId) {
   return new Float32Array(await response.arrayBuffer());
 }
 
-function policyForm(file, name, livery, commandVx) {
+function policyForm(file, name, livery, commandVx, envUrl) {
   const form = new FormData();
   form.append("file", file);
   if (name) form.append("name", name);
@@ -50,14 +50,17 @@ function policyForm(file, name, livery, commandVx) {
   // Empty means "sweep", which is the server's default too, so it is left off
   // the form entirely rather than sent as a blank the server has to interpret.
   if (commandVx) form.append("command_vx", commandVx);
+  // Left off entirely when blank: the field is optional, and the server reads
+  // an absent value and an empty one the same way.
+  if (envUrl) form.append("env_url", envUrl);
   return form;
 }
 
 /** Race it and publish it to the board. */
-export function submitPolicy(eventId, file, name, livery, commandVx) {
+export function submitPolicy(eventId, file, name, livery, commandVx, envUrl) {
   return json(`/api/events/${eventId}/submit`, {
     method: "POST",
-    body: policyForm(file, name, livery, commandVx),
+    body: policyForm(file, name, livery, commandVx, envUrl),
   });
 }
 

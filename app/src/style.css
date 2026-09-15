@@ -624,3 +624,44 @@ a.card:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 .card--planned { opacity: 0.6; border-style: dashed; }
 .card--planned .card__name { color: var(--dim); }
 .card__standing--planned { font-style: italic; }
+
+/* ── which runs the board shows ───────────────────────────────────────── */
+
+.boardtop { display: flex; justify-content: flex-end; margin: 18px 0 6px; }
+.modes { display: flex; gap: 2px; }
+.modes button {
+  padding: 5px 13px;
+  border: 1px solid var(--rule);
+  background: none;
+  color: var(--dim);
+  font: 500 0.72rem/1 var(--display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.modes button + button { border-left: 0; }
+.modes button:hover { color: var(--chalk); }
+/* aria-pressed carries the state, so the styling reads from it rather than
+   from a class that could drift out of step with what a screen reader hears. */
+.modes button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--orange);
+  border-color: var(--orange);
+}
+.modes button:focus-visible { outline: 2px solid var(--orange); outline-offset: 1px; }
+
+/* The link to a policy's training environment. Same weight as the download
+   glyph beside it: both are offers, neither is the point of the row. */
+table.board .env { width: 2.4rem; text-align: right; }
+table.board .env a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 3px;
+  color: var(--dim);
+  text-decoration: none;
+}
+table.board .env a:hover,
+table.board .env a:focus-visible { color: var(--cyan); background: rgba(80, 200, 255, 0.12); }

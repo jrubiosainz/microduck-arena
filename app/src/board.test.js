@@ -366,3 +366,36 @@ describe("taking your own entry off the board", () => {
     expect(calls).toEqual(["01AAA"]);
   });
 });
+
+describe("the training-environment link", () => {
+  const rendered = (over) => {
+    const container = document.createElement("div");
+    renderBoard(container, { event: { title: "2 m Sprint" }, rows: [row(over)] });
+    return container.querySelector("td.env a");
+  };
+
+  it("appears only when its author shared one", () => {
+    expect(rendered({ env_url: null })).toBeNull();
+    expect(rendered({ env_url: "https://github.com/me/env" })).not.toBeNull();
+  });
+
+  it("opens in a new tab without leaking the referrer or the opener", () => {
+    // The destination has no business knowing which board sent someone, and an
+    // opener handle is a tabnabbing surface.
+    const link = rendered({ env_url: "https://github.com/me/env" });
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+    expect(link.getAttribute("rel")).toContain("noreferrer");
+  });
+
+  it("names the host, so a click is not blind", () => {
+    const link = rendered({ env_url: "https://huggingface.co/datasets/me/env" });
+    expect(link.title).toContain("huggingface.co");
+    expect(link.getAttribute("aria-label")).toContain("huggingface.co");
+  });
+
+  it("points exactly where the server said", () => {
+    const link = rendered({ env_url: "https://gitlab.com/me/env?tab=x" });
+    expect(link.getAttribute("href")).toBe("https://gitlab.com/me/env?tab=x");
+  });
+});

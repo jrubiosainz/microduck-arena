@@ -15,6 +15,7 @@ import { MAX, MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
 import { panelState, signInHref } from "./session.js";
 import { insertProvisional } from "./standings.js";
+import { modeIsUseful, visibleRows } from "./views.js";
 import { menuHref } from "./router.js";
 import { createViewer } from "./viewer.js";
 import { duckHead, wordmark } from "./wordmark.js";
@@ -95,6 +96,7 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
   const tryButton = container.querySelector("#try");
   const publishButton = container.querySelector("#publish");
   const nameInput = container.querySelector("#policy-name");
+  const envInput = container.querySelector("#policy-env");
 
   // The four colourways the real robot comes in. Picking one shows it on your
   // duck straight away, before you have raced anything.
@@ -165,6 +167,9 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
       } else {
         const published = await onPublish({
           file,
+          // Only on publish: a trial records nothing, so a link would have
+          // nowhere to live and no row to sit on.
+          envUrl: envInput?.value ?? "",
           name: nameInput.value,
           livery,
           commandVx: pinned,
@@ -265,6 +270,13 @@ export async function renderRace(root, { event, state }) {
       </div>
       <aside class="entry" id="entry"></aside>
     </div>
+    <div class="boardtop">
+      <div class="modes" role="group" aria-label="Which runs to show">
+        <button data-mode="top" aria-pressed="true">Top</button>
+        <button data-mode="mine" aria-pressed="false">Mine</button>
+        <button data-mode="all" aria-pressed="false">All</button>
+      </div>
+    </div>
     <div id="board"></div>
   `;
   document.querySelector("#racehead-mark").replaceWith(headerMark());
@@ -287,6 +299,24 @@ export async function renderRace(root, { event, state }) {
   const brightness = root.querySelector("#brightness");
   brightness.value = String(viewer.brightness);
   brightness.addEventListener("input", () => viewer.setBrightness(brightness.value));
+
+  // Declared here, above every handler that closes over them, and assigned
+  // later once getMe() resolves. Further down they worked only because a click
+  // always happens after that line — a handler moved above it would fail with a
+  // temporal-dead-zone error that reads like nothing.
+  let me = null;
+  let mode = "top";
+
+  const modeButtons = [...root.querySelectorAll(".modes button")];
+  for (const button of modeButtons) {
+    button.addEventListener("click", async () => {
+      mode = button.dataset.mode;
+      for (const other of modeButtons) {
+        other.setAttribute("aria-pressed", String(other.dataset.mode === mode));
+      }
+      await paint();
+    });
+  }
 
   root.querySelector("#follow").addEventListener("click", () => viewer.follow());
 
@@ -340,11 +370,6 @@ export async function renderRace(root, { event, state }) {
       : "Tick a lane below, or test a policy, to watch a replay.";
   }
 
-  // Declared before paint(), which closes over it. Assigned below, once
-  // getMe() resolves. As a `const` further down it worked only because every
-  // paint() call happens after that line — a future one moved above it would
-  // fail with a temporal-dead-zone error that reads like nothing.
-  let me = null;
 
   async function paint() {
     const { rows } = await getLeaderboard(event.id);
@@ -353,7 +378,9 @@ export async function renderRace(root, { event, state }) {
     const tiers = tiersByRunId(merged);
     renderBoard(
       board,
-      { event, rows: merged },
+      // Filtered, never re-ranked: visibleRows narrows the list and leaves every
+      // rank exactly as the server computed it.
+      { event, rows: visibleRows(merged, { mode, me: me?.user ?? null }) },
       {
         onSelectionChange: (runIds) => race(runIds, tiers),
         me: me?.user ?? null,
@@ -388,8 +415,8 @@ export async function renderRace(root, { event, state }) {
       trial = await tryPolicy(event.id, file, name, livery, commandVx);
       await paint();
     },
-    onPublish: async ({ file, name, livery, commandVx }) => {
-      const published = await submitPolicy(event.id, file, name, livery, commandVx);
+    onPublish: async ({ file, name, livery, commandVx, envUrl }) => {
+      const published = await submitPolicy(event.id, file, name, livery, commandVx, envUrl);
       trial = null;
       await paint();
       return published;

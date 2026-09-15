@@ -73,6 +73,10 @@ class RunRecord:
     # runs recorded before policies were kept show no download link instead of a
     # broken one — the log is append-only, those files are never coming back.
     model_stored: bool = False
+    # Where this policy's training environment lives, if its author shared one.
+    # Validated on the way in by arena/envlink.py — only a few known hosts, and
+    # never rendered without rel="noopener noreferrer".
+    env_url: str | None = None
     # The commanded forward speed the score was set at. The sweep picks it per
     # policy (see evaluate.py), so it differs from row to row and is worth
     # keeping: two entries with the same time did not necessarily do the same
@@ -113,6 +117,7 @@ class RunRecord:
             "runner_version": self.runner_version,
             "command_vx": self.command_vx,
             "model_stored": self.model_stored,
+            "env_url": self.env_url,
             "livery": self.livery,
         }
 
@@ -136,6 +141,7 @@ class RunRecord:
             runner_version=raw["runner_version"],
             command_vx=raw.get("command_vx", 0.0),
             model_stored=raw.get("model_stored", False),
+            env_url=raw.get("env_url"),
             # .get, not [..]: runs recorded before liveries existed have no such
             # key, and an append-only log means those files are never rewritten.
             livery=raw.get("livery", "classic"),

@@ -87,6 +87,7 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
                 # before policies were kept, so the page shows nothing rather
                 # than a link that 404s.
                 "model_stored": row.record.model_stored,
+                "env_url": row.record.env_url,
                 # The single rule the board renders from: `model_stored` or a
                 # Hub-backed source. See RunRecord.offers_download.
                 "offers_download": row.record.offers_download,

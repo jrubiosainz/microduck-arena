@@ -603,3 +603,41 @@ def test_a_planned_event_records_nothing(api, store_dir):
 
 def test_an_open_event_is_unaffected(api):
     assert submit(api).status_code == 200
+
+
+def test_a_training_environment_link_is_recorded_and_served(api):
+    with open(REFERENCE, "rb") as fh:
+        body = api.post(
+            "/api/events/sprint-2m/submit",
+            files={"file": ("w.onnx", fh)},
+            data={"name": "linked", "env_url": "https://github.com/me/training-env"},
+        ).json()
+    assert body["run_id"]
+    rows = api.get("/api/events/sprint-2m/leaderboard").json()["rows"]
+    assert rows[0]["env_url"] == "https://github.com/me/training-env"
+
+
+def test_a_submission_without_a_link_simply_has_none(api):
+    submit(api)
+    rows = api.get("/api/events/sprint-2m/leaderboard").json()["rows"]
+    assert rows[0]["env_url"] is None
+
+
+def test_a_refused_link_is_a_400_and_costs_no_simulation(api, store_dir, monkeypatch):
+    """Checked before racing: a link this server will refuse should not cost
+    anyone thirty seconds of physics first — and the refusal says why."""
+    import arena.web.routes_submit as routes
+
+    raced = []
+    monkeypatch.setattr(routes, "_load_and_evaluate", lambda *a, **k: raced.append(True))
+
+    with open(REFERENCE, "rb") as fh:
+        response = api.post(
+            "/api/events/sprint-2m/submit",
+            files={"file": ("w.onnx", fh)},
+            data={"env_url": "https://github.com.evil.com/x"},
+        )
+    assert response.status_code == 400
+    assert "github.com.evil.com" in response.json()["detail"]
+    assert raced == []
+    assert list(store_dir.rglob("*.json")) == []

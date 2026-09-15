@@ -32,6 +32,13 @@ const WITHDRAW_ICON =
   '<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
   'd="M4 4l8 8M12 4l-8 8"/></svg>';
 
+// An arrow leaving a box: "this goes somewhere else". Distinct from the
+// download glyph beside it, which comes towards you.
+const ENV_ICON =
+  '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">' +
+  '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" ' +
+  'stroke-linejoin="round" d="M9.5 2.5h4v4M13.5 2.5 8 8M12 9.75v3a.75.75 0 0 1-.75.75h-8a.75.75 0 0 1-.75-.75v-8a.75.75 0 0 1 .75-.75h3"/></svg>';
+
 export function buildRows(rows, { me = null } = {}) {
   let lanes = 0;
   // The leader is the best PUBLISHED finisher — not simply rank 1, because a
@@ -65,6 +72,9 @@ export function buildRows(rows, { me = null } = {}) {
       // else's regardless, so this is about not offering a button that would
       // be rejected — not about security, which lives server-side.
       mine: Boolean(me && row.run_id && !row.provisional && row.user === me),
+      // The server refuses anything but a few known hosts, so a link that
+      // reaches here is one of those. Still opened with noopener/noreferrer.
+      envUrl: row.env_url || null,
       runId: row.run_id,
       dnf,
       selected,
@@ -102,7 +112,7 @@ export function renderBoard(
   table.innerHTML =
     "<thead><tr><th class='tab'></th><th class='rank'>place</th><th>who</th>" +
     "<th>policy</th><th class='time'>time</th><th class='speed'>m/s</th>" +
-    "<th class='seeds'>seeds</th><th class='grab'></th>" +
+    "<th class='seeds'>seeds</th><th class='env'></th><th class='grab'></th>" +
     "<th class='mine'></th></tr></thead>";
   const body = document.createElement("tbody");
 
@@ -163,6 +173,21 @@ export function renderBoard(
       grab.append(link);
     }
 
+    const env = document.createElement("td");
+    env.className = "env";
+    if (row.envUrl) {
+      const link = document.createElement("a");
+      link.href = row.envUrl;
+      link.target = "_blank";
+      // noreferrer as well as noopener: the destination has no business knowing
+      // which board sent someone, and this costs nothing.
+      link.rel = "noopener noreferrer";
+      link.innerHTML = ENV_ICON;
+      link.title = `Training environment for ${row.policy} (${new URL(row.envUrl).hostname})`;
+      link.setAttribute("aria-label", link.title);
+      env.append(link);
+    }
+
     const own = document.createElement("td");
     own.className = "mine";
     if (row.mine && onWithdraw) {
@@ -184,6 +209,7 @@ export function renderBoard(
       cell(row.score, "time"),
       cell(row.speed, "speed"),
       cell(row.seeds, "seeds"),
+      env,
       grab,
       own,
     );
