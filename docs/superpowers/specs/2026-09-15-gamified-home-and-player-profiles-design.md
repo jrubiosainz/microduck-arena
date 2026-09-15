@@ -131,8 +131,9 @@ run.
 `tokens.css` with opposite meanings, so the two cannot be loaded together.
 `index.html` links both sets with a `data-theme` attribute; `main.js` sets
 `link.disabled` on every stylesheet whose theme is not the current view's.
-The Google Fonts link goes away: Anton is now self-hosted by the design
-tokens.
+The Google Fonts link goes away: Anton is self-hosted from `design/fonts/`.
+A disabled sheet contributes no `@font-face`, so `race.css` carries its own
+two Anton declarations pointing at the same files.
 
 ### Design import
 
@@ -151,11 +152,11 @@ Replaces `menu.js`.
 1. `header.signage`: brand (the arena's duck head, `h1` "Microduck Arena",
    mono label), and `nav.site-nav` holding the player chip.
 2. `section.door`: eyebrow, hero title, lede — the arena's existing blurb.
-3. `section.chapter.season-note`: `h3.eyebrow` "Season standings", then the
+3. `section.chapter`: `h3.eyebrow` "Season standings", then the
    ladder component: one `a.ladder-row` per player, rank, shell dot, `@user`,
    points, linking to `#/p/<user>`. Top 10 of `/api/standings`. Empty state:
    "Nobody has published yet."
-4. `section.chapter.challenge-list`: `h3.eyebrow` "Pick your round", then
+4. `section.chapter`: `h3.eyebrow` "Pick your round", then
    `div.cabinets` with one `article.challenge-note` per event from
    `/api/events`, in programme order. An open event is `a.challenge-link` to
    `#/e/<id>` with eyebrow "Race", `h4.flyer-title`, a `.challenge-art` frame,
