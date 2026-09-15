@@ -90,11 +90,17 @@ Everything the system needs derives from this one record:
 
 ### `ballot_id`
 
-**The MAC of the signed ballot**, not a fresh random id. Two POSTs of the same
-issued ballot therefore write the same path, and `LocalStore`'s existing refusal
-to overwrite (`store.py`, `FileExistsError`) becomes the double-click guard. The
-second vote is caught and reported as an idempotent success. Nothing new is
-written to make this work.
+**The ballot's own opaque token** — the `secrets.token_urlsafe(32)` the server
+minted for it. Its alphabet is `[A-Za-z0-9_-]`, so it is a safe filename with
+nothing to sanitise.
+
+An earlier draft made it the MAC of a signed ballot and leaned on the log's
+refusal to overwrite as the double-click guard. That guard does not hold: the
+file is keyed on `cast_at`'s DAY, so one ballot voted at `23:59:59Z` and again at
+`00:00:01Z` writes two files and counts twice. **The guard is the table entry
+being single-use** — spent when the vote is recorded, clock-independent. The log
+still refuses to overwrite, and the route still catches it, but as belt and
+braces rather than as the mechanism.
 
 ### Storage
 
@@ -198,8 +204,20 @@ hours.
 `cast_today` and appending the ballot are two steps, and the seconds between them
 are a real window — the read scans a week of shards, and that scan grows with the
 contest. Under a lock, four concurrent votes against a cap of one record one
-ballot; without it, review recorded all four landing. The lock is per process,
-which is what a single-container Space is.
+ballot; without it, review recorded all four landing.
+
+Both the lock and the ballot table are **per process**, and both would be
+defeated by a second worker — a ballot issued by one would be unknown to the
+other. That is safe here for a structural reason, not a hopeful one:
+`arena/cli.py` calls `uvicorn.run()` with an app *instance* rather than an import
+string, which is precisely the form uvicorn cannot fork workers from. Serving
+this app on more than one process is therefore a deliberate code change, and it
+is the change that would have to move both of these to shared storage.
+
+The lock is one global rather than one per voter. It is held across a Hub
+round-trip on a deployed Space, so voters queue behind each other's commits — at
+twenty ballots a day per person that costs nothing, and a per-voter lock table is
+machinery this does not need yet.
 
 ### Refusals
 
