@@ -10,9 +10,6 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--body);
@@ -21,7 +18,14 @@ body {
   overflow-x: hidden;
 }
 
-/* The strip bleeds to the window; everything under it sits in this column. */
+/* The strips bleed to the window; everything between them sits in this column,
+   which stretches so the footer closes the window on a short page. */
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
 .hall {
   position: relative;
   max-width: var(--space-content-column);
@@ -51,6 +55,7 @@ body {
 }
 .wordmark span { display: block; }
 .wordmark a { color: inherit; text-decoration: none; }
+.signage-end .mono-label a { color: inherit; }
 .wordmark__solid { color: var(--yellow); }
 .wordmark__arena { color: var(--orange); }
 
@@ -93,4 +98,6 @@ body {
 @media (max-width: 640px) {
   .signage { padding: 14px var(--space-gutter-min); gap: var(--space-gutter-min); }
   .duckhead { width: 34px; }
+  .signage-end { grid-template-columns: 1fr; }
+  .signage-end .signage-stickers { margin-left: 0; flex-wrap: wrap; }
 }

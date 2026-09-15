@@ -4,7 +4,7 @@
 import { getMe, getPlayer } from "./api.js";
 import { formatScore } from "./format.js";
 import { menuHref, raceHref } from "./router.js";
-import { avatar, signage } from "./signage.js";
+import { avatar, footer, signage } from "./signage.js";
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -63,5 +63,5 @@ export async function renderPlayer(root, user) {
   root.replaceChildren(signage(me));
   const hall = el("main", "hall");
   hall.append(player ? profile(player) : noProfile(user));
-  root.append(hall);
+  root.append(hall, footer());
 }

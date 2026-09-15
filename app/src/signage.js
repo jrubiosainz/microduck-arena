@@ -1,6 +1,8 @@
 // The strip over the door: the arena's mark on the left, the player on the
 // right. Every page wears it, races included — the mark is how you get back to
-// the front, so a race needs no back link of its own.
+// the front, so a race needs no back link of its own. Under every page, the
+// same strip on deep ink: Duck Jam's footer, with the two doors out of the
+// arena — the community, and the robot itself.
 
 import { menuHref, playerHref } from "./router.js";
 import { signInHref } from "./session.js";
@@ -73,4 +75,37 @@ export function signage(me) {
 
   header.append(brand, nav);
   return header;
+}
+
+const FLOCK = "https://discord.com/invite/pollen-community-519098054377340948";
+const STORE = "https://store.pollen-robotics.com/products/microduck";
+const POLLEN = "https://pollen-robotics.com/";
+
+function outLink(className, href, text) {
+  const link = document.createElement("a");
+  link.className = className;
+  link.href = href;
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.textContent = text;
+  return link;
+}
+
+export function footer() {
+  const strip = document.createElement("footer");
+  strip.className = "signage signage-end";
+
+  const maker = document.createElement("span");
+  maker.className = "mono-label";
+  maker.append(outLink("", POLLEN, "POLLEN ROBOTICS"));
+
+  const stickers = document.createElement("div");
+  stickers.className = "signage-stickers fx-tilt-alternate";
+  stickers.append(
+    outLink("sticker sticker-cyan fx-tilt-1-5", FLOCK, "Join the flock"),
+    outLink("sticker fx-tilt-1-5", STORE, "Get your real microduck"),
+  );
+
+  strip.append(maker, stickers);
+  return strip;
 }

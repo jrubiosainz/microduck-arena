@@ -14,7 +14,7 @@ import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { MAX, MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
 import { panelState, signInHref } from "./session.js";
-import { signage } from "./signage.js";
+import { footer, signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
 import { modeIsUseful, visibleRows } from "./views.js";
 import { createViewer } from "./viewer.js";
@@ -278,7 +278,7 @@ export async function renderRace(root, { event, state }) {
       <div id="board"></div>
     </div>
   `;
-  root.append(hall);
+  root.append(hall, footer());
 
   renderEventFacts(root, event);
 
