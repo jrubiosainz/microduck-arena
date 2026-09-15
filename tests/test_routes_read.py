@@ -352,3 +352,52 @@ def test_an_event_says_whether_it_takes_votes_and_how(client):
     assert swag["vote"] == {
         "ballot_min": 2, "ballot_max": 4, "window_days": 7, "per_day": 20,
     }
+
+
+def cast(app, choice, candidates, **overrides):
+    from datetime import UTC, datetime
+
+    from arena.store import Ballot, new_id
+
+    fields = {
+        "ballot_id": new_id(),
+        "event_id": "swag-contest",
+        "voter": "coralie",
+        "cast_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "candidates": tuple(candidates),
+        "choice": choice,
+    }
+    fields.update(overrides)
+    app.state.ballots.cast(Ballot(**fields))
+
+
+def test_a_voted_board_ranks_on_votes_and_still_reports_the_time(client):
+    api, app = client
+    ann = record_run(app, user="ann", event_id="swag-contest", score=12.0)
+    bob = record_run(app, user="bob", event_id="swag-contest", score=40.0)
+    cast(app, bob.run_id, [ann.run_id, bob.run_id])
+
+    rows = api.get("/api/events/swag-contest/leaderboard").json()["rows"]
+    assert [(r["rank"], r["user"], r["votes"], r["shown"]) for r in rows] == [
+        (1, "bob", 1, 1),
+        (2, "ann", 0, 1),
+    ]
+    # The time is measured anyway, so it stays on the row — as a fact, not a rank.
+    assert rows[0]["score"] == 40.0
+
+
+def test_a_vote_that_fell_out_of_the_window_no_longer_counts(client):
+    api, app = client
+    ann = record_run(app, user="ann", event_id="swag-contest")
+    bob = record_run(app, user="bob", event_id="swag-contest")
+    cast(app, ann.run_id, [ann.run_id, bob.run_id], cast_at="2026-01-01T10:00:00Z")
+
+    rows = api.get("/api/events/swag-contest/leaderboard").json()["rows"]
+    assert all(r["votes"] == 0 for r in rows)
+
+
+def test_a_timed_board_is_untouched_and_carries_no_vote_columns(client):
+    api, app = client
+    record_run(app, user="ann", event_id="sprint-2m", score=12.0)
+    rows = api.get("/api/events/sprint-2m/leaderboard").json()["rows"]
+    assert "votes" not in rows[0]

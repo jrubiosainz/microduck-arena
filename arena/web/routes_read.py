@@ -6,11 +6,13 @@ web layer and the CLI can never disagree about who is first.
 """
 
 import re
+from datetime import UTC, datetime
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 
+from .. import votes
 from ..course import wall_boxes
 from ..index import leaderboard
 from ..manifest import Manifest, ManifestError, all_events, load_event
@@ -86,43 +88,56 @@ def list_events() -> dict:
     return {"events": [event_summary(m) for m in programme]}
 
 
+def _board_row(row) -> dict:
+    """The fields every board shows, timed or voted."""
+    record = row.record
+    return {
+        "rank": row.rank,
+        "user": record.user,
+        "policy_name": record.policy_name,
+        "livery": record.livery,
+        "score": record.score,
+        "command_vx": record.command_vx,
+        # Whether this row offers a download. False for runs recorded
+        # before policies were kept, so the page shows nothing rather
+        # than a link that 404s.
+        "model_stored": record.model_stored,
+        "env_url": record.env_url,
+        # The single rule the board renders from: `model_stored` or a
+        # Hub-backed source. See RunRecord.offers_download.
+        "offers_download": record.offers_download,
+        "policy_url": (record.source or {}).get("url"),
+        "seeds_finished": record.seeds_finished,
+        "seeds_total": len(record.per_seed),
+        "run_id": record.run_id,
+        "submitted_at": record.submitted_at,
+    }
+
+
 @router.get("/events/{event_id}/leaderboard")
 def event_leaderboard(event_id: str, request: Request) -> dict:
     manifest = _event_or_404(event_id)
     config = request.app.state.config
     store = request.app.state.store
-    rows = leaderboard(
-        store.runs(manifest.id),
-        entrant=config.entrant,
-        withdrawn=_withdrawn(store),
-    )
-    return {
-        "event": event_summary(manifest),
-        "rows": [
-            {
-                "rank": row.rank,
-                "user": row.record.user,
-                "policy_name": row.record.policy_name,
-                "livery": row.record.livery,
-                "score": row.record.score,
-                "command_vx": row.record.command_vx,
-                # Whether this row offers a download. False for runs recorded
-                # before policies were kept, so the page shows nothing rather
-                # than a link that 404s.
-                "model_stored": row.record.model_stored,
-                "env_url": row.record.env_url,
-                # The single rule the board renders from: `model_stored` or a
-                # Hub-backed source. See RunRecord.offers_download.
-                "offers_download": row.record.offers_download,
-                "policy_url": (row.record.source or {}).get("url"),
-                "seeds_finished": row.record.seeds_finished,
-                "seeds_total": len(row.record.per_seed),
-                "run_id": row.record.run_id,
-                "submitted_at": row.record.submitted_at,
-            }
-            for row in rows
-        ],
-    }
+    withdrawn = _withdrawn(store)
+    records = store.runs(manifest.id)
+
+    if manifest.metric == "votes":
+        # A separate function, not a parameterised leaderboard: index.sort_key
+        # means "lower is better" and is correct for five live timed events.
+        # Teaching it a second direction would put all of them at risk.
+        now = datetime.now(UTC)
+        days = manifest.vote.window_days
+        ballots = request.app.state.ballots
+        kept = votes.window(ballots.since(votes.first_day(now, days)), now, days)
+        rows = votes.standings(votes.pool(records, withdrawn), kept)
+        out = [_board_row(row) for row in rows]
+        for shaped, row in zip(out, rows):
+            shaped["votes"], shaped["shown"] = row.votes, row.shown
+        return {"event": event_summary(manifest), "rows": out}
+
+    rows = leaderboard(records, entrant=config.entrant, withdrawn=withdrawn)
+    return {"event": event_summary(manifest), "rows": [_board_row(row) for row in rows]}
 
 
 @router.get("/standings")
