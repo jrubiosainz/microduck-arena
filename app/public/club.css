@@ -1,76 +1,13 @@
-/* The club: the home and player pages, in Duck Jam's paper and ink.
+/* The club: the home and player pages.
  *
  * Every colour, size and face is a token from design/tokens.css; every object
  * (eyebrow, mono label, signage, sticker, flyer tape and title, marquee title)
- * is design/components.css's. This file only places them. It is enabled on
- * the club views and disabled on the race pages, which wear race.css instead:
- * the two sets define --ink and --paper with opposite meanings. */
+ * is design/components.css's; the strip over the door and the column under it
+ * are shell.css's, now that the race pages wear them too. This file places
+ * what is left, which is the front and a player's page. */
 
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--body);
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line);
-  overflow-x: hidden;
-}
-
-.hall {
-  position: relative;
-  max-width: var(--space-content-column);
-  margin: 0 auto;
-  padding: var(--space-gutter-max) var(--space-gutter-min);
-  flex: 1;
-  width: 100%;
-}
-
-.failed { padding: var(--space-gutter-max); color: var(--orange-inked); }
-
-/* ── Signage: the brand left, the player top-right ─────────────────────────── */
-
-.signage { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
-.club-brand { display: flex; align-items: center; gap: 12px; }
-.club-duck { width: 52px; height: 52px; object-fit: contain; }
-.signage-title a { color: inherit; text-decoration: none; }
-.site-nav { display: flex; align-items: center; gap: var(--space-gutter-min); }
-
-.profile-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 14px 4px 4px;
-  border: 2px solid var(--paper);
-  background: var(--ink);
-  color: var(--paper);
-  text-decoration: none;
-  font-family: var(--type-sticker-family);
-  font-size: 1rem;
-  letter-spacing: var(--type-sticker-tracking);
-  text-transform: uppercase;
-}
-.profile-chip:hover { background: var(--deep-ink); }
-.profile-chip:focus-visible, .ladder-row:focus-visible, .challenge-link:focus-visible,
+.ladder-row:focus-visible, .challenge-link:focus-visible,
 .profile-results a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
-
-/* The Hub's picture when it has one, a duck on lavender when it does not. */
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  overflow: hidden;
-  border: 2px solid var(--ink);
-  background: var(--lavender);
-  font-size: 22px;
-  line-height: 1;
-}
-.avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 /* ── Door: the hero over the hall ──────────────────────────────────────────── */
 
@@ -255,8 +192,3 @@ body {
 .profile-results strong { font-size: 1.25rem; }
 .profile-results a:hover { background: var(--warm-paper); }
 .profile-empty a { color: var(--orange-inked); }
-
-@media (max-width: 640px) {
-  .signage { padding: 14px var(--space-gutter-min); gap: var(--space-gutter-min); }
-  .club-duck { width: 36px; height: 36px; }
-}

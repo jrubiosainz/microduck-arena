@@ -1,177 +1,81 @@
-/* Microduck Arena — a trackside timing board.
+/* A race: the stage, the entry note beside it, the board beneath.
  *
- * Palette and text levels are the simulator Space's own tokens (INK, ORANGE and
- * its two white alphas), so the two read as the same family. The one loud
- * element is the finishing time; everything else is hairlines and quiet.
+ * The strip over the door and the column under it are shell.css's, shared with
+ * the front and a player's page; the objects are design/components.css's. This
+ * sheet places what only a race has, in the same paper and ink: square corners,
+ * ink rules at 2 px and 3 px, and a shadow that is an offset with no blur.
  *
- * Anton is self-hosted from /design/fonts/, the same files the club theme
- * uses, so the page still works with no network. */
+ * The one surface that stays dark is the stage. It is a screen, and the club
+ * draws every screen on deep ink behind an ink bezel. */
 
-@font-face {
-  font-family: 'Anton';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/design/fonts/anton-400-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
+/* 15 px rather than the shell's body step: a timing board reads as one, and
+   its density is part of what it is. The face stays the club's. */
+body { font: 15px/1.55 var(--body); }
 
-@font-face {
-  font-family: 'Anton';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/design/fonts/anton-400-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
+/* ── race page chrome ─────────────────────────────────────── */
 
-:root {
-  color-scheme: dark;
-  --ink: #08080c;
-  --paper: #101015;
-  --rule: #23232b;
-  --orange: #ff7a2f;
-  --chalk: rgba(255, 255, 255, 0.85);
-  --dim: rgba(255, 255, 255, 0.45);
-  --dnf: #ff522f;
-
-  --display: "Anton", "Oswald", "Liberation Sans Narrow", "Ubuntu Condensed",
-    "Arial Narrow", Impact, sans-serif;
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: var(--ink);
-  color: var(--chalk);
-  font: 15px/1.55 var(--sans);
-  -webkit-font-smoothing: antialiased;
-}
-
-#app { max-width: 1080px; margin: 0 auto; padding: 28px 20px 72px; }
-
-/* ── the wordmark ─────────────────────────────────────────────────────── */
-
-/* The Pollen microduck page's own title treatment, values taken from it:
-   a hard black drop, a cyan ghost left, a magenta ghost right, and a soft
-   glow — an offset-print plate that did not quite register. Its heading is
-   tilted -1.5deg; ours takes the same tilt. */
-.wordmark {
-  margin: 0;
-  font: 400 clamp(2.6rem, 9vw, 5rem) / 0.88 var(--display);
-  text-transform: uppercase;
-  letter-spacing: 0.005em;
-  transform: rotate(-1.5deg);
-  transform-origin: left center;
-}
-.wordmark span { display: block; }
-.wordmark__solid,
-.wordmark__arena {
-  text-shadow:
-    0.06em 0.06em 0 var(--ink),
-    -0.035em 0 0 var(--ghost-cyan),
-    0.035em 0 0 var(--ghost-pink),
-    0 4px 32px rgba(8, 8, 12, 0.55);
-}
-.wordmark__solid { color: var(--duck-yellow); }
-.wordmark__arena { color: var(--orange); }
-
-.wordmark--compact {
-  font-size: clamp(1.05rem, 2.6vw, 1.4rem);
-  line-height: 0.9;
-  /* Upright in the race-page header: a tilted mark beside a title and a back
-     link reads as a rendering fault rather than a device. */
-  transform: none;
-}
-.wordmark--compact .wordmark__solid,
-.wordmark--compact .wordmark__arena {
-  text-shadow:
-    0.045em 0.045em 0 var(--ink),
-    -0.022em 0 0 var(--ghost-cyan),
-    0.022em 0 0 var(--ghost-pink);
-}
-
-/* The mark from the corner of the Pollen page. */
-.duckhead {
-  width: clamp(72px, 11vw, 124px);
-  height: auto;
-  flex: none;
-  filter: drop-shadow(0 6px 18px rgba(8, 8, 12, 0.6));
-}
-
-/* ── race page chrome ─────────────────────────────────────────────────── */
-
-.racehead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 4px 0 18px;
-}
-.back { color: var(--dim); text-decoration: none; font-size: 0.9rem; }
-.back:hover { color: var(--orange); }
-.back::before { content: "\2039\00a0"; }
-
-/* The display face, as on the programme cards: this is the name of the race,
-   and it should read like one rather than like a form label. */
+/* The display face, as on the flyers: this is the name of the race, and it
+   should read like one rather than like a form label. */
 .racetitle {
   margin: 0 0 4px;
   font: 400 clamp(1.9rem, 4.4vw, 2.8rem) / 1.05 var(--display);
   text-transform: uppercase;
   letter-spacing: 0.01em;
-  color: var(--chalk);
-  /* The wordmark's offset at a fraction of its strength — enough to belong to
-     the same page, not so much that it competes with the mark above it. */
-  text-shadow:
-    0.03em 0.03em 0 var(--ink),
-    -0.014em 0 0 var(--ghost-cyan),
-    0.014em 0 0 var(--ghost-pink);
 }
-
-.racehead__mark { display: flex; align-items: center; gap: 10px; }
-.duckhead--small { width: clamp(30px, 4.5vw, 42px); }
 
 .facts { display: flex; gap: 26px; flex-wrap: wrap; margin: 14px 0 10px; }
 .facts div { display: flex; flex-direction: column; gap: 1px; }
-.facts dt { color: var(--dim); font-size: 0.72rem; }
+.facts dt {
+  color: var(--orange-inked);
+  font-family: var(--type-eyebrow-family);
+  font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size);
+  letter-spacing: var(--type-eyebrow-tracking);
+  text-transform: uppercase;
+}
 .facts dd { margin: 0; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
 
 /* Context, not a warning: quieter than the facts it sits under, so it reads
    as part of what the board is rather than a caution stapled onto it. */
-.racecaveat { color: var(--dim); font-size: 0.82rem; max-width: 60ch; margin: 0 0 18px; }
+.racecaveat { color: var(--ink-70); font-size: 0.82rem; max-width: 60ch; margin: 0 0 18px; }
 
 .racegrid { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 18px; align-items: start; }
 @media (max-width: 760px) { .racegrid { grid-template-columns: minmax(0, 1fr); } }
 
 /* ── the entry column ─────────────────────────────────────────────────── */
 
+/* A note taped to the wall, the way an event is on the front: cream in a 2 px
+   ink border, its own ink shadow, a strip of tape across the top and the
+   charter's smallest lean. The tape is components.css's .flyer-tape, put there
+   by renderEntryPanel — it is absolutely positioned, so it takes no slot in
+   this column and no gap with it. */
 .entry {
-  border: 1px solid var(--rule);
-  border-radius: 8px;
+  position: relative;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  background: var(--cream);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
+  rotate: var(--rotate-1-0);
 }
 .drop {
-  border: 1px dashed #3a3a46;
-  border-radius: 6px;
+  border: 2px dashed var(--ink);
   padding: 22px 14px;
   text-align: center;
   cursor: pointer;
   background: var(--paper);
 }
-.drop:hover, .drop:focus-visible { border-color: var(--orange); outline: none; }
-.drop--over { border-color: var(--orange); background: rgba(255, 122, 47, 0.07); }
+.drop:hover, .drop:focus-visible { border-color: var(--orange-inked); outline: none; }
+.drop--over { border-color: var(--orange-inked); background: rgba(255, 122, 47, 0.14); }
 .drop__line { margin: 0 0 4px; font-size: 0.92rem; overflow-wrap: anywhere; }
-.drop__or { margin: 0; color: var(--dim); font-size: 0.85rem; }
-.drop code { color: var(--dim); }
+.drop__or { margin: 0; color: var(--ink-70); font-size: 0.85rem; }
+.drop code { font-family: var(--mono); color: var(--sky-inked); }
 
 button.link {
   font: inherit;
-  color: var(--orange);
+  color: var(--orange-inked);
   background: none;
   border: 0;
   padding: 0;
@@ -179,181 +83,109 @@ button.link {
   text-decoration: underline;
 }
 
-.entry__name { display: flex; flex-direction: column; gap: 5px; color: var(--dim); font-size: 0.82rem; }
-.entry__name input {
-  font: inherit;
-  font-size: 0.92rem;
-  padding: 7px 9px;
-  color: var(--chalk);
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
+/* Every label in this column is an eyebrow, as the section heads are on the
+   front. The control under it resets the face, or it would inherit the
+   eyebrow's capitals and its tracking. */
+.entry__name, .livery legend, .entry__speed {
+  color: var(--orange-inked);
+  font-family: var(--type-eyebrow-family);
+  font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size);
+  letter-spacing: var(--type-eyebrow-tracking);
+  text-transform: uppercase;
 }
+
+.entry__name { display: flex; flex-direction: column; gap: 5px; }
+.entry__name input {
+  font: 400 0.92rem/1.3 var(--body);
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 7px 9px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+}
+.entry__name input:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+
+/* The cabinet's two buttons, side by side: the action in orange on the hot
+   shadow, the quieter one in yellow on the cold one. The offset is the
+   sticker's, not the card's, so the left button's shadow lands in the gap
+   rather than under the button beside it. */
 .entry__actions { display: flex; gap: 8px; }
 .entry__actions button {
   flex: 1;
-  font: 600 0.9rem/1 var(--sans);
+  font: 400 0.95rem/1.15 var(--display);
+  letter-spacing: var(--type-button-label-tracking);
+  text-transform: uppercase;
   padding: 9px 10px;
   cursor: pointer;
-  border-radius: 6px;
-  border: 0;
+  border: 2px solid var(--ink);
   background: var(--orange);
   color: var(--ink);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--magenta);
 }
 .entry__actions button.ghost {
-  background: transparent;
-  color: var(--chalk);
-  border: 1px solid var(--rule);
-  font-weight: 500;
+  background: var(--yellow);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--cyan);
 }
-.entry__actions button.ghost:hover { border-color: var(--orange); }
-.entry__actions button:disabled { opacity: 0.5; cursor: progress; }
-.entry__status { margin: 0; color: var(--dim); font-size: 0.85rem; min-height: 1.2em; }
-.entry__status.bad { color: var(--dnf); }
+.entry__actions button:active {
+  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
+  box-shadow: none;
+}
+.entry__actions button:disabled {
+  background: var(--warm-paper);
+  color: var(--ink-70);
+  box-shadow: none;
+  cursor: progress;
+}
+.entry__status { margin: 0; color: var(--ink-70); font-size: 0.85rem; min-height: 1.2em; }
+.entry__status.bad { color: var(--orange-inked); font-weight: 600; }
 
 /* The signed-out panel: a lead line and one link, nothing to fill with. */
-.entry__lead { margin: 0; font-size: 0.92rem; color: var(--chalk); }
+.entry__lead { margin: 0; font-size: 0.92rem; }
 .entry__signin {
   display: block;
   text-align: center;
-  font: 600 0.9rem/1 var(--sans);
+  font: 400 0.95rem/1.15 var(--display);
+  letter-spacing: var(--type-button-label-tracking);
+  text-transform: uppercase;
   padding: 9px 10px;
-  border-radius: 6px;
+  border: 2px solid var(--ink);
   background: var(--orange);
   color: var(--ink);
   text-decoration: none;
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--magenta);
 }
-.entry__signin:hover, .entry__signin:focus-visible { filter: brightness(1.08); }
+.entry__signin:active {
+  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
+  box-shadow: none;
+}
 
 /* Whose entry this is, once signed in. */
-.entry__user { margin: 0; font-size: 0.82rem; color: var(--dim); }
-.entry__user strong { color: var(--chalk); }
+.entry__user { margin: 0; font-size: 0.82rem; color: var(--ink-70); }
+.entry__user strong { color: var(--ink); }
 
 /* The no-hub state: Publish is disabled above this, so say why right here. */
 .entry__nohub {
   margin: 0;
-  font: 400 0.78rem/1.45 var(--display);
-  letter-spacing: 0.02em;
-  color: var(--dim);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ink-70);
 }
-
-.failed { color: var(--dnf); padding: 30px 0; }
 
 /* ── stage ────────────────────────────────────────────────────────────── */
 
+/* The CRT on its trolley: deep ink behind a 5 px ink bezel, and no offset
+   shadow. The club's own screen carries one, but at this size it reads as a
+   slab under the picture rather than as a lift off the wall. The shadow pair
+   keeps the places it earns — the entry note, and its two buttons. */
 .stage {
   position: relative;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
   overflow: hidden;
-  background: var(--paper);
+  background: var(--deep-ink);
+  border: 5px solid var(--ink);
 }
 .stage canvas { display: block; width: 100%; height: 44vh; min-height: 260px; }
-
-.controls { display: flex; gap: 8px; align-items: center; margin: 12px 0 26px; }
-.controls button {
-  font: 500 0.85rem/1 var(--sans);
-  padding: 7px 13px;
-  cursor: pointer;
-  color: var(--chalk);
-  background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-}
-.controls button:hover { border-color: #33333d; }
-.controls .hint { color: var(--dim); font-size: 0.88rem; }
-
-/* ── the board ────────────────────────────────────────────────────────── */
-
-table.board { width: 100%; border-collapse: collapse; margin-top: 22px; }
-
-table.board th {
-  text-align: left;
-  font-weight: 500;
-  font-size: 0.72rem;
-  color: var(--dim);
-  padding: 0 10px 7px;
-  border-bottom: 1px solid var(--rule);
-}
-table.board td { padding: 11px 10px; border-bottom: 1px solid var(--rule); }
-
-/* the lane tab: a filled bar for a duck on the stage, hollow otherwise */
-table.board .tab { width: 34px; padding-left: 0; padding-right: 4px; }
-table.board td.tab {
-  border-left: 3px solid transparent;
-  border-left-color: var(--lane, transparent);
-}
-table.board td.tab input { accent-color: var(--lane, var(--dim)); cursor: pointer; }
-
-table.board .rank { width: 3.5rem; color: var(--dim); font-variant-numeric: tabular-nums; }
-table.board .seeds { width: 5rem; text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
-/* The speed the sweep found for this policy. Deliberately quiet next to the
-   time: it explains the time, it is not competing with it. */
-table.board .speed {
-  width: 4.5rem;
-  text-align: right;
-  color: var(--cyan);
-  font-variant-numeric: tabular-nums;
-}
-table.board tr.dnf .speed { color: var(--dim); }
-
-/* the one loud thing on the page */
-table.board .time {
-  width: 8.5rem;
-  text-align: right;
-  font: 400 1.7rem/1 var(--display);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-}
-table.board tbody tr:first-child .time { color: var(--orange); }
-table.board tr.dnf .time { font-size: 1.05rem; color: var(--dnf); }
-table.board tr.dnf { color: var(--dim); }
-
-table.board tr.provisional td.tab { border-left-style: dashed; }
-table.board tr.provisional .time { color: var(--chalk); }
-.unpublished {
-  display: block;
-  color: var(--dim);
-  font-size: 0.72rem;
-  margin-top: 1px;
-}
-
-.empty { color: var(--dim); margin-top: 22px; }
-
-@media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition: none !important; }
-}
-
-/* ══ 90s pass ═══════════════════════════════════════════════════════════
- *
- * The page is an arcade attract screen and its high-score table. Devices are
- * borrowed from the two sources rather than from retro-in-general: the dot
- * grid, scanlines and vignette are the simulator's own CSS recipe, and the
- * second accent is the cyan already sitting in the simulator's VHS chroma
- * ghost. (A star-separated marquee ran across the top until the programme
- * became a grid of cards; it was removed rather than restyled — the cards are
- * the attract screen now.)
- *
- * Deliberately NOT borrowed: the simulator's BIOS boot sequence. It is its most
- * characteristic device and the most tempting, but a boot screen in front of a
- * tool you open fifty times a day is friction.
- */
-
-:root {
-  --cyan: #50c8ff;
-  /* Read off pollen-robotics.com/microduck, not matched by eye: its heading is
-     #FFD23F with a #2FF0E6 ghost left and a #FF2FA8 ghost right. Our --orange
-     was already its #FF7A2F exactly. */
-  --duck-yellow: #ffd23f;
-  --ghost-cyan: #2ff0e6;
-  --ghost-pink: #ff2fa8;
-}
-
-body {
-  /* The simulator's dot grid, at its exact values. */
-  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1.5px);
-  background-size: 21px 21px;
-}
 
 /* ── the stage's vignette ─────────────────────────────────────────────── */
 
@@ -367,70 +199,158 @@ body {
   background: radial-gradient(130% 100% at 50% 50%, transparent 72%, rgba(0, 0, 0, 0.26) 100%);
 }
 
-/* ── high-score table ─────────────────────────────────────────────────── */
+.controls { display: flex; gap: 8px; align-items: center; margin: 12px 0 26px; }
+.controls button {
+  font: 400 0.85rem/1 var(--display);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 8px 13px;
+  cursor: pointer;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: 3px 3px var(--shadow-blur) var(--ink);
+}
+.controls button:active { translate: 3px 3px; box-shadow: none; }
+.controls button[aria-pressed="true"] { background: var(--yellow); }
+.controls .hint { color: var(--ink-70); font-size: 0.88rem; }
+
+/* ── the board ────────────────────────────────────────────────────────── */
+
+/* The pegboard, hung by hand: warm paper inside a 3 px ink frame on its own
+   ink shadow, one rule between rows, taped up and leaning the other way from
+   the entry note beside it — the charter alternates the sign from one sibling
+   to the next. */
+.boardsheet {
+  position: relative;
+  margin-top: 30px;
+  rotate: calc(-1 * var(--rotate-0-75));
+}
+
+table.board {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--warm-paper);
+  border: 3px solid var(--ink);
+  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
+}
+
+table.board th {
+  text-align: left;
+  color: var(--orange-inked);
+  font-family: var(--type-eyebrow-family);
+  font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size);
+  letter-spacing: var(--type-eyebrow-tracking);
+  text-transform: uppercase;
+  padding: 10px 10px 8px;
+  border-bottom: 3px solid var(--ink);
+}
+table.board td { padding: 11px 10px; border-top: 2px solid var(--ink); }
+table.board tbody tr:first-child td { border-top: 0; }
+table.board tbody tr:hover { background: var(--cream); }
+
+/* the lane tab: a filled bar for a duck on the stage, hollow otherwise */
+table.board .tab { width: 34px; padding-left: 0; padding-right: 4px; }
+table.board td.tab {
+  border-left: 5px solid transparent;
+  border-left-color: var(--lane, transparent);
+}
+table.board td.tab input { accent-color: var(--lane, var(--ink)); cursor: pointer; }
 
 table.board .rank {
+  width: 3.5rem;
   font: 400 1.1rem/1 var(--display);
-  color: var(--dim);
+  color: var(--ink-70);
+  font-variant-numeric: tabular-nums;
 }
-table.board tbody tr:first-child .rank { color: var(--orange); }
-.unpublished { color: var(--cyan); }
-table.board tr.provisional td.tab { border-left-color: var(--cyan); }
+table.board tbody tr:first-child .rank { color: var(--orange-inked); }
+table.board .seeds { width: 5rem; text-align: right; color: var(--ink-70); font-variant-numeric: tabular-nums; }
+/* The speed the sweep found for this policy. Deliberately quiet next to the
+   time: it explains the time, it is not competing with it. */
+table.board .speed {
+  width: 4.5rem;
+  text-align: right;
+  color: var(--sky-inked);
+  font-variant-numeric: tabular-nums;
+}
+table.board tr.dnf .speed { color: var(--ink-70); }
 
-/* ── an empty race invites an entry ───────────────────────────────────── */
+/* the one loud thing on the page */
+table.board .time {
+  width: 8.5rem;
+  text-align: right;
+  font: 400 1.7rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+table.board tbody tr:first-child .time { color: var(--orange-inked); }
+table.board tr.dnf .time { font-size: 1.05rem; color: var(--orange-inked); }
+table.board tr.dnf { color: var(--ink-70); }
 
+table.board tr.provisional td.tab { border-left-style: dashed; border-left-color: var(--lavender-inked); }
+table.board tr.provisional .time { color: var(--ink); }
+.unpublished {
+  display: block;
+  color: var(--lavender-inked);
+  font-size: 0.72rem;
+  margin-top: 1px;
+}
+
+.empty { color: var(--ink-70); margin-top: 22px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
 
 /* ── which duck is which ──────────────────────────────────────────────── */
 
-/* The stage rings each duck in its tier's colour; this is the key to that,
-   and the table's rows carry the same three colours on their tab. */
+/* The stage rings each duck in its tier's colour; this is the key to that, and
+   the table's rows carry the same colours on their tab. The three are the
+   charter's — lavender for the run you just tested, Pollen orange for the one
+   you are chasing, paper for the rest — so the key can be inked on paper and
+   still name the same three rings. */
 .key {
   list-style: none;
   display: flex;
   gap: 18px;
   margin: 0 0 24px;
   padding: 0;
-  color: var(--dim);
+  color: var(--ink-70);
   font-size: 0.82rem;
 }
 .key li { display: flex; align-items: center; gap: 6px; }
 .key li::before {
   content: "";
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
+  width: 10px;
+  height: 10px;
   border: 2px solid currentColor;
 }
-.key--trial { color: var(--cyan); }
-.key--leader { color: var(--orange); }
-.key--ghost { color: #54545e; }
+.key--trial { color: var(--lavender-inked); }
+.key--leader { color: var(--orange-inked); }
+.key--ghost { color: var(--ink-70); }
 
 table.board tr.tier-leader td.tab { border-left-color: var(--orange); }
-table.board tr.tier-leader .policy-name { color: var(--chalk); }
-table.board tr.tier-ghost { color: var(--dim); }
-table.board tr.tier-ghost .time { color: var(--dim); }
+table.board tr.tier-ghost { color: var(--ink-70); }
+table.board tr.tier-ghost .time { color: var(--ink-70); }
 
 /* ── the colour picker ────────────────────────────────────────────────── */
 
 .livery { border: 0; margin: 0; padding: 0; }
-.livery legend { color: var(--dim); font-size: 0.82rem; padding: 0 0 5px; }
+.livery legend { padding: 0 0 5px; }
 .livery__swatches { display: flex; gap: 8px; }
 
+/* Square, because radius 0 forbids a round chip. */
 .swatch {
   width: 30px;
   height: 30px;
   padding: 0;
   cursor: pointer;
-  border-radius: 50%;
-  border: 2px solid var(--rule);
+  border: 2px solid var(--ink);
   background: var(--swatch);
 }
-.swatch:hover { border-color: var(--dim); }
-.swatch[aria-pressed="true"] {
-  border-color: var(--orange);
-  box-shadow: 0 0 0 2px var(--ink), 0 0 0 3px var(--orange);
-}
-.swatch:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.swatch[aria-pressed="true"] { outline: 3px solid var(--orange-inked); outline-offset: 2px; }
 
 /* ── stage brightness ─────────────────────────────────────────────────── */
 
@@ -441,36 +361,28 @@ table.board tr.tier-ghost .time { color: var(--dim); }
   align-items: center;
   gap: 7px;
   margin-left: auto;
-  color: var(--dim);
+  color: var(--ink-70);
   font-size: 0.8rem;
 }
 .bright input[type="range"] { width: 96px; accent-color: var(--orange); }
 
 /* Trial speed picker. Sits with the entry controls, and says plainly that it
    does not affect a publish — otherwise it reads as a way to game the board. */
-.entry__speed {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font: 500 0.72rem/1 var(--display);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--dim);
-}
+.entry__speed { display: flex; flex-direction: column; gap: 6px; }
 .entry__speed select {
   padding: 9px 10px;
-  background: var(--ink);
-  border: 1px solid var(--rule);
-  color: var(--chalk);
-  font: 400 0.9rem/1.2 var(--display);
-  letter-spacing: 0.02em;
-}
-.entry__speed select:focus-visible { outline: 2px solid var(--orange); outline-offset: 1px; }
-.entry__hint {
-  font: 400 0.68rem/1.3 var(--display);
-  letter-spacing: 0.06em;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  font: 400 0.9rem/1.2 var(--body);
+  letter-spacing: 0;
   text-transform: none;
-  color: var(--dim);
+}
+.entry__hint {
+  font: 400 0.72rem/1.4 var(--body);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-70);
 }
 
 /* Download column. Quiet by default and orange on hover: it is an offer, not
@@ -484,29 +396,20 @@ table.board .grab a {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 3px;
-  color: var(--dim);
+  color: var(--ink-70);
   text-decoration: none;
 }
 table.board .grab a:hover,
-table.board .grab a:focus-visible {
-  color: var(--orange);
-  background: rgba(255, 122, 47, 0.12);
-}
-table.board .grab a:focus-visible { outline: 2px solid var(--orange); outline-offset: 1px; }
+table.board .grab a:focus-visible { color: var(--ink); background: var(--yellow); }
 
 /* What Publish costs you, said next to the button rather than buried. */
 .entry__consent {
   margin: 2px 0 0;
-  font: 400 0.7rem/1.45 var(--display);
-  letter-spacing: 0.03em;
-  color: var(--dim);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--ink-70);
 }
-.entry__consent code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.95em;
-  color: var(--chalk);
-}
+.entry__consent code { font-family: var(--mono); color: var(--sky-inked); }
 
 /* Take-off-the-board control. Only ever rendered on your own rows.
    It WAS transparent until the row was hovered, on the theory that a rare
@@ -523,44 +426,48 @@ table.board .withdraw {
   height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 3px;
   background: none;
-  /* --dim, the same weight as the download icon beside it. --rule (#23232b on
-     a #101015 ground) was the first attempt and is barely distinguishable from
-     transparent — which is the mistake this comment exists to stop repeating. */
-  color: var(--dim);
+  color: var(--ink-70);
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease;
 }
-table.board tr:hover .withdraw { color: var(--chalk); }
+table.board tr:hover .withdraw { color: var(--ink); }
 table.board .withdraw:hover,
-table.board .withdraw:focus-visible { color: var(--dnf); background: rgba(255, 82, 47, 0.12); }
-table.board .withdraw:focus-visible { outline: 2px solid var(--dnf); outline-offset: 1px; }
+table.board .withdraw:focus-visible { color: var(--paper); background: var(--magenta); }
 
 /* ── which runs the board shows ───────────────────────────────────────── */
 
-.boardtop { display: flex; justify-content: flex-end; margin: 18px 0 6px; }
-.modes { display: flex; gap: 2px; }
+.boardtop { display: flex; justify-content: flex-end; margin: 18px 0 8px; }
+.modes { display: flex; gap: 10px; }
+
+/* Three stickers pressed on by hand, each its own colour and its own lean.
+   They were a segmented control; joined, square and grey they were the one
+   thing left on the page that still belonged to the old board. */
 .modes button {
-  padding: 5px 13px;
-  border: 1px solid var(--rule);
-  background: none;
-  color: var(--dim);
-  font: 500 0.72rem/1 var(--display);
+  padding: 7px 15px;
+  border: 2px solid var(--ink);
+  background: var(--yellow);
+  color: var(--ink);
+  font: 400 0.8rem/1 var(--display);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+  rotate: calc(-1 * var(--rotate-1-0));
 }
-.modes button + button { border-left: 0; }
-.modes button:hover { color: var(--chalk); }
+.modes button:nth-child(2) { background: var(--sky); rotate: var(--rotate-1-5); }
+.modes button:nth-child(3) { background: var(--cream); }
 /* aria-pressed carries the state, so the styling reads from it rather than
-   from a class that could drift out of step with what a screen reader hears. */
+   from a class that could drift out of step with what a screen reader hears.
+   The one that is on takes the action's orange and the hot shadow with it. */
 .modes button[aria-pressed="true"] {
-  color: var(--ink);
   background: var(--orange);
-  border-color: var(--orange);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--magenta);
 }
-.modes button:focus-visible { outline: 2px solid var(--orange); outline-offset: 1px; }
+.modes button:active {
+  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
+  box-shadow: none;
+}
 
 /* The link to a policy's training environment. Same weight as the download
    glyph beside it: both are offers, neither is the point of the row. */
@@ -571,9 +478,23 @@ table.board .env a {
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 3px;
-  color: var(--dim);
+  color: var(--ink-70);
   text-decoration: none;
 }
 table.board .env a:hover,
-table.board .env a:focus-visible { color: var(--cyan); background: rgba(80, 200, 255, 0.12); }
+table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
+
+/* The focus ring is cyan, on everything that takes focus — the club's rule. */
+.drop:focus-visible,
+.swatch:focus-visible,
+.controls button:focus-visible,
+.modes button:focus-visible,
+.entry__actions button:focus-visible,
+.entry__signin:focus-visible,
+.entry__speed select:focus-visible,
+table.board .grab a:focus-visible,
+table.board .env a:focus-visible,
+table.board .withdraw:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 2px;
+}

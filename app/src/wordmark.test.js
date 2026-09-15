@@ -13,11 +13,6 @@ describe("the wordmark", () => {
   it("is an h1, because it is the page's heading and not decoration", () => {
     expect(wordmark().tagName).toBe("H1");
   });
-
-  it("has a compact form for the race page's header", () => {
-    expect(wordmark({ compact: true }).className).toContain("wordmark--compact");
-    expect(wordmark().className).not.toContain("wordmark--compact");
-  });
 });
 
 describe("the duck head", () => {

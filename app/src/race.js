@@ -14,11 +14,10 @@ import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { MAX, MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
 import { panelState, signInHref } from "./session.js";
+import { signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
 import { modeIsUseful, visibleRows } from "./views.js";
-import { menuHref } from "./router.js";
 import { createViewer } from "./viewer.js";
-import { duckHead, wordmark } from "./wordmark.js";
 
 /**
  * The entry column: a sign-in prompt, or the racing/publishing controls.
@@ -46,6 +45,7 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
     // has; the cookies are set SameSite=None so they survive that third-party
     // context (see arena/web/routes_auth.py).
     container.innerHTML = `
+      <span class="flyer-tape"></span>
       <p class="entry__lead">Sign in to race a policy.</p>
       <a class="entry__signin" href="${signInHref()}">
         Sign in with Hugging Face
@@ -59,6 +59,7 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
   }
 
   container.innerHTML = `
+    <span class="flyer-tape"></span>
     <p class="entry__user">Racing as <strong id="entry-user"></strong></p>
     <div id="dropzone"></div>
     <label class="entry__name">Name
@@ -233,28 +234,15 @@ export function renderEventFacts(root, event) {
   return caveat;
 }
 
-/**
- * The header's mark: the duck head, then the compact wordmark.
- *
- * Exported because renderRace builds a WebGL viewer and cannot run in the test
- * suite — without this the only way to "test" the header is to rebuild it in
- * the test, which asserts nothing about the page.
- */
-export function headerMark() {
-  const mark = document.createElement("div");
-  mark.className = "racehead__mark";
-  const head = duckHead();
-  head.classList.add("duckhead--small");
-  mark.append(head, wordmark({ compact: true }));
-  return mark;
-}
-
 export async function renderRace(root, { event, state }) {
-  root.innerHTML = `
-    <header class="racehead">
-      <a class="back" href="${menuHref}">All races</a>
-      <span id="racehead-mark"></span>
-    </header>
+  // Asked for first: the strip over the door carries this player's chip, and
+  // the board below needs to know whose rows are their own.
+  const me = await getMe();
+  root.replaceChildren(signage(me));
+
+  const hall = document.createElement("main");
+  hall.className = "hall";
+  hall.innerHTML = `
     <h2 class="racetitle">${event.title}</h2>
     <dl class="facts" id="facts"></dl>
     <div class="racegrid">
@@ -285,9 +273,12 @@ export async function renderRace(root, { event, state }) {
         <button data-mode="all" aria-pressed="false">All</button>
       </div>
     </div>
-    <div id="board"></div>
+    <div class="boardsheet">
+      <span class="flyer-tape"></span>
+      <div id="board"></div>
+    </div>
   `;
-  document.querySelector("#racehead-mark").replaceWith(headerMark());
+  root.append(hall);
 
   renderEventFacts(root, event);
 
@@ -308,11 +299,9 @@ export async function renderRace(root, { event, state }) {
   brightness.value = String(viewer.brightness);
   brightness.addEventListener("input", () => viewer.setBrightness(brightness.value));
 
-  // Declared here, above every handler that closes over them, and assigned
-  // later once getMe() resolves. Further down they worked only because a click
-  // always happens after that line — a handler moved above it would fail with a
-  // temporal-dead-zone error that reads like nothing.
-  let me = null;
+  // Declared above every handler that closes over it. Further down it worked
+  // only because a click always happens after that line — a handler moved above
+  // it would fail with a temporal-dead-zone error that reads like nothing.
   let mode = "top";
 
   const modeButtons = [...root.querySelectorAll(".modes button")];
@@ -412,7 +401,6 @@ export async function renderRace(root, { event, state }) {
     await race(selectedRunIds(board), tiers);
   }
 
-  me = await getMe();
   renderEntryPanel(entry, me, {
     event,
     onLiveryChange: (livery) => {

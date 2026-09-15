@@ -1,8 +1,10 @@
-// The strip over the door: the arena's name on the left, the player on the
-// right. Shared by the home and player pages; the race pages keep their own.
+// The strip over the door: the arena's mark on the left, the player on the
+// right. Every page wears it, races included — the mark is how you get back to
+// the front, so a race needs no back link of its own.
 
 import { menuHref, playerHref } from "./router.js";
 import { signInHref } from "./session.js";
+import { duckHead, wordmark } from "./wordmark.js";
 
 /**
  * The Hub's picture for a handle, or a duck.
@@ -54,17 +56,15 @@ export function signage(me) {
 
   const brand = document.createElement("div");
   brand.className = "club-brand";
-  const duck = document.createElement("img");
-  duck.className = "club-duck";
-  duck.src = "/duck-head-mark.webp";
-  duck.alt = "";
-  const title = document.createElement("h1");
-  title.className = "signage-title";
+  // The link goes inside the heading rather than around it: the whole mark is
+  // the way home, and an <a> wrapping an <h1> is not a heading a screen reader
+  // will announce as one.
+  const title = wordmark();
   const home = document.createElement("a");
   home.href = menuHref;
-  home.textContent = "Microduck Arena";
+  home.append(...title.childNodes);
   title.append(home);
-  brand.append(duck, title);
+  brand.append(duckHead(), title);
 
   const nav = document.createElement("nav");
   nav.className = "site-nav";

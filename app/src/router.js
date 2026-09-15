@@ -19,9 +19,9 @@ export const playerHref = (user) => `#/p/${user}`;
 export const menuHref = "#/";
 
 /**
- * Which stylesheet set a view wears. The race pages keep their dark trackside
- * board; the home and player pages are the club, in Duck Jam's paper and ink.
- * The two sets define `--ink` and `--paper` with opposite meanings, so only
+ * Which placement sheet a view wears. Both are the club, in Duck Jam's paper
+ * and ink; they differ only in what they place — a race page has a stage, a
+ * board and an entry column, and owns its own body and column for them. Only
  * one is ever enabled.
  */
 export const themeFor = (view) => (view === "race" ? "race" : "club");

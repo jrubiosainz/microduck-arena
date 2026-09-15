@@ -45,12 +45,19 @@ describe("chip", () => {
 });
 
 describe("signage", () => {
-  it("names the arena, links home, and seats the chip top-right", () => {
+  it("carries the mark, links home from it, and seats the chip top-right", () => {
     const el = signage({ signed_in: true, user: "ann", oauth_enabled: false });
     expect(el.matches("header.signage")).toBe(true);
-    expect(el.querySelector("h1.signage-title a").getAttribute("href")).toBe("#/");
-    expect(el.querySelector("h1").textContent).toBe("Microduck Arena");
-    expect(el.querySelector(".club-brand img.club-duck")).not.toBeNull();
+    expect(el.querySelector(".club-brand img.duckhead")).not.toBeNull();
     expect(el.querySelector("nav.site-nav .profile-chip")).not.toBeNull();
+  });
+
+  it("puts the link inside the heading, so the heading stays one", () => {
+    // An <a> wrapped AROUND the <h1> is not announced as a heading.
+    const el = signage({ signed_in: false, user: null, oauth_enabled: true });
+    const home = el.querySelector("h1.wordmark > a");
+    expect(home.getAttribute("href")).toBe("#/");
+    expect(home.querySelector(".wordmark__solid").textContent).toBe("Microduck");
+    expect(home.querySelector(".wordmark__arena").textContent).toBe("Arena");
   });
 });

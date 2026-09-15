@@ -1,14 +1,14 @@
-// The title, in the Pollen microduck page's own treatment.
+// The site's mark, in the Pollen microduck page's own treatment.
 //
-// MICRODUCK in its yellow, ARENA in its orange, both carrying the page's
-// chromatic offset: a hard black drop shadow with a cyan ghost to the left and
-// a magenta one to the right — an offset-print plate that did not quite line
-// up. The values are the page's, read from it rather than guessed: #FFD23F,
-// #FF7A2F, #2FF0E6, #FF2FA8, and the -1.5deg tilt it gives its own heading.
+// MICRODUCK in its yellow, ARENA in its orange, stacked. The values are the
+// page's, read from it rather than guessed, and they are the charter's too:
+// #FFD23F and #FF7A2F. The chromatic offset that page puts behind it is not
+// here — the mark lives in the strip over the door, beside a handle and a
+// picture, where two ghosts read as a printing fault rather than as a device.
 
-export function wordmark({ compact = false } = {}) {
+export function wordmark() {
   const el = document.createElement("h1");
-  el.className = compact ? "wordmark wordmark--compact" : "wordmark";
+  el.className = "wordmark";
   const solid = document.createElement("span");
   solid.className = "wordmark__solid";
   solid.textContent = "Microduck";

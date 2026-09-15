@@ -181,9 +181,10 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     scene.environmentIntensity = ENV_INTENSITY * brightness;
     return brightness;
   }
-  // Matches the page's --paper so the canvas reads as one surface with it.
-  scene.background = new Color(0x101015);
-  scene.fog = new Fog(0x101015, 4.5, 16);
+  // --deep-ink: the stage is a screen, and the club draws every screen — the
+  // CRT, the stills on the flyers — on deep ink.
+  scene.background = new Color(0x08080c);
+  scene.fog = new Fog(0x08080c, 4.5, 16);
 
   // Four lights, because ACES tone mapping pulls mid-tones DOWN and the first
   // attempt at this left the robots as dark blobs. Ambient sets the floor, the

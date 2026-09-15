@@ -1,0 +1,96 @@
+/* The shell every page wears: the strip over the door, and the column under it.
+ *
+ * Both views are the club now, so what used to be the home page's own chrome is
+ * the site's. This sheet loads on every page, above whichever placement sheet
+ * the view wears — club.css for the front and a player, race.css for a race —
+ * and it is what keeps the two from each owning a copy of the same header.
+ * Every colour, size and face is a token from design/tokens.css. */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  overflow-x: hidden;
+}
+
+/* The strip bleeds to the window; everything under it sits in this column. */
+.hall {
+  position: relative;
+  max-width: var(--space-content-column);
+  margin: 0 auto;
+  padding: var(--space-gutter-max) var(--space-gutter-min);
+  flex: 1;
+  width: 100%;
+}
+
+.failed { padding: var(--space-gutter-max); color: var(--orange-inked); }
+
+/* ── The strip over the door: the mark left, the player right ──────────── */
+
+.signage { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.club-brand { display: flex; align-items: center; gap: 12px; }
+.site-nav { display: flex; align-items: center; gap: var(--space-gutter-min); }
+
+/* The mark is the Pollen microduck page's own: the duck head, then MICRODUCK in
+   its yellow and ARENA in its orange, stacked. No chromatic aberration on it —
+   the treatment belongs on a cover, and here the mark shares a strip with a
+   handle and a picture, where the two ghosts read as a printing fault. */
+.wordmark {
+  margin: 0;
+  font: 400 clamp(1.05rem, 2.6vw, 1.4rem) / 0.9 var(--display);
+  text-transform: uppercase;
+  letter-spacing: 0.005em;
+}
+.wordmark span { display: block; }
+.wordmark a { color: inherit; text-decoration: none; }
+.wordmark__solid { color: var(--yellow); }
+.wordmark__arena { color: var(--orange); }
+
+.duckhead { width: 46px; height: auto; flex: none; }
+
+.profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 14px 4px 4px;
+  border: 2px solid var(--paper);
+  background: var(--ink);
+  color: var(--paper);
+  text-decoration: none;
+  font-family: var(--type-sticker-family);
+  font-size: 1rem;
+  letter-spacing: var(--type-sticker-tracking);
+  text-transform: uppercase;
+}
+.profile-chip:hover { background: var(--deep-ink); }
+.wordmark a:focus-visible, .profile-chip:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+/* The Hub's picture when it has one, a duck on lavender when it does not. */
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  background: var(--lavender);
+  font-size: 22px;
+  line-height: 1;
+}
+.avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+@media (max-width: 640px) {
+  .signage { padding: 14px var(--space-gutter-min); gap: var(--space-gutter-min); }
+  .duckhead { width: 34px; }
+}

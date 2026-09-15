@@ -15,9 +15,9 @@ async function events() {
 }
 
 /**
- * Enable one theme's stylesheets and disable the other's. The two sets define
- * `--ink` and `--paper` with opposite meanings, so they never load together;
- * flipping `disabled` is instant and keeps both cached.
+ * Enable one view's placement sheet and disable the other's. Both dress the
+ * same tokens, but each owns the page's own body and column, so they never
+ * load together; flipping `disabled` is instant and keeps both cached.
  */
 function dress(theme) {
   for (const link of document.querySelectorAll("link[data-theme]")) {

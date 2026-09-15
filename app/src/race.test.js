@@ -6,7 +6,7 @@
 // what would have caught that.
 
 import { describe, expect, it, vi } from "vitest";
-import { renderEntryPanel, renderEventFacts, headerMark } from "./race.js";
+import { renderEntryPanel, renderEventFacts } from "./race.js";
 
 const event = {
   seeds: 5,
@@ -232,23 +232,6 @@ describe("the speed picker applies to publishing too", () => {
       { event, onTry: vi.fn(), onPublish: vi.fn() },
     );
     expect(container.querySelector("#speed").value).toBe("");
-  });
-});
-
-describe("the race page header", () => {
-  it("puts the duck head to the LEFT of the wordmark", () => {
-    // Exercises the page's own builder, not a copy of it rebuilt here — a test
-    // that reassembles the markup would pass with race.js doing nothing.
-    const mark = headerMark();
-    expect(mark.children[0].tagName).toBe("IMG");
-    expect(mark.children[0].getAttribute("src")).toBe("/duck-head-mark.webp");
-    expect(mark.children[1].className).toContain("wordmark");
-  });
-
-  it("uses the small head and the compact mark, not the menu's full size", () => {
-    const mark = headerMark();
-    expect(mark.children[0].className).toContain("duckhead--small");
-    expect(mark.children[1].className).toContain("wordmark--compact");
   });
 });
 
