@@ -125,3 +125,19 @@ def test_a_tied_total_goes_to_whoever_published_first_then_by_name():
 
 def test_standings_of_nothing_is_empty():
     assert standings([]) == []
+
+
+def test_beating_your_best_on_seeds_alone_pays_own_best():
+    flaky = make_record(user="alice", score=20.0, seeds_finished=3,
+                        submitted_at="2026-09-03T09:00:00Z")
+    steady = make_record(user="alice", score=20.0, seeds_finished=5,
+                         submitted_at="2026-09-03T10:00:00Z")
+    own = acts(receipts([flaky, steady], frozenset()), "own_best")
+    assert [r.run_id for r in own] == [steady.run_id]
+
+
+def test_withdrawing_the_first_run_moves_first_event_to_the_next():
+    first = make_record(user="alice", submitted_at="2026-09-03T09:00:00Z")
+    second = make_record(user="alice", submitted_at="2026-09-03T10:00:00Z")
+    firsts = acts(receipts([first, second], frozenset({first.run_id})), "first_event")
+    assert [r.run_id for r in firsts] == [second.run_id]

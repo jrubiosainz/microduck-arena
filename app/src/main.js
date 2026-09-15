@@ -48,7 +48,10 @@ async function show() {
       await renderHome(root);
     }
   } catch (error) {
-    root.innerHTML = `<p class="failed">Could not reach the API: ${error.message}</p>`;
+    const failed = document.createElement("p");
+    failed.className = "failed";
+    failed.textContent = `Could not reach the API: ${error.message}`;
+    root.replaceChildren(failed);
   }
 }
 
