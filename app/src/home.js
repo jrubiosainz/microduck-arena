@@ -103,7 +103,7 @@ export async function renderHome(root) {
     el(
       "p",
       "lede",
-      "Train your duck, compete, repeat.",
+      "Train, submit, compete, repeat.",
     ),
   );
   hall.append(door);
