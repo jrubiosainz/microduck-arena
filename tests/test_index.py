@@ -1,5 +1,5 @@
 from arena.constants import RUNNER_VERSION
-from arena.index import by_policy, by_user, leaderboard
+from arena.index import by_policy, by_user, leaderboard, standing
 from tests.test_store import make_record
 
 
@@ -132,3 +132,26 @@ def test_the_default_entrant_is_the_public_rule():
         ]
     )
     assert len(rows) == 1
+
+
+def test_standing_places_a_run_among_everyone_elses_best():
+    field = [make_record(run_id=f"R{i}", user=f"u{i}", score=10.0 + i) for i in range(10)]
+    mine = make_record(run_id="ME", user="me", score=14.5)  # between R4 and R5
+    s = standing([*field, mine], "ME")
+    assert (s.rank, s.on_board) == (6, True)
+    # Two rows above, the run, five below — with their ranks on the whole board.
+    assert [row.rank for row in s.board] == [4, 5, 6, 7, 8, 9, 10, 11]
+    assert [row.record.run_id for row in s.board][:3] == ["R3", "R4", "ME"]
+
+
+def test_standing_of_a_run_beaten_by_your_own_better_one():
+    """Off the board, since the board keeps one row per person — but still placed
+    against the others, with the author's own better row taken out of the way."""
+    runs = [
+        make_record(run_id="BEST", user="me", score=10.0),
+        make_record(run_id="WORSE", user="me", score=12.0),
+        make_record(run_id="B", user="bob", score=11.0),
+    ]
+    s = standing(runs, "WORSE")
+    assert (s.rank, s.on_board) == (2, False)
+    assert [row.record.run_id for row in s.board] == ["B", "WORSE"]

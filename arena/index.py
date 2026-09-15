@@ -69,3 +69,40 @@ def leaderboard(
 
     ranked = sorted(best.values(), key=sort_key)
     return [Row(rank=i + 1, record=r) for i, r in enumerate(ranked)]
+
+
+@dataclass(frozen=True)
+class Standing:
+    rank: int
+    on_board: bool
+    board: list[Row]
+
+
+def standing(
+    records,
+    run_id: str,
+    withdrawn: frozenset[str] = frozenset(),
+    runner_version: int = RUNNER_VERSION,
+    above: int = 2,
+    below: int = 5,
+) -> Standing:
+    """Where ONE run stands against everyone else's best, on the board or not.
+
+    The board keeps one row per person, so a run beaten by its author's own
+    better run, a withdrawn run, or one from an older runner has no row — and
+    still deserves an answer to "where would this have placed". The author's
+    own row is taken out and the run put in at its sorted place; `rank` is that
+    place, and `board` is the window around it: `above` rows over it, up to
+    `below` under it, every rank counted on the whole field.
+    """
+    record = next(r for r in records if r.run_id == run_id)
+    rows = leaderboard(records, runner_version, entrant=by_user, withdrawn=withdrawn)
+    others = [row.record for row in rows if row.record.user != record.user]
+    field = sorted([*others, record], key=sort_key)
+    at = field.index(record)
+    ranked = [Row(rank=i + 1, record=r) for i, r in enumerate(field)]
+    return Standing(
+        rank=at + 1,
+        on_board=any(row.record.run_id == run_id for row in rows),
+        board=ranked[max(0, at - above) : at + 1 + below],
+    )
