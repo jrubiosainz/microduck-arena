@@ -1,5 +1,7 @@
 from arena.constants import RUNNER_VERSION
-from arena.points import RUNS_PER_DAY, SCHEDULE, counting, receipts
+from arena.points import (
+    RUNS_PER_DAY, SCHEDULE, Card, boards_by_user, counting, receipts, standings,
+)
 from tests.test_store import make_record
 
 
@@ -62,3 +64,64 @@ def test_withdrawn_and_old_runner_runs_pay_nothing():
 def test_receipts_carry_the_runs_own_timestamp():
     run = make_record(user="alice", submitted_at="2026-09-03T09:30:00Z")
     assert {r.at for r in receipts([run], frozenset())} == {"2026-09-03T09:30:00Z"}
+
+
+def test_podium_pays_the_top_three_by_user_and_skips_dnf_rows():
+    first = make_record(user="ann", score=20.0, submitted_at="2026-09-03T09:00:00Z")
+    first_again = make_record(user="ann", score=21.0, policy_name="v2")
+    second = make_record(user="bob", score=22.0)
+    third = make_record(user="cid", score=23.0)
+    fourth = make_record(user="dee", score=24.0)
+    dnf = make_record(user="eve", score=50.0, seeds_finished=0)
+    podium = acts(receipts([dnf, fourth, third, first_again, second, first], frozenset()), "podium")
+    assert [(r.user, r.points, r.run_id) for r in podium] == [
+        ("ann", 250, first.run_id),
+        ("bob", 150, second.run_id),
+        ("cid", 100, third.run_id),
+    ]
+
+
+def test_a_lone_dnf_is_not_a_podium():
+    dnf = make_record(user="eve", score=50.0, seeds_finished=0)
+    assert acts(receipts([dnf], frozenset()), "podium") == []
+
+
+def test_podium_is_per_event():
+    sprint = make_record(user="ann", event_id="sprint-2m")
+    hill = make_record(user="ann", event_id="hill-climb-1m5")
+    podium = acts(receipts([sprint, hill], frozenset()), "podium")
+    assert sorted(r.event_id for r in podium) == ["hill-climb-1m5", "sprint-2m"]
+    assert all(r.points == 250 for r in podium)
+
+
+def test_boards_by_user_collapse_a_players_policies_to_one_row():
+    v1 = make_record(user="ann", policy_name="v1", score=25.0)
+    v2 = make_record(user="ann", policy_name="v2", score=20.0)
+    bob = make_record(user="bob", score=22.0)
+    rows = boards_by_user([v1, v2, bob], frozenset())["sprint-2m"]
+    assert [(r.rank, r.record.user, r.record.run_id) for r in rows] == [
+        (1, "ann", v2.run_id),
+        (2, "bob", bob.run_id),
+    ]
+
+
+def test_standings_sum_receipts_and_rank_by_total():
+    ann = make_record(user="ann", score=20.0, submitted_at="2026-09-03T09:00:00Z")
+    bob = make_record(user="bob", score=22.0, submitted_at="2026-09-03T10:00:00Z")
+    cards = standings(receipts([ann, bob], frozenset()))
+    # ann: first_event 100 + run 10 + podium 250; bob: 100 + 10 + 150.
+    assert cards == [Card(1, "ann", 360), Card(2, "bob", 260)]
+
+
+def test_a_tied_total_goes_to_whoever_published_first_then_by_name():
+    later = make_record(user="zed", event_id="sprint-2m", submitted_at="2026-09-03T10:00:00Z")
+    earlier = make_record(user="amy", event_id="hill-climb-1m5", submitted_at="2026-09-03T09:00:00Z")
+    same_time = make_record(user="bea", event_id="roller-sprint-2m",
+                            submitted_at="2026-09-03T09:00:00Z")
+    cards = standings(receipts([later, earlier, same_time], frozenset()))
+    assert [c.user for c in cards] == ["amy", "bea", "zed"]
+    assert [c.rank for c in cards] == [1, 2, 3]
+
+
+def test_standings_of_nothing_is_empty():
+    assert standings([]) == []

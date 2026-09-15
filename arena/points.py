@@ -10,11 +10,11 @@ the ladder from the same records the board is built from, with the same
 filter, so a run either counts everywhere or nowhere.
 """
 
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 from .constants import RUNNER_VERSION
-from .index import sort_key
+from .index import by_user, leaderboard, sort_key
 from .store import RunRecord
 
 # Duck Jam's own numbers for the acts that transfer to an arena that never
@@ -31,6 +31,30 @@ class Receipt:
     event_id: str
     run_id: str
     at: str
+
+
+@dataclass(frozen=True)
+class Card:
+    rank: int
+    user: str
+    points: int
+
+
+def boards_by_user(
+    records, withdrawn: frozenset[str], runner_version: int = RUNNER_VERSION
+) -> dict:
+    """Each event's board with one row per PERSON, whatever the local board shows.
+
+    The podium is a people's prize, so a player with three policies in the top
+    three takes one place, not three.
+    """
+    by_event: dict[str, list[RunRecord]] = defaultdict(list)
+    for run in counting(records, withdrawn, runner_version):
+        by_event[run.event_id].append(run)
+    return {
+        event_id: leaderboard(runs, runner_version, entrant=by_user, withdrawn=withdrawn)
+        for event_id, runs in by_event.items()
+    }
 
 
 def counting(
@@ -72,4 +96,19 @@ def receipts(
             best[key] = run
         elif previous is None:
             best[key] = run
+    for rows in boards_by_user(runs, withdrawn, runner_version).values():
+        finishers = [row for row in rows if row.record.seeds_finished > 0]
+        for row, points in zip(finishers, SCHEDULE["podium"]):
+            out.append(_receipt(row.record, "podium", points))
     return out
+
+
+def standings(receipts: list[Receipt]) -> list[Card]:
+    """One card per player: the total, ranked. Ties go to who published first."""
+    points: Counter = Counter()
+    since: dict[str, str] = {}
+    for receipt in receipts:
+        points[receipt.user] += receipt.points
+        since[receipt.user] = min(since.get(receipt.user, receipt.at), receipt.at)
+    order = sorted(points, key=lambda user: (-points[user], since[user], user))
+    return [Card(rank, user, points[user]) for rank, user in enumerate(order, 1)]
