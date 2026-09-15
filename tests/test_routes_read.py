@@ -388,19 +388,25 @@ def test_a_voted_board_ranks_on_votes_and_still_reports_the_time(client):
 
 def test_a_vote_cast_days_ago_but_still_inside_the_window_counts(client):
     """The seam where the two window stages meet: `since()` fetches whole DAY
-    shards, `window()` then trims to the exact instant. This ballot lands on
-    the single calendar day the window's exact edge falls on — the one day a
-    first_day off-by-one would drop from the shard fetch entirely — but late
-    enough in that day to sit inside the true instant cutoff. It has to
-    survive both stages to reach the board, not just one."""
-    from datetime import UTC, datetime, time, timedelta
+    shards, `window()` then trims to the exact instant. This ballot is one
+    second inside the window's exact edge — the same calendar day the edge
+    falls on in the common case, the one day a first_day off-by-one would
+    drop from the shard fetch entirely. It has to survive both stages to
+    reach the board, not just one.
+
+    Anchored to the edge instant, not a clock face: a fixed 23:59:59 would
+    coincide with the server's own edge string exactly once a day (whenever
+    `now`'s time-of-day floors to that same second), making this assertion
+    fail deterministically rather than prove anything.
+    """
+    from datetime import UTC, datetime, timedelta
 
     api, app = client
     ann = record_run(app, user="ann", event_id="swag-contest")
     bob = record_run(app, user="bob", event_id="swag-contest")
-    edge = datetime.now(UTC) - timedelta(days=7)
-    stamp = datetime.combine(edge.date(), time(23, 59, 59), tzinfo=UTC)
-    cast(app, bob.run_id, [ann.run_id, bob.run_id], cast_at=stamp.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    edge = (datetime.now(UTC) - timedelta(days=7)).replace(microsecond=0)
+    stamp = (edge + timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cast(app, bob.run_id, [ann.run_id, bob.run_id], cast_at=stamp)
 
     rows = api.get("/api/events/swag-contest/leaderboard").json()["rows"]
     by_user = {r["user"]: r["votes"] for r in rows}
@@ -408,18 +414,26 @@ def test_a_vote_cast_days_ago_but_still_inside_the_window_counts(client):
 
 
 def test_a_vote_that_fell_out_of_the_window_no_longer_counts(client):
-    """Dated on the exact same calendar day the window's edge falls on, so
-    `since()` still opens this ballot's day shard — but at that day's first
-    instant, before the window's true edge, so it is `window()`'s instant
-    trim, and not the day-shard fetch, that has to be what excludes it."""
-    from datetime import UTC, datetime, time, timedelta
+    """One second before the window's exact edge — usually the same calendar
+    day the edge falls on, so `since()` still opens this ballot's day shard,
+    and it is genuinely `window()`'s instant trim, not the day-shard fetch,
+    that excludes it. (In the rare case this second crosses a UTC midnight,
+    the ballot lands in the previous day's shard instead and `since()` is
+    what excludes it — the assertion still holds, it just proves a little
+    less that one second of the day.)
+
+    Anchored to the edge instant, not a clock face: a fixed 00:00:00 would
+    coincide with the server's own edge string exactly once a day, making
+    this assertion fail deterministically rather than prove anything.
+    """
+    from datetime import UTC, datetime, timedelta
 
     api, app = client
     ann = record_run(app, user="ann", event_id="swag-contest")
     bob = record_run(app, user="bob", event_id="swag-contest")
-    edge = datetime.now(UTC) - timedelta(days=7)
-    stamp = datetime.combine(edge.date(), time(0, 0, 0), tzinfo=UTC)
-    cast(app, ann.run_id, [ann.run_id, bob.run_id], cast_at=stamp.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    edge = (datetime.now(UTC) - timedelta(days=7)).replace(microsecond=0)
+    stamp = (edge - timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cast(app, ann.run_id, [ann.run_id, bob.run_id], cast_at=stamp)
 
     rows = api.get("/api/events/swag-contest/leaderboard").json()["rows"]
     assert all(r["votes"] == 0 for r in rows)
