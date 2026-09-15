@@ -1,31 +1,24 @@
-// Three cues for the voting ceremony (see public/sound/PROVENANCE.md): a
-// press when a post-it lifts off the row, a stamp when the envelope seals a
-// counted vote, and a chime when the "+1"s land on the player chip.
+// The arena's cues (see public/sound/PROVENANCE.md): the voting ceremony's
+// press, stamp and points, and the reveal's victory, climb and chirp. Duck
+// Jam's files at Duck Jam's volumes.
 //
-// Every cue fires from inside a click handler -- a user gesture -- so there
-// is no autoplay policy to route around: the browser only refuses playback
-// it did not ask for, and this is always playback the visitor just asked for.
-// What it CANNOT assume is that playback will succeed: a browser can still
-// block it, the file can fail to load, or the API can be missing entirely.
-// None of that is a reason for a vote to fail, so `play` wraps everything and
-// never throws.
+// A fresh <audio> per play, so two cues can overlap — a tick per flap while a
+// counter rolls. What a cue CANNOT assume is that playback will succeed: a
+// browser can refuse it (a page opened cold, with no gesture yet), the file
+// can fail to load, or the API can be missing entirely. None of that is a
+// reason for a vote or a reveal to fail, so `play` wraps everything, never
+// throws, and nothing waits on a sound.
 
 const KEY = "arena.muted";
 
 const FILES = {
-  press: "/sound/press.wav",
-  stamp: "/sound/stamp.wav",
-  points: "/sound/points.wav",
+  press: ["/sound/press.wav", 0.4],
+  stamp: ["/sound/stamp.wav", 0.6],
+  points: ["/sound/points.wav", 0.4],
+  win: ["/sound/microduck-victory.wav", 0.4],
+  climb: ["/sound/rank-climb.wav", 0.4],
+  chirp: ["/sound/microduck-chirp.wav", 0.4],
 };
-
-// Built on first use, not at import: a page that never votes never fetches a
-// single wav.
-const cache = {};
-
-function audioFor(cue) {
-  if (!cache[cue]) cache[cue] = new Audio(FILES[cue]);
-  return cache[cue];
-}
 
 /** Whether cues are silenced. Off by default -- see the file header. */
 export function isMuted() {
@@ -55,20 +48,55 @@ export function toggleMuted() {
 }
 
 /**
+ * Fetch the kit now, so the first cue of a reveal is not late. A page that
+ * plays sound calls it once; every other page never fetches a wav.
+ */
+export function load() {
+  try {
+    for (const [file] of Object.values(FILES)) new Audio(file).load();
+  } catch {
+    // No Audio at all: nothing to warm, and nothing to fail over.
+  }
+}
+
+/**
  * Play a cue. Never throws, never awaited by the caller: a failed or blocked
- * cue must not hold up the vote it was decorating.
+ * cue must not hold up the vote or the reveal it was decorating.
  */
 export function play(cue) {
   if (isMuted()) return;
   try {
-    const audio = audioFor(cue);
-    audio.currentTime = 0;
+    const [file, volume] = FILES[cue];
+    const audio = new Audio(file);
+    audio.volume = volume;
     // `.play()` returns a promise a browser can reject (autoplay policy, a
     // missing file); swallow it the same way a synchronous throw is
     // swallowed below.
     audio.play()?.catch(() => {});
   } catch {
     // Missing/unsupported Audio, or a browser that throws instead of
-    // rejecting: either way, a sound cue is not something a vote depends on.
+    // rejecting: either way, a sound cue is not something a page depends on.
   }
+}
+
+/**
+ * A tick per flap while a split-flap tile rolls, read off the tile's rendered
+ * faces rather than a timer, so dropped frames never queue a burst of missed
+ * clicks. Returns the function that stops following.
+ */
+export function followCounter(tile) {
+  const faces = () =>
+    ["::before", "::after"]
+      .map((face) => getComputedStyle(tile, face).getPropertyValue("--flip-at"))
+      .join("/");
+  let previous = faces();
+  let frame = requestAnimationFrame(sample);
+  function sample() {
+    if (!tile.isConnected || !tile.classList.contains("flip-roll")) return;
+    const current = faces();
+    if (current !== previous) play("points");
+    previous = current;
+    frame = requestAnimationFrame(sample);
+  }
+  return () => cancelAnimationFrame(frame);
 }

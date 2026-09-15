@@ -28,13 +28,16 @@ export function applyFrame(rig, frame) {
 }
 
 export class Player {
-  constructor(traces, { onTick } = {}) {
+  constructor(traces, { onTick, loop = true } = {}) {
     this.traces = traces;
     this.counts = traces.map(frameCount);
     this.duration = this.counts.length ? Math.max(...this.counts) * CTRL_DT : 0;
     this.time = 0;
     this.playing = false;
     this.onTick = onTick;
+    // Loop the race so it can be watched repeatedly; with `loop` off it holds
+    // the last frame and stops — the reveal wants the ducks at the line.
+    this.loop = loop;
     this._last = null;
   }
 
@@ -83,7 +86,13 @@ export class Player {
     this._last = nowMs;
     let next = this.time + dt;
     if (next >= this.duration) {
-      next = 0; // loop the race, so it can be watched repeatedly
+      if (!this.loop) {
+        this.time = this.duration;
+        this.playing = false;
+        this.onTick?.(this.time);
+        return;
+      }
+      next = 0;
       this._last = nowMs;
     }
     this.time = next;

@@ -245,7 +245,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     }
   }
 
-  function setLanes(entries, event) {
+  function setLanes(entries, event, playerOptions = {}) {
     clearScene();
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
@@ -261,7 +261,9 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
       // instead — the treatment the simulator gives its multiplayer peers.
       attachMeshes(rig, kinematics, geometries, {
         livery: entry.livery ?? "classic",
-        opacity: tier === "ghost" ? GHOST_OPACITY : 1,
+        // A rival on a publication page is a real entry, drawn solid: an
+        // explicit `opacity` overrides what the tier would give it.
+        opacity: entry.opacity ?? (tier === "ghost" ? GHOST_OPACITY : 1),
       });
       // The same spacing buildCourse used: the ducks must stand between their
       // own walls, not between someone else's.
@@ -276,7 +278,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
 
       return { ...entry, rig, marker, tier };
     });
-    player = new Player(lanes.map((lane) => lane.trace));
+    player = new Player(lanes.map((lane) => lane.trace), playerOptions);
     player.play();
   }
 
