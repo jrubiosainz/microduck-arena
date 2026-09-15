@@ -1,0 +1,42 @@
+# Every push to main becomes the running Space.
+#
+# Not `git push` to the Hub: it rejects binary files pushed through plain git,
+# and this repo vendors a GLB, forty-odd STLs and an ONNX policy.
+# scripts/deploy_space.py uploads through the Hub API, which speaks Xet
+# natively — so all this workflow has to get right is handing it the real files
+# and a token that can write to the Space.
+name: Deploy the Space
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# The deploy replaces the whole tree (delete_patterns=["*"]). Two of them
+# overlapping would race, and the slower upload's tree is what the Space would
+# keep. One at a time, in order.
+concurrency:
+  group: deploy-space
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Without this the checkout is 47 LFS pointer files, and the deploy
+          # would replace the Space's meshes and policy with 130-byte stubs.
+          lfs: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # The deploy script imports huggingface_hub and nothing else from the
+      # project. Installing mujoco and onnxruntime here would buy nothing: the
+      # Space's own Docker build is what re-measures the golden run.
+      - run: pip install "huggingface_hub[hf_xet]>=0.24"
+
+      - run: python scripts/deploy_space.py
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}

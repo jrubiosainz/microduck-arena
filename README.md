@@ -30,14 +30,24 @@ It runs two ways, and both are first-class:
 
 ## Deploying to the Space
 
-`git push` does not work here: the Hub rejects binary files pushed through plain
-git and asks for Xet instead, and this repo vendors a GLB, forty-odd STLs and an
-ONNX policy. So deploys go through the Hub API, which speaks Xet natively:
+The source of truth is the private GitHub repo
+[`pollen-robotics/microduck-arena`](https://github.com/pollen-robotics/microduck-arena).
+**Every push to `main` deploys** — `.github/workflows/deploy-space.yml` publishes
+the tree to <https://huggingface.co/spaces/pollen-robotics/microduck-arena>.
+
+`git push` to the Hub does not work here: it rejects binary files pushed through
+plain git and asks for Xet instead, and this repo vendors a GLB, forty-odd STLs
+and an ONNX policy. So the deploy goes through the Hub API, which speaks Xet
+natively — the same script the workflow runs is the one to run by hand:
 
 ```bash
 uv run python scripts/deploy_space.py            # publishes the working tree
 uv run python scripts/deploy_space.py --dry-run  # shows what would go
 ```
+
+The run log is not part of this. It lives in the `ARENA_DATASET` dataset repo,
+which a deploy never touches, so the board and the standings survive every
+redeploy — see *Running as a Space* below.
 
 The Space rebuilds itself on each upload. Its own Docker build re-measures the
 golden run and fails if the physics does not reproduce, so a broken build is
