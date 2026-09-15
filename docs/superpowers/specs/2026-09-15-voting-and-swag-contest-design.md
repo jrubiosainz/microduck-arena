@@ -59,7 +59,10 @@ to its TOML, the way an event is already created without touching code.
 
 ### Record
 
-`arena/votes.py` is pure and I/O-free, like `points.py`.
+The record lives in `store.py`, beside `RunRecord` and `Withdrawal` — records
+live with the log, folds live in `index.py` / `points.py` / `votes.py`. It has to
+be that way round: `votes.py` imports `RunRecord` exactly as `points.py` does, so
+`store.py` importing `votes.py` would be a cycle.
 
 ```python
 @dataclass(frozen=True)
@@ -148,9 +151,9 @@ the normal case — it is a uniform draw.
 
 ```
 GET  /api/events/{id}/ballot
-     → {ballot: "<signed>",
-        lanes: [{lane: 0, colour: "#ff7a2f"}, …],
-        cast_today: 7, per_day: 20}
+     → {state: "ballot", ballot: "<signed>", lanes: 3, cast_today: 7, per_day: 20}
+     → {state: "too-few", have: 1, need: 2}
+     → {state: "quota", cast_today: 20, per_day: 20}
 
 GET  /api/ballots/{ballot}/lanes/{i}/trace
      → the same bytes the existing run-trace route serves
@@ -158,6 +161,10 @@ GET  /api/ballots/{ballot}/lanes/{i}/trace
 POST /api/events/{id}/vote   {ballot, lane: 2}
      → {points: 2, cast_today: 8}
 ```
+
+`lanes` is a **count**, not a list of colours. The palette already lives in
+`course.js` as `LANE_CSS`, and lane *i* wears entry *i*; sending the hex codes
+would be a second copy of a list the client already has.
 
 The signed ballot carries `event_id`, the voter, the run ids in lane order, and
 the moment it was issued, sealed with `sign()` and the existing `session_secret`.
@@ -173,13 +180,18 @@ at once:
 
 ### Refusals
 
+`GET /ballot` answers **200 with a `state`** for "too few ducks" and "quota
+reached". Neither is an error — they are states of a voting session, and the page
+renders each as a panel. Only the two below are real failures, and only `POST`
+rejects a malformed ballot.
+
 | Condition | Response |
 | --- | --- |
-| not signed in | 401 |
-| event has no `[vote]` | 404 |
-| fewer than `ballot_min` eligible ducks | 409, naming how many exist and how many are needed |
-| daily quota reached | 429, carrying `cast_today` and `per_day` |
-| bad signature, expired ballot, lane out of range, voter mismatch | 400 |
+| not signed in | 401 on both routes |
+| event has no `[vote]` | 404 on both routes |
+| fewer than `ballot_min` eligible ducks | `GET` → 200 `{state: "too-few", have, need}`; `POST` → 409 |
+| daily quota reached | `GET` → 200 `{state: "quota", …}`; `POST` → 429 |
+| bad signature, expired ballot, lane out of range, voter mismatch | `POST` → 400 |
 
 ## Ranking and points
 
