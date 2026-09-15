@@ -15,7 +15,8 @@ entry is never protected by seniority.
 Voting is the point of the exercise. Swag Contest is a prototype of it. Every
 rule below therefore lives in the event manifest, never in code that names
 `swag-contest`: a future challenge becomes votable by adding a `[vote]` section
-to its TOML, the way an event is already created without touching code.
+to its TOML **and setting `metric = "votes"`** — the manifest requires both, and
+refuses either alone — the way an event is already created without touching code.
 
 ## Decisions taken
 
@@ -25,7 +26,8 @@ to its TOML, the way an event is already created without touching code.
 | **A ballot shows 2 to 4 ducks and the voter picks a colour** | Four is the target; fewer is allowed down to two, so the contest works from the moment a second duck exists. Rules out pairwise duels as the only shape (duckJam's model), which needs far more ballots to rank the same field. |
 | **The colour is the LANE's, not the duck's** | `course.js` already carries `LANE_COLORS` — Pollen orange, sky, hi-vis lime, lavender, beak yellow — and `viewer.js` already refuses to repaint the robot, because painting a duck one flat colour *"erased every seam between shell, legs and head and left an unreadable silhouette"*. Every duck in a ballot therefore wears the same livery; only the travelling ring under it differs. Rules out two competing colour axes, which would make "the purple one" ambiguous. |
 | **The draw assigns colours, so a ballot is anonymous** | The same duck comes out orange on one ballot and lavender on the next. Judgement lands on the gait, not on the handle. Rules out showing names during voting. |
-| **The client never sees a `run_id`** | Traces are served through ballot-scoped URLs and a vote names a lane index, not an entry. Without this, one look at devtools plus `/api/runs/<id>` de-anonymises the ballot, and the anonymity above would be decorative. |
+| **The client never sees a `run_id`** | Traces are served through ballot-scoped URLs and a vote names a lane index, not an entry. Without this, one look at devtools plus `/api/runs/<id>` names every author. **It raises the cost of de-anonymising a ballot; it does not close it** — see the row below. |
+| **A ballot is anonymous by DEFAULT, not by construction** | Final review proved the gap on a running app: the voted board publishes each row's `run_id`, and `/api/runs/{id}/trace` returns bytes identical to `/api/ballots/{tok}/lanes/{i}/trace`, so a script that fetches the board's traces and byte-matches them against the ballot's lanes recovers the whole mapping before a vote is cast. Dropping `run_id` from the voted board would break the board's own replay picker and withdraw button, and it would buy little: the replay **is** the duck, and a distinctive gait is recognisable by eye. So the claim is scoped honestly rather than defended badly — the draw's shuffled colours stop the casual reader and the idle glance, which is what they are for, and a determined person can identify an entry. If that ever matters, the fix is not obfuscation but a rule change: stop publishing `run_id` on a voted board and give it its own replay affordance. |
 | **The score is a raw vote count over 7 days** | Readable without explanation — "43 votes this week" — and it needs no fitted model. Its weakness, that a count measures exposure as much as merit, is closed by the draw rather than by the arithmetic (below). Rules out Bradley-Terry (duckJam's model): a fitted strength cannot be printed next to a handle. |
 | **The draw equalises exposure** | The pool is sorted by how often each entry has been *shown* in the window, and the least-shown are drawn first. With exposure equal, a raw count measures merit again. This costs nothing to log, because a ballot records all its candidates, not only its winner. |
 | **A ballot pays its voter 2 points, capped at 20 a day** | duckJam's own numbers (`ballot: 2`, twenty per round), transposed to an arena that never closes a round: the cap becomes daily, the shape `run`'s daily cap already has. 40 points a day from voting, against 100 for a first entry on an event. |
@@ -35,6 +37,7 @@ to its TOML, the way an event is already created without touching code.
 | **One ballot is one immutable file** | `votes/<YYYY-MM-DD>/<ballot_id>.json`, one commit each, exactly the thesis of the run log. Rules out a stored vote counter, which would break "the leaderboard is derived, never stored" and could not answer a sliding window anyway. |
 | **Ballots get their own Hub snapshot, limited to the window** | Voting must not invalidate the runs snapshot, and reading must not get slower as the contest ages. Rules out pruning: the repo grows, reads do not. |
 | ~~**The ballot is signed, not remembered**~~ **SUPERSEDED — the ballot is remembered, and its token is opaque** | The original decision was to seal the run ids into a signed token, for the elegance of holding no server state. **It was wrong, and review caught it in implementation**: `sign()` is an HMAC, and an HMAC proves the server wrote a value — it does not hide it. The payload is plain base64, so one `atob()` in devtools plus `/api/runs/{id}` names every author and maps them to lanes, which is the exact failure the lane-index API exists to prevent. Signing cannot be patched into secrecy without a cipher this project does not depend on. So the run ids stay on the server, behind a random opaque token, in an in-memory table — the same shape, and the same documented trade, as the session table two files away (`session.py`: "The table is in memory on purpose. It costs a restart logging everyone out… not worth a database"). A restart now costs a ballot in flight, which is a 15-minute object, not an 8-hour one. |
+| **`[vote]` and `metric = "votes"` imply each other** | An earlier draft kept them as separate axes, so that a future challenge could be timed and voted at once. Nothing asked for that, and review found the cost: `routes_read._voted()` keyed on `[vote]` while `event_leaderboard` keyed on `metric`, so adding `[vote]` to `sprint-2m.toml` alone would leave its board ranking on time while its podium silently re-ranked on votes. A speculative axis bought a real inconsistency, so the axes collapse: the manifest validates both directions, and the two readings cannot diverge. |
 | **`index.py` is not touched** | Its `sort_key` means "lower is better" and is correct for the five timed events already live. The voted board is a separate function, chosen by `manifest.metric`. Two simple functions rather than one parameterised one. |
 | **The Swag Contest pins one speed (`lo == hi`)** | The sweep exists to find where a policy is fastest, and the score here is not a time. More importantly every duck must walk at the *same commanded speed*, or the judgement lands on speed rather than style. Side effect: 6 simulations per submission instead of 36. |
 
@@ -51,6 +54,21 @@ to its TOML, the way an event is already created without touching code.
   most recent; older votes stay attached to the older run, which has left the
   pool. Coherent with a window whose whole intent is that nothing is protected by
   age, but it must be stated on screen.
+- **A voted event is still SCORED on its finish time.** `manifest.py` validates
+  which metric names an event may declare; `evaluate.py` holds a second registry
+  mapping that name to the function that computes a run's score. Adding `"votes"`
+  to the first and not the second made every submission to the Swag Contest die
+  on `KeyError: 'votes'` — the feature was unreachable, and no test saw it,
+  because every test fabricates records directly. `metric` says how the board
+  RANKS; a run's `score` is the time it was measured at either way.
+- **On the deployed Space, every ballot commits to the run log's own repo.**
+  `HubBallots` keeps its own snapshot, so voting never invalidates the board's
+  cache — but a commit moves the repo's `main`, so the run store's next TTL
+  refresh resolves a new revision and re-materialises its whole tree. Blobs are
+  content-addressed and nothing re-downloads, but the per-file work is real and
+  grows with the RUN log. Untestable locally, and the first thing to watch on a
+  busy day; the remedy if it bites is a separate `…-votes` dataset repo, which
+  is a configuration change and not a restructure.
 - **The cap is reversible at zero cost.** Points are derived from the log on every
   request, never stored, so changing each manifest's `per_day` applies
   retroactively to the whole history.
@@ -113,7 +131,7 @@ they are the same thesis — *"the log is a git repo"*. They satisfy:
 ```python
 class Ballots(Protocol):
     def cast(self, ballot: Ballot) -> None: ...
-    def since(self, first_day: date) -> list[Ballot]: ...
+    def since(self, first_day: str) -> list[Ballot]: ...
 ```
 
 `HubBallots` holds **its own snapshot**, downloaded with
@@ -157,7 +175,7 @@ the normal case — it is a uniform draw.
 
 ```
 GET  /api/events/{id}/ballot
-     → {state: "ballot", ballot: "<signed>", lanes: 3, cast_today: 7, per_day: 20}
+     → {state: "ballot", ballot: "<opaque token>", lanes: 3, cast_today: 7, per_day: 20}
      → {state: "too-few", have: 1, need: 2}
      → {state: "quota", cast_today: 20, per_day: 20}
 
@@ -230,9 +248,9 @@ rejects a malformed ballot.
 | --- | --- |
 | not signed in | 401 on both routes |
 | event has no `[vote]` | 404 on both routes |
-| fewer than `ballot_min` eligible ducks | `GET` → 200 `{state: "too-few", have, need}`; `POST` → 409 |
+| fewer than `ballot_min` eligible ducks | `GET` → 200 `{state: "too-few", have, need}`. `POST` cannot reach this: a token already names its field. |
 | daily quota reached | `GET` → 200 `{state: "quota", …}`; `POST` → 429 |
-| bad signature, expired ballot, lane out of range, voter mismatch | `POST` → 400 |
+| unknown or expired token, lane out of range, voter mismatch, wrong event | `POST` → 400 |
 
 ## Ranking and points
 
@@ -389,7 +407,7 @@ double speed is a different gait.
 ## Tests
 
 **Python** — the draw (exposure equalisation, own-entries excluded, the 2–4
-range, refusal below `ballot_min`); ballot signing (forged, expired, impersonated,
+range, refusal below `ballot_min`); the ballot table (unknown token, expired, impersonated,
 lane out of range); double-click idempotence through `FileExistsError`; the
 sliding window at its edges; the cap enforced at both the gate and the fold; the
 voted board's ranking and tie-break; `[vote]` manifest validation.
