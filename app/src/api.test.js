@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ballotTraceUrl, getBallot, getLeaderboard, getPlayer, getStandings, getTrace } from "./api.js";
+import {
+  ballotTraceUrl,
+  getBallot,
+  getBallotTrace,
+  getLeaderboard,
+  getPlayer,
+  getStandings,
+  getTrace,
+} from "./api.js";
 
 function respondWith({ ok = true, status = 200, statusText = "OK", body, bytes }) {
   globalThis.fetch = vi.fn(async () => ({
@@ -93,5 +101,30 @@ describe("the ballot", () => {
 
   it("addresses a lane's replay through the ballot and never a run", () => {
     expect(ballotTraceUrl("tok.mac", 2)).toBe("/api/ballots/tok.mac/lanes/2/trace");
+  });
+
+  it("applies the same error contract to a lane's replay", async () => {
+    respondWith({ ok: false, status: 404, body: { detail: "no such ballot: 'tok.mac'" } });
+    await expect(getBallotTrace("tok.mac", 2)).rejects.toThrow("no such ballot: 'tok.mac'");
+  });
+
+  it("stringifies a non-string detail instead of [object Object]", async () => {
+    // FastAPI's validation errors put an array here.
+    respondWith({ ok: false, status: 422, body: { detail: [{ type: "missing" }] } });
+    await expect(getBallotTrace("tok.mac", 2)).rejects.toThrow(/"type":"missing"/);
+  });
+
+  it("falls back to the status line when the body is not JSON", async () => {
+    respondWith({ ok: false, status: 502, statusText: "Bad Gateway" });
+    await expect(getBallotTrace("tok.mac", 2)).rejects.toThrow("502 Bad Gateway");
+  });
+
+  it("returns a Float32Array fetched over the ballot-scoped url", async () => {
+    const source = new Float32Array([1.5, 2.5, 3.5]);
+    respondWith({ bytes: source.buffer });
+    const trace = await getBallotTrace("tok.mac", 2);
+    expect(trace).toBeInstanceOf(Float32Array);
+    expect([...trace]).toEqual([1.5, 2.5, 3.5]);
+    expect(fetch.mock.calls[0][0]).toBe("/api/ballots/tok.mac/lanes/2/trace");
   });
 });

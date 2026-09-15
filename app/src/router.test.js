@@ -36,6 +36,7 @@ describe("parseRoute", () => {
       "#/p/a/b",
       "#/v/",
       "#/v/a/b",
+      "#/v/bad id",
     ]) {
       expect(parseRoute(hash)).toEqual({ view: "menu" });
     }
