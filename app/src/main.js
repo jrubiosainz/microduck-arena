@@ -5,6 +5,7 @@ import { renderHome } from "./home.js";
 import { renderPlayer } from "./player.js";
 import { renderRace } from "./race.js";
 import { parseRoute, themeFor } from "./router.js";
+import { renderVote } from "./vote.js";
 
 const root = document.querySelector("#app");
 const state = { events: null, viewer: null };
@@ -42,6 +43,13 @@ async function show() {
         return;
       }
       await renderRace(root, { event, state });
+    } else if (route.view === "vote") {
+      const event = (await events()).find((e) => e.id === route.eventId);
+      if (!event || !event.vote) {
+        location.hash = "#/";
+        return;
+      }
+      await renderVote(root, { event, state });
     } else if (route.view === "player") {
       await renderPlayer(root, route.user);
     } else {

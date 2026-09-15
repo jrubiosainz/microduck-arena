@@ -270,7 +270,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
       scene.add(rig.placer);
 
       // The follow-spot, parented to the course so it climbs a slope with it.
-      const marker = buildMarker(tier);
+      const marker = buildMarker(tier, entry.colour ?? null);
       marker.position.z = z;
       scene.add(marker);
 

@@ -498,3 +498,52 @@ table.board .withdraw:focus-visible {
   outline: 3px solid var(--cyan);
   outline-offset: 2px;
 }
+
+/* The voting booth. The colour buttons ARE the ballot, so they are the
+   loudest thing under the stage — the opposite of the lane stripes, which
+   stay quiet because the ring already identifies a lane in motion. */
+.votehead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.vote-panel {
+  margin: 1.25rem 0 2rem;
+  text-align: center;
+}
+
+.vote-lead {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.vote-picks {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.vote-pick {
+  width: 4.5rem;
+  height: 4.5rem;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  background: var(--pick);
+  cursor: pointer;
+}
+
+.vote-pick:hover,
+.vote-pick:focus-visible {
+  border-color: #fff;
+  transform: scale(1.06);
+}
+
+.vote-count,
+.vote-empty {
+  margin: 1rem 0 0;
+  opacity: 0.8;
+}

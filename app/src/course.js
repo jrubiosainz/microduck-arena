@@ -182,14 +182,18 @@ export const TIER_MARKER = { trial: 0x9d87e8, leader: 0xff7a2f, ghost: 0xfaf8f2 
  * sports broadcast rings the player it is tracking. It carries the tier colour
  * so the duck you just tested and the one you are chasing are both obvious
  * without touching the robots' own colours.
+ *
+ * `colour` overrides the tier's own, which is what a ballot needs: on a voting
+ * page every duck wears the same livery and the RING is the only thing that
+ * tells one lane from another — the signal this ring was already the best at.
  */
-export function buildMarker(tier = "ghost") {
+export function buildMarker(tier = "ghost", colour = null) {
   const marker = new Mesh(
     new RingGeometry(0.085, 0.115, 32),
     new MeshBasicMaterial({
-      color: TIER_MARKER[tier] ?? TIER_MARKER.ghost,
+      color: colour ?? TIER_MARKER[tier] ?? TIER_MARKER.ghost,
       transparent: true,
-      opacity: tier === "ghost" ? 0.4 : 0.95,
+      opacity: colour !== null || tier !== "ghost" ? 0.95 : 0.4,
     }),
   );
   marker.rotation.x = -Math.PI / 2; // lay the ring flat
