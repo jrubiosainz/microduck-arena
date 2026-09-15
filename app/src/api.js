@@ -94,3 +94,33 @@ export async function tryPolicy(eventId, file, name, livery, commandVx) {
 /** Take one of your own entries off the board. Not a delete — see the server. */
 export const withdrawRun = (runId) =>
   json(`/api/runs/${runId}/withdraw`, { method: "POST" });
+
+/**
+ * A field to judge, or the reason there is none.
+ *
+ * Every answer is a STATE, never a thrown error: "you are signed out", "there
+ * are not enough ducks yet" and "that is your votes for today" are all things
+ * the page draws as a panel, not failures.
+ */
+export async function getBallot(eventId) {
+  const response = await fetch(`/api/events/${encodeURIComponent(eventId)}/ballot`);
+  if (response.status === 401) return { state: "signed-out" };
+  if (!response.ok) throw new Error(await detailFrom(response));
+  return response.json();
+}
+
+/** One lane's replay. Addressed through the ballot, so no run id is exposed. */
+export const ballotTraceUrl = (ballot, lane) => `/api/ballots/${ballot}/lanes/${lane}/trace`;
+
+export async function getBallotTrace(ballot, lane) {
+  const response = await fetch(ballotTraceUrl(ballot, lane));
+  if (!response.ok) throw new Error(await detailFrom(response));
+  return new Float32Array(await response.arrayBuffer());
+}
+
+export const castVote = (eventId, ballot, lane) =>
+  json(`/api/events/${encodeURIComponent(eventId)}/vote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ballot, lane }),
+  });

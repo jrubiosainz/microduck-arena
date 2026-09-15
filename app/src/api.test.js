@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getLeaderboard, getPlayer, getStandings, getTrace } from "./api.js";
+import { ballotTraceUrl, getBallot, getLeaderboard, getPlayer, getStandings, getTrace } from "./api.js";
 
 function respondWith({ ok = true, status = 200, statusText = "OK", body, bytes }) {
   globalThis.fetch = vi.fn(async () => ({
@@ -72,5 +72,26 @@ describe("standings and players", () => {
   it("still surfaces any other failure as the server's sentence", async () => {
     respondWith({ ok: false, status: 500, body: { detail: "store unreadable" } });
     await expect(getPlayer("ann")).rejects.toThrow("store unreadable");
+  });
+});
+
+describe("the ballot", () => {
+  it("reads a field to judge", async () => {
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({ state: "ballot", ballot: "tok.mac", lanes: 3, cast_today: 1, per_day: 20 }),
+    });
+    expect(await getBallot("swag-contest")).toEqual({
+      state: "ballot", ballot: "tok.mac", lanes: 3, cast_today: 1, per_day: 20,
+    });
+  });
+
+  it("reads being signed out as a state, not a failure", async () => {
+    globalThis.fetch = async () => ({ ok: false, status: 401, json: async () => ({}) });
+    expect(await getBallot("swag-contest")).toEqual({ state: "signed-out" });
+  });
+
+  it("addresses a lane's replay through the ballot and never a run", () => {
+    expect(ballotTraceUrl("tok.mac", 2)).toBe("/api/ballots/tok.mac/lanes/2/trace");
   });
 });
