@@ -13,6 +13,7 @@ import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { MAX, MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
+import { runHref } from "./router.js";
 import { panelState, signInHref } from "./session.js";
 import { footer, signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
@@ -431,8 +432,8 @@ export async function renderRace(root, { event, state }) {
     },
     onPublish: async ({ file, name, livery, commandVx, envUrl }) => {
       const published = await submitPolicy(event.id, file, name, livery, commandVx, envUrl);
-      trial = null;
-      await paint();
+      // The result has its own page now, and the reveal plays there.
+      location.hash = runHref(published.run_id);
       return published;
     },
   });

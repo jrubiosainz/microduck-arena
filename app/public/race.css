@@ -257,6 +257,7 @@ table.board th {
 table.board td { padding: 11px 10px; border-top: 2px solid var(--ink); }
 table.board tbody tr:first-child td { border-top: 0; }
 table.board tbody tr:hover { background: var(--cream); }
+table.board tr.linked { cursor: pointer; }
 
 /* the lane tab: a filled bar for a duck on the stage, hollow otherwise */
 table.board .tab { width: 34px; padding-left: 0; padding-right: 4px; }
