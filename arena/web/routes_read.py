@@ -75,6 +75,21 @@ def _withdrawn(store) -> frozenset[str]:
     return frozenset(w.run_id for w in store.withdrawals())
 
 
+def _voted() -> dict:
+    """Every event that takes ballots, with its rules. The fold needs both."""
+    return {m.id: m.vote for m in all_events() if m.vote is not None}
+
+
+def _ballots(request: Request) -> list:
+    """Every ballot inside the widest window any votable event declares."""
+    rules = _voted()
+    if not rules:
+        return []
+    now = datetime.now(UTC)
+    widest = max(v.window_days for v in rules.values())
+    return request.app.state.ballots.since(votes.first_day(now, widest))
+
+
 def _all_runs(store) -> list[RunRecord]:
     """Every event's log, because points and ladders are across the programme."""
     return [record for manifest in all_events() for record in store.runs(manifest.id)]
@@ -144,7 +159,15 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
 def player_standings(request: Request) -> dict:
     """One ladder across every event: the sum of each player's receipts, ranked."""
     store = request.app.state.store
-    cards = standings(receipts(_all_runs(store), _withdrawn(store)))
+    cards = standings(
+        receipts(
+            _all_runs(store),
+            _withdrawn(store),
+            ballots=_ballots(request),
+            voted=_voted(),
+            now=datetime.now(UTC),
+        )
+    )
     return {"rows": [{"rank": c.rank, "user": c.user, "points": c.points} for c in cards]}
 
 
@@ -153,10 +176,18 @@ def player_page(user: str, request: Request) -> dict:
     """A player's total, rank, and best run on every event they entered."""
     store = request.app.state.store
     runs, withdrawn = _all_runs(store), _withdrawn(store)
-    card = next((c for c in standings(receipts(runs, withdrawn)) if c.user == user), None)
+    ballots, rules, now = _ballots(request), _voted(), datetime.now(UTC)
+    card = next(
+        (
+            c
+            for c in standings(receipts(runs, withdrawn, ballots, rules, now))
+            if c.user == user
+        ),
+        None,
+    )
     if card is None:
         raise HTTPException(status_code=404, detail=f"{user!r} has not published yet")
-    boards = boards_by_user(runs, withdrawn)
+    boards = boards_by_user(runs, withdrawn, ballots, rules, now)
     best = []
     for manifest in sorted(all_events(), key=lambda m: (m.order, m.title)):
         row = next((r for r in boards.get(manifest.id, []) if r.record.user == user), None)

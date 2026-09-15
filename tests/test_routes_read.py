@@ -444,3 +444,13 @@ def test_a_timed_board_is_untouched_and_carries_no_vote_columns(client):
     record_run(app, user="ann", event_id="sprint-2m", score=12.0)
     rows = api.get("/api/events/sprint-2m/leaderboard").json()["rows"]
     assert "votes" not in rows[0]
+
+
+def test_voting_puts_points_on_the_ladder(client):
+    api, app = client
+    ann = record_run(app, user="ann", event_id="swag-contest")
+    bob = record_run(app, user="bob", event_id="swag-contest")
+    cast(app, ann.run_id, [ann.run_id, bob.run_id], voter="coralie")
+
+    rows = {r["user"]: r["points"] for r in api.get("/api/standings").json()["rows"]}
+    assert rows["coralie"] == 2
