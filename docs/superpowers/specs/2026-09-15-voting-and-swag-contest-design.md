@@ -34,7 +34,7 @@ to its TOML, the way an event is already created without touching code.
 | **The author earns nothing per vote** | *"A score never converts into points"* is the rule the points module is built on. Authors earn from the **podium** instead, which `boards_by_user` already pays on every event and which now moves as the votes move. |
 | **One ballot is one immutable file** | `votes/<YYYY-MM-DD>/<ballot_id>.json`, one commit each, exactly the thesis of the run log. Rules out a stored vote counter, which would break "the leaderboard is derived, never stored" and could not answer a sliding window anyway. |
 | **Ballots get their own Hub snapshot, limited to the window** | Voting must not invalidate the runs snapshot, and reading must not get slower as the contest ages. Rules out pruning: the repo grows, reads do not. |
-| **The ballot is signed, not remembered** | `arena/web/session.py` already has `sign()` / `unsign()` and a `session_secret`. No server state, nothing to expire, and a Space restart does not fail a vote in flight. |
+| ~~**The ballot is signed, not remembered**~~ **SUPERSEDED — the ballot is remembered, and its token is opaque** | The original decision was to seal the run ids into a signed token, for the elegance of holding no server state. **It was wrong, and review caught it in implementation**: `sign()` is an HMAC, and an HMAC proves the server wrote a value — it does not hide it. The payload is plain base64, so one `atob()` in devtools plus `/api/runs/{id}` names every author and maps them to lanes, which is the exact failure the lane-index API exists to prevent. Signing cannot be patched into secrecy without a cipher this project does not depend on. So the run ids stay on the server, behind a random opaque token, in an in-memory table — the same shape, and the same documented trade, as the session table two files away (`session.py`: "The table is in memory on purpose. It costs a restart logging everyone out… not worth a database"). A restart now costs a ballot in flight, which is a 15-minute object, not an 8-hour one. |
 | **`index.py` is not touched** | Its `sort_key` means "lower is better" and is correct for the five timed events already live. The voted board is a separate function, chosen by `manifest.metric`. Two simple functions rather than one parameterised one. |
 | **The Swag Contest pins one speed (`lo == hi`)** | The sweep exists to find where a policy is fastest, and the score here is not a time. More importantly every duck must walk at the *same commanded speed*, or the judgement lands on speed rather than style. Side effect: 6 simulations per submission instead of 36. |
 
@@ -166,17 +166,40 @@ POST /api/events/{id}/vote   {ballot, lane: 2}
 `course.js` as `LANE_CSS`, and lane *i* wears entry *i*; sending the hex codes
 would be a second copy of a list the client already has.
 
-The signed ballot carries `event_id`, the voter, the run ids in lane order, and
-the moment it was issued, sealed with `sign()` and the existing `session_secret`.
-The client never decodes it; it hands it back verbatim. That closes four things
-at once:
+`ballot` is an **opaque random token** — `secrets.token_urlsafe(32)`, carrying no
+information at all. The server holds what it stands for in memory: the event, the
+voter, the run ids in lane order, and the moment it was issued. The client hands
+the token back verbatim, and can learn nothing from it however hard it looks.
+That is the whole point, and it is why the token is not a signed payload: an HMAC
+proves the server wrote a value, it does not hide it, so a signed ballot would
+carry its own run ids in readable base64 and `/api/runs/{id}` would name every
+author. See the superseded row in Decisions.
 
-- a ballot of four copies of your own duck cannot be forged;
-- you cannot vote as someone else — the voter is inside the sealed payload and is
-  re-compared to the session;
+The table closes four things:
+
+- a ballot of four copies of your own duck cannot be forged — the client never
+  supplies candidates, only a token the server minted;
+- you cannot vote as someone else: the entry records its voter, re-compared to
+  the session on both routes;
 - the ballot **expires after 15 minutes**, so one held back cannot vote for an
   entry withdrawn since;
-- there is no server state to expire.
+- **a ballot is single-use.** The entry is marked spent when its vote is
+  recorded, so a double-click gets the same idempotent answer whatever the clock
+  reads — the earlier scheme leaned on the log refusing to overwrite, which a
+  ballot cast either side of UTC midnight walked straight around, because the two
+  writes land in different day shards.
+
+Its cost, taken deliberately: a restart drops ballots in flight, and a voter is
+asked to draw a new field. That is the same trade `session.py` already documents
+for the session table, on an object that lives fifteen minutes rather than eight
+hours.
+
+**The quota's check and its write are one critical section.** Reading
+`cast_today` and appending the ballot are two steps, and the seconds between them
+are a real window — the read scans a week of shards, and that scan grows with the
+contest. Under a lock, four concurrent votes against a cap of one record one
+ballot; without it, review recorded all four landing. The lock is per process,
+which is what a single-container Space is.
 
 ### Refusals
 
