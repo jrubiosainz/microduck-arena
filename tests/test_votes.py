@@ -63,6 +63,13 @@ def test_the_pool_drops_withdrawn_old_physics_and_ducks_that_never_finished():
     assert pool([gone, stale, fell, kept], frozenset({gone.run_id})) == [kept]
 
 
+def test_the_pool_breaks_a_submitted_at_tie_by_the_later_run_id():
+    earlier = make_record(user="ann", submitted_at="2026-09-10T10:00:00Z", run_id="run-aaa")
+    later = make_record(user="ann", submitted_at="2026-09-10T10:00:00Z", run_id="run-zzz")
+    assert pool([earlier, later], frozenset()) == [later]
+    assert pool([later, earlier], frozenset()) == [later]
+
+
 def test_you_are_never_handed_your_own_duck():
     mine = make_record(user="ann")
     theirs = make_record(user="bob")
@@ -86,12 +93,22 @@ def test_a_draw_shrinks_to_the_field_rather_than_refusing_it():
 
 
 def test_a_draw_shuffles_lane_order_so_a_duck_is_not_always_the_same_colour():
+    # Distinct `shown` values make the sort in step 2 fully determine which
+    # two survive truncation, regardless of the first shuffle: whatever order
+    # the field arrives in, sorting by a unique key always yields the same
+    # sequence. So the surviving pair is fixed — [field[0], field[1]] — and the
+    # only thing left that can vary their order is the SECOND shuffle. If that
+    # shuffle were dropped, `orders` would collapse to one tuple.
     field = [make_record(user=f"u{i}") for i in range(4)]
+    shown = Counter({r.run_id: i for i, r in enumerate(field)})
     orders = {
-        tuple(r.run_id for r in draw(field, Counter(), 2, 4, random.Random(seed)))
+        tuple(r.run_id for r in draw(field, shown, 2, 2, random.Random(seed)))
         for seed in range(20)
     }
-    assert len(orders) > 1
+    assert orders == {
+        (field[0].run_id, field[1].run_id),
+        (field[1].run_id, field[0].run_id),
+    }
 
 
 def test_standings_rank_by_votes_then_by_who_published_first():
