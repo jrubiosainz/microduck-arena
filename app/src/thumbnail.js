@@ -24,7 +24,7 @@ import {
 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { LANE_SPACING, buildCourse, laneOffsetZ } from "./course.js";
+import { buildCourse, laneOffsetZ, laneSpacing } from "./course.js";
 import { MODEL_DIR, attachMeshes, buildRigTree, loadKinematics, rigGeometries } from "./rig.js";
 
 export const WIDTH = 480;
@@ -132,7 +132,7 @@ function still(renderer, environment, { kinematics, geometries }, event, width, 
     attachMeshes(rig, kinematics, geometries, { livery });
     // A little way down the lane, so the start line is visible behind them.
     const along = (Number(event.length_m) || 1) * (0.22 + lane * 0.1);
-    standOnCourse(rig, course, along, laneOffsetZ(lane, 2, LANE_SPACING));
+    standOnCourse(rig, course, along, laneOffsetZ(lane, 2, laneSpacing(event)));
   });
 
   const { position, target } = cameraFor(event.length_m);

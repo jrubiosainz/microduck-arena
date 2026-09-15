@@ -17,7 +17,27 @@ import {
   RingGeometry,
 } from "three";
 
-export const LANE_SPACING = 0.45; // metres between lane centres
+// Fallback only. The real spacing is the course's own width, below.
+export const LANE_SPACING = 0.45;
+
+/**
+ * How far apart to draw two lanes, in metres.
+ *
+ * A real course is `width_m` wide plus its wall thickness, and the physics has
+ * no lanes at all — every run is a separate simulation on that same single
+ * course. Drawing them side by side is a presentational fiction, so the least
+ * it can do is not lie about how wide each one is: at the old fixed 0.45 m the
+ * lanes were packed at roughly half their true width, which is why drawing the
+ * walls truthfully put the outer ducks inside them.
+ *
+ * At this spacing neighbouring lanes' walls meet exactly, which is also what a
+ * real multi-lane track looks like — and no duck can cross into another's lane,
+ * which is true of the physics too.
+ */
+export function laneSpacing({ width_m = 0.8, walls = [] } = {}) {
+  const thickness = walls.length ? walls[0].half[1] * 2 : 0.05;
+  return width_m + thickness;
+}
 
 // A lane's identity lives in the ground and in its row tab — never in the
 // robot's own colours, which carry the shape of the machine.
@@ -52,11 +72,13 @@ export function laneOffsetZ(i, n, spacing = LANE_SPACING) {
  * leaving them undrawable meant a roller policy grazing something invisible,
  * which is how this came up.
  */
-export function buildWalls(walls = []) {
+export function buildWalls(walls = [], lanes = 1, spacing = LANE_SPACING) {
   const group = new Group();
   group.name = "walls";
   group.visible = false;
-  for (const { pos, half } of walls) {
+  for (let lane = 0; lane < lanes; lane += 1) {
+   const laneZ = laneOffsetZ(lane, lanes, spacing);
+   for (const { pos, half } of walls) {
     const mesh = new Mesh(
       new BoxGeometry(half[0] * 2, half[2] * 2, half[1] * 2),
       new MeshStandardMaterial({
@@ -67,8 +89,12 @@ export function buildWalls(walls = []) {
         opacity: 0.35,
       }),
     );
-    mesh.position.set(pos[0], pos[2], -pos[1]);
+    // Each lane carries its OWN pair: every run really did have walls at
+    // +/- width/2 around ITS centreline, and since the runs are spread out to
+    // be compared, their walls spread with them.
+    mesh.position.set(pos[0], pos[2], laneZ - pos[1]);
     group.add(mesh);
+   }
   }
   return group;
 }
@@ -79,7 +105,8 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   // Climbing toward +x is a positive rotation about z: it lifts +x into +y.
   course.rotation.z = (slope_deg * Math.PI) / 180;
 
-  const span = Math.max(width_m, lanes * LANE_SPACING + width_m * 0.5);
+  const spacing = laneSpacing({ width_m, walls });
+  const span = Math.max(width_m, lanes * spacing);
   const ground = new Mesh(
     new PlaneGeometry(length_m + OVERRUN * 2, span),
     // Back to dark, and fully rough so the scene environment barely touches
@@ -101,7 +128,7 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
 
   course.add(line(0, span, 0xf5f5f5, "start"));
   course.add(line(length_m, span, 0xff7a2f, "finish"));
-  course.add(buildWalls(walls));
+  course.add(buildWalls(walls, lanes, spacing));
 
   // One stripe per lane, so a table row can point at its duck.
   //
@@ -119,7 +146,7 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
         opacity: 0.5,
       }),
     );
-    stripe.position.set(length_m / 2, 0.002, laneOffsetZ(i, lanes) - LANE_SPACING * 0.42);
+    stripe.position.set(length_m / 2, 0.002, laneOffsetZ(i, lanes, spacing) - spacing * 0.42);
     stripe.name = `lane-stripe-${i}`;
     course.add(stripe);
   }

@@ -12,7 +12,7 @@ import { buildCourse } from "./course.js";
 import { applyFrame } from "./replay.js";
 import { buildRigTree } from "./rig.js";
 import { standOnCourse } from "./thumbnail.js";
-import { attachCourse, placeLane } from "./viewer.js";
+import { attachCourse, cameraSideOffset, placeLane } from "./viewer.js";
 
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
 const HILL = { length_m: 1.5, width_m: 0.8, slope_deg: 8, rig: "legs" };
@@ -141,5 +141,25 @@ describe("the wall toggle across a re-race", () => {
   it("does not fall over on an event with no walls at all", () => {
     const scene = new Group();
     expect(() => attachCourse(scene, { length_m: 2 }, 1, true)).not.toThrow();
+  });
+});
+
+describe("the camera's side offset", () => {
+  it("backs away as the arena widens", () => {
+    // Three lanes now span 2.6 m rather than 1.35, and a fixed offset left the
+    // outer two out of frame.
+    expect(cameraSideOffset(3, 0.85)).toBeGreaterThan(cameraSideOffset(1, 0.85));
+    expect(cameraSideOffset(3, 0.85)).toBeGreaterThan(1.275); // past the outer wall
+  });
+
+  it("never comes closer than the framing that always worked for one lane", () => {
+    expect(cameraSideOffset(1, 0.1)).toBeGreaterThanOrEqual(1.15);
+    expect(cameraSideOffset(0, 0.85)).toBeGreaterThanOrEqual(1.15);
+  });
+
+  it("clears the outermost wall at every lane count", () => {
+    for (const lanes of [1, 2, 3, 4, 5]) {
+      expect(cameraSideOffset(lanes, 0.85)).toBeGreaterThan((lanes * 0.85) / 2);
+    }
   });
 });

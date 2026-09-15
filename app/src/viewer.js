@@ -32,7 +32,7 @@ import {
   loadKinematics,
   rigGeometries,
 } from "./rig.js";
-import { LANE_SPACING, buildCourse, buildMarker, laneOffsetZ } from "./course.js";
+import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
 import { Player, applyFrame, frameAt } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
 
@@ -79,6 +79,21 @@ const GHOST_OPACITY = 0.5;
  * Extracted from createViewer so the rule has somewhere to be tested — the
  * viewer itself needs WebGL and has none in the suite.
  */
+/**
+ * How far to the side the camera must sit to frame this many lanes.
+ *
+ * A fixed 1.15 m framed three lanes when they were packed at 0.45 m apart. They
+ * are now drawn at the course's true width, so three of them span 2.6 m rather
+ * than 1.35 and the outer two fell out of frame. Pure, so the arithmetic is
+ * testable without a renderer.
+ */
+export function cameraSideOffset(lanes, spacing) {
+  const halfArena = (Math.max(1, lanes) * spacing) / 2;
+  // 1.15 is the framing that has always worked for a single lane; a wider
+  // arena is backed away from in proportion to how much wider it is.
+  return Math.max(1.15, 0.75 + halfArena * 1.35);
+}
+
 /**
  * Build the course for one race and put it in the scene, honouring the wall
  * toggle.
@@ -214,6 +229,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   let lanes = [];
   let course = null;
   let wallsVisible = false;
+  let sideOffset = 1.15;
   let player = new Player([]);
 
   function clearScene() {
@@ -230,6 +246,8 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
 
   function setLanes(entries, event) {
     clearScene();
+    const spacing = laneSpacing(event || {});
+    sideOffset = cameraSideOffset(entries.length, spacing);
     if (event) {
       course = attachCourse(scene, event, Math.max(1, entries.length), wallsVisible);
     }
@@ -244,7 +262,9 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
         livery: entry.livery ?? "classic",
         opacity: tier === "ghost" ? GHOST_OPACITY : 1,
       });
-      const z = laneOffsetZ(i, entries.length, LANE_SPACING);
+      // The same spacing buildCourse used: the ducks must stand between their
+      // own walls, not between someone else's.
+      const z = laneOffsetZ(i, entries.length, spacing);
       placeLane(rig, z);
       scene.add(rig.placer);
 
@@ -313,8 +333,9 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
       const lead = Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]));
       _target.set(lead, 0.12, 0);
       // Trackside: mostly to the side, slightly behind and above, so the gait
-      // reads as a gait rather than a shape coming at you.
-      camera.position.set(lead - 0.35, 0.34, 1.15);
+      // reads as a gait rather than a shape coming at you. The side offset
+      // widens with the arena so the outer lanes stay in frame.
+      camera.position.set(lead - 0.35, 0.34, sideOffset);
       controls.target.copy(_target);
     }
     controls.update();

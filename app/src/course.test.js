@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Vector3 } from "three";
-import { LANE_SPACING, TIER_MARKER, buildCourse, buildMarker, laneOffsetZ, buildWalls } from "./course.js";
+import { LANE_SPACING, TIER_MARKER, buildCourse, buildMarker, laneOffsetZ, buildWalls, laneSpacing } from "./course.js";
 
 describe("laneOffsetZ", () => {
   it("centres a single lane", () => {
@@ -93,9 +93,9 @@ describe("the lane walls", () => {
     { name: "wall_left", pos: [1.0, 0.425, 0.075], half: [1.5, 0.025, 0.075] },
     { name: "wall_right", pos: [1.0, -0.425, 0.075], half: [1.5, 0.025, 0.075] },
   ];
+  const EVENT = { length_m: 2, width_m: 0.8, walls: WALLS };
 
   it("is hidden until asked for", () => {
-    // Two grey slabs around every replay would be worse than the problem.
     expect(buildWalls(WALLS).visible).toBe(false);
   });
 
@@ -112,16 +112,9 @@ describe("the lane walls", () => {
   it("doubles the half-extents, mapping them the same way", () => {
     const [left] = buildWalls(WALLS).children;
     const { width, height, depth } = left.geometry.parameters;
-    expect(width).toBeCloseTo(3.0, 6); // 2 * 1.5 along the lane
-    expect(height).toBeCloseTo(0.15, 6); // 2 * 0.075, the wall's height
-    expect(depth).toBeCloseTo(0.05, 6); // 2 * 0.025, its thickness
-  });
-
-  it("is the length of the lane plus its overrun, not the lane alone", () => {
-    // 3.0 for a 2 m course: the physics wall runs 0.5 m past the finish, and
-    // drawing it shorter would show a gap the robot cannot actually pass.
-    const [left] = buildWalls(WALLS).children;
-    expect(left.geometry.parameters.width).toBeGreaterThan(2.0);
+    expect(width).toBeCloseTo(3.0, 6);
+    expect(height).toBeCloseTo(0.15, 6);
+    expect(depth).toBeCloseTo(0.05, 6);
   });
 
   it("draws nothing when an event serves no walls", () => {
@@ -129,10 +122,52 @@ describe("the lane walls", () => {
     expect(buildWalls([]).children).toHaveLength(0);
   });
 
+  it("gives EVERY lane its own pair", () => {
+    // The physics has no lanes: each run is a separate simulation on the same
+    // single course, so each drawn lane really did have its own walls.
+    expect(buildWalls(WALLS, 3, laneSpacing(EVENT)).children).toHaveLength(6);
+  });
+
+  it("puts each duck between its own walls, not inside them", () => {
+    // The bug she saw: at the old fixed 0.45 m spacing the outer ducks stood
+    // exactly where the walls were drawn.
+    const spacing = laneSpacing(EVENT);
+    const group = buildWalls(WALLS, 3, spacing);
+    for (let lane = 0; lane < 3; lane += 1) {
+      const z = laneOffsetZ(lane, 3, spacing);
+      const [a, b] = group.children.slice(lane * 2, lane * 2 + 2).map((m) => m.position.z);
+      expect(Math.abs(a - z)).toBeCloseTo(0.425, 6);
+      expect(Math.abs(b - z)).toBeCloseTo(0.425, 6);
+      expect(Math.min(a, b)).toBeLessThan(z);
+      expect(Math.max(a, b)).toBeGreaterThan(z);
+    }
+  });
+
+  it("makes neighbouring lanes share a wall line, as a real track does", () => {
+    const spacing = laneSpacing(EVENT);
+    const group = buildWalls(WALLS, 2, spacing);
+    const zs = group.children.map((m) => m.position.z).sort((x, y) => x - y);
+    expect(zs[1]).toBeCloseTo(zs[2], 6);
+  });
+
   it("rides with the course, so it tilts with a slope", () => {
-    const course = buildCourse({ length_m: 1.5, slope_deg: 8, walls: WALLS }, 1);
-    const group = course.children.find((c) => c.name === "walls");
+    const course = buildCourse({ ...EVENT, slope_deg: 8 }, 1);
+    const group = course.getObjectByName("walls");
     expect(group).not.toBeNull();
     expect(group.parent).toBe(course);
+  });
+});
+
+describe("laneSpacing", () => {
+  it("is the course's true width, walls included", () => {
+    // It was a fixed 0.45 m while a real course is 0.85 m wide — the lanes were
+    // drawn at roughly half their width, which is why truthful walls overlapped.
+    const walls = [{ name: "w", pos: [1, 0.425, 0.075], half: [1.5, 0.025, 0.075] }];
+    expect(laneSpacing({ width_m: 0.8, walls })).toBeCloseTo(0.85, 6);
+  });
+
+  it("falls back sensibly for an event that serves no walls", () => {
+    expect(laneSpacing({ width_m: 0.8 })).toBeCloseTo(0.85, 6);
+    expect(laneSpacing()).toBeGreaterThan(0.5);
   });
 });
