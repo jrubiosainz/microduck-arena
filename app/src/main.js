@@ -1,14 +1,15 @@
-// Three views, chosen by the hash. Everything else lives in its view.
+// Four views, chosen by the hash. Everything else lives in its view.
 
 import { getEvents } from "./api.js";
 import { renderHome } from "./home.js";
 import { renderPlayer } from "./player.js";
 import { renderRace } from "./race.js";
+import { renderRun } from "./run.js";
 import { parseRoute, themeFor } from "./router.js";
 import { renderVote } from "./vote.js";
 
 const root = document.querySelector("#app");
-const state = { events: null, viewer: null };
+const state = { events: null, viewer: null, teardown: null };
 
 async function events() {
   if (!state.events) state.events = await getEvents();
@@ -31,6 +32,9 @@ async function show() {
   // viewers keep animating against the same canvas.
   state.viewer?.dispose();
   state.viewer = null;
+  // A reveal in progress is abandoned, not finished, when the page is left.
+  state.teardown?.();
+  state.teardown = null;
 
   const route = parseRoute(location.hash);
   dress(themeFor(route.view));
@@ -50,6 +54,9 @@ async function show() {
         return;
       }
       await renderVote(root, { event, state });
+
+    } else if (route.view === "run") {
+      await renderRun(root, route.runId, state);
     } else if (route.view === "player") {
       await renderPlayer(root, route.user);
     } else {

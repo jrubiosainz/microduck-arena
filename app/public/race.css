@@ -768,3 +768,53 @@ table.board .withdraw:focus-visible,
 @keyframes fly-to-chip {
   to { translate: var(--fly-x) var(--fly-y); scale: 0.3; opacity: 0.4; }
 }
+
+/* ── a publication: the run page ─────────────────────────────────────── */
+
+.run-byline { margin: 0 0 14px; color: var(--ink-70); }
+.run-byline a { color: var(--sky-inked); }
+.run-byline .sticker { font-size: 0.7rem; padding: 2px 8px; }
+
+/* The stage's key: one entry per lane, in the lane's own stripe colour. */
+.run-legend li { color: var(--lane); }
+.run-legend li::before { background: var(--lane); border-color: var(--lane); }
+.run-legend strong { color: var(--ink); }
+
+/* The score: the split-flap board and the CRT the stamp lands on, side by side. */
+.run-score {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  margin: 26px 0;
+}
+@media (max-width: 760px) { .run-score { grid-template-columns: minmax(0, 1fr); } }
+.run-score .scoreboard { align-items: center; }
+.run-score .flip { font-size: clamp(2rem, 6vw, 3.6rem); }
+.run-score .crt-screen {
+  display: grid;
+  place-items: center;
+  min-height: 7rem;
+  aspect-ratio: auto;
+  overflow: visible; /* the stamp overshoots the bezel as it lands */
+  box-shadow: var(--shadow-card-min) var(--shadow-card-min) var(--shadow-blur) var(--ink);
+}
+.run-score .stamp { font-size: clamp(1.4rem, 4vw, 2.6rem); rotate: calc(-1 * var(--rotate-2-5)); }
+.run-facts { grid-column: 1 / -1; margin: 0; color: var(--ink-70); }
+
+/* The pegboard: a window of the board, this run's row in lime, each row a link. */
+.run-board { margin: 26px 0; }
+.pegboard-row { color: inherit; text-decoration: none; }
+.pegboard-row:hover { background: var(--cream); }
+.pegboard-row-you:hover { background: var(--lime); }
+
+/* What the run earned, one sticker per receipt. */
+.run-receipts { display: flex; flex-wrap: wrap; gap: 14px; margin: 26px 0; }
+.run-receipts .mono-label { color: var(--ink-70); }
+
+.run-details { margin-top: 26px; }
+.run-seeds { border-collapse: collapse; margin: 8px 0 18px; }
+.run-seeds td { padding: 4px 14px 4px 0; font-variant-numeric: tabular-nums; }
+.run-seeds .replayed { color: var(--orange-inked); }
+.run-links { display: flex; flex-wrap: wrap; gap: 18px; margin: 0; }
+.run-links a { color: var(--orange-inked); }
