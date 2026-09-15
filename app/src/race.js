@@ -13,12 +13,12 @@ import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { MAX, MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
-import { voteHref } from "./router.js";
 import { panelState, signInHref } from "./session.js";
 import { signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
 import { modeIsUseful, visibleRows } from "./views.js";
 import { createViewer } from "./viewer.js";
+import { voteButton } from "./votebutton.js";
 
 /**
  * The entry column: a sign-in prompt, or the racing/publishing controls.
@@ -236,26 +236,17 @@ export function renderEventFacts(root, event) {
 }
 
 /**
- * The title, and the way into the booth when the event takes votes.
+ * The way into the booth, when this event takes votes.
  *
- * Its own function so the rule is testable without a WebGL viewer or a
- * leaderboard fetch: give it an event, check what comes back.
+ * Placed above the entry form, not beside the title -- "détaché et plus
+ * visible" was the owner's ask, and a button sharing a line with a heading
+ * reads as a menu item, not a call to action. Its own function so the
+ * placement is testable without a WebGL viewer or a leaderboard fetch: give
+ * it a root with an `#entry` node and an event, and check what lands before it.
  */
-export function raceTitle(event) {
-  const head = document.createElement("div");
-  head.className = "racehead";
-  const title = document.createElement("h2");
-  title.className = "racetitle";
-  title.textContent = event.title;
-  head.append(title);
-  if (event.vote) {
-    const link = document.createElement("a");
-    link.className = "racevote";
-    link.href = voteHref(event.id);
-    link.textContent = "Vote";
-    head.append(link);
-  }
-  return head;
+export function renderVoteButton(root, event) {
+  if (!event.vote) return;
+  root.querySelector("#entry").before(voteButton(event, { variant: "panel" }));
 }
 
 export async function renderRace(root, { event, state }) {
@@ -267,7 +258,7 @@ export async function renderRace(root, { event, state }) {
   const hall = document.createElement("main");
   hall.className = "hall";
   hall.innerHTML = `
-    <div id="racehead"></div>
+    <h2 class="racetitle">${event.title}</h2>
     <dl class="facts" id="facts"></dl>
     <div class="racegrid">
       <div>
@@ -288,7 +279,9 @@ export async function renderRace(root, { event, state }) {
           <li class="key--ghost">the rest</li>
         </ul>
       </div>
-      <aside class="entry" id="entry"></aside>
+      <div class="entry-col">
+        <aside class="entry" id="entry"></aside>
+      </div>
     </div>
     <div class="boardtop">
       <div class="modes" role="group" aria-label="Which runs to show">
@@ -303,7 +296,7 @@ export async function renderRace(root, { event, state }) {
     </div>
   `;
   root.append(hall);
-  root.querySelector("#racehead").replaceWith(raceTitle(event));
+  renderVoteButton(root, event);
 
   renderEventFacts(root, event);
 

@@ -44,6 +44,13 @@ body { font: 15px/1.55 var(--body); }
 
 /* ── the entry column ─────────────────────────────────────────────────── */
 
+/* The vote button (when the event has one) and the entry note, stacked in
+   the same 17rem grid column. Stretch is the flex default, so the note
+   keeps the column's full width; only the button opts out, via
+   .vote-button--panel's align-self below, to sit right-aligned above it. */
+.entry-col { display: flex; flex-direction: column; gap: 14px; }
+.entry-col .vote-button--panel { align-self: flex-end; }
+
 /* A note taped to the wall, the way an event is on the front: cream in a 2 px
    ink border, its own ink shadow, a strip of tape across the top and the
    charter's smallest lean. The tape is components.css's .flyer-tape, put there
@@ -580,20 +587,3 @@ table.board .withdraw:focus-visible,
 
 .vote-status { margin: 0.75rem 0 0; color: var(--ink-70); font-size: 0.85rem; min-height: 1.2em; }
 .vote-status.bad { color: var(--orange-inked); font-weight: 600; }
-
-.racehead {
-  display: flex;
-  align-items: baseline;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.racevote {
-  padding: 0.35rem 0.9rem;
-  border-radius: 0.25rem;
-  background: #c8ff2e;
-  color: #12131a;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-decoration: none;
-}

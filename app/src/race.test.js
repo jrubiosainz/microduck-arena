@@ -6,7 +6,7 @@
 // what would have caught that.
 
 import { describe, expect, it, vi } from "vitest";
-import { raceTitle, renderEntryPanel, renderEventFacts } from "./race.js";
+import { renderEntryPanel, renderEventFacts, renderVoteButton } from "./race.js";
 
 const event = {
   seeds: 5,
@@ -289,18 +289,32 @@ describe("the training-environment field", () => {
   });
 });
 
-describe("the vote button", () => {
-  it("stands beside the title only when the event takes votes", () => {
-    const timed = document.createElement("div");
-    timed.append(raceTitle({ id: "sprint-2m", title: "2 m Sprint" }));
-    expect(timed.querySelector("a.racevote")).toBeNull();
+describe("renderVoteButton: the way into the booth, above the entry form", () => {
+  // A bare stand-in for the bit of renderRace's template this cares about --
+  // no stage, no viewer, no leaderboard fetch, just the node the placement
+  // is anchored on.
+  function root() {
+    const div = document.createElement("div");
+    div.innerHTML =
+      '<div class="racegrid"><div class="entry-col"><aside class="entry" id="entry"></aside></div></div>';
+    return div;
+  }
 
-    const votedBox = document.createElement("div");
-    votedBox.append(
-      raceTitle({ id: "swag-contest", title: "Swag Contest", vote: { ballot_min: 2 } }),
-    );
-    const link = votedBox.querySelector("a.racevote");
-    expect(link.getAttribute("href")).toBe("#/v/swag-contest");
-    expect(link.textContent).toBe("Vote");
+  it("sits directly above the entry form when the event takes votes", () => {
+    const div = root();
+    renderVoteButton(div, { id: "swag-contest", vote: { ballot_min: 2 } });
+    const button = div.querySelector(".vote-button--panel");
+    expect(button).not.toBeNull();
+    expect(button.getAttribute("href")).toBe("#/v/swag-contest");
+    // Detached from the title on purpose (the owner asked for it "plus
+    // visible"): it is the sibling right before the form, not beside a
+    // heading somewhere else on the page.
+    expect(button.nextElementSibling).toBe(div.querySelector("#entry"));
+  });
+
+  it("adds nothing on a timed event", () => {
+    const div = root();
+    renderVoteButton(div, { id: "sprint-2m" });
+    expect(div.querySelector(".vote-button")).toBeNull();
   });
 });
