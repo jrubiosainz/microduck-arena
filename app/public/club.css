@@ -52,7 +52,16 @@
   gap: clamp(1rem, 4vw, 3rem);
   min-width: 0;
 }
-.masthead-player { flex: none; }
+/* Pushed out past the content column toward the window's edge, but never past
+   the gutter and never on a narrow screen, where the max() falls to zero and
+   the plate stays inside the column with everything else. */
+.masthead-player {
+  flex: none;
+  margin-right: calc(-1 * min(
+    96px,
+    max(0px, (100vw - var(--space-content-column)) / 2 - var(--space-gutter-min))
+  ));
+}
 
 /* A square card, paper on the cover's ink: your picture, your handle, and
    where you stand. Square because it reads as a locker plate rather than as
@@ -67,7 +76,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: 12.5rem;
+  width: 10.5rem;
   aspect-ratio: 1;
   padding: var(--space-card-padding-min);
   border: 3px solid var(--ink);
@@ -89,9 +98,9 @@
    width the picture was the card and the handle read as a caption under it. */
 .player-card-you .avatar {
   flex: none;
-  width: 76px;
-  height: 76px;
-  font-size: 44px;
+  width: 62px;
+  height: 62px;
+  font-size: 36px;
 }
 .player-card-name {
   font-family: var(--type-card-title-family);

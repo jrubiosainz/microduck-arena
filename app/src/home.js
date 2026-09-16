@@ -156,7 +156,9 @@ export function masthead(me, standing) {
   head.className = "masthead fx-ray-fan";
   const row = el("div", "masthead-row");
   const lockup = el("div", "masthead-lockup");
-  lockup.append(wordmark({ variant: "cover" }), duckHead({ quacks: true }));
+  // The duck leads, the mark follows — the head reads as the badge on the
+  // title rather than as a mascot trailing after it.
+  lockup.append(duckHead({ quacks: true }), wordmark({ variant: "cover" }));
   const nav = document.createElement("nav");
   nav.className = "masthead-player";
   nav.setAttribute("aria-label", "Player");
