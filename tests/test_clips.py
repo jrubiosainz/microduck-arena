@@ -191,3 +191,37 @@ def test_the_clip_route_says_none_pending_then_ready_with_its_files(tmp_path):
     assert api.get(f"{url}/poster.png").headers["content-type"] == "image/png"
     assert api.get(f"{url}/clip.json").status_code == 404
     assert api.get("/api/runs/NOPE/clip").status_code == 404
+
+
+def test_a_run_link_unfurls_with_the_poster_once_the_clip_is_ready(tmp_path, monkeypatch):
+    monkeypatch.setenv("SPACE_HOST", "arena.hf.space")
+    api, app, record = app_with_run(tmp_path)
+    page = api.get(f"/r/{record.run_id}", follow_redirects=False)
+    assert page.status_code == 200
+    assert page.headers["content-type"].startswith("text/html")
+    assert f'<meta property="og:url" content="https://arena.hf.space/r/{record.run_id}">' in page.text
+    assert '<meta property="og:title" content="@alice · walker v2 · 2 m Sprint">' in page.text
+    assert "og:image" not in page.text
+    assert f'url=/#/r/{record.run_id}' in page.text
+
+    manifest = clip_manifest(record.run_id, rendered(), "2026-09-16T10:05:00Z")
+    app.state.store.put_clip(record.run_id, {"clip.json": _json.dumps(manifest).encode(),
+                                             "landscape.mp4": b"L", "vertical.mp4": b"V",
+                                             "poster.png": b"P"})
+    page = api.get(f"/r/{record.run_id}").text
+    assert (f'<meta property="og:image" content="https://arena.hf.space/api/runs/'
+            f'{record.run_id}/clip/poster.png">') in page
+    assert '<meta property="og:video:width" content="1920">' in page
+    assert '<meta name="twitter:card" content="summary_large_image">' in page
+    assert api.get("/r/NOPE").status_code == 404
+
+
+def test_the_unfurl_escapes_what_a_submitter_typed_and_falls_back_to_the_request_host(tmp_path):
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="alice", clip_worker=False)
+    app = create_app(config)
+    record = make_record(user="alice", policy_name='x"><script>alert(1)</script>')
+    app.state.store.append(record, encode_trace(np.zeros((5, 21), dtype=np.float32)))
+    page = TestClient(app, base_url="http://testserver").get(f"/r/{record.run_id}").text
+    assert "<script>alert" not in page
+    assert "&lt;script&gt;" in page
+    assert f'content="http://testserver/r/{record.run_id}"' in page

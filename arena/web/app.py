@@ -16,6 +16,7 @@ from .config import ArenaConfig
 from .routes_auth import router as auth_router
 from .routes_read import router as read_router
 from .routes_submit import router as submit_router
+from .routes_unfurl import router as unfurl_router
 from .routes_vote import BallotBook
 from .routes_vote import router as vote_router
 from .session import Sessions
@@ -87,6 +88,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.include_router(submit_router)
     app.include_router(auth_router)
     app.include_router(vote_router)
+    app.include_router(unfurl_router)
 
     if config.frontend_dir is None:
         @app.get("/")
