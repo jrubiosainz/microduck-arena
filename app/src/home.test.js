@@ -100,8 +100,11 @@ describe("the first chapter's band", () => {
     // The fade must stay a background layer. `mask-image` resolves through
     // `mask-mode`, which browsers have differed on, and it put the dots at
     // the wrong end of the band once already.
-    expect(dotRules, "the dots have no wash to fade them out below the top")
-      .toMatch(/linear-gradient\(to bottom, transparent 0%, var\(--warm-paper\)/);
+    // `to top` puts the gradient's 0% at the BOTTOM edge, so the dots gather
+    // along the band's lower edge against the tilted rule. Flipping this to
+    // `to bottom` moves the whole field to the other end of the band.
+    expect(dotRules, "the dots are not gathered at the band's lower edge")
+      .toMatch(/linear-gradient\(to top, transparent 0%, var\(--warm-paper\)/);
     expect(dotRules, "the fade went back to being a mask").not.toMatch(/mask-image/);
     // The wash must sit BEHIND the text. Painted over it, it faded the title
     // to a ghost and swallowed every ladder row after the first.
