@@ -729,6 +729,7 @@ table.board .withdraw:focus-visible,
   .vote-ceremony__flap {
     transition: none;
   }
+}
 
 /* ── a publication: the run page ─────────────────────────────────────── */
 
