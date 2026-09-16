@@ -33,6 +33,7 @@ import {
   rigGeometries,
 } from "./rig.js";
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
+import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
 
@@ -117,6 +118,32 @@ export function placeLane(rig, laneZ) {
   rig.placer.rotation.set(0, 0, 0);
 }
 
+// A nameplate's height in metres and how far above the trunk it floats. Tuned
+// by eye on the clip page; the publication page hangs none.
+const PLATE_HEIGHT = 0.05;
+const PLATE_LIFT = 0.16;
+
+/**
+ * Where the camera stands and what it looks at, for one frame.
+ *
+ * `null` is the chase camera the publication and race pages always had:
+ * behind the leader, trackside, the side offset widening with the arena. An
+ * event's `[clip.camera]` spec overrides its constants or fixes the camera
+ * outright; `distance` scales a chase's offsets, which is how the vertical
+ * clip fits the same picture in a narrower frame. Pure, so it is testable.
+ */
+export function cameraPose(spec, lead, sideOffset) {
+  if (spec?.kind === "fixed") return { position: [...spec.position], target: [...spec.target] };
+  const back = spec?.back ?? 0.35;
+  const height = spec?.height ?? 0.34;
+  const side = spec?.side ?? sideOffset;
+  const distance = spec?.distance ?? 1;
+  return {
+    position: [lead - back * distance, height * distance, side * distance],
+    target: [lead, spec?.target_height ?? 0.12, 0],
+  };
+}
+
 // The GLB is one 1.3 MB download shared by every rig, so it is memoised on its
 // own and never re-fetched when you move between a walking race and a roller
 // race.
@@ -148,7 +175,10 @@ function loadAssets(rig) {
   return rigAssets.get(rig);
 }
 
-export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs" } = {}) {
+export async function createViewer(
+  canvas,
+  { onChaseChange, rig: rigName = "legs", manual = false, camera: spec = null } = {},
+) {
   // `rigName` and not `rig`, because setLanes below names each lane's built
   // tree `rig` — the two would shadow, and it would work by accident today
   // only because nothing reads the parameter after this line.
@@ -158,7 +188,9 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   const { kinematics, geometries } = await loadAssets(rigName);
 
   const renderer = new WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  // A clip is exactly its layout's pixels: the recorder wants the drawing
+  // buffer to match the frame it is composing, not a device's own ratio.
+  renderer.setPixelRatio(manual ? 1 : Math.min(devicePixelRatio, 2));
   // The liveries' colours are linear and deliberately oversaturated because the
   // simulator tone-maps with ACES; without this every robot reads too hot.
   renderer.toneMapping = ACESFilmicToneMapping;
@@ -208,24 +240,28 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   grid.position.y = -0.001; // just under the course so it reads as backdrop
   scene.add(grid);
 
-  const camera = new PerspectiveCamera(42, 1, 0.02, 100);
+  const camera = new PerspectiveCamera(spec?.fov ?? 42, 1, 0.02, 100);
   camera.position.set(-0.35, 0.34, 1.15);
-
-  const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.minDistance = 0.25;
-  controls.maxDistance = 8;
-  controls.target.set(0, 0.12, 0);
 
   // Chase camera on by default; the first drag hands control to the user, the
   // same bargain the original sandbox makes.
   let chase = true;
-  controls.addEventListener("start", () => {
-    if (!chase) return;
-    chase = false;
-    onChaseChange?.(false);
-  });
+
+  // A clip drives the camera from cameraPose alone: no controls to fight, no
+  // "start" drag to hand chase away.
+  const controls = manual ? null : new OrbitControls(camera, canvas);
+  if (controls) {
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 0.25;
+    controls.maxDistance = 8;
+    controls.target.set(0, 0.12, 0);
+    controls.addEventListener("start", () => {
+      if (!chase) return;
+      chase = false;
+      onChaseChange?.(false);
+    });
+  }
 
   let lanes = [];
   let course = null;
@@ -237,6 +273,8 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     for (const lane of lanes) {
       scene.remove(lane.rig.placer);
       if (lane.marker) scene.remove(lane.marker);
+      lane.plate?.dispose();
+      if (lane.plate) scene.remove(lane.plate.sprite);
     }
     lanes = [];
     if (course) {
@@ -276,7 +314,15 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
       marker.position.z = z;
       scene.add(marker);
 
-      return { ...entry, rig, marker, tier };
+      // The duck's name, hung over its head in its lane's colour: the clip
+      // has four ducks and no legend, so the name rides the duck.
+      let plate = null;
+      if (entry.name) {
+        plate = nameplate(entry.name, entry.nameColour ?? "#faf8f2", "#08080c");
+        plate.sprite.scale.set(PLATE_HEIGHT * plate.ratio, PLATE_HEIGHT, 1);
+        scene.add(plate.sprite);
+      }
+      return { ...entry, rig, marker, plate, tier };
     });
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
     player.play();
@@ -319,32 +365,46 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   }
 
   const _target = new Vector3();
+  const _trunk = new Vector3();
   let raf = null;
-  function tick(now) {
-    player.advance(now);
+
+  function draw() {
     const indices = player.frameIndices();
     lanes.forEach((lane, i) => {
       const frame = frameAt(lane.trace, indices[i]);
       applyFrame(lane.rig, frame);
       // Keep the marker under its duck. frame[0] is MJCF +x, which is three +x.
       if (lane.marker) lane.marker.position.x = frame[0];
+      if (lane.plate) {
+        lane.rig.bodies.get("trunk_base").getWorldPosition(_trunk);
+        lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);
+      }
     });
 
     if (chase && lanes.length) {
       // Follow the leader along +x, the direction of travel, from behind and
       // slightly to one side so the gait is visible rather than end-on.
       const lead = Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]));
-      _target.set(lead, 0.12, 0);
-      // Trackside: mostly to the side, slightly behind and above, so the gait
-      // reads as a gait rather than a shape coming at you. The side offset
-      // widens with the arena so the outer lanes stay in frame.
-      camera.position.set(lead - 0.35, 0.34, sideOffset);
-      controls.target.copy(_target);
+      const pose = cameraPose(spec, lead, sideOffset);
+      camera.position.set(...pose.position);
+      _target.set(...pose.target);
+      if (controls) controls.target.copy(_target);
+      else camera.lookAt(_target);
     }
-    controls.update();
-
+    controls?.update();
     renderer.render(scene, camera);
+  }
+
+  function tick(now) {
+    player.advance(now);
+    draw();
     raf = requestAnimationFrame(tick);
+  }
+
+  /** Manual mode: pose every lane at `seconds` and render once. */
+  function frame(seconds) {
+    player.seek(seconds);
+    draw();
   }
 
   resize();
@@ -354,7 +414,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   // the drawing buffer 36% taller than the box it was painted into.
   const watcher = new ResizeObserver(resize);
   watcher.observe(canvas);
-  raf = requestAnimationFrame(tick);
+  if (!manual) raf = requestAnimationFrame(tick);
 
   setBrightness(brightness);
 
@@ -363,6 +423,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     follow,
     setWallsVisible,
     setBrightness,
+    frame,
     get brightness() {
       return brightness;
     },
@@ -375,7 +436,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     dispose() {
       if (raf) cancelAnimationFrame(raf);
       watcher.disconnect();
-      controls.dispose();
+      controls?.dispose();
       clearScene();
       environment.dispose();
       renderer.dispose();

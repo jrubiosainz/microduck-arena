@@ -8,15 +8,13 @@ import { getMe, getRun, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { LANE_COLORS, LANE_CSS } from "./course.js";
 import { formatScore, formatSpeed } from "./format.js";
+import { lanesFor } from "./lanes.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
 import { playerHref, raceHref, runHref } from "./router.js";
 import { footer, signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
 import { createViewer } from "./viewer.js";
-
-// How many of the ducks ranked just under this run race beside it.
-const RIVALS = 3;
 
 const TONES = {
   first_event: "sticker-lime",
@@ -30,12 +28,6 @@ function el(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
-}
-
-/** The lanes on the stage: this run first, then the rows ranked just under it. */
-function lanesFor(run) {
-  const at = run.board.findIndex((row) => row.you);
-  return [run.board[at], ...run.board.slice(at + 1, at + 1 + RIVALS)];
 }
 
 /** Which seed the stored replay is, and why that one. */
