@@ -36,25 +36,33 @@ export const HEIGHT = 198;
 export const PORTRAIT = 440;
 
 /**
- * Sitting, the way the robot is photographed on the product page: hips folded,
- * knees up, head level and turned a little toward whoever is looking.
+ * Sitting, as the product page photographs it: legs out in front and SPLAYED,
+ * feet flat, knees only slightly bent, trunk upright, head level.
+ *
+ * The splay is the half of it that reads — a sit with the legs together is a
+ * squat, and the page's duck is sitting on the floor. Hip roll only opens 22°
+ * either way, so the yaw carries the rest of it.
  *
  * Every value is clamped to the joint's own range by setJoint, so a sign that
  * turns out to be the other way round reads as a shallower sit rather than as
- * a broken duck. The default pose is a machine standing to attention, which is
- * the one thing a picture on a front page should not be.
+ * a broken duck. The mirrored joints (roll, yaw) are the uncertain ones: if
+ * only one leg opens, they mirror with the SAME sign, not opposite ones.
  */
 export const PORTRAIT_POSE = {
-  left_hip_pitch: 1.1,
-  left_knee: -1.3,
-  left_ankle: 0.5,
-  right_hip_pitch: 1.1,
-  right_knee: -1.3,
-  right_ankle: 0.5,
-  neck_pitch: -0.14,
-  head_pitch: -0.1,
-  head_yaw: 0.3,
-  head_roll: 0.12,
+  left_hip_pitch: 1.35,
+  left_hip_roll: 0.38,
+  left_hip_yaw: 0.45,
+  left_knee: -0.55,
+  left_ankle: 0.7,
+  right_hip_pitch: 1.35,
+  right_hip_roll: -0.38,
+  right_hip_yaw: -0.45,
+  right_knee: -0.55,
+  right_ankle: 0.7,
+  neck_pitch: -0.1,
+  head_pitch: -0.05,
+  head_yaw: 0.12,
+  head_roll: 0.06,
 };
 
 // The two liveries that read most distinctly against the dark ground, so the
@@ -182,11 +190,12 @@ export async function renderDuckPortrait({
     duck.placer.position.set(0, 0, 0);
     scene.add(duck.placer);
 
-    // Three-quarter view, and lower than the standing shot was — a sitting
-    // duck's mass is nearer the floor, and the old eyeline looked down on it.
+    // Nearly head-on, as the product page shoots it — the duck faces +x, so
+    // the camera stands in front of it rather than behind, where the course
+    // stills put theirs. Low, because a sitting duck's mass is near the floor.
     const camera = new PerspectiveCamera(30, 1, 0.02, 60);
-    camera.position.set(0.42, 0.20, 0.55);
-    camera.lookAt(0, 0.11, 0);
+    camera.position.set(0.66, 0.16, 0.2);
+    camera.lookAt(0, 0.1, 0);
 
     renderer.render(scene, camera);
     // PNG, not WebP: the alpha has to survive, and this is one small image.
