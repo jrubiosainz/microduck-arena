@@ -47,3 +47,22 @@ def test_a_clip_is_never_written_twice(tmp_path):
     store.put_clip("R3", {"clip.json": b"{}"})
     with pytest.raises(FileExistsError):
         store.put_clip("R3", {"clip.json": b"{}"})
+
+
+from pathlib import Path
+
+from arena.recorder import ffmpeg_args
+
+
+def test_the_encode_is_h264_with_the_pcm_muxed_and_the_live_tag_set():
+    args = ffmpeg_args(25, Path("/tmp/s.f32"), Path("/tmp/out.mp4"))
+    assert args[:2] == ["ffmpeg", "-y"]
+    assert ["-f", "image2pipe", "-framerate", "25", "-c:v", "mjpeg", "-i", "-"] == args[4:12]
+    assert ["-f", "f32le", "-ar", "48000", "-ac", "2", "-i", "/tmp/s.f32"] == args[12:20]
+    # Values are unique in the command; flags are not (`-c:v` names the input's
+    # mjpeg first), so each value is found and the flag before it is checked.
+    for flag, value in (("-c:v", "libx264"), ("-crf", "23"), ("-pix_fmt", "yuv420p"),
+                        ("-c:a", "aac"), ("-b:a", "192k"), ("-metadata", "crowdMixed=true"),
+                        ("-movflags", "+faststart+use_metadata_tags")):
+        assert args[args.index(value) - 1] == flag
+    assert args[-1] == "/tmp/out.mp4"

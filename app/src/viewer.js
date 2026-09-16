@@ -187,7 +187,9 @@ export async function createViewer(
   // race page shows one event, and an event declares one rig.
   const { kinematics, geometries } = await loadAssets(rigName);
 
-  const renderer = new WebGLRenderer({ canvas, antialias: true });
+  // Under SwiftShader MSAA cost 2.7× per frame (401 → 151 ms at 1080p), and a
+  // clip is encoded by x264 anyway, which softens edges; the interactive pages keep it.
+  const renderer = new WebGLRenderer({ canvas, antialias: !manual });
   // A clip is exactly its layout's pixels: the recorder wants the drawing
   // buffer to match the frame it is composing, not a device's own ratio.
   renderer.setPixelRatio(manual ? 1 : Math.min(devicePixelRatio, 2));

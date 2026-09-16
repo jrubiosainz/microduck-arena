@@ -6,13 +6,17 @@ The client is the protocol's JSON over a websocket and nothing more: a call is
 a message with an id and the reply that carries the same id.
 """
 
+import base64
 import json
 import os
+import platform
 import shutil
 import subprocess
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
 CHROMES = (
@@ -177,3 +181,120 @@ class Chrome:
 
     def __exit__(self, *_):
         self.close()
+
+
+SIZES = {"landscape": (1920, 1080), "vertical": (1080, 1920)}
+# The soundtrack comes out of the page in pieces this big, base64 over the protocol.
+CHUNK = 4 << 20
+JPEG_QUALITY = 92
+
+
+def ffmpeg_args(fps: int, pcm: Path, out: Path) -> list[str]:
+    """H.264 at CRF 23 with the page's PCM muxed as AAC, faststart, and the
+    `crowdMixed` tag the live programme reads before it decides whether to add
+    a crowd of its own."""
+    return [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-f", "image2pipe", "-framerate", str(fps), "-c:v", "mjpeg", "-i", "-",
+        "-f", "f32le", "-ar", "48000", "-ac", "2", "-i", str(pcm),
+        "-map", "0:v", "-map", "1:a",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k",
+        "-metadata", "crowdMixed=true", "-movflags", "+faststart+use_metadata_tags",
+        str(out),
+    ]
+
+
+@dataclass(frozen=True)
+class RenderedLayout:
+    mp4: bytes
+    plan: dict
+    crowd: dict | None
+    timing: dict
+
+
+@dataclass(frozen=True)
+class RenderedRun:
+    layouts: dict[str, RenderedLayout]
+    poster: bytes
+
+
+def _open(chrome: Chrome, origin: str, run_id: str, layout: str) -> Tab:
+    width, height = SIZES[layout]
+    tab = chrome.tab(width, height)
+    tab.navigate(f"{origin}/clip.html?run={run_id}&layout={layout}&frame=0")
+    tab.wait_ready()
+    return tab
+
+
+def _soundtrack(tab: Tab) -> bytes:
+    """The whole soundtrack, rendered in the page and carried over in pieces."""
+    length = tab.evaluate("window.clip.soundtrack()", await_promise=True, timeout=600.0)
+    pcm = bytearray()
+    for offset in range(0, length, CHUNK):
+        chunk = tab.evaluate(f"window.clip.chunk({offset}, {CHUNK})", await_promise=True, timeout=120.0)
+        pcm += base64.b64decode(chunk)
+    return bytes(pcm)
+
+
+def _record_layout(tab: Tab, pcm_path: Path, out: Path, nice: int) -> tuple[RenderedLayout, bytes]:
+    plan = tab.evaluate("window.clip.plan")
+    crowd = tab.evaluate("window.clip.score.crowd")
+    opened = time.monotonic()
+    ffmpeg = subprocess.Popen(niced(ffmpeg_args(plan["fps"], pcm_path, out), nice), stdin=subprocess.PIPE)
+    poster = b""
+    draw_s = shot_s = 0.0
+    for i in range(plan["frames"]):
+        asked = time.monotonic()
+        tab.evaluate(f"window.clip.draw({i})")
+        drawn = time.monotonic()
+        shot = tab.send("Page.captureScreenshot", {"format": "jpeg", "quality": JPEG_QUALITY})
+        if i == plan["poster"]:
+            poster = base64.b64decode(tab.send("Page.captureScreenshot", {"format": "png"})["data"])
+        draw_s += drawn - asked
+        shot_s += time.monotonic() - drawn
+        ffmpeg.stdin.write(base64.b64decode(shot["data"]))
+    ffmpeg.stdin.close()
+    if ffmpeg.wait() != 0:
+        raise RuntimeError(f"ffmpeg exited {ffmpeg.returncode}")
+    frames = plan["frames"]
+    timing = {
+        "draw_ms_per_frame": round(1000 * draw_s / frames, 1),
+        "capture_ms_per_frame": round(1000 * shot_s / frames, 1),
+        "total_wall_ms": round(1000 * (time.monotonic() - opened)),
+        "cores": os.cpu_count(),
+        "load": [round(x, 1) for x in os.getloadavg()],
+        "machine": f"{platform.system()} {platform.machine()}",
+    }
+    return RenderedLayout(mp4=out.read_bytes(), plan=plan, crowd=crowd, timing=timing), poster
+
+
+def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None = None,
+               nice: int = 10) -> RenderedRun:
+    """Every layout of one run. One browser; the first tab renders the
+    soundtrack every layout shares; tabs are recorded `parallel` at a time.
+    The poster is the landscape clip's."""
+    binary = binary or find_chrome()
+    if binary is None:
+        raise RuntimeError("no Chrome found: set $CHROME")
+    if not ffmpeg_available():
+        raise RuntimeError("no ffmpeg on the PATH")
+    with Chrome(binary, nice) as chrome, tempfile.TemporaryDirectory(prefix="arena-clip-") as work:
+        work = Path(work)
+        tabs = {"landscape": _open(chrome, origin, run_id, "landscape")}
+        pcm_path = work / "soundtrack.f32"
+        pcm_path.write_bytes(_soundtrack(tabs["landscape"]))
+        for layout in SIZES:
+            if layout not in tabs:
+                tabs[layout] = _open(chrome, origin, run_id, layout)
+
+        def one(layout: str) -> tuple[str, RenderedLayout, bytes]:
+            rendered, poster = _record_layout(tabs[layout], pcm_path, work / f"{layout}.mp4", nice)
+            tabs[layout].close()
+            return layout, rendered, poster
+
+        with ThreadPoolExecutor(max_workers=max(1, parallel)) as pool:
+            results = list(pool.map(one, SIZES))
+    layouts = {layout: rendered for layout, rendered, _ in results}
+    poster = next(poster for layout, _, poster in results if layout == "landscape")
+    return RenderedRun(layouts=layouts, poster=poster)
