@@ -1,3 +1,6 @@
+import dataclasses
+import inspect
+
 import pytest
 
 from arena.manifest import EVENTS_DIR, ManifestError, all_events, load_event, load_manifest
@@ -387,3 +390,23 @@ def test_every_shipped_events_metric_has_a_scoring_function():
 
     for m in all_events():
         assert m.metric in SCORERS, f"{m.id}: no evaluate.METRICS entry for {m.metric!r}"
+
+
+def test_category_never_reaches_scoring_storage_or_the_run_record():
+    """`category` is display-only: which wall a flyer hangs on, nothing more.
+
+    It must never influence how a run is scored, how it is stored, how points
+    are folded, or what a RunRecord carries — a scoring rule that read it
+    would let event authors game the board by relabelling an event, and a
+    stored field would be a second place category could drift from the
+    manifest. This was checked by hand with grep during review; nothing kept
+    it checked, so it is cheap for a category to sneak back in unnoticed.
+    """
+    from arena import evaluate, points, store
+
+    for module in (evaluate, points, store):
+        src = inspect.getsource(module)
+        assert "category" not in src.lower(), f"'category' appears in {module.__name__}"
+
+    field_names = {f.name for f in dataclasses.fields(store.RunRecord)}
+    assert "category" not in field_names, "RunRecord carries a 'category' field"

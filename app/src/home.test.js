@@ -161,6 +161,25 @@ describe("the flyer's category", () => {
 
   it("uses the charter's shadow primitive rather than its own box-shadow", () => {
     expect(flyer(open, []).className).toContain("fx-shadow-card");
+
+    // The className check above would still pass with a literal box-shadow
+    // re-added alongside fx-shadow-card. Read the sheet's own source and
+    // scope the check to the rules this branch owns (the challenge-note
+    // family) — club.css still carries three PRE-EXISTING literal
+    // box-shadow declarations (.profile-duck, .profile-summary
+    // .sticker:active, .profile-results a), all on the player page, which
+    // this branch never touched, so a blanket search of the file would trip
+    // on those.
+    const cssPath = resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css");
+    const css = readFileSync(cssPath, "utf8");
+    const noteRules = [...css.matchAll(/([^{}]*\.challenge-note[^{}]*)\{([^}]*)\}/g)];
+    expect(noteRules.length).toBeGreaterThan(0);
+    for (const [, selector, body] of noteRules) {
+      expect(
+        body,
+        `${selector.trim()} declares a literal box-shadow — use fx-shadow-card instead`,
+      ).not.toMatch(/box-shadow\s*:/);
+    }
   });
 
   it("renders an unrecognised category without a label and without throwing", () => {
@@ -264,6 +283,57 @@ describe("the ladder frame", () => {
     // primitive (fx-shadow-card) rather than a literal box-shadow.
     expect(el.className).toBe("ladders fx-shadow-card");
     expect(el.querySelector(".ladder-scroll .ladder-row")).not.toBeNull();
+
+    // The DOM checks above pass just as well with the scrolling removed —
+    // jsdom never loads club.css, so nothing above can see whether
+    // .ladder-scroll actually scrolls. Read the sheet's own source, as the
+    // marquee test above does: the scroller must declare a capped height and
+    // overflow-y, and the frame around it must declare neither — that split
+    // is what keeps the border still while the rows inside it move.
+    const cssPath = resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css");
+    const css = readFileSync(cssPath, "utf8");
+    const rule = (selector) => css.match(new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`));
+    const scroll = rule("ladder-scroll");
+    const frame = rule("ladders");
+    expect(scroll, ".ladder-scroll rule not found in club.css").not.toBeNull();
+    expect(frame, ".ladders rule not found in club.css").not.toBeNull();
+    expect(scroll[1], ".ladder-scroll does not declare overflow-y").toMatch(/overflow-y\s*:/);
+    expect(scroll[1], ".ladder-scroll does not cap its height").toMatch(/max-height\s*:/);
+    expect(frame[1], ".ladders declares overflow-y — the border would scroll with the rows").not.toMatch(/overflow-y\s*:/);
+    expect(frame[1], ".ladders declares max-height — the border would scroll with the rows").not.toMatch(/max-height\s*:/);
+  });
+});
+
+describe("the duck's motion", () => {
+  it("keeps every hover transition behind prefers-reduced-motion", () => {
+    // The charter requires every motion to sit behind
+    // `@media (prefers-reduced-motion: no-preference)`. jsdom never loads
+    // club.css and never evaluates media queries, so nothing rendered can
+    // tell an unguarded transition from a guarded one — read the sheet's
+    // own source, as the marquee and ladder-frame tests above do.
+    const cssPath = resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css");
+    const css = readFileSync(cssPath, "utf8");
+    const guardedBlocks = [
+      ...css.matchAll(/@media \(prefers-reduced-motion: no-preference\) \{\n([\s\S]*?)\n\}/g),
+    ].map(([, body]) => body);
+    expect(guardedBlocks.length).toBeGreaterThan(0);
+    const guarded = guardedBlocks.join("\n");
+
+    expect(guarded, "the duck's hover transitions are not behind the media query")
+      .toMatch(/\.duck \.duckhead \{[^}]*transition\s*:/);
+    expect(guarded, "the duck-quack's transition is not behind the media query")
+      .toMatch(/\.duck-quack \{[^}]*transition\s*:/);
+    expect(guarded, "the duck's hover rule is not behind the media query")
+      .toMatch(/\.duck:hover \.duckhead/);
+    expect(guarded, "the duck-quack's hover rule is not behind the media query")
+      .toMatch(/\.duck:hover \.duck-quack/);
+
+    // And nothing duck-related escapes into the unguarded rest of the sheet.
+    const unguarded = css.replace(
+      /@media \(prefers-reduced-motion: no-preference\) \{\n[\s\S]*?\n\}/g,
+      "",
+    );
+    expect(unguarded, "a .duck:hover rule exists outside the media query").not.toMatch(/\.duck:hover/);
   });
 });
 

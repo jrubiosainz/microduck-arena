@@ -26,7 +26,7 @@
 .masthead {
   position: relative;
   background-color: var(--deep-ink);
-  padding: var(--space-gutter-max) var(--space-gutter-min) var(--space-gutter-max);
+  padding: var(--space-gutter-max) var(--space-gutter-min);
 }
 .masthead-lockup {
   display: flex;
@@ -118,10 +118,13 @@
 
 /* The charter's own rhythm. These four tokens were defined and referenced
    nowhere: a chapter opened on a 28 px grid gutter, which is why the hero, the
-   ladder and the wall read as one column. */
-.chapter { margin-top: var(--space-chapter-top-min); }
+   ladder and the wall read as one column.
+   The 104 px above a chapter is not set here — every .chapter on the page is
+   preceded by a .chapter-rule, and `.chapter-rule + .chapter` below (0,2,0)
+   always beats this rule's own margin-top (0,1,0), so that's the one actually
+   delivering the gap. Nothing else on the site uses .chapter alone. */
 .chapter:last-child { margin-bottom: var(--space-chapter-bottom-min); }
-.chapter > .eyebrow { margin-bottom: var(--space-title-to-grid-min); display: block; }
+.chapter > .eyebrow { margin-bottom: var(--space-title-to-grid-min); }
 
 /* A hand-torn divider: 3 px of ink, tilted within the charter's ceiling and
    alternating in sense. It overhangs the column on purpose; `overflow-x:
@@ -235,14 +238,19 @@
   display: block;
   width: 100%;
   aspect-ratio: 480 / 198;
-  margin-top: 0;
   border: 2px solid var(--ink);
   background: var(--deep-ink);
   overflow: hidden;
 }
 .challenge-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
-.challenge-facts { margin: var(--space-gutter-min) 0 0; }
+.challenge-facts {
+  margin: var(--space-gutter-min) 0 0;
+  font-family: var(--type-mono-label-family);
+  font-weight: var(--type-mono-label-weight);
+  font-size: var(--type-mono-label-size);
+  letter-spacing: var(--type-mono-label-tracking);
+}
 
 /* The caption. The handle is what a person scans the wall by, so it takes the
    card-title step and the event's own title sits under it at body size. */
