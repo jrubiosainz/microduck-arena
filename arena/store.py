@@ -22,6 +22,10 @@ from .evaluate import SeedResult
 _BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford, ULID-style
 _TAIL_BITS = 60  # 12 base32 chars
 
+# The media a ready clip holds beside its clip.json (arena/clips.py writes them,
+# routes_read.py serves them by these exact names).
+CLIP_MEDIA = ("landscape.mp4", "vertical.mp4", "poster.png")
+
 _id_lock = threading.Lock()
 _id_state = {"stamp": -1, "rand": 0}
 
@@ -305,6 +309,12 @@ class Store(Protocol):
     def withdrawals(self) -> list[Withdrawal]: ...
     def mark_seen(self, run_id: str, user: str, seen_at: str) -> None: ...
     def seen(self) -> frozenset[str]: ...
+    def mark_clip_pending(self, run_id: str, user: str, event_id: str, queued_at: str) -> None: ...
+    def put_clip(self, run_id: str, files: dict[str, bytes]) -> None: ...
+    def fail_clip(self, run_id: str, failed_at: str, reason: str) -> None: ...
+    def clip_state(self, run_id: str) -> tuple[str, dict | None]: ...
+    def clip_file(self, run_id: str, name: str) -> Path: ...
+    def pending_clips(self) -> list[str]: ...
 
 
 class LocalStore:
@@ -412,6 +422,64 @@ class LocalStore:
             return frozenset()
         return frozenset(p.stem for p in directory.glob("*.json"))
 
+    # ── clips: pending.json, then clip.json + media, or failed.json ──────────
+    #
+    # Three files rather than one state file that changes: this store never
+    # rewrites, and a state read by presence needs no lock. `clip_state` is the
+    # one place the precedence lives: ready beats failed beats pending.
+
+    def _clip_dir(self, run_id: str) -> Path:
+        return self.root / "clips" / run_id
+
+    def mark_clip_pending(self, run_id: str, user: str, event_id: str, queued_at: str) -> None:
+        path = self._clip_dir(run_id) / "pending.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(
+            {"run_id": run_id, "user": user, "event_id": event_id, "queued_at": queued_at}, indent=2
+        ))
+
+    def put_clip(self, run_id: str, files: dict[str, bytes]) -> None:
+        folder = self._clip_dir(run_id)
+        if (folder / "clip.json").exists():
+            raise FileExistsError(f"clip {run_id} already rendered at {folder}")
+        folder.mkdir(parents=True, exist_ok=True)
+        # Media first, clip.json last: state is read off clip.json, so a write
+        # that dies part-way leaves a pending clip, never a ready one with a
+        # missing file.
+        for name, blob in files.items():
+            if name != "clip.json":
+                (folder / name).write_bytes(blob)
+        (folder / "clip.json").write_bytes(files["clip.json"])
+
+    def fail_clip(self, run_id: str, failed_at: str, reason: str) -> None:
+        path = self._clip_dir(run_id) / "failed.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(
+            {"run_id": run_id, "failed_at": failed_at, "reason": reason}, indent=2
+        ))
+
+    def clip_state(self, run_id: str) -> tuple[str, dict | None]:
+        folder = self._clip_dir(run_id)
+        if (folder / "clip.json").is_file():
+            return "ready", json.loads((folder / "clip.json").read_text())
+        if (folder / "failed.json").is_file():
+            return "failed", None
+        if (folder / "pending.json").is_file():
+            return "pending", None
+        return "none", None
+
+    def clip_file(self, run_id: str, name: str) -> Path:
+        return self._clip_dir(run_id) / name
+
+    def pending_clips(self) -> list[str]:
+        directory = self.root / "clips"
+        if not directory.is_dir():
+            return []
+        return sorted(
+            folder.name for folder in directory.iterdir()
+            if folder.is_dir() and self.clip_state(folder.name)[0] == "pending"
+        )
+
 
 class HubStore:
     """The same log, on a Hugging Face dataset repo.
@@ -492,7 +560,11 @@ class HubStore:
             and time.monotonic() - self._snapshot_at < self._snapshot_ttl_s
         ):
             return self._snapshot
-        self._snapshot = LocalStore(Path(snapshot_download(self.repo_id, repo_type="dataset")))
+        # The clips' media stay out of the snapshot — a boot would otherwise
+        # download every video ever rendered. clip_file fetches one on demand.
+        self._snapshot = LocalStore(Path(snapshot_download(
+            self.repo_id, repo_type="dataset", ignore_patterns=["*.mp4", "*.png"]
+        )))
         self._snapshot_at = time.monotonic()
         return self._snapshot
 
@@ -550,6 +622,49 @@ class HubStore:
 
     def seen(self) -> frozenset[str]:
         return self.snapshot().seen()
+
+    def _commit_clip_files(self, run_id: str, files: dict[str, bytes], message: str) -> None:
+        from huggingface_hub import CommitOperationAdd
+
+        self.api.create_commit(
+            repo_id=self.repo_id,
+            repo_type="dataset",
+            commit_message=message,
+            operations=[
+                CommitOperationAdd(path_in_repo=f"clips/{run_id}/{name}", path_or_fileobj=blob)
+                for name, blob in files.items()
+            ],
+        )
+        self._snapshot = None
+
+    def mark_clip_pending(self, run_id: str, user: str, event_id: str, queued_at: str) -> None:
+        body = {"run_id": run_id, "user": user, "event_id": event_id, "queued_at": queued_at}
+        self._commit_clip_files(
+            run_id, {"pending.json": json.dumps(body, indent=2).encode()}, f"clip pending {run_id}"
+        )
+
+    def put_clip(self, run_id: str, files: dict[str, bytes]) -> None:
+        if self.api.file_exists(self.repo_id, f"clips/{run_id}/clip.json", repo_type="dataset"):
+            raise FileExistsError(f"clip {run_id} already rendered in {self.repo_id}")
+        self._commit_clip_files(run_id, files, f"clip {run_id}")
+
+    def fail_clip(self, run_id: str, failed_at: str, reason: str) -> None:
+        body = {"run_id": run_id, "failed_at": failed_at, "reason": reason}
+        self._commit_clip_files(
+            run_id, {"failed.json": json.dumps(body, indent=2).encode()}, f"clip failed {run_id}"
+        )
+
+    def clip_state(self, run_id: str) -> tuple[str, dict | None]:
+        return self.snapshot().clip_state(run_id)
+
+    def clip_file(self, run_id: str, name: str) -> Path:
+        from huggingface_hub import hf_hub_download
+
+        # One file, cached by the Hub cache: the second read costs nothing.
+        return Path(hf_hub_download(self.repo_id, f"clips/{run_id}/{name}", repo_type="dataset"))
+
+    def pending_clips(self) -> list[str]:
+        return self.snapshot().pending_clips()
 
 
 class HubBallots:
