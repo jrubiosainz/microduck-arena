@@ -296,7 +296,14 @@
      gap between them made it read as its own block. */
   margin-top: 10px;
 }
-.door-meet .duckhead { width: clamp(64px, 11vw, 112px); }
+/* Small, under the pitch. The intrinsic width/height on the tag reserves the
+   box before the file lands, so the band does not jump when it does. */
+.door-squad {
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  display: block;
+}
 
 
 .hero {

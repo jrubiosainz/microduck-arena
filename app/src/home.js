@@ -287,8 +287,18 @@ export async function renderHome(root) {
       "Train, submit, compete, repeat.",
     ),
   );
+  // The four colourways, from the product page. The head mark that stood here
+  // said "a duck"; this says "four of them, and one of them could be yours",
+  // which is what the pitch above it is arguing.
   const meet = el("div", "door-meet");
-  meet.append(duckHead());
+  const squad = document.createElement("img");
+  squad.className = "door-squad";
+  squad.src = "/microduck-squad.webp";
+  squad.alt = "The four Microduck colourways: sky, graphite, cream and lavender.";
+  squad.width = 1839;
+  squad.height = 638;
+  squad.loading = "lazy";
+  meet.append(squad);
   pitch.append(meet);
 
   const board = el("div", "door-board");
