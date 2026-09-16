@@ -63,6 +63,13 @@ flat mark; the front page renders it at `--type-hero-title-size` with `fx-aberra
 duck head large to its right. `chip(me)` — already a separate export — floats top right
 over the masthead, with no strip behind it.
 
+The masthead's ground is **deep ink**, not paper. This is not decoration: `--yellow`
+(#FFD23F) on `--paper` (#FAF8F2) is far too close to read at any size, and the charter
+never asks it to — it draws the aberration twice, both times on a yellow word over deep
+ink, and `effects.css` says so in its own comment. The charter's cover is the exact
+composition this page wants: the deep-ink block carrying the mark, the yellow band
+immediately beneath it. The front page takes that lockup whole.
+
 **The quack.** Only `duck-head-mark.webp` exists, so the hover is CSS: the head tilts
 within the charter's 4° ceiling and a yellow `QUACK!` sticker appears beside it, hard
 shadow, no blur. It is built so that dropping in an open-beak sprite later swaps the
