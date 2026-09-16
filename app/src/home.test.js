@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { flyer, ladder, shellOf } from "./home.js";
 
 const open = {
-  id: "sprint-2m", title: "2 m Sprint", status: "open", rig: "legs", length_m: 2, slope_deg: 0,
+  id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", rig: "legs",
+  length_m: 2, slope_deg: 0,
   sweep_lo: 0.2, sweep_hi: 1.2, sweep_step: 0.05, sweep_count: 21,
 };
-const planned = { ...open, id: "best-jump", title: "Best Jump", status: "planned" };
+const planned = { ...open, id: "best-jump", title: "Best Jump", status: "planned", category: "challenge" };
 const held = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
 
 describe("the ladder", () => {
@@ -44,7 +45,7 @@ describe("an open event's flyer", () => {
     expect(el.matches("article.challenge-note")).toBe(true);
     expect(el.querySelector("a.challenge-link").getAttribute("href")).toBe("#/e/sprint-2m");
     expect(el.querySelector(".flyer-title").textContent).toBe("2 m Sprint");
-    expect(el.querySelector(".eyebrow").textContent).toBe("Race");
+    expect(el.querySelector(".eyebrow").textContent).toBe("RACE");
   });
 
   it("leaves the art frame empty until the still lands", () => {
@@ -58,7 +59,7 @@ describe("an open event's flyer", () => {
   });
 
   it("shows who holds it and in what time", () => {
-    const standing = flyer(open, held).querySelector(".challenge-standing");
+    const standing = flyer(open, held).querySelector(".flyer-leader");
     expect(standing.querySelector(".challenge-star")).not.toBeNull();
     expect(standing.textContent).toContain("cdeplanne");
     expect(standing.textContent).toContain("9.456s");
@@ -103,12 +104,12 @@ describe("a votable flyer", () => {
 
   it("counts the week's votes instead of a time", () => {
     const note = flyer(voted, [{ user: "cdeplanne", votes: 43, seeds_finished: 5 }]);
-    expect(note.querySelector(".challenge-standing").textContent).toContain("43 votes");
+    expect(note.querySelector(".flyer-leader").textContent).toContain("43 votes");
   });
 
   it("says so when nothing has been voted for yet", () => {
     const note = flyer(voted, [{ user: "cdeplanne", votes: 0, seeds_finished: 5 }]);
-    expect(note.querySelector(".challenge-standing").textContent).toContain("no votes yet");
+    expect(note.querySelector(".flyer-leader").textContent).toContain("no votes yet");
   });
 
   it("hides the button on a planned round -- there is no booth to send anyone to yet", () => {
@@ -119,5 +120,50 @@ describe("a votable flyer", () => {
   it("leaves a timed flyer alone", () => {
     const note = flyer(open, held);
     expect(note.querySelector(".vote-button")).toBeNull();
+  });
+});
+
+describe("the flyer's category", () => {
+  it("labels the event with its own category, not 'Race'", () => {
+    expect(flyer({ ...open, category: "showcase" }, []).querySelector(".eyebrow").textContent)
+      .toBe("SHOWCASE");
+  });
+
+  it("colours the offset shadow by category", () => {
+    const shadowOf = (category) => flyer({ ...open, category }, []).className;
+    expect(shadowOf("race")).toContain("challenge-note--race");
+    expect(shadowOf("challenge")).toContain("challenge-note--challenge");
+    expect(shadowOf("showcase")).toContain("challenge-note--showcase");
+  });
+
+  it("uses the charter's shadow primitive rather than its own box-shadow", () => {
+    expect(flyer(open, []).className).toContain("fx-shadow-card");
+  });
+
+  it("renders an unrecognised category without a label and without throwing", () => {
+    // One malformed manifest must not take the whole wall down. The server is
+    // where an unknown category is rejected; the page degrades.
+    const note = flyer({ ...open, category: "parade" }, []);
+    expect(note.className).not.toMatch(/challenge-note--/);
+    expect(note.querySelector(".eyebrow")).toBeNull();
+  });
+});
+
+describe("the polaroid caption", () => {
+  it("puts the leader's handle above the event's title", () => {
+    const note = flyer(open, [
+      { user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 },
+    ]);
+    const order = [...note.querySelectorAll(".flyer-leader, .flyer-title")]
+      .map((n) => n.className);
+    expect(order).toEqual(["flyer-leader", "flyer-title"]);
+    expect(note.querySelector(".flyer-leader").textContent).toContain("cdeplanne");
+    expect(note.querySelector(".flyer-title").textContent).toBe("2 m Sprint");
+  });
+
+  it("shows the still above the caption, polaroid-fashion", () => {
+    const note = flyer(open, []);
+    const parts = [...note.querySelector(".challenge-link").children].map((n) => n.className);
+    expect(parts.indexOf("challenge-art")).toBeLessThan(parts.indexOf("flyer-leader"));
   });
 });

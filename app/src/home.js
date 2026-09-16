@@ -47,10 +47,13 @@ export function ladder(rows) {
   return box;
 }
 
-function standingLine(event, planned, rows) {
-  const line = el("p", "challenge-standing");
+const CATEGORIES = new Set(["race", "challenge", "showcase"]);
+
+/** Who holds this event, at the size a person scans the wall by. */
+function leaderLine(event, planned, rows) {
+  const line = el("p", "flyer-leader");
   if (planned) {
-    line.textContent = "course not built yet";
+    line.append(el("span", "flyer-leader-name", "course not built yet"));
     return line;
   }
   const star = el("img", "challenge-star");
@@ -58,31 +61,28 @@ function standingLine(event, planned, rows) {
   star.alt = "";
   const leader = rows.find((row) => row.seeds_finished > 0);
   if (!leader) {
-    line.append(star, el("span", null, rows.length ? "no finisher yet" : "be the first"));
+    line.append(star, el("span", "flyer-leader-name", rows.length ? "no finisher yet" : "be the first"));
     return line;
   }
   // A voted event is held by whoever collected the most votes THIS WEEK, so
   // the line says votes. A time would be the wrong fact about it.
-  if (event.vote) {
-    line.append(
-      star,
-      el("span", null, leader.user),
-      el("span", null, leader.votes ? `${leader.votes} votes` : "no votes yet"),
-    );
-    return line;
-  }
-  line.append(
-    star,
-    el("span", null, leader.user),
-    el("span", null, formatScore(leader.score, { finished: leader.seeds_finished })),
-  );
+  const held = event.vote
+    ? (leader.votes ? `${leader.votes} votes` : "no votes yet")
+    : formatScore(leader.score, { finished: leader.seeds_finished });
+  line.append(star, el("span", "flyer-leader-name", leader.user), el("span", "flyer-leader-score", held));
   return line;
 }
 
-/** One event on the wall: its course, its facts, and the time that stands on it. */
+/** One event on the wall: its still, who holds it, and what it is. */
 export function flyer(event, rows) {
   const planned = event.status === "planned";
-  const note = el("article", planned ? "challenge-note challenge-note--planned" : "challenge-note");
+  const known = CATEGORIES.has(event.category);
+  const classes = ["challenge-note", "fx-shadow-card"];
+  // An unrecognised category keeps the neutral ink shadow the base rule sets,
+  // rather than borrowing another category's colour.
+  if (known) classes.push(`challenge-note--${event.category}`);
+  if (planned) classes.push("challenge-note--planned");
+  const note = el("article", classes.join(" "));
   note.append(el("span", "flyer-tape"));
   if (event.vote && !planned) {
     note.append(voteButton(event, { variant: "sticker" }));
@@ -93,12 +93,12 @@ export function flyer(event, rows) {
     .filter((fact) => fact.label !== "speed sweep")
     .map((fact) => fact.value)
     .join(" · ");
+  link.append(el("div", "challenge-art"));
+  if (known) link.append(el("span", "eyebrow", event.category.toUpperCase()));
   link.append(
-    el("span", "eyebrow", "Race"),
+    leaderLine(event, planned, rows),
     el("h4", "flyer-title", event.title),
-    el("div", "challenge-art"),
     el("p", "challenge-facts", facts),
-    standingLine(event, planned, rows),
   );
   note.append(link);
   return note;
