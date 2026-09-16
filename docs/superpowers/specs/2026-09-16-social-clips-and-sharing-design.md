@@ -1,6 +1,6 @@
 # Social clips and sharing — design
 
-Date: 2026-09-16. Status: approved in brainstorm, awaiting written review.
+Date: 2026-09-16. Status: implemented on branch social-clips, awaiting the owner's browser check and the first Space render.
 
 ## Goal
 
@@ -242,8 +242,8 @@ when the author's trace ends are cut with it, as the reveal does. A run longer
 than `tape_max_s` — a timeout — is cut at the ceiling and stamped anyway: the
 verdict is the record's, not the tape's.
 
-`window.clip = { plan, draw, soundtrack, triangles, ready, error }`. The
-recorder reads and calls nothing else.
+`window.clip = { plan, score, layout, draw, soundtrack, chunk, ready, error }`.
+The recorder reads and calls nothing else.
 
 ### The frame
 

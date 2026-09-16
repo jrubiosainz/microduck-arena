@@ -8,7 +8,9 @@ import { StadiumAmbience, prepareStadium } from "./stadium.js";
 
 const RATE = 48000;
 /** The stadium's own volume scale (0–100). */
-const CROWD_VOLUME = 30;
+const CROWD_VOLUME = 100;
+/** Past the stadium's own ceiling: the bed sat at -45 dBFS at 30, under every cue by 25 dB. */
+const CROWD_GAIN = 2;
 /** Scheduling horizon, from renderStadium: keeps the engine's active nodes bounded. */
 const BATCH_S = 0.5;
 
@@ -52,11 +54,14 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
   if (!score.crowd) return interleave(await context.startRendering());
 
   await prepareStadium(Context);
+  const crowd = context.createGain();
+  crowd.gain.value = CROWD_GAIN;
+  crowd.connect(limiter);
   const engine = new StadiumAmbience(context, {
     direction: stadiumDirection(score.crowd),
     seed: score.seed,
     volume: CROWD_VOLUME,
-    destination: limiter,
+    destination: crowd,
   });
   // renderStadium's batching: schedule half a second ahead, suspending one
   // render quantum before each horizon, because Chrome rounds suspension

@@ -12,8 +12,11 @@ import { actAt, clipPlan, stepAt } from "./plan.js";
 import { clipScore } from "./score.js";
 import { renderSoundtrack } from "./soundtrack.js";
 
-/** How much further back the camera stands in a portrait frame. Tuned by eye. */
-const VERTICAL_DISTANCE = 1.6;
+/** How far the chase camera stands per layout, as a factor on the viewer's
+ * offsets. Measured on a three-lane sprint: 1.0 left the ducks small in a
+ * 1080p frame, 0.55 crushed the far lane behind the near one; the portrait
+ * frame wants a little more room than the landscape. */
+const DISTANCE = { landscape: 0.7, vertical: 0.8 };
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -60,7 +63,7 @@ async function main() {
   const lanes = lanesFor(run);
   const traces = await Promise.all(lanes.map((lane) => getTrace(lane.run_id)));
   const config = run.event.clip;
-  const camera = layout === "vertical" ? { ...config.camera, distance: VERTICAL_DISTANCE } : config.camera;
+  const camera = { ...config.camera, distance: DISTANCE[layout] };
   const viewer = await createViewer($("stage"), { rig: run.event.rig, manual: true, camera });
   viewer.setLanes(
     lanes.map((lane, i) => ({

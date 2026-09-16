@@ -1799,6 +1799,15 @@ Canvas2D overlay. **Task 7 proceeds with JPEG screenshots, and the viewer's manu
 creates its renderer with `antialias: false`** (`antialias: !manual`). Aliasing on the duck's
 edges at 1080p is judged on the first real render in Task 15; x264 softens it further.
 
+**Renders** (Task 15, this Mac, `rm -r $C && arena clip <run> --store <store>`):
+
+| run | layout | frames | seconds | capture_ms_per_frame | total_wall_ms | machine |
+| --- | --- | --- | --- | --- | --- | --- |
+| `01M2KH4QB0ZVTZ6DX6DX0X` (finished, 3-lane sprint) | landscape | 381 | 15.24 | 386.7 | 170586 | Darwin arm64 |
+| `01M2KH4QB0ZVTZ6DX6DX0X` (finished, 3-lane sprint) | vertical | 381 | 15.24 | 341.0 | 133696 | Darwin arm64 |
+| `01M2JFKAWWKK71F0FR0V1G` (DNF, hill climb) | landscape | 194 | 7.76 | 258.8 | 70928 | Darwin arm64 |
+| `01M2JFKAWWKK71F0FR0V1G` (DNF, hill climb) | vertical | 194 | 7.76 | 203.6 | 40694 | Darwin arm64 |
+
 ---
 
 ### Task 7: Recording one run — frames to ffmpeg, the soundtrack, the poster
