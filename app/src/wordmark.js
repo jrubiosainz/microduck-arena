@@ -31,10 +31,15 @@ export function wordmark({ variant = "strip" } = {}) {
 /**
  * The duck head from the Pollen page.
  *
- * `quacks` wraps it with a sticker that appears on hover. There is only one
- * sprite — a beak that never opens — so the hover is a tilt and a shout rather
- * than two frames. Dropping an open-beak sprite in later swaps the tilt for a
- * real alternation without touching this markup.
+ * `quacks` stacks the open-beak sprite over the closed one and shows it on
+ * hover, with a sticker beside it. The two are anchored at the TOP and share
+ * a width: the open sprite is 460x333 against the closed one's 454x269, so
+ * the extra height is all beak. Anchored any other way the whole skull jumps
+ * when the mouth opens.
+ *
+ * The swap and the sticker are NOT behind prefers-reduced-motion — that
+ * setting asks for less movement, not for less to look at. Only the tilt and
+ * the transitions are.
  */
 export function duckHead({ quacks = false } = {}) {
   const img = document.createElement("img");
@@ -47,10 +52,14 @@ export function duckHead({ quacks = false } = {}) {
 
   const box = document.createElement("span");
   box.className = "duck";
+  const open = document.createElement("img");
+  open.className = "duckhead duckhead--open";
+  open.src = "/duck-head-mark-open.webp";
+  open.alt = "";
   const shout = document.createElement("span");
   shout.className = "duck-quack sticker";
   shout.textContent = "QUACK!";
   shout.setAttribute("aria-hidden", "true");
-  box.append(img, shout);
+  box.append(img, open, shout);
   return box;
 }

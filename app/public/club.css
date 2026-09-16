@@ -128,6 +128,17 @@
 }
 
 .duck { position: relative; display: inline-flex; flex: none; }
+/* Over the closed head, anchored at the top and matched in width: the open
+   sprite is taller and the extra height is all beak, so any other anchor
+   makes the skull jump when the mouth opens. */
+.duckhead--open {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+}
 .duck-quack {
   position: absolute;
   top: -10px;
@@ -138,11 +149,32 @@
   pointer-events: none;
 }
 
+/* The beak and the shout are not motion, and reduced motion asks for less
+   movement rather than for less to look at — so they happen either way. */
+.duck:hover > .duckhead:not(.duckhead--open) { opacity: 0; }
+.duck:hover .duckhead--open,
+.duck:hover .duck-quack { opacity: 1; }
+
 @media (prefers-reduced-motion: no-preference) {
-  .duck .duckhead { transition: rotate 140ms ease, translate 140ms ease; }
+  .duck .duckhead { transition: rotate 140ms ease, translate 140ms ease, opacity 90ms ease; }
   .duck-quack { transition: opacity 120ms ease; }
   .duck:hover .duckhead { rotate: calc(-1 * var(--rotate-4-0)); translate: 0 -4px; }
-  .duck:hover .duck-quack { opacity: 1; }
+}
+
+/* The locker plate swings like a flyer does, from its top edge. It carries no
+   tape, so it pivots on its own top centre rather than on a point off it. */
+.player-card-you, .player-card-in { transform-origin: 50% 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .player-card-you, .player-card-in {
+    transition:
+      rotate 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
+      translate 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  .player-card-you:hover, .player-card-in:hover {
+    rotate: calc(-1 * var(--rotate-2-5));
+    translate: 0 -5px;
+  }
 }
 
 /* ── The flock band: the charter's yellow strip, standing still ────────────── */

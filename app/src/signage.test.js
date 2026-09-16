@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { avatar, chip, footer, signage } from "./signage.js";
 import { duckHead, wordmark } from "./wordmark.js";
@@ -81,13 +84,37 @@ describe("the duck", () => {
     expect(duckHead().tagName).toBe("IMG");
   });
 
-  it("carries a quack on the cover", () => {
+  it("carries a quack on the cover, with a beak that opens", () => {
     const duck = duckHead({ quacks: true });
     expect(duck.className).toBe("duck");
-    expect(duck.querySelector("img.duckhead")).not.toBeNull();
+    const heads = [...duck.querySelectorAll("img.duckhead")];
+    expect(heads.map((h) => h.getAttribute("src"))).toEqual([
+      "/duck-head-mark.webp",
+      "/duck-head-mark-open.webp",
+    ]);
+    // The open sprite is 460x333 against the closed one's 454x269 — the extra
+    // height is beak. Both are decorative; the wordmark beside them names the
+    // page, and "duck head" after "Microduck Arena" is noise in a reader.
+    expect(heads.every((h) => h.getAttribute("alt") === "")).toBe(true);
     expect(duck.querySelector(".duck-quack").textContent).toBe("QUACK!");
-    // Decorative twice over: the sticker repeats nothing a reader needs.
     expect(duck.querySelector(".duck-quack").getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("keeps the beak and the shout out of the reduced-motion guard", () => {
+    // That setting asks for less movement, not for less to look at: with it
+    // on, the tilt goes and the mouth still opens.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    const unguarded = css.replace(
+      /@media \(prefers-reduced-motion: no-preference\) \{\n[\s\S]*?\n\}/g,
+      "",
+    );
+    expect(unguarded, "the beak only opens when motion is welcome")
+      .toMatch(/\.duck:hover \.duckhead--open/);
+    expect(unguarded, "the shout only appears when motion is welcome")
+      .toMatch(/\.duck:hover \.duck-quack/);
   });
 });
 

@@ -502,35 +502,31 @@ describe("the ladder frame", () => {
 });
 
 describe("the duck's motion", () => {
-  it("keeps every hover transition behind prefers-reduced-motion", () => {
-    // The charter requires every motion to sit behind
-    // `@media (prefers-reduced-motion: no-preference)`. jsdom never loads
-    // club.css and never evaluates media queries, so nothing rendered can
-    // tell an unguarded transition from a guarded one — read the sheet's
-    // own source, as the marquee and ladder-frame tests above do.
-    const cssPath = resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css");
-    const css = readFileSync(cssPath, "utf8");
-    const guardedBlocks = [
-      ...css.matchAll(/@media \(prefers-reduced-motion: no-preference\) \{\n([\s\S]*?)\n\}/g),
-    ].map(([, body]) => body);
-    expect(guardedBlocks.length).toBeGreaterThan(0);
-    const guarded = guardedBlocks.join("\n");
-
-    expect(guarded, "the duck's hover transitions are not behind the media query")
-      .toMatch(/\.duck \.duckhead \{[^}]*transition\s*:/);
-    expect(guarded, "the duck-quack's transition is not behind the media query")
-      .toMatch(/\.duck-quack \{[^}]*transition\s*:/);
-    expect(guarded, "the duck's hover rule is not behind the media query")
-      .toMatch(/\.duck:hover \.duckhead/);
-    expect(guarded, "the duck-quack's hover rule is not behind the media query")
-      .toMatch(/\.duck:hover \.duck-quack/);
-
-    // And nothing duck-related escapes into the unguarded rest of the sheet.
+  it("guards the MOVEMENT only, and lets the beak open either way", () => {
+    // The rule this pins changed on purpose. prefers-reduced-motion asks for
+    // less movement, not for less to look at: with it on the head stops
+    // tilting, and the mouth still opens. So the tilt and the transitions
+    // must be inside the guard and the opacity swap must not.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    const guarded = [...css.matchAll(
+      /@media \(prefers-reduced-motion: no-preference\) \{\n([\s\S]*?)\n\}/g,
+    )].map(([, body]) => body).join("\n");
     const unguarded = css.replace(
       /@media \(prefers-reduced-motion: no-preference\) \{\n[\s\S]*?\n\}/g,
       "",
     );
-    expect(unguarded, "a .duck:hover rule exists outside the media query").not.toMatch(/\.duck:hover/);
+
+    expect(guarded, "the duck's transitions are not behind the media query")
+      .toMatch(/\.duck \.duckhead \{[^}]*transition\s*:/);
+    expect(guarded, "the head's tilt is not behind the media query")
+      .toMatch(/\.duck:hover \.duckhead \{[^}]*rotate\s*:/);
+    // No movement escapes: nothing outside the guard rotates or translates
+    // anything on hover of the duck.
+    expect(unguarded, "the duck moves even where movement was refused")
+      .not.toMatch(/\.duck:hover[^{]*\{[^}]*(rotate|translate|transition)\s*:/);
   });
 });
 
