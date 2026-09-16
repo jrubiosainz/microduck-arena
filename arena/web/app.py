@@ -35,6 +35,18 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.state.ballot_book = BallotBook()
     app.state.sessions = Sessions()
 
+    from ..clips import ClipRenderer
+
+    app.state.clips = ClipRenderer(
+        app.state.store, config.origin, config.frontend_dir, config.clip_parallel
+    )
+    if config.clip_worker and app.state.clips.available:
+        @app.on_event("startup")
+        def _render_owed_clips() -> None:
+            # A thread, as recovery is: a render is minutes of CPU and the
+            # health check cannot wait for it.
+            app.state.clips.start()
+
     @app.get("/api/health")
     def health() -> dict:
         return {

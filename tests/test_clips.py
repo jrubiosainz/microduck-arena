@@ -66,3 +66,72 @@ def test_the_encode_is_h264_with_the_pcm_muxed_and_the_live_tag_set():
                         ("-movflags", "+faststart+use_metadata_tags")):
         assert args[args.index(value) - 1] == flag
     assert args[-1] == "/tmp/out.mp4"
+
+
+from fastapi.testclient import TestClient
+
+from arena.clips import CLIP_VERSION, ClipRenderer, clip_manifest
+from arena.recorder import RenderedLayout, RenderedRun
+from arena.web.app import create_app
+from arena.web.config import ArenaConfig
+
+
+def rendered(seconds=7.52):
+    layout = lambda w, h: RenderedLayout(
+        mp4=b"mp4", plan={"fps": 25, "frames": 188, "seconds": seconds},
+        crowd={"start": 1.0, "end": 5.0, "verdict": "pass"}, timing={"total_wall_ms": 1},
+    )
+    return RenderedRun(layouts={"landscape": layout(1920, 1080), "vertical": layout(1080, 1920)},
+                       poster=b"png")
+
+
+def test_the_manifest_carries_the_live_contract_per_layout():
+    manifest = clip_manifest("R1", rendered(), "2026-09-16T10:00:00Z")
+    assert manifest["version"] == CLIP_VERSION
+    assert manifest["poster"] == "poster.png"
+    land = manifest["layouts"]["landscape"]
+    assert land == {
+        "file": "landscape.mp4", "width": 1920, "height": 1080, "fps": 25, "frames": 188,
+        "seconds": 7.52, "crowdMixed": True,
+        "crowdDirection": {"start": 1.0, "end": 5.0, "verdict": "pass"},
+        "timing": {"total_wall_ms": 1},
+    }
+    assert manifest["layouts"]["vertical"]["width"] == 1080
+
+
+def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
+    store = LocalStore(tmp_path)
+    store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:01:00Z")
+
+    def render(origin, run_id, parallel):
+        if run_id == "R2":
+            raise RuntimeError("ffmpeg exited 1")
+        return rendered()
+
+    said = []
+    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=render, log=said.append)
+    worker.drain()
+    assert list(worker.queue.queue) == ["R1", "R2"]
+    while not worker.queue.empty():
+        worker.render_one(worker.queue.get())
+    state, manifest = store.clip_state("R1")
+    assert state == "ready" and manifest["run_id"] == "R1"
+    assert store.clip_file("R1", "vertical.mp4").read_bytes() == b"mp4"
+    assert store.clip_state("R2") == ("failed", None)
+    assert any("RuntimeError: ffmpeg exited 1" in line for line in said)
+
+
+def test_a_publish_owes_a_clip_only_where_a_renderer_exists(tmp_path, monkeypatch):
+    from tests.test_routes_submit import REFERENCE, submit
+
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie", clip_worker=False)
+    app = create_app(config)
+    api = TestClient(app)
+    run_id = submit(api, REFERENCE).json()["run_id"]
+    assert app.state.store.clip_state(run_id) == ("none", None)
+
+    monkeypatch.setattr(app.state.clips, "available", True)
+    run_id = submit(api, REFERENCE).json()["run_id"]
+    assert app.state.store.clip_state(run_id) == ("pending", None)
+    assert list(app.state.clips.queue.queue) == [run_id]

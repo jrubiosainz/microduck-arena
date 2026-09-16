@@ -115,16 +115,21 @@ def _cmd_serve(args) -> int:
     from .web.app import create_app
     from .web.config import ArenaConfig
 
-    config = ArenaConfig.from_env(store_dir=args.store, dev_user=args.user)
+    config = ArenaConfig.from_env(
+        store_dir=args.store, dev_user=args.user, origin=f"http://127.0.0.1:{args.port}"
+    )
     config.ensure_store()
+    app = create_app(config)
     print(f"store  {config.store_description()}")
     print(f"user   {config.dev_user}")
     if config.frontend_dir is None:
         print("frontend  NOT BUILT — run: cd app && npm install && npm run build")
     else:
         print(f"frontend  {config.frontend_dir}")
+    clips = "on" if app.state.clips.available else "off (no Chrome, ffmpeg or clip page)"
+    print(f"clips  {clips}")
     print(f"\n  http://{args.host}:{args.port}\n")
-    uvicorn.run(create_app(config), host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     return 0
 
 

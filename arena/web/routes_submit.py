@@ -364,6 +364,12 @@ async def submit(
     )
     store.append(record, trace_codec.encode(result.trace), payload if published is None else None)
 
+    clips = request.app.state.clips
+    if clips.available:
+        # Owed now, rendered later: the response does not wait for a video.
+        store.mark_clip_pending(record.run_id, record.user, record.event_id, record.submitted_at)
+        clips.enqueue(record.run_id)
+
     return {
         "run_id": record.run_id,
         "user": record.user,

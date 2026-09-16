@@ -54,6 +54,18 @@ class ArenaConfig:
     # worthless rather than replayable.
     session_secret: str = ""
     session_ttl_s: float = DEFAULT_SESSION_TTL_S
+    # Where the clip recorder's own Chrome loads clip.html: this server, on
+    # loopback. `arena serve` passes its port; ARENA_ORIGIN overrides.
+    origin: str = "http://127.0.0.1:8000"
+    # The address a shared link carries. A Space knows its host; locally there
+    # is none, and the unfurl route falls back to the request's.
+    public_origin: str | None = None
+    # Layouts rendered at once. Half the cores: SwiftShader takes every core a
+    # frame can get, so a 2-vCPU Space renders one layout at a time.
+    clip_parallel: int = 1
+    # Whether this process runs the clip worker. `arena clip` turns it off so
+    # its one render is not raced by a drain of everything else owed.
+    clip_worker: bool = True
 
     @classmethod
     def from_env(
@@ -62,6 +74,8 @@ class ArenaConfig:
         dev_user: str | None = None,
         frontend_dir: Path | None = None,
         rank_by: str | None = None,
+        origin: str | None = None,
+        clip_worker: bool = True,
     ) -> "ArenaConfig":
         store = Path(store_dir or os.environ.get("ARENA_STORE") or DEFAULT_STORE)
         user = dev_user or os.environ.get("ARENA_DEV_USER") or DEFAULT_USER
@@ -94,6 +108,10 @@ class ArenaConfig:
             recover_on_boot=(os.environ.get("ARENA_RECOVER") or "").strip() in {"1", "true", "yes"},
             oauth=oauth,
             session_secret=secret,
+            origin=origin or os.environ.get("ARENA_ORIGIN") or "http://127.0.0.1:8000",
+            public_origin=(f"https://{host}" if (host := os.environ.get("SPACE_HOST")) else None),
+            clip_parallel=int(os.environ.get("ARENA_CLIP_PARALLEL") or max(1, (os.cpu_count() or 2) // 2)),
+            clip_worker=clip_worker,
         )
 
     @property
