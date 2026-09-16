@@ -3,7 +3,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
-  chapterRule, demoRows, flockBand, flyer, ladder, masthead, pageTexture, playerCard, shellOf,
+  chapterRule, demoAsked, demoRows, flockBand, flyer, ladder, masthead, pageTexture, playerCard,
+  shellOf,
 } from "./home.js";
 
 const open = {
@@ -317,20 +318,36 @@ describe("the flock band", () => {
 });
 
 describe("the demo padding", () => {
+  it("is asked for either side of the hash, since the router addresses by hash", () => {
+    // `#/?demo=1` is the spelling a person reaches for on a hash-routed page,
+    // and it leaves location.search empty. Reading only search made the
+    // switch look broken to the one person who needed it.
+    expect(demoAsked("?demo=1", "#/")).toBe(true);
+    expect(demoAsked("", "#/?demo=1")).toBe(true);
+    expect(demoAsked("", "#/e/sprint-2m?demo")).toBe(true);
+    expect(demoAsked("", "#/")).toBe(false);
+    expect(demoAsked("", "")).toBe(false);
+    expect(demoAsked("?other=1", "#/?other=1")).toBe(false);
+  });
+
+  it("pads from the hash spelling too", () => {
+    expect(demoRows([], "", "#/?demo=1").length).toBe(15);
+  });
+
   it("leaves the real standings alone without ?demo", () => {
     const real = [{ rank: 1, user: "ann", points: 360 }];
-    expect(demoRows(real, "")).toBe(real);
-    expect(demoRows(real, "?foo=1")).toBe(real);
+    expect(demoRows(real, "", "#/")).toBe(real);
+    expect(demoRows(real, "?foo=1", "#/?foo=1")).toBe(real);
   });
 
   it("pads past the frame's ten rungs so the scroll can be exercised", () => {
-    const padded = demoRows([{ rank: 1, user: "ann", points: 360 }], "?demo=1");
+    const padded = demoRows([{ rank: 1, user: "ann", points: 360 }], "?demo=1", "#/");
     expect(padded.length).toBeGreaterThan(10);
     expect(padded[0]).toEqual({ rank: 1, user: "ann", points: 360 });
   });
 
   it("makes its placeholders obviously fake and correctly ranked", () => {
-    const padded = demoRows([], "?demo=1");
+    const padded = demoRows([], "?demo=1", "#/");
     expect(padded.every((r) => r.user.startsWith("demo-"))).toBe(true);
     expect(padded.map((r) => r.rank)).toEqual(padded.map((_, i) => i + 1));
     // Points must fall with rank, or the frame shows a board that ranks wrong.

@@ -39,8 +39,17 @@ function el(tag, className, text) {
  * another visitor's screen. The handles say `demo-` out loud, because a
  * placeholder that looks like a person is how a screenshot becomes a lie.
  */
-export function demoRows(rows, search = location.search) {
-  if (!new URLSearchParams(search).has("demo")) return rows;
+export function demoAsked(search, hash) {
+  if (new URLSearchParams(String(search || "")).has("demo")) return true;
+  // The router addresses pages by hash, so `#/?demo=1` is the spelling a
+  // person naturally reaches for — and it leaves `location.search` empty.
+  // Reading only one of the two made the switch look broken.
+  const query = String(hash || "").split("?")[1];
+  return query ? new URLSearchParams(query).has("demo") : false;
+}
+
+export function demoRows(rows, search = location.search, hash = location.hash) {
+  if (!demoAsked(search, hash)) return rows;
   const padded = [...rows];
   while (padded.length < DEMO_ROWS) {
     const rank = padded.length + 1;
