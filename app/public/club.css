@@ -85,13 +85,12 @@
 }
 .player-card-in { background: var(--orange); }
 .player-card-glyph { font-size: 30px; line-height: 1; }
-/* The Hugging Face picture IS the plate: it takes every pixel the handle and
-   the score do not, rather than sitting in it as a stamp. */
+/* A square of its own inside the square plate, rather than filling it: at full
+   width the picture was the card and the handle read as a caption under it. */
 .player-card-you .avatar {
-  flex: 1 1 auto;
-  width: 100%;
-  height: auto;
-  min-height: 0;
+  flex: none;
+  width: 76px;
+  height: 76px;
   font-size: 44px;
 }
 .player-card-name {
