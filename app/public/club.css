@@ -102,19 +102,41 @@
 
 /* ── Door: the hero over the hall ──────────────────────────────────────────── */
 
+/* What this is, on the left; who is winning it, on the right. Wide enough for
+   both, they sit side by side; below that they stack, pitch first. */
 .door {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-gutter-max);
+  gap: var(--space-chapter-top-min) var(--space-gutter-max);
   padding: 0 0 var(--space-gutter-max);
 }
-/* The pitch keeps the charter's 66-character measure; the locker takes what
-   is left and never drops below a readable box. */
-.door-pitch { flex: 1 1 26rem; min-width: 0; }
+/* The pitch keeps the charter's 66-character measure; the board takes what is
+   left and never drops below a readable frame. */
+.door-pitch { flex: 1 1 28rem; min-width: 0; }
+.door-board { flex: 1 1 22rem; min-width: 0; }
+.door-board > .eyebrow {
+  display: block;
+  margin-bottom: var(--space-gutter-min);
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: var(--type-card-title-size);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+  color: var(--ink);
+}
 
-.door-player { flex: 0 1 20rem; min-width: 0; }
+/* The duck and your locker, under the pitch. */
+.door-meet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-gutter-max);
+  margin-top: var(--space-gutter-max);
+}
+.door-meet .duckhead { width: clamp(64px, 11vw, 112px); }
+
+.door-player { flex: 1 1 15rem; min-width: 0; }
 .door-player-label {
   margin: 0 0 12px;
   font-family: var(--type-eyebrow-family);
@@ -157,7 +179,9 @@
   text-wrap: balance;
   font-family: var(--type-hero-title-family);
   font-weight: var(--type-hero-title-weight);
-  font-size: var(--type-section-title-size);
+  /* A step down from section-title: beside a scoreboard it was shouting over
+     the thing it introduces. */
+  font-size: var(--type-display-subtitle-size);
   line-height: var(--type-hero-title-line);
   letter-spacing: var(--type-hero-title-tracking);
   text-transform: uppercase;
@@ -215,9 +239,8 @@
    frame shows — the seventh is the invitation to scroll, so the frame must
    cut a row rather than land between two. */
 .ladders {
-  --ladder-rung: 58px;
+  --ladder-rung: 48px;
   --fx-shadow-color: var(--ink);
-  max-width: 640px;
   background: var(--warm-paper);
   border: 3px solid var(--ink);
   color: var(--ink);
@@ -230,7 +253,6 @@
 
 /* Only ever drawn beside invented rows. Magenta, because it is a warning. */
 .demo-note {
-  max-width: 640px;
   margin: 10px 0 0;
   padding: 6px 10px;
   border: 2px solid var(--ink);
@@ -248,7 +270,7 @@
   grid-template-columns: auto auto 1fr auto;
   align-items: center;
   gap: var(--space-gutter-min);
-  padding: 12px var(--space-card-padding-min);
+  padding: 8px var(--space-card-padding-min);
   border-top: 3px solid var(--ink);
   color: inherit;
   text-decoration: none;
@@ -256,10 +278,13 @@
 .ladder > .ladder-row:first-child { border-top: 0; }
 .ladder-row:hover { background: var(--cream); }
 
+/* The display face at the lede step rather than the card-title one: the
+   charter reserves card-title for a key figure, and a rung in a sidebar
+   scoreboard is a line in a list. */
 .ladder-rank, .ladder-points {
   font-family: var(--type-card-title-family);
   font-weight: var(--type-card-title-weight);
-  font-size: var(--type-card-title-size);
+  font-size: var(--type-lede-size);
   line-height: var(--type-card-title-line);
   letter-spacing: var(--type-card-title-tracking);
 }

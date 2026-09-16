@@ -243,7 +243,11 @@ export async function renderHome(root) {
   const hall = el("main", "hall");
   root.append(hall);
 
+  // The pitch and the season are ONE chapter: what this is, on the left, and
+  // who is winning it, on the right. They were two, and a rule between them
+  // divided a thing from its own scoreboard.
   const door = el("section", "door");
+
   const pitch = el("div", "door-pitch");
   pitch.append(
     el("p", "eyebrow", "Official competition"),
@@ -254,18 +258,21 @@ export async function renderHome(root) {
       "Train, submit, compete, repeat.",
     ),
   );
-  door.append(pitch, playerCard(me));
-  hall.append(door);
+  const meet = el("div", "door-meet");
+  meet.append(duckHead(), playerCard(me));
+  pitch.append(meet);
 
-  const season = el("section", "chapter");
+  const board = el("div", "door-board");
   const rungs = demoRows(standings);
-  season.append(el("h3", "eyebrow", "Season standings"), ladder(rungs));
+  board.append(el("h3", "eyebrow", "Season standings"), ladder(rungs));
   // Say so, loudly, whenever a row on screen was invented. A placeholder that
   // looks like a person is how a screenshot becomes a lie.
   if (rungs.length !== standings.length) {
-    season.append(el("p", "demo-note", `${rungs.length - standings.length} placeholder rows — not on the live board`));
+    board.append(el("p", "demo-note", `${rungs.length - standings.length} placeholder rows — not on the live board`));
   }
-  hall.append(chapterRule(0), season);
+
+  door.append(pitch, board);
+  hall.append(door);
 
   // Only an open event has a board worth asking for.
   const boards = await Promise.all(
@@ -280,7 +287,7 @@ export async function renderHome(root) {
   const flyers = events.map((event, i) => flyer(event, boards[i].rows));
   wall.append(...flyers);
   rounds.append(el("h3", "eyebrow", "Pick your round"), wall);
-  hall.append(chapterRule(1), rounds);
+  hall.append(chapterRule(0), rounds);
 
   // After the wall is on screen: the stills replace the dark frames as they
   // arrive, rather than holding the whole page for WebGL and a 1.3 MB GLB.

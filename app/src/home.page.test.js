@@ -28,7 +28,10 @@ describe("the whole front page", () => {
 
     expect(root.querySelector(".masthead .wordmark--cover")).not.toBeNull();
     expect(root.querySelector(".flock-band")).not.toBeNull();
-    expect(root.querySelectorAll(".chapter-rule")).toHaveLength(2);
+    // One rule now: the pitch and the season standings are one chapter, and a
+    // rule between them divided a thing from its own scoreboard.
+    expect(root.querySelectorAll(".chapter-rule")).toHaveLength(1);
+    expect(root.querySelector(".door-board .ladder-scroll")).not.toBeNull();
     expect(root.querySelector(".ladder-scroll")).not.toBeNull();
     expect(root.querySelector(".challenge-note--race")).not.toBeNull();
     // The strip and the footer belong to the pages you can come back FROM.
