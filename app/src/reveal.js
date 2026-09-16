@@ -52,20 +52,24 @@ export function setRanks(pegRows, order) {
  * actually seen.
  */
 export async function reveal(parts, show, signal) {
-  const { page, chip, chipFlip, seedsBox, score, stamp, crt, flip } = parts;
+  const { page, chip, chipFlip, seedsBox, score, facts, stamp, crt, flip } = parts;
   const { boardBox, pegboard, pegRows, pointsBox, stickers } = parts;
   const { run, plan, receipts, raced, startPoints, onSeen } = show;
   const act = (name) => {
     page.dataset.act = name;
   };
+  // Instant, not smooth: `shower` measures the sticker the moment it is shown,
+  // and a smooth scroll is still travelling then — which spawned every star
+  // below the fold. On a page that fits the window this scrolls nothing at all.
   const reveal = (box) => {
     box.hidden = false;
-    box.scrollIntoView({ block: "center", behavior: "smooth" });
+    box.scrollIntoView({ block: "center", behavior: "instant" });
   };
 
   const settle = () => {
     act("rest");
     seedsBox.hidden = score.hidden = stamp.hidden = boardBox.hidden = pointsBox.hidden = false;
+    facts.hidden = false;
     for (const sticker of stickers) sticker.hidden = false;
     setRanks(pegRows, plan.end);
     pegboard.replaceChildren(...plan.end.map((row) => pegRows.get(row.run_id)));
@@ -88,6 +92,7 @@ export async function reveal(parts, show, signal) {
 
     act("verdict");
     reveal(score);
+    facts.hidden = false;
     await slam(stamp, { support: crt, signal, contact: () => play("stamp") });
     if (signal.aborted) return;
 

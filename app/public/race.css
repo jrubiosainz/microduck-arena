@@ -733,57 +733,117 @@ table.board .withdraw:focus-visible,
 
 /* ── a publication: the run page ─────────────────────────────────────── */
 
-/* During a reveal the strip stays put, so the chip the receipts fly to is on screen. */
-.signage--pinned { position: sticky; top: 0; z-index: 2; background: var(--paper); }
+/* The one page in the club that does not scroll.
+ *
+ * Everything the reveal animates has to be on screen together, or the stars
+ * fly to a chip nobody is looking at — which is exactly what happened when
+ * the page was three windows long. So the page is the window tall, and of its
+ * four rows only the stage is elastic: the head, the board and the seeds are
+ * each as tall as their content, and the picture takes whatever is left. */
+#app:has(> main.run) { height: 100vh; }
 
-.run-byline { margin: 0 0 14px; color: var(--ink-70); }
+.hall.run {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: var(--space-gutter-min);
+  min-height: 0;
+  padding-block: 20px;
+}
+
+/* The strip stays put, in its own ink: a sticky bar needs an opaque
+   background, and the paper it used to take turned the strip white halfway
+   through the theatre. Only the scrolling fallback below can still move. */
+.signage--pinned { position: sticky; top: 0; z-index: 2; background: var(--ink); }
+
+/* The title is the way back to the event, so the page carries no back link. */
+.run-head .racetitle a { color: inherit; text-decoration: none; }
+.run-head .racetitle a:hover { color: var(--orange-inked); }
+
+/* Who made it, when, and what you can take away: one dot-separated line.
+   Plain inline flow, not a flex row: the separators are text, and flex would
+   make each of them its own item with its own gaps. */
+.run-byline { margin: 0; color: var(--ink-70); }
 .run-byline a { color: var(--sky-inked); }
 .run-byline .sticker { font-size: 0.7rem; padding: 2px 8px; }
 
-/* The stage's key: one entry per lane, in the lane's own stripe colour. */
+/* The stage and the result, shoulder to shoulder: every moving thing is here,
+   a short flight from the chip. The right column keeps its width while it is
+   still hidden, so the picture does not jump sideways when the verdict lands. */
+.run-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: var(--space-gutter-max);
+  min-height: 0;
+}
+.run-stagebox { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 6px; min-height: 0; }
+/* The stage gives the rest of the page its slack, down to a floor below which
+   there is no picture left worth watching. */
+.run-stagebox .stage { min-height: 220px; }
+.run-stagebox .stage canvas { height: 100%; min-height: 0; }
+
+/* One line under the picture: who wears which stripe, and which seed this is.
+   Two rows cost more than the caption is worth on a page counting pixels. */
+.run-caption { display: flex; flex-wrap: wrap; align-items: center; gap: 0 18px; }
+.run-legend { margin: 0; }
 .run-legend li { color: var(--lane); }
 .run-legend li::before { background: var(--lane); border-color: var(--lane); }
 .run-legend strong { color: var(--ink); }
+.run-facts { margin: 0; color: var(--ink-70); }
 
-/* The score: the split-flap board and the CRT the stamp lands on, side by side. */
+/* The result: the split-flap time, the screen the stamp lands on, and the
+   stickers it earned. The screen takes the slack, so the time it rolls and
+   the stickers the stars leave from both keep their size. */
 .run-score {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
-  align-items: center;
-  margin: 26px 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  margin: 0;
+  min-height: 0;
 }
-@media (max-width: 760px) { .run-score { grid-template-columns: minmax(0, 1fr); } }
 .run-score .scoreboard { align-items: center; }
-.run-score .flip { font-size: clamp(2rem, 6vw, 3.6rem); }
+.run-score .flip { font-size: clamp(1.6rem, 3.4vw, 2.6rem); }
 .run-score .crt-screen {
   display: grid;
   place-items: center;
-  min-height: 7rem;
+  min-height: 5rem;
   aspect-ratio: auto;
   overflow: visible; /* the stamp overshoots the bezel as it lands */
   box-shadow: var(--shadow-card-min) var(--shadow-card-min) var(--shadow-blur) var(--ink);
 }
 .run-score .stamp { font-size: clamp(1.4rem, 4vw, 2.6rem); rotate: calc(-1 * var(--rotate-2-5)); }
-.run-facts { grid-column: 1 / -1; margin: 0; color: var(--ink-70); }
 
-/* The pegboard: a window of the board, this run's row in lime, each row a link. */
-.run-board { margin: 26px 0; }
+/* What the run earned, one sticker per receipt. */
+.run-receipts { display: flex; flex-wrap: wrap; align-content: end; gap: 10px; margin: 0; }
+.run-receipts .mono-label { color: var(--ink-70); }
+
+/* The pegboard: a window of the board, this run's row in lime, each row a link.
+   One line per row here, the repo beside the handle instead of under it —
+   eight two-line rows leave the stage fourteen pixels, which is nothing. */
+.run-board { margin: 0; min-height: 0; }
+.run-board .pegboard-row { padding: 4px var(--space-card-padding-min); gap: 0 12px; }
+.run-board .pegboard-rank,
+.run-board .pegboard-score { font-size: 1.2rem; line-height: 1.15; }
+.run-board .pegboard-repo { display: inline; margin-left: 8px; }
 .pegboard-row { color: inherit; text-decoration: none; }
 .pegboard-row:hover { background: var(--cream); }
 .pegboard-row-you:hover { background: var(--lime); }
 
-/* What the run earned, one sticker per receipt. */
-.run-receipts { display: flex; flex-wrap: wrap; gap: 14px; margin: 26px 0; }
-.run-receipts .mono-label { color: var(--ink-70); }
-
-.run-details { margin-top: 26px; }
-.run-links { display: flex; flex-wrap: wrap; gap: 18px; margin: 0; }
-.run-links a { color: var(--orange-inked); }
+/* Too short or too narrow for one screen: the page scrolls, as the others do,
+   and the rows get their second line back. */
+@media (max-height: 700px), (max-width: 860px) {
+  #app:has(> main.run) { height: auto; }
+  .hall.run { display: block; }
+  .hall.run > * + * { margin-top: var(--space-gutter-max); }
+  .run-top { grid-template-columns: minmax(0, 1fr); gap: var(--space-gutter-max); }
+  .run-stagebox .stage { min-height: 260px; }
+  .run-stagebox .stage canvas { height: 44vh; }
+  .run-board .pegboard-row { padding: 14px var(--space-card-padding-min); }
+  .run-board .pegboard-repo { display: block; margin-left: 0; }
+}
 
 /* ── the seeds, folded away under their summary ───────────────────────── */
 
-.run-seedlist { margin: 26px 0; }
+.run-seedlist { margin: 0; }
 .run-seedlist summary { cursor: pointer; }
 .run-seedlist ol {
   list-style: none;

@@ -82,36 +82,61 @@ export async function renderRun(root, runId, state) {
   // Which beat the page is in. Read by nothing yet: it is the hook a screenshot
   // or a test waits on, as in Duck Jam.
   page.dataset.act = revealing ? "race" : "rest";
+  // Four rows, and only the stage gives: the page is exactly one window tall,
+  // so everything the reveal animates is on screen at once. race.css does the
+  // arithmetic; this is the order.
   page.innerHTML = `
-    <p class="eyebrow">Publication</p>
-    <h2 class="racetitle" id="title"></h2>
-    <p class="run-byline mono-label" id="byline"></p>
-    <div class="stage"><canvas id="stage"></canvas></div>
-    <ul class="key run-legend" id="legend"></ul>
+    <header class="run-head">
+      <p class="eyebrow">Publication</p>
+      <h2 class="racetitle"><a id="title"></a></h2>
+      <p class="run-byline mono-label" id="byline"></p>
+    </header>
+    <div class="run-top">
+      <div class="run-stagebox">
+        <div class="stage"><canvas id="stage"></canvas></div>
+        <div class="run-caption">
+          <ul class="key run-legend" id="legend"></ul>
+          <p class="mono-label run-facts" id="facts"></p>
+        </div>
+      </div>
+      <section class="run-score" id="score">
+        <div class="scoreboard"><span class="mono-label">time</span><div class="flip" id="flip"></div></div>
+        <div class="crt-screen" id="crt"><span class="stamp" id="stamp"></span></div>
+        <section class="run-receipts" id="points"></section>
+      </section>
+    </div>
+    <section class="run-board" id="board"><div class="pegboard" id="pegboard"></div></section>
     <details class="run-seedlist" id="seedlist">
       <summary class="eyebrow">Seeds</summary>
       <ol id="seeds"></ol>
     </details>
-    <section class="run-score" id="score">
-      <div class="scoreboard"><span class="mono-label">time</span><div class="flip" id="flip"></div></div>
-      <div class="crt-screen" id="crt"><span class="stamp" id="stamp"></span></div>
-      <p class="mono-label run-facts" id="facts"></p>
-    </section>
-    <section class="run-board" id="board"><div class="pegboard" id="pegboard"></div></section>
-    <section class="run-receipts" id="points"></section>
-    <section class="run-details">
-      <p class="run-links" id="links"></p>
-    </section>
   `;
   root.append(page, footer());
   const $ = (id) => page.querySelector(`#${id}`);
 
+  // The title is the way back to the event, which is why the page carries no
+  // back link of its own.
   $("title").textContent = run.event.title;
+  $("title").href = raceHref(run.event.id);
   const who = el("a", null, `@${run.user}`);
   who.href = playerHref(run.user);
   $("byline").append(who, ` · ${run.policy_name} · ${run.submitted_at.slice(0, 10)}`);
   if (run.withdrawn) $("byline").append(" · ", el("span", "sticker sticker-magenta", "withdrawn"));
   else if (!run.on_board) $("byline").append(" · ", el("span", "sticker", "not on the board"));
+  // What you can take away sits with who made it: one line, no section of its own.
+  if (run.offers_download) {
+    const grab = el("a", null, "Download .onnx");
+    grab.href = run.policy_url || `/api/runs/${run.run_id}/policy`;
+    grab.setAttribute("download", "");
+    $("byline").append(" · ", grab);
+  }
+  if (run.env_url) {
+    const env = el("a", null, "Training environment");
+    env.href = run.env_url;
+    env.target = "_blank";
+    env.rel = "noopener noreferrer";
+    $("byline").append(" · ", env);
+  }
 
   // The score is in the DOM before any theatre: the roll is drawn over it.
   $("flip").append(...flipTiles(dnf ? "DNF" : run.score.toFixed(3)));
@@ -119,7 +144,9 @@ export async function renderRun(root, runId, state) {
   stamp.textContent = dnf ? "DNF" : `FINISHED ${run.seeds_finished}/${run.seeds_total}`;
   stamp.classList.add(dnf ? "stamp-fail" : "stamp-pass");
   stamp.hidden = revealing;
+  // "median finisher" says the run finished, so the caption waits for the stamp.
   $("facts").textContent = replayLine(run);
+  $("facts").hidden = revealing;
 
   // The pegboard, in its starting order when revealing: you at the bottom.
   const pegRows = new Map(plan.end.map((row) => [row.run_id, pegRow(row)]));
@@ -143,22 +170,6 @@ export async function renderRun(root, runId, state) {
       el("strong", null, s.time_s == null ? s.status : `${s.time_s.toFixed(3)}s`),
     );
     $("seeds").append(row);
-  }
-  const back = el("a", null, `Back to ${run.event.title}`);
-  back.href = raceHref(run.event.id);
-  $("links").append(back);
-  if (run.offers_download) {
-    const grab = el("a", null, "Download .onnx");
-    grab.href = run.policy_url || `/api/runs/${run.run_id}/policy`;
-    grab.setAttribute("download", "");
-    $("links").append(grab);
-  }
-  if (run.env_url) {
-    const env = el("a", null, "Training environment");
-    env.href = run.env_url;
-    env.target = "_blank";
-    env.rel = "noopener noreferrer";
-    $("links").append(env);
   }
 
   for (const box of [$("seedlist"), $("score"), $("board"), $("points")]) box.hidden = revealing;
@@ -256,6 +267,7 @@ export async function renderRun(root, runId, state) {
       chipFlip,
       seedsBox: $("seedlist"),
       score: $("score"),
+      facts: $("facts"),
       stamp,
       crt: $("crt"),
       flip: $("flip"),
