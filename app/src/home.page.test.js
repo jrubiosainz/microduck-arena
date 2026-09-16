@@ -28,13 +28,13 @@ describe("the whole front page", () => {
 
     expect(root.querySelector(".masthead .wordmark--cover")).not.toBeNull();
     expect(root.querySelector(".flock-band")).not.toBeNull();
-    // Two rules, and the first chapter sits BETWEEN them: the pitch and the
-    // season standings are one band, so a rule above it and a rule below.
+    // The band comes FIRST in the hall, flush under the yellow strip whose own
+    // border is the line there. A rule above it put a stripe of bare paper
+    // between the two, which is the thing that was removed.
     const hall = [...root.querySelector(".hall").children].map((n) => n.className);
-    expect(hall.filter((c) => c.startsWith("chapter-rule"))).toHaveLength(2);
-    expect(hall[0]).toMatch(/^chapter-rule/);
-    expect(hall[1]).toMatch(/^door\b/);
-    expect(hall[2]).toMatch(/^chapter-rule/);
+    expect(hall[0]).toMatch(/^door\b/);
+    expect(hall[1]).toMatch(/^chapter-rule/);
+    expect(hall.filter((c) => c.startsWith("chapter-rule"))).toHaveLength(1);
     expect(root.querySelector(".door-board .ladder-scroll")).not.toBeNull();
     expect(root.querySelector(".ladder-scroll")).not.toBeNull();
     expect(root.querySelector(".challenge-note--race")).not.toBeNull();

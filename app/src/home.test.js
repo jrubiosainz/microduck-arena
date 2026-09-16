@@ -92,7 +92,9 @@ describe("the first chapter's band", () => {
 describe("the page texture", () => {
   it("is decorative and lets clicks through", () => {
     const skin = pageTexture();
-    expect(skin.className).toBe("page-fx fx-grain fx-scanlines");
+    // Grain, and no scanlines: over a page of paper and text the lines read
+    // as a fault rather than as a screen.
+    expect(skin.className).toBe("page-fx fx-grain");
     expect(skin.getAttribute("aria-hidden")).toBe("true");
   });
 

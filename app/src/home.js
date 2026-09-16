@@ -199,15 +199,18 @@ export function playerCard(me, standing) {
 }
 
 /**
- * Grain and scanlines over the WHOLE window, not just the column.
+ * Grain over the WHOLE window, not just the column.
  *
- * Fixed rather than laid out, so the cover and the band carry it too — the
- * charter asks that both cover the page, and hanging them on `.hall` stopped
- * them at the content column. It is the first child of the view, so leaving
- * the page takes it away with everything else.
+ * Fixed rather than laid out, so the cover and the band carry it too — hanging
+ * it on `.hall` stopped it at the content column. It is the first child of the
+ * view, so leaving the page takes it away with everything else.
+ *
+ * Grain only: the charter pairs it with scanlines, but over a page of paper
+ * and text the lines read as a fault rather than as a screen, and they were
+ * asked for off here.
  */
 export function pageTexture() {
-  const skin = el("div", "page-fx fx-grain fx-scanlines");
+  const skin = el("div", "page-fx fx-grain");
   skin.setAttribute("aria-hidden", "true");
   return skin;
 }
@@ -286,7 +289,10 @@ export async function renderHome(root) {
   }
 
   door.append(pitch, board);
-  hall.append(chapterRule(0), door);
+  // No rule above it: the band runs flush under the yellow strip, whose own
+  // bottom border is the line there. A rule plus the hall's top padding put a
+  // stripe of bare paper between the two, which was the thing to remove.
+  hall.append(door);
 
   // Only an open event has a board worth asking for.
   const boards = await Promise.all(
@@ -301,7 +307,7 @@ export async function renderHome(root) {
   const flyers = events.map((event, i) => flyer(event, boards[i].rows));
   wall.append(...flyers);
   rounds.append(el("h3", "eyebrow", "Pick your round"), wall);
-  hall.append(chapterRule(1), rounds);
+  hall.append(chapterRule(0), rounds);
 
   // After the wall is on screen: the stills replace the dark frames as they
   // arrive, rather than holding the whole page for WebGL and a 1.3 MB GLB.

@@ -171,21 +171,22 @@
   gap: var(--space-chapter-top-min) var(--space-gutter-max);
   width: 100vw;
   margin-left: calc(50% - 50vw);
-  /* Half the rise, up and down, so the cut edges meet the rules rather than
-     leaving a wedge of paper between them. */
-  margin-block: calc(-0.5 * var(--slant));
+  /* Flush under the yellow strip — cancelling the hall's own top padding —
+     so no stripe of bare paper sits between the two. Half the rise at the
+     bottom, so the cut edge meets the rule below rather than leaving a wedge
+     of paper between them. */
+  margin-top: calc(-1 * var(--space-gutter-max));
+  margin-bottom: calc(-0.5 * var(--slant));
   padding:
-    calc(var(--space-chapter-top-min) + var(--slant))
-    max(var(--space-gutter-min), calc(50vw - var(--space-content-column) / 2));
+    var(--space-chapter-top-min)
+    max(var(--space-gutter-min), calc(50vw - var(--space-content-column) / 2))
+    calc(var(--space-chapter-top-min) + var(--slant));
   background-color: var(--warm-paper);
-  /* Top edge rises to the right, matching .chapter-rule--left's -1°; bottom
-     edge falls to the right, matching .chapter-rule--right's +1°. */
-  clip-path: polygon(
-    0 var(--slant),
-    100% 0,
-    100% 100%,
-    0 calc(100% - var(--slant))
-  );
+  /* Square on top, where it meets the yellow strip's own straight border. The
+     bottom edge RISES to the right: the rule under it is .chapter-rule--left,
+     rotated -1°, which is counter-clockwise — its left end drops and its right
+     end lifts, and the cut has to do the same or the two cross. */
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--slant)), 0 100%);
 }
 /* The pitch keeps the charter's 66-character measure; the board takes what is
    left and never drops below a readable frame. */
@@ -267,6 +268,7 @@
   margin-top: var(--space-chapter-top-min);
   background: var(--ink);
 }
+/* The band already carries the space below it in its own padding. */
 .door + .chapter-rule { margin-top: 0; }
 .chapter-rule--left { rotate: calc(-1 * var(--rotate-1-0)); }
 .chapter-rule--right { rotate: var(--rotate-1-0); }
