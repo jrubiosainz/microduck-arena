@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -57,14 +58,22 @@ class Tab:
                   {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": False})
         self.send("Page.enable")
 
-    def _call(self, method: str, params: dict | None = None, session: str | None = None) -> dict:
+    def _call(
+        self,
+        method: str,
+        params: dict | None = None,
+        session: str | None = None,
+        timeout: float = 60.0,
+    ) -> dict:
         self._id += 1
         message = {"id": self._id, "method": method, "params": params or {}}
         if session:
             message["sessionId"] = session
         self.socket.send(json.dumps(message))
         while True:
-            reply = json.loads(self.socket.recv())
+            # Without a timeout a stuck reply hangs forever, and no caller's
+            # own deadline (wait_ready's, say) is ever actually enforced.
+            reply = json.loads(self.socket.recv(timeout=timeout))
             # Events carry no id and are not waited on: readiness is polled.
             if reply.get("id") != self._id:
                 continue
@@ -72,13 +81,16 @@ class Tab:
                 raise RuntimeError(f"{method}: {reply['error'].get('message')}")
             return reply["result"]
 
-    def send(self, method: str, params: dict | None = None) -> dict:
-        return self._call(method, params, self.session)
+    def send(self, method: str, params: dict | None = None, timeout: float = 60.0) -> dict:
+        return self._call(method, params, self.session, timeout)
 
-    def evaluate(self, expression: str, await_promise: bool = False):
+    def evaluate(self, expression: str, await_promise: bool = False, timeout: float = 60.0):
+        # A parameter, not a constant: the soundtrack render can take minutes,
+        # and a caller doing that must be able to ask for longer than the
+        # default without it looking like a hang.
         result = self.send("Runtime.evaluate", {
             "expression": expression, "awaitPromise": await_promise, "returnByValue": True,
-        })
+        }, timeout=timeout)
         if "exceptionDetails" in result:
             details = result["exceptionDetails"]
             raise RuntimeError(details.get("exception", {}).get("description") or details.get("text"))
@@ -114,11 +126,18 @@ class Chrome:
 
     def __init__(self, binary: str, nice: int = 10):
         self.profile = tempfile.mkdtemp(prefix="arena-chrome-")
-        self.process = subprocess.Popen(
-            niced([binary, *self.FLAGS, f"--user-data-dir={self.profile}", "about:blank"], nice),
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
-        )
-        self.endpoint = self._endpoint()
+        self.process = None
+        try:
+            self.process = subprocess.Popen(
+                niced([binary, *self.FLAGS, f"--user-data-dir={self.profile}", "about:blank"], nice),
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+            )
+            self.endpoint = self._endpoint()
+        except BaseException:
+            # A half-launched Chrome (or its profile) must not outlive the
+            # exception that reports it.
+            self.close()
+            raise
 
     def _endpoint(self, timeout_s: float = 20.0) -> str:
         deadline = time.monotonic() + timeout_s
@@ -131,16 +150,25 @@ class Chrome:
                 continue
             said += line
             if "ws://" in line:
-                return line[line.index("ws://"):].split()[0]
+                endpoint = line[line.index("ws://"):].split()[0]
+                # SwiftShader/ANGLE keep talking after this line. Left unread,
+                # the pipe fills and blocks Chrome, wedging every render behind it.
+                threading.Thread(target=self._drain_stderr, daemon=True).start()
+                return endpoint
         raise RuntimeError(f"Chrome opened no DevTools endpoint: {said.strip()}")
+
+    def _drain_stderr(self) -> None:
+        for _ in self.process.stderr:
+            pass
 
     def tab(self, width: int, height: int) -> Tab:
         return Tab(self.endpoint, width, height)
 
     def close(self) -> None:
         try:
-            self.process.kill()
-            self.process.wait(timeout=5)
+            if self.process is not None:
+                self.process.kill()
+                self.process.wait(timeout=5)
         finally:
             shutil.rmtree(self.profile, ignore_errors=True)
 
