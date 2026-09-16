@@ -14,7 +14,7 @@ import { voteButton } from "./votebutton.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
 const SHELLS = ["cream", "graphite", "lavender", "sky"];
-const LADDER_ROWS = 10;
+const DEMO_ROWS = 18;
 
 /** Which of the four duck shells a player drives: a stable hash of the name. */
 export function shellOf(user) {
@@ -30,9 +30,27 @@ function el(tag, className, text) {
   return node;
 }
 
+/**
+ * Padding for `?demo=1`, so the ladder's scroll can be judged against more
+ * than three real people.
+ *
+ * Client-side and pure: no fabricated row reaches the store, the API or
+ * another visitor's screen. The handles say `demo-` out loud, because a
+ * placeholder that looks like a person is how a screenshot becomes a lie.
+ */
+export function demoRows(rows, search = location.search) {
+  if (!new URLSearchParams(search).has("demo")) return rows;
+  const padded = [...rows];
+  while (padded.length < DEMO_ROWS) {
+    const rank = padded.length + 1;
+    padded.push({ rank, user: `demo-duck-${rank}`, points: 1000 - rank * 37 });
+  }
+  return padded.map((row, i) => ({ ...row, rank: i + 1 }));
+}
+
 export function ladder(rows) {
-  const box = el("div", "ladders");
-  const list = el("div", "ladder");
+  const box = el("div", "ladders fx-shadow-card");
+  const list = el("div", "ladder ladder-scroll");
   if (!rows.length) list.append(el("p", "ladder-empty", "Nobody has published yet."));
   for (const row of rows) {
     const rung = el("a", "ladder-row");
@@ -179,7 +197,7 @@ export async function renderHome(root) {
   hall.append(door);
 
   const season = el("section", "chapter");
-  season.append(el("h3", "eyebrow", "Season standings"), ladder(standings.slice(0, LADDER_ROWS)));
+  season.append(el("h3", "eyebrow", "Season standings"), ladder(demoRows(standings)));
   hall.append(chapterRule(0), season);
 
   // Only an open event has a board worth asking for.

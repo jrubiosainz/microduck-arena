@@ -138,12 +138,21 @@
 
 /* ── Ladder: one rung per player ───────────────────────────────────────────── */
 
+/* The frame holds still; the rungs scroll inside it. Ten rungs is what the
+   frame shows — the eleventh is the invitation to scroll, so the frame must
+   cut a row rather than land between two. */
 .ladders {
+  --ladder-rung: 58px;
+  --fx-shadow-color: var(--ink);
   max-width: 640px;
   background: var(--warm-paper);
   border: 3px solid var(--ink);
-  box-shadow: 5px 5px 0 var(--ink);
   color: var(--ink);
+}
+.ladder-scroll {
+  max-height: calc(var(--ladder-rung) * 10.5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .ladder-row {

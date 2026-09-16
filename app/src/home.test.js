@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { chapterRule, flockBand, flyer, ladder, masthead, shellOf } from "./home.js";
+import { chapterRule, demoRows, flockBand, flyer, ladder, masthead, shellOf } from "./home.js";
 
 const open = {
   id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", rig: "legs",
@@ -229,6 +229,41 @@ describe("the flock band", () => {
         `${selector.trim()} declares an animation — the marquee is back`,
       ).not.toMatch(/animation(-name)?\s*:/);
     }
+  });
+});
+
+describe("the demo padding", () => {
+  it("leaves the real standings alone without ?demo", () => {
+    const real = [{ rank: 1, user: "ann", points: 360 }];
+    expect(demoRows(real, "")).toBe(real);
+    expect(demoRows(real, "?foo=1")).toBe(real);
+  });
+
+  it("pads past the frame's ten rungs so the scroll can be exercised", () => {
+    const padded = demoRows([{ rank: 1, user: "ann", points: 360 }], "?demo=1");
+    expect(padded.length).toBeGreaterThan(10);
+    expect(padded[0]).toEqual({ rank: 1, user: "ann", points: 360 });
+  });
+
+  it("makes its placeholders obviously fake and correctly ranked", () => {
+    const padded = demoRows([], "?demo=1");
+    expect(padded.every((r) => r.user.startsWith("demo-"))).toBe(true);
+    expect(padded.map((r) => r.rank)).toEqual(padded.map((_, i) => i + 1));
+    // Points must fall with rank, or the frame shows a board that ranks wrong.
+    for (let i = 1; i < padded.length; i += 1) {
+      expect(padded[i].points).toBeLessThan(padded[i - 1].points);
+    }
+  });
+});
+
+describe("the ladder frame", () => {
+  it("scrolls its rungs inside a border that stays put", () => {
+    const el = ladder([{ rank: 1, user: "ann", points: 360 }]);
+    // The bordered box is the frame; the scroller is inside it, or the border
+    // scrolls away with the rows. It also carries the charter's card-shadow
+    // primitive (fx-shadow-card) rather than a literal box-shadow.
+    expect(el.className).toBe("ladders fx-shadow-card");
+    expect(el.querySelector(".ladder-scroll .ladder-row")).not.toBeNull();
   });
 });
 
