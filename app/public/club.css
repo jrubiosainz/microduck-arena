@@ -204,11 +204,10 @@
   width: 100vw;
   margin-left: calc(50% - 50vw);
   /* Flush under the yellow strip — cancelling the hall's own top padding —
-     so no stripe of bare paper sits between the two. Half the rise at the
-     bottom, so the cut edge meets the rule below rather than leaving a wedge
-     of paper between them. */
+     so no stripe of bare paper sits between the two. Nothing pulled up at the
+     bottom: the cut edge IS the join now, and the chapter below opens on its
+     own chapter-top space. */
   margin-top: calc(-1 * var(--space-gutter-max));
-  margin-bottom: calc(-0.5 * var(--slant));
   padding:
     var(--space-title-to-grid-max)
     max(var(--space-gutter-min), calc(50vw - var(--space-content-column) / 2))
@@ -362,12 +361,10 @@
   margin-top: var(--space-chapter-top-min);
   background: var(--ink);
 }
-/* The band already carries the space below it in its own padding. */
-.door + .chapter-rule { margin-top: 0; }
 .chapter-rule--left { rotate: calc(-1 * var(--rotate-1-0)); }
 .chapter-rule--right { rotate: var(--rotate-1-0); }
-/* The rule already carries the space above its chapter. */
-.chapter-rule + .chapter { margin-top: var(--space-title-to-grid-max); }
+/* With no rule above it, the chapter carries its own opening space again. */
+.chapter { margin-top: var(--space-chapter-top-min); }
 
 /* ── Ladder: one rung per player ───────────────────────────────────────────── */
 
@@ -529,13 +526,15 @@
       rotate 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
       translate 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
   }
-  .challenge-note:has(.challenge-link):hover {
+  /* One direction for every card, whichever way it rests: the wall swings as
+     one gesture rather than as each sheet doing its own thing. The
+     :nth-child(2n) override is deliberately absent — specificity (0,4,0)
+     against this rule's (0,3,0) is what would bring it back. */
+  .challenge-note:has(.challenge-link):hover,
+  .challenge-note:nth-child(2n):has(.challenge-link):hover {
     --fx-shadow-size: var(--shadow-card-max);
     rotate: calc(-1 * var(--rotate-2-5));
     translate: 0 -5px;
-  }
-  .challenge-note:nth-child(2n):has(.challenge-link):hover {
-    rotate: var(--rotate-2-5);
   }
 }
 

@@ -28,13 +28,11 @@ describe("the whole front page", () => {
 
     expect(root.querySelector(".masthead .wordmark--cover")).not.toBeNull();
     expect(root.querySelector(".flock-band")).not.toBeNull();
-    // The band comes FIRST in the hall, flush under the yellow strip whose own
-    // border is the line there. A rule above it put a stripe of bare paper
-    // between the two, which is the thing that was removed.
+    // The band first, the wall straight after it: no rule between them, and
+    // none anywhere. The band's own cut bottom edge is the join.
     const hall = [...root.querySelector(".hall").children].map((n) => n.className);
     expect(hall[0]).toMatch(/^door\b/);
-    expect(hall[1]).toMatch(/^chapter-rule/);
-    expect(hall.filter((c) => c.startsWith("chapter-rule"))).toHaveLength(1);
+    expect(hall.filter((c) => c.startsWith("chapter-rule"))).toHaveLength(0);
     expect(root.querySelector(".door-board .ladder-scroll")).not.toBeNull();
     // The squad photo under the pitch, with its box reserved so the band does
     // not jump when the file lands, and with alt text a screen reader can use.

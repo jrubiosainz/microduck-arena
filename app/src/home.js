@@ -324,7 +324,7 @@ export async function renderHome(root) {
   const flyers = events.map((event, i) => flyer(event, boards[i].rows));
   wall.append(...flyers);
   rounds.append(el("h3", "eyebrow", "Pick your round"), wall);
-  hall.append(chapterRule(0), rounds);
+  hall.append(rounds);
 
   // After the wall is on screen: the stills replace the dark frames as they
   // arrive, rather than holding the whole page for WebGL and a 1.3 MB GLB.

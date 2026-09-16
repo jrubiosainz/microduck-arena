@@ -294,8 +294,13 @@ describe("the flyer's category", () => {
     const guarded = [...css.matchAll(
       /@media \(prefers-reduced-motion: no-preference\) \{\n([\s\S]*?)\n\}/g,
     )].map(([, body]) => body).join("\n");
+    // Matched loosely on purpose: the hover may be one selector or a list of
+    // them, and pinning the exact shape of the selector is pinning the
+    // formatting, not the behaviour.
     expect(guarded, "the flyer's hover swing is not behind the media query")
-      .toMatch(/\.challenge-note:has\(\.challenge-link\):hover \{[^}]*rotate:/);
+      .toMatch(/\.challenge-note:has\(\.challenge-link\):hover/);
+    expect(guarded, "the hover does not rotate the sheet")
+      .toMatch(/rotate:\s*calc\(-1 \* var\(--rotate-2-5\)\)/);
     const unguarded = css.replace(
       /@media \(prefers-reduced-motion: no-preference\) \{\n[\s\S]*?\n\}/g,
       "",
