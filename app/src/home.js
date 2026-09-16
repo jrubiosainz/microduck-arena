@@ -14,15 +14,7 @@ import { renderDuckPortrait, renderThumbnails } from "./thumbnail.js";
 import { voteButton } from "./votebutton.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
-const SHELLS = ["cream", "graphite", "lavender", "sky"];
 const DEMO_ROWS = 15;
-
-/** Which of the four duck shells a player drives: a stable hash of the name. */
-export function shellOf(user) {
-  let hash = 0;
-  for (const char of String(user)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return SHELLS[hash & 3];
-}
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -78,8 +70,7 @@ export function ladder(rows) {
     rung.href = playerHref(row.user);
     rung.append(
       el("span", "ladder-rank", String(row.rank)),
-      el("span", `ladder-shell ladder-shell-${shellOf(row.user)}`),
-      el("span", "ladder-name", `@${row.user}`),
+      el("span", "ladder-name", row.user),
       el("span", "ladder-points", `${row.points} PTS`),
     );
     list.append(rung);
@@ -296,8 +287,9 @@ export async function renderHome(root) {
       "Train, submit, compete, repeat.",
     ),
   );
-  // The head stands in until the rendered duck arrives, so the band never
-  // reflows and a machine with no WebGL keeps something.
+  // The head stands alone until the rendered duck arrives, and stays beside it
+  // once it does, so the band never reflows and a machine with no WebGL keeps
+  // something.
   const meet = el("div", "door-meet");
   meet.append(duckHead());
   pitch.append(meet);
@@ -335,7 +327,7 @@ export async function renderHome(root) {
     img.className = "door-duck";
     img.src = portrait;
     img.alt = "";
-    meet.replaceChildren(img);
+    meet.append(img);
   }
 
   const stills = await renderThumbnails(events);

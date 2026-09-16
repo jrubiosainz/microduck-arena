@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   chapterRule, demoAsked, demoRows, flockBand, flyer, ladder, masthead, pageTexture, playerCard,
-  shellOf,
 } from "./home.js";
 
 const open = {
@@ -168,24 +167,18 @@ describe("the ladder", () => {
     const rows = [...el.querySelectorAll("a.ladder-row")];
     expect(rows.map((r) => r.getAttribute("href"))).toEqual(["#/p/ann", "#/p/bob"]);
     expect(rows[0].querySelector(".ladder-rank").textContent).toBe("1");
-    expect(rows[0].querySelector(".ladder-name").textContent).toBe("@ann");
+    // No "@": the handle is the name here, not a mention of one.
+    expect(rows[0].querySelector(".ladder-name").textContent).toBe("ann");
     expect(rows[0].querySelector(".ladder-points").textContent).toBe("360 PTS");
-    expect(rows[0].querySelector(".ladder-shell").className).toMatch(/ladder-shell-(cream|graphite|lavender|sky)/);
+    // The colour square is gone: it hashed the handle to one of four shells
+    // and stood for nothing a reader could act on.
+    expect(rows[0].querySelector(".ladder-shell")).toBeNull();
   });
 
   it("says so when nobody has published", () => {
     const el = ladder([]);
     expect(el.querySelector("a.ladder-row")).toBeNull();
     expect(el.querySelector(".ladder-empty").textContent).toBe("Nobody has published yet.");
-  });
-});
-
-describe("shellOf", () => {
-  it("is stable per name and one of the four shells", () => {
-    expect(shellOf("ann")).toBe(shellOf("ann"));
-    for (const user of ["ann", "bob", "cid", "dee", "eve"]) {
-      expect(["cream", "graphite", "lavender", "sky"]).toContain(shellOf(user));
-    }
   });
 });
 

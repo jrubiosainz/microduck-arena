@@ -391,7 +391,7 @@
 
 .ladder-row {
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: var(--space-gutter-min);
   padding: 8px var(--space-card-padding-min);
@@ -414,11 +414,6 @@
 }
 .ladder-rank { min-width: 2ch; }
 
-.ladder-shell { width: 14px; height: 14px; border: 2px solid var(--ink); }
-.ladder-shell-cream { background: var(--cream); }
-.ladder-shell-graphite { background: var(--graphite); }
-.ladder-shell-lavender { background: var(--lavender); }
-.ladder-shell-sky { background: var(--sky); }
 
 .ladder-name { font-weight: 600; overflow-wrap: anywhere; }
 .ladder-empty { margin: 0; padding: 12px var(--space-card-padding-min); }
