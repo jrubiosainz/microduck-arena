@@ -17,9 +17,18 @@ RUN npm run build
 # ── the app ──────────────────────────────────────────────────────────────
 FROM python:3.13-slim
 
-# MuJoCo runs headless here — no rendering, no GL context. It still links
-# libstdc++ at import, which the slim image has; nothing else is needed, and
-# adding libgl1 "to be safe" would be 90 MB for a library never loaded.
+# The clip recorder (arena/recorder.py) photographs the arena's own stage in
+# a headless Chromium and encodes it with ffmpeg. That is the one reason this
+# image carries a browser and Mesa: MuJoCo still runs headless with no GL of
+# its own. fonts-liberation is the fallback face for glyphs Anton and DM Sans
+# lack. The version check fails the build on a broken apt layer, before a
+# Space boots and renders nothing.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends chromium ffmpeg fonts-liberation \
+ && rm -rf /var/lib/apt/lists/* \
+ && chromium --version && ffmpeg -version | head -1
+ENV CHROME=/usr/bin/chromium
+
 RUN useradd -m -u 1000 user
 USER user
 ENV HOME=/home/user \
