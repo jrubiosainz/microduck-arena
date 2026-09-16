@@ -422,6 +422,20 @@
 
 /* ── Flyers: one per event, taped up crooked ───────────────────────────────── */
 
+/* Scanlines on the wall alone, and BEHIND the sheets rather than over them:
+   they show in the gutters between flyers and stop at the paper. `fx-scanlines`
+   is an ::after, which paints above in-flow content, so it drops to -1 and the
+   section isolates itself rather than leaning on some ancestor's stacking
+   context. Full width like everything else on this page; the chapter's own box
+   is what scopes it vertically. */
+.chapter--wall { isolation: isolate; }
+.chapter--wall::after {
+  z-index: -1;
+  left: calc(50% - 50vw);
+  right: auto;
+  width: 100vw;
+}
+
 .cabinets {
   display: grid;
   /* Three to a row, at a width between the two tried before: 355px was the

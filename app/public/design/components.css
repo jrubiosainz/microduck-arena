@@ -454,11 +454,11 @@
   padding: 6px 12px;
   border: 2px solid var(--ink);
   border-radius: 0.2rem;
-  /* Magenta, which the charter calls its hot signal and already spends on
-     LIVE and REC. Paper on it, not ink: the charter's own .sticker-magenta
-     does the same, because ink on magenta is not a contrast anyone reads. */
-  background: var(--magenta);
-  color: var(--paper);
+  /* Cyan, the tape's own colour, so the vote badge and the sticky tape on a
+     flyer read as the same roll. Ink on it, which cyan is bright enough to
+     carry. */
+  background: var(--cyan);
+  color: var(--ink);
   font-family: var(--type-sticker-family);
   font-weight: var(--type-sticker-weight);
   font-size: var(--type-sticker-size);
@@ -473,7 +473,9 @@
   translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
   box-shadow: none;
 }
-.vote-button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+/* Ink, not cyan: the button IS cyan now, and a cyan ring on a cyan button is
+   no ring at all for anyone arriving by keyboard. */
+.vote-button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 
 /* Tucked into the flyer's corner like the tape above it, at the charter's lean. */
 .vote-button--sticker {

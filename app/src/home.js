@@ -319,7 +319,7 @@ export async function renderHome(root) {
         : getLeaderboard(event.id).catch(() => ({ rows: [] })),
     ),
   );
-  const rounds = el("section", "chapter");
+  const rounds = el("section", "chapter chapter--wall fx-scanlines");
   const wall = el("div", "cabinets");
   const flyers = events.map((event, i) => flyer(event, boards[i].rows));
   wall.append(...flyers);
