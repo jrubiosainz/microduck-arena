@@ -434,6 +434,13 @@
   left: calc(50% - 50vw);
   right: auto;
   width: 100vw;
+  /* Out past the section's own box at both ends, or the stripes start 48px
+     below the rule and stop at the last sheet. Up by the space the rule
+     leaves above the chapter; down by the chapter's closing space plus the
+     hall's own bottom padding, which together are everything between the last
+     sheet and the foot of the page. */
+  top: calc(-1 * var(--space-title-to-grid-max));
+  bottom: calc(-1 * (var(--space-chapter-bottom-min) + var(--space-gutter-max)));
 }
 
 .cabinets {
