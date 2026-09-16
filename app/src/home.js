@@ -128,8 +128,8 @@ export function flyer(event, rows) {
   link.append(el("div", "challenge-art"));
   if (known) link.append(el("span", "eyebrow", event.category.toUpperCase()));
   link.append(
-    leaderLine(event, planned, rows),
     el("h4", "flyer-title", event.title),
+    leaderLine(event, planned, rows),
     el("p", "challenge-facts", facts),
   );
   note.append(link);

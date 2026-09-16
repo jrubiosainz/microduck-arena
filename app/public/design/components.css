@@ -454,10 +454,11 @@
   padding: 6px 12px;
   border: 2px solid var(--ink);
   border-radius: 0.2rem;
-  /* Sky, not cyan: the focus ring below is cyan, and a cyan ring on a cyan
-     button is no ring at all. Sky is the blue that leaves it visible. */
-  background: var(--sky);
-  color: var(--ink);
+  /* Magenta, which the charter calls its hot signal and already spends on
+     LIVE and REC. Paper on it, not ink: the charter's own .sticker-magenta
+     does the same, because ink on magenta is not a contrast anyone reads. */
+  background: var(--magenta);
+  color: var(--paper);
   font-family: var(--type-sticker-family);
   font-weight: var(--type-sticker-weight);
   font-size: var(--type-sticker-size);

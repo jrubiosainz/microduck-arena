@@ -424,7 +424,9 @@
 
 .cabinets {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-wide)), 1fr));
+  /* The charter's medium track, one step down from wide: narrower sheets, and
+     more of them across the same column. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-medium)), 1fr));
   gap: var(--space-gutter-max);
   align-items: stretch;
   margin-top: var(--space-gutter-min);
@@ -488,21 +490,18 @@
   letter-spacing: var(--type-mono-label-tracking);
 }
 
-/* The caption. The handle is what a person scans the wall by, so it takes the
-   card-title step and the event's own title sits under it at body size. */
+/* The caption. The EVENT is what a person picks off the wall, so its name
+   takes the card-title step and whoever holds it sits under, at body size. */
 .flyer-leader {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px;
-  margin: var(--space-gutter-min) 0 0;
+  margin: 6px 0 0;
 }
 .flyer-leader-name {
-  font-family: var(--type-card-title-family);
-  font-weight: var(--type-card-title-weight);
-  font-size: var(--type-card-title-size);
-  line-height: var(--type-card-title-line);
-  letter-spacing: var(--type-card-title-tracking);
+  font-size: 1rem;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 .flyer-leader-score {
@@ -511,7 +510,16 @@
   font-size: var(--type-mono-label-size);
   letter-spacing: var(--type-mono-label-tracking);
 }
-.flyer-title { margin: 4px 0 0; font-size: 1rem; font-weight: 600; text-transform: none; }
+.flyer-title {
+  margin: var(--space-gutter-min) 0 0;
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: var(--type-card-title-size);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+  /* Anton is the charter's display face and it is always capitals. */
+  text-transform: uppercase;
+}
 .challenge-star { width: 18px; height: 18px; align-self: center; }
 .challenge-link .eyebrow { display: block; margin-top: var(--space-gutter-min); color: var(--orange-inked); }
 

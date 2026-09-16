@@ -342,13 +342,13 @@ describe("the flyer's category", () => {
 });
 
 describe("the polaroid caption", () => {
-  it("puts the leader's handle above the event's title", () => {
+  it("puts the event's title above the leader's handle", () => {
     const note = flyer(open, [
       { user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 },
     ]);
     const order = [...note.querySelectorAll(".flyer-leader, .flyer-title")]
       .map((n) => n.className);
-    expect(order).toEqual(["flyer-leader", "flyer-title"]);
+    expect(order).toEqual(["flyer-title", "flyer-leader"]);
     expect(note.querySelector(".flyer-leader").textContent).toContain("cdeplanne");
     expect(note.querySelector(".flyer-title").textContent).toBe("2 m Sprint");
   });
@@ -356,7 +356,7 @@ describe("the polaroid caption", () => {
   it("shows the still above the caption, polaroid-fashion", () => {
     const note = flyer(open, []);
     const parts = [...note.querySelector(".challenge-link").children].map((n) => n.className);
-    expect(parts.indexOf("challenge-art")).toBeLessThan(parts.indexOf("flyer-leader"));
+    expect(parts.indexOf("challenge-art")).toBeLessThan(parts.indexOf("flyer-title"));
   });
 });
 
