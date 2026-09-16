@@ -1782,6 +1782,23 @@ software rendering. A repeat landscape run for stability-checking gave `draw + V
 342.1 ms instead of 172.2 ms (everything else within a few ms) — see Task 6's report for the
 full second run.
 
+The same probe with the renderer's `antialias` off (a one-line change in `viewer.js`, made
+permanent for manual mode by Task 7):
+
+| layout | draw | png shot | jpeg shot | jpeg in page | VideoFrame | vp9 |
+| --- | --- | --- | --- | --- | --- | --- |
+| landscape | 1.5 ms | 152.9 ms | 151.4 ms | 127.0 ms | 86.9 ms | 184.3 ms (40 chunks) |
+| vertical | 1.4 ms | 133.6 ms | 141.2 ms | 112.1 ms | 47.7 ms | 144.5 ms (40 chunks) |
+
+**Decision (controller, applying the rule):** MSAA was the dominant cost — 401 → 151 ms per
+frame with it off, and PNG, JPEG and in-page JPEG all sat within 25 ms of each other, so the
+image format never mattered. Without MSAA the VP9 encode (184 ms) is slower than the JPEG
+screenshot it would replace (151 ms), so the WebCodecs path cannot win even though the raw
+readback (87 ms) is cheaper: the remaining 65 ms is compositing and encode, not worth a
+Canvas2D overlay. **Task 7 proceeds with JPEG screenshots, and the viewer's manual mode
+creates its renderer with `antialias: false`** (`antialias: !manual`). Aliasing on the duck's
+edges at 1080p is judged on the first real render in Task 15; x264 softens it further.
+
 ---
 
 ### Task 7: Recording one run — frames to ffmpeg, the soundtrack, the poster
