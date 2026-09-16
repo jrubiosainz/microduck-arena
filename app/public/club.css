@@ -204,10 +204,11 @@
   width: 100vw;
   margin-left: calc(50% - 50vw);
   /* Flush under the yellow strip — cancelling the hall's own top padding —
-     so no stripe of bare paper sits between the two. Nothing pulled up at the
-     bottom: the cut edge IS the join now, and the chapter below opens on its
-     own chapter-top space. */
+     so no stripe of bare paper sits between the two. Half the rise at the
+     bottom, so the cut edge meets the rule below rather than leaving a wedge
+     of paper between them. */
   margin-top: calc(-1 * var(--space-gutter-max));
+  margin-bottom: calc(-0.5 * var(--slant));
   padding:
     var(--space-title-to-grid-max)
     max(var(--space-gutter-min), calc(50vw - var(--space-content-column) / 2))
@@ -363,8 +364,12 @@
 }
 .chapter-rule--left { rotate: calc(-1 * var(--rotate-1-0)); }
 .chapter-rule--right { rotate: var(--rotate-1-0); }
-/* With no rule above it, the chapter carries its own opening space again. */
+/* A chapter opens on the charter's chapter-top space, unless a rule sits above
+   it — the rule carries that space itself, and (0,2,0) beats (0,1,0). */
 .chapter { margin-top: var(--space-chapter-top-min); }
+.chapter-rule + .chapter { margin-top: var(--space-title-to-grid-max); }
+/* The band already carries the space below it in its own padding. */
+.door + .chapter-rule { margin-top: 0; }
 
 /* ── Ladder: one rung per player ───────────────────────────────────────────── */
 
@@ -447,7 +452,7 @@
 }
 .challenge-note:nth-child(2n) { rotate: var(--rotate-1-0); }
 
-.challenge-note--race { --fx-shadow-color: var(--cyan); }
+.challenge-note--race { --fx-shadow-color: var(--orange); }
 .challenge-note--challenge { --fx-shadow-color: var(--magenta); }
 /* The charter's shadow rule names the magenta/cyan pair, which covers two
    categories. The third takes yellow bec, which the charter already spends on
