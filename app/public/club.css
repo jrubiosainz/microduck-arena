@@ -179,6 +179,10 @@
     max(var(--space-gutter-min), calc(50vw - var(--space-content-column) / 2))
     calc(var(--space-chapter-top-min) + var(--slant));
   background-color: var(--warm-paper);
+  /* Guarantees the stacking context the z-index: -1 layers below depend on.
+     clip-path happens to create one too, but then the layering would quietly
+     break the day someone removes the clip. */
+  isolation: isolate;
   /* Square on top, where it meets the yellow strip's own straight border. The
      bottom edge RISES to the right: the rule under it is .chapter-rule--left,
      rotated -1°, which is counter-clockwise — its left end drops and its right
@@ -196,11 +200,19 @@
    The alpha is mixed from the token, so this adds no hex the charter has not
    already named. `.door`'s clip-path trims this layer to the band's own
    slanted shape. */
+.door::before { z-index: -1; }
+
 .door::after {
   content: "";
   position: absolute;
   inset: -6%;
   pointer-events: none;
+  /* BEHIND the text. An absolutely positioned pseudo-element paints above the
+     in-flow content, so the wash that fades the dots out was also fading out
+     the title and swallowing every ladder row after the first. `.door`'s own
+     clip-path makes it a stacking context, so -1 lands between its background
+     and its children rather than behind the page. */
+  z-index: -1;
   transform: rotate(calc(-1 * var(--rotate-2-5)));
   /* Stronger than the site's 20% / 7.1%: its dot layer sits on a short hero,
      where 7% of the height is a wide stripe. This band is the page's tallest

@@ -103,6 +103,10 @@ describe("the first chapter's band", () => {
     expect(dotRules, "the dots have no wash to fade them out below the top")
       .toMatch(/linear-gradient\(to bottom, transparent 0%, var\(--warm-paper\)/);
     expect(dotRules, "the fade went back to being a mask").not.toMatch(/mask-image/);
+    // The wash must sit BEHIND the text. Painted over it, it faded the title
+    // to a ghost and swallowed every ladder row after the first.
+    expect(dotRules, "the wash paints over the band's own content")
+      .toMatch(/z-index\s*:\s*-1/);
     const board = css.match(/\.door-board\s*\{([^}]*)\}/);
     expect(board[1], ".door-board is boxed again").not.toMatch(/border\s*:/);
     expect(board[1], "the regular dot pattern is back").not.toMatch(/radial-gradient/);
