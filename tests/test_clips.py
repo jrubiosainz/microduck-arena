@@ -140,3 +140,54 @@ def test_a_publish_owes_a_clip_only_where_a_renderer_exists(tmp_path, monkeypatc
     run_id = submit(api, REFERENCE).json()["run_id"]
     assert app.state.store.clip_state(run_id) == ("pending", None)
     assert list(app.state.clips.queue.queue) == [run_id]
+
+
+import json as _json
+
+import numpy as np
+
+from arena.trace import encode as encode_trace
+from tests.test_store import make_record
+
+
+def app_with_run(tmp_path):
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="alice", clip_worker=False)
+    app = create_app(config)
+    record = make_record(user="alice", policy_name="walker v2")
+    app.state.store.append(record, encode_trace(np.zeros((5, 21), dtype=np.float32)))
+    return TestClient(app), app, record
+
+
+def test_the_clip_route_says_none_pending_then_ready_with_its_files(tmp_path):
+    api, app, record = app_with_run(tmp_path)
+    store = app.state.store
+    url = f"/api/runs/{record.run_id}/clip"
+    assert api.get(url).json() == {"state": "none"}
+    assert api.get(url).headers["cache-control"] == "no-store"
+    assert api.get(f"{url}/landscape.mp4").status_code == 404
+
+    store.mark_clip_pending(record.run_id, "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    assert api.get(url).json() == {"state": "pending"}
+
+    manifest = clip_manifest(record.run_id, rendered(), "2026-09-16T10:05:00Z")
+    store.put_clip(record.run_id, {"clip.json": _json.dumps(manifest).encode(),
+                                   "landscape.mp4": b"L", "vertical.mp4": b"V", "poster.png": b"P"})
+    body = api.get(url).json()
+    assert body["state"] == "ready"
+    assert body["poster"] == f"{url}/poster.png"
+    assert body["layouts"]["vertical"] == {
+        "url": f"{url}/vertical.mp4", "width": 1080, "height": 1920, "seconds": 7.52
+    }
+
+    inline = api.get(f"{url}/landscape.mp4")
+    assert inline.status_code == 200 and inline.content == b"L"
+    assert inline.headers["content-type"] == "video/mp4"
+    assert "content-disposition" not in inline.headers
+    assert inline.headers["cache-control"] == "public, max-age=31536000, immutable"
+    saved = api.get(f"{url}/vertical.mp4?download=1")
+    assert saved.headers["content-disposition"] == (
+        'attachment; filename="microduck-arena-alice-walker-v2-vertical.mp4"'
+    )
+    assert api.get(f"{url}/poster.png").headers["content-type"] == "image/png"
+    assert api.get(f"{url}/clip.json").status_code == 404
+    assert api.get("/api/runs/NOPE/clip").status_code == 404

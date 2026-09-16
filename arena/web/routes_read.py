@@ -11,14 +11,14 @@ from datetime import UTC, datetime
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
 from .. import votes
 from ..course import wall_boxes
 from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, standings
-from ..store import RunRecord
+from ..store import CLIP_MEDIA, RunRecord
 from ..trace import decode
 
 router = APIRouter(prefix="/api")
@@ -316,22 +316,20 @@ def run_detail(run_id: str, request: Request) -> dict:
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_-]+")
 
 
-def policy_filename(policy_name: str, user: str) -> str:
-    """A filename a person can find again in their downloads folder.
+def safe_stem(*parts: str) -> str:
+    """A filename stem a person can find again, from submitter-supplied text.
 
-    Derived from submitter-supplied text, so it is sanitised rather than
-    trusted: a policy called `../../etc/passwd` or one with a quote in it must
-    not be able to shape a Content-Disposition header or a path.
-
-    Dots are dropped from the stem rather than kept, which costs `v1.2` its dot
-    and removes the whole family of `..` and `policy.onnx.exe` confusions in
-    exchange. The extension is appended here, so it is the only one.
+    Sanitised rather than trusted: a policy called `../../etc/passwd` or one
+    with a quote in it must not be able to shape a Content-Disposition header
+    or a path. Dots are dropped, so `..` and `policy.onnx.exe` are gone too.
     """
-    # Collapsed, not just substituted: "../../etc" would otherwise become
-    # "--etc" and read as a mangled filename rather than a clean one.
-    stem = _SAFE_NAME.sub("-", f"{user}-{policy_name}")
+    stem = _SAFE_NAME.sub("-", "-".join(parts))
     stem = re.sub(r"-{2,}", "-", stem).strip("-")[:60].strip("-")
-    return f"{stem or 'policy'}.onnx"
+    return stem or "policy"
+
+
+def policy_filename(policy_name: str, user: str) -> str:
+    return f"{safe_stem(user, policy_name)}.onnx"
 
 
 @router.get("/runs/{run_id}/policy")
@@ -387,4 +385,43 @@ def run_trace(run_id: str, request: Request) -> Response:
         content=payload,
         media_type="application/octet-stream",
         headers={"X-Frame-Count": str(trace.shape[0]), "Cache-Control": "no-store"},
+    )
+
+
+@router.get("/runs/{run_id}/clip")
+def run_clip(run_id: str, request: Request) -> JSONResponse:
+    """Where this run's clip stands, and its files when it is ready. Polled by
+    the publication page while a render is owed, so never cached."""
+    store = request.app.state.store
+    _find_run(store, run_id)
+    state, manifest = store.clip_state(run_id)
+    body: dict = {"state": state}
+    if state == "ready":
+        base = f"/api/runs/{run_id}/clip"
+        body["poster"] = f"{base}/{manifest['poster']}"
+        body["layouts"] = {
+            name: {"url": f"{base}/{layout['file']}", "width": layout["width"],
+                   "height": layout["height"], "seconds": layout["seconds"]}
+            for name, layout in manifest["layouts"].items()
+        }
+    return JSONResponse(body, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/runs/{run_id}/clip/{name}")
+def run_clip_file(run_id: str, name: str, request: Request, download: int = 0) -> FileResponse:
+    """A clip's file. Streamed from here because the dataset is private; the
+    bytes behind a ready clip never change, so cached hard. `download=1` makes
+    the answer an attachment with a name worth keeping."""
+    store = request.app.state.store
+    record = _find_run(store, run_id)
+    if name not in CLIP_MEDIA or store.clip_state(run_id)[0] != "ready":
+        raise HTTPException(status_code=404, detail=f"no clip file {name!r} for run {run_id}")
+    headers = {"Cache-Control": "public, max-age=31536000, immutable"}
+    if download and name.endswith(".mp4"):
+        stem = safe_stem(record.user, record.policy_name, name.removesuffix(".mp4"))
+        headers["Content-Disposition"] = f'attachment; filename="microduck-arena-{stem}.mp4"'
+    return FileResponse(
+        store.clip_file(run_id, name),
+        media_type="video/mp4" if name.endswith(".mp4") else "image/png",
+        headers=headers,
     )
