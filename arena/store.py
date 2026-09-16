@@ -432,7 +432,11 @@ class LocalStore:
         return self.root / "clips" / run_id
 
     def mark_clip_pending(self, run_id: str, user: str, event_id: str, queued_at: str) -> None:
+        # Written once, like a seen file: a re-queue after a crash must not
+        # re-date the clip it already owed.
         path = self._clip_dir(run_id) / "pending.json"
+        if path.exists():
+            return
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(
             {"run_id": run_id, "user": user, "event_id": event_id, "queued_at": queued_at}, indent=2
@@ -452,7 +456,11 @@ class LocalStore:
         (folder / "clip.json").write_bytes(files["clip.json"])
 
     def fail_clip(self, run_id: str, failed_at: str, reason: str) -> None:
+        # Written once, like a seen file: a second failure must not erase the
+        # reason the first one recorded.
         path = self._clip_dir(run_id) / "failed.json"
+        if path.exists():
+            return
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(
             {"run_id": run_id, "failed_at": failed_at, "reason": reason}, indent=2
@@ -638,6 +646,11 @@ class HubStore:
         self._snapshot = None
 
     def mark_clip_pending(self, run_id: str, user: str, event_id: str, queued_at: str) -> None:
+        # Written once, like a seen file: a re-queue after a crash must not
+        # re-date the clip it already owed. One round trip to know.
+        path = f"clips/{run_id}/pending.json"
+        if self.api.file_exists(self.repo_id, path, repo_type="dataset"):
+            return
         body = {"run_id": run_id, "user": user, "event_id": event_id, "queued_at": queued_at}
         self._commit_clip_files(
             run_id, {"pending.json": json.dumps(body, indent=2).encode()}, f"clip pending {run_id}"
@@ -649,6 +662,11 @@ class HubStore:
         self._commit_clip_files(run_id, files, f"clip {run_id}")
 
     def fail_clip(self, run_id: str, failed_at: str, reason: str) -> None:
+        # Written once, like a seen file: a second failure must not erase the
+        # reason the first one recorded.
+        path = f"clips/{run_id}/failed.json"
+        if self.api.file_exists(self.repo_id, path, repo_type="dataset"):
+            return
         body = {"run_id": run_id, "failed_at": failed_at, "reason": reason}
         self._commit_clip_files(
             run_id, {"failed.json": json.dumps(body, indent=2).encode()}, f"clip failed {run_id}"

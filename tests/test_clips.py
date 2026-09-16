@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from arena.store import LocalStore
 
 
@@ -11,6 +13,8 @@ def test_clip_state_is_read_by_presence(tmp_path):
     assert store.pending_clips() == []
 
     store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    # Written once: a re-queue after a crash must not re-date the clip.
+    store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T11:00:00Z")
     assert store.clip_state("R1") == ("pending", None)
     assert store.pending_clips() == ["R1"]
     pending = json.loads((tmp_path / "clips" / "R1" / "pending.json").read_text())
@@ -30,6 +34,8 @@ def test_a_failed_clip_is_its_own_file_and_leaves_the_queue(tmp_path):
     store = LocalStore(tmp_path)
     store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:00:00Z")
     store.fail_clip("R2", "2026-09-16T10:05:00Z", "ffmpeg exited 1")
+    # Written once: a second failure must not erase the first reason.
+    store.fail_clip("R2", "2026-09-16T10:06:00Z", "second")
     assert store.clip_state("R2") == ("failed", None)
     assert store.pending_clips() == []
     failed = json.loads((tmp_path / "clips" / "R2" / "failed.json").read_text())
@@ -37,8 +43,6 @@ def test_a_failed_clip_is_its_own_file_and_leaves_the_queue(tmp_path):
 
 
 def test_a_clip_is_never_written_twice(tmp_path):
-    import pytest
-
     store = LocalStore(tmp_path)
     store.put_clip("R3", {"clip.json": b"{}"})
     with pytest.raises(FileExistsError):
