@@ -15,7 +15,16 @@ export function flipTiles(value) {
   });
 }
 
-/** Resolves when `name` ends on `node` (or its `pseudo` element), or when the signal aborts. */
+/**
+ * Resolves when `name` ends on `node` (or its `pseudo` element), or when the
+ * signal aborts — or one frame later, if no such animation is running at all.
+ *
+ * Subscribe, THEN add the class that starts the animation. The last clause is
+ * the theatre's safety net: a stylesheet the browser kept from a previous
+ * build, or a rule that never matched, must not hold a beat forever. An
+ * animation that has not begun a frame after its class landed is over as far
+ * as the sequence is concerned, and the page simply shows its end state.
+ */
 export const ended = (node, name, pseudo = "", signal) =>
   new Promise((there) => {
     const finish = () => {
@@ -32,6 +41,13 @@ export const ended = (node, name, pseudo = "", signal) =>
     if (signal?.aborted) return there();
     node.addEventListener("animationend", done);
     signal?.addEventListener("abort", finish, { once: true });
+    if (typeof node.getAnimations !== "function") return;
+    requestAnimationFrame(() => {
+      const running = node
+        .getAnimations({ subtree: Boolean(pseudo) })
+        .some((animation) => animation.animationName === name);
+      if (!running) finish();
+    });
   });
 
 /** The stamp comes down on its support; `contact` fires at the moment of impact. */

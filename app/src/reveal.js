@@ -95,8 +95,9 @@ export async function reveal(parts, show, signal) {
     for (const row of seedRows) {
       row.hidden = false;
       play("press");
+      const landed = ended(row, "seed-in", "", signal);
       row.classList.add("seed-in");
-      await ended(row, "seed-in", "", signal);
+      await landed;
       row.classList.remove("seed-in");
       if (signal.aborted) return;
     }
