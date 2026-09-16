@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flyer, ladder, masthead, shellOf } from "./home.js";
+import { flockBand, flyer, ladder, masthead, shellOf } from "./home.js";
 
 const open = {
   id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", rig: "legs",
@@ -185,5 +185,29 @@ describe("the polaroid caption", () => {
     const note = flyer(open, []);
     const parts = [...note.querySelector(".challenge-link").children].map((n) => n.className);
     expect(parts.indexOf("challenge-art")).toBeLessThan(parts.indexOf("flyer-leader"));
+  });
+});
+
+describe("the flock band", () => {
+  it("carries the four ways out, each opening safely", () => {
+    const band = flockBand();
+    const hrefs = [...band.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).toHaveLength(4);
+    expect(hrefs.some((h) => h.includes("discord.com"))).toBe(true);
+    expect(hrefs.some((h) => h.includes("github.com/pollen-robotics/microduck-arena"))).toBe(true);
+    expect(hrefs.some((h) => h.includes("store.pollen-robotics.com"))).toBe(true);
+    expect(hrefs.some((h) => h.includes("pollen-robotics.com/microduck"))).toBe(true);
+    for (const a of band.querySelectorAll("a")) {
+      expect(a.getAttribute("rel")).toBe("noopener");
+      expect(a.getAttribute("target")).toBe("_blank");
+    }
+  });
+
+  it("does not move", () => {
+    // A scrolling marquee was taken off this page on purpose. The band says the
+    // same things standing still.
+    const band = flockBand();
+    expect(band.className).not.toMatch(/marquee|scroll|ticker/);
+    expect(band.querySelector("[class*=marquee]")).toBeNull();
   });
 });

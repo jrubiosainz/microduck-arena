@@ -4,6 +4,7 @@
 // same strip on deep ink: Duck Jam's footer, with the two doors out of the
 // arena — the community, and the robot itself.
 
+import { FLOCK, POLLEN, STORE } from "./links.js";
 import { menuHref, playerHref } from "./router.js";
 import { signInHref } from "./session.js";
 import { duckHead, wordmark } from "./wordmark.js";
@@ -76,10 +77,6 @@ export function signage(me) {
   header.append(brand, nav);
   return header;
 }
-
-const FLOCK = "https://discord.com/invite/pollen-community-519098054377340948";
-const STORE = "https://store.pollen-robotics.com/products/microduck";
-const POLLEN = "https://pollen-robotics.com/";
 
 function outLink(className, href, text) {
   const link = document.createElement("a");

@@ -6,6 +6,7 @@
 
 import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
 import { formatEventFacts, formatScore } from "./format.js";
+import { FLOCK, MICRODUCK, SOURCE, STORE } from "./links.js";
 import { playerHref, raceHref } from "./router.js";
 import { chip } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
@@ -123,9 +124,38 @@ export function masthead(me) {
   return head;
 }
 
+const FLOCK_LINKS = [
+  ["Join the flock", FLOCK],
+  ["Source", SOURCE],
+  ["Get your microduck", STORE],
+  ["pollen-robotics.com/microduck", MICRODUCK],
+];
+
+/**
+ * The yellow band under the cover, as the charter draws it: ink on yellow,
+ * separated by stars. It stands still — the scrolling version of this was
+ * taken off the page on purpose.
+ */
+export function flockBand() {
+  const band = document.createElement("div");
+  band.className = "flock-band";
+  const row = el("div", "flock-band-row");
+  FLOCK_LINKS.forEach(([text, href], i) => {
+    if (i) row.append(el("span", "flock-star", "★"));
+    const link = document.createElement("a");
+    link.href = href;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = text;
+    row.append(link);
+  });
+  band.append(row);
+  return band;
+}
+
 export async function renderHome(root) {
   const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
-  root.replaceChildren(masthead(me));
+  root.replaceChildren(masthead(me), flockBand());
   const hall = el("main", "hall");
   root.append(hall);
 
