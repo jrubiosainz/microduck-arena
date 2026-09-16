@@ -1,0 +1,45 @@
+/* The clip: the frame the recorder photographs. ?layout=landscape is
+   1920 × 1080, ?layout=vertical is 1080 × 1920, and the recorder sets the
+   viewport to the same. Only placement lives here: colour, type and the
+   stamp are the design system's. */
+* { box-sizing: border-box; border-radius: 0; }
+html { font-size: 28px; }
+html, body { margin: 0; background: var(--deep-ink); color: var(--paper); font-family: var(--body); }
+.frame { position: relative; overflow: hidden; display: flex; flex-direction: column; }
+[data-layout="landscape"] .frame { width: 1920px; height: 1080px; }
+[data-layout="vertical"] .frame { width: 1080px; height: 1920px; }
+
+/* The screen: the stage fills it, the OSD sits in its corners, scanlines on ::after. */
+.screen { position: relative; flex: 1; min-height: 0; background: var(--deep-ink); }
+.screen canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.screen .crt-osd { z-index: 2; }
+.crt-osd b { color: var(--magenta); font-weight: inherit; }
+.osd-event { left: 18px; bottom: 14px; color: var(--yellow); }
+[data-layout="vertical"] .osd-event { display: none; }
+.screen::after { z-index: 3; }
+
+/* The stamp lands on the screen at the outro, over the last thing the duck did. */
+.screen .stamp { position: absolute; right: 6%; top: 10%; z-index: 4; }
+
+/* The bands: the marquee above, the figures below. Vertical has room for both
+   for the whole tape; landscape shows the figures only at the outro. */
+.band { position: relative; z-index: 5; padding: 36px 54px; background: var(--ink); }
+.band-top .eyebrow { color: var(--sky); }
+.band-top .marquee-title { margin-top: 4px; }
+.participant { font-size: 1.7rem; line-height: 1.2; margin: 12px 0 0; overflow-wrap: anywhere; }
+.band-bottom .figures { grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.band-bottom .weights { overflow-wrap: anywhere; margin: 12px 0 0; color: var(--sky); }
+[data-layout="landscape"] .band-top { display: none; }
+[data-layout="landscape"] .band-bottom { position: absolute; left: 0; right: 0; bottom: 0; }
+
+/* The title card: full frame, for the first second. */
+.card { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; justify-content: center; padding: 0 9%; background: var(--ink); }
+.card .eyebrow { color: var(--sky); }
+.card .marquee-title { margin: 8px 0 0; font-size: var(--type-hero-title-size); }
+.card .mono-label { margin: 28px 0 0; color: var(--paper); }
+
+/* The tape jammed: the frame says why rather than going blank. */
+.jam { position: absolute; inset: 0; z-index: 7; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 18px; background: var(--deep-ink); }
+
+/* Last, so hiding beats every display above. */
+[hidden] { display: none; }
