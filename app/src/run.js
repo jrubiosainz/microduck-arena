@@ -173,12 +173,17 @@ export async function renderRun(root, runId, state) {
   strip.nav.classList.toggle("veiled", revealing);
   $("points").after(strip.nav);
   wireShare(strip, run, { origin: location.origin });
+  // Pending is the honest first state: nobody has answered for the clip yet,
+  // so the row wears the same face it would for a render still in progress —
+  // present and disabled, not a live-looking link that goes stale a beat later.
+  strip.setClip({ state: "pending" });
   const leaving = new AbortController();
+  let timer = null;
   async function followClip() {
-    const clip = await getClip(run.run_id).catch(() => ({ state: "none" }));
+    const clip = await getClip(run.run_id).catch(() => null);
     if (leaving.signal.aborted) return;
-    strip.setClip(clip);
-    if (clip.state === "pending") setTimeout(followClip, 5000);
+    if (clip) strip.setClip(clip);
+    if (!clip || clip.state === "pending") timer = setTimeout(followClip, 5000);
   }
   followClip();
 
@@ -204,6 +209,7 @@ export async function renderRun(root, runId, state) {
   }
   state.teardown = () => {
     leaving.abort();
+    clearTimeout(timer);
     lifetime?.abort();
     theatre?.abort("leave");
   };
