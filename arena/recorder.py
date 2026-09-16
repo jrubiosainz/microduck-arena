@@ -244,17 +244,25 @@ def _record_layout(tab: Tab, pcm_path: Path, out: Path, nice: int) -> tuple[Rend
     ffmpeg = subprocess.Popen(niced(ffmpeg_args(plan["fps"], pcm_path, out), nice), stdin=subprocess.PIPE)
     poster = b""
     draw_s = shot_s = 0.0
-    for i in range(plan["frames"]):
-        asked = time.monotonic()
-        tab.evaluate(f"window.clip.draw({i})")
-        drawn = time.monotonic()
-        shot = tab.send("Page.captureScreenshot", {"format": "jpeg", "quality": JPEG_QUALITY})
-        if i == plan["poster"]:
-            poster = base64.b64decode(tab.send("Page.captureScreenshot", {"format": "png"})["data"])
-        draw_s += drawn - asked
-        shot_s += time.monotonic() - drawn
-        ffmpeg.stdin.write(base64.b64decode(shot["data"]))
-    ffmpeg.stdin.close()
+    completed = False
+    try:
+        for i in range(plan["frames"]):
+            asked = time.monotonic()
+            tab.evaluate(f"window.clip.draw({i})")
+            drawn = time.monotonic()
+            shot = tab.send("Page.captureScreenshot", {"format": "jpeg", "quality": JPEG_QUALITY})
+            if i == plan["poster"]:
+                poster = base64.b64decode(tab.send("Page.captureScreenshot", {"format": "png"})["data"])
+            draw_s += drawn - asked
+            shot_s += time.monotonic() - drawn
+            ffmpeg.stdin.write(base64.b64decode(shot["data"]))
+        completed = True
+    finally:
+        ffmpeg.stdin.close()
+        if not completed:
+            # A frame raised mid-loop: ffmpeg must not be left blocked on stdin.
+            ffmpeg.kill()
+            ffmpeg.wait()
     if ffmpeg.wait() != 0:
         raise RuntimeError(f"ffmpeg exited {ffmpeg.returncode}")
     frames = plan["frames"]
@@ -289,8 +297,10 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
                 tabs[layout] = _open(chrome, origin, run_id, layout)
 
         def one(layout: str) -> tuple[str, RenderedLayout, bytes]:
-            rendered, poster = _record_layout(tabs[layout], pcm_path, work / f"{layout}.mp4", nice)
-            tabs[layout].close()
+            try:
+                rendered, poster = _record_layout(tabs[layout], pcm_path, work / f"{layout}.mp4", nice)
+            finally:
+                tabs[layout].close()
             return layout, rendered, poster
 
         with ThreadPoolExecutor(max_workers=max(1, parallel)) as pool:
