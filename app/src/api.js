@@ -127,3 +127,6 @@ export const castVote = (eventId, ballot, lane) =>
 
 /** Tell the server its author has seen this run's page. The server refuses anyone else. */
 export const markSeen = (runId) => json(`/api/runs/${runId}/seen`, { method: "POST" });
+
+/** Where a run's clip stands: none, pending, failed, or ready with its files. */
+export const getClip = (runId) => json(`/api/runs/${runId}/clip`);
