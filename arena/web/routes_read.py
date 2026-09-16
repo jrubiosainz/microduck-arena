@@ -62,6 +62,7 @@ def event_summary(manifest: Manifest) -> dict:
         "sweep_hi": manifest.sweep.hi,
         "sweep_step": manifest.sweep.step,
         "sweep_count": len(manifest.sweep.speeds()),
+        "clip": manifest.clip.to_dict(),
     }
 
 
