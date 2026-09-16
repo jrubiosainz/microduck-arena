@@ -7,6 +7,7 @@ rather than a place where behaviour is invented.
 
 import argparse
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -109,6 +110,58 @@ def _cmd_recover(args) -> int:
     return 0
 
 
+def _cmd_clip(args) -> int:
+    """Render one run's clips into a local store, by hand.
+
+    The recorder's Chrome needs the clip page and the API, so the app is
+    started here on a free loopback port, without its own clip worker — this
+    one render must not be raced by a drain of everything else owed.
+    """
+    import socket
+    import threading
+
+    import httpx
+    import uvicorn
+
+    from .clips import ClipRenderer
+    from .web.app import create_app
+    from .web.config import ArenaConfig
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    origin = f"http://127.0.0.1:{port}"
+    config = ArenaConfig.from_env(store_dir=args.store, origin=origin, clip_worker=False)
+    app = create_app(config)
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    threading.Thread(target=server.run, daemon=True).start()
+    for _ in range(100):
+        try:
+            if httpx.get(f"{origin}/api/health", timeout=1).status_code == 200:
+                break
+        except httpx.HTTPError:
+            time.sleep(0.1)
+
+    renderer = ClipRenderer(
+        app.state.store, origin, config.frontend_dir, args.parallel or config.clip_parallel
+    )
+    if not renderer.available:
+        print("no renderer here: needs a Chrome ($CHROME or the usual paths), ffmpeg, and a built clip.html",
+              file=sys.stderr)
+        server.should_exit = True
+        return 1
+    renderer.render_one(args.run_id)
+    server.should_exit = True
+    state, manifest = app.state.store.clip_state(args.run_id)
+    if state != "ready":
+        return 1
+    for name, layout in manifest["layouts"].items():
+        print(f"{name}: {layout['seconds']} s, {layout['timing']['total_wall_ms'] / 1000:.0f} s wall, "
+              f"{layout['timing']['capture_ms_per_frame']} ms/frame capture")
+    print(f"written under {config.store_dir}/clips/{args.run_id}")
+    return 0
+
+
 def _cmd_serve(args) -> int:
     import uvicorn
 
@@ -176,6 +229,13 @@ def main(argv=None) -> int:
         help="every microduck-policy repo on the Hub, not only ones published here",
     )
     recover.set_defaults(func=_cmd_recover)
+
+    clip = subs.add_parser("clip", help="render one run's social clips into a local store")
+    clip.add_argument("run_id")
+    clip.add_argument("--store", required=True)
+    clip.add_argument("--parallel", type=int, default=None,
+                      help="layouts rendered at once; default half the cores")
+    clip.set_defaults(func=_cmd_clip)
 
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
