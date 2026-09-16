@@ -76,8 +76,14 @@ class ClipRenderer:
         threading.Thread(target=self._work, name="arena-clips", daemon=True).start()
 
     def _work(self) -> None:
+        # The worker outlives every failure, or the next publish owes a clip
+        # nobody renders: nothing raised by one run may end the loop.
         while True:
-            self.render_one(self.queue.get())
+            run_id = self.queue.get()
+            try:
+                self.render_one(run_id)
+            except Exception as exc:  # noqa: BLE001 — see above
+                self.log(f"clip: {run_id} lost the worker a turn ({type(exc).__name__}: {exc})")
 
     def render_one(self, run_id: str) -> None:
         self.log(f"clip: rendering {run_id}")
@@ -90,6 +96,10 @@ class ClipRenderer:
             wall = max(layout.timing.get("total_wall_ms", 0) for layout in rendered.layouts.values())
             self.log(f"clip: {run_id} ready ({wall / 1000:.0f} s)")
         except Exception as exc:  # noqa: BLE001 — a failed clip must never take the worker down
-            self.store.fail_clip(run_id, _now(), f"{type(exc).__name__}: {exc}")
+            try:
+                self.store.fail_clip(run_id, _now(), f"{type(exc).__name__}: {exc}")
+            except Exception as store_exc:  # noqa: BLE001 — same reason: the store must not either
+                self.log(f"clip: {run_id} could not be marked failed "
+                         f"({type(store_exc).__name__}: {store_exc})")
             self.log(f"clip: {run_id} failed ({type(exc).__name__}: {exc})")
             self.log(traceback.format_exc())

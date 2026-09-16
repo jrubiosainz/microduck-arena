@@ -125,7 +125,12 @@ def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
 def test_a_publish_owes_a_clip_only_where_a_renderer_exists(tmp_path, monkeypatch):
     from tests.test_routes_submit import REFERENCE, submit
 
-    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie", clip_worker=False)
+    # An absent frontend_dir resolves to None regardless of what this machine
+    # has built, so `available` starts False whether or not app/dist exists.
+    config = ArenaConfig.from_env(
+        store_dir=tmp_path, dev_user="coralie", frontend_dir=tmp_path / "no-bundle",
+        clip_worker=False,
+    )
     app = create_app(config)
     api = TestClient(app)
     run_id = submit(api, REFERENCE).json()["run_id"]

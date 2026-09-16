@@ -108,7 +108,7 @@ class ArenaConfig:
             recover_on_boot=(os.environ.get("ARENA_RECOVER") or "").strip() in {"1", "true", "yes"},
             oauth=oauth,
             session_secret=secret,
-            origin=origin or os.environ.get("ARENA_ORIGIN") or "http://127.0.0.1:8000",
+            origin=os.environ.get("ARENA_ORIGIN") or origin or "http://127.0.0.1:8000",
             public_origin=(f"https://{host}" if (host := os.environ.get("SPACE_HOST")) else None),
             clip_parallel=int(os.environ.get("ARENA_CLIP_PARALLEL") or max(1, (os.cpu_count() or 2) // 2)),
             clip_worker=clip_worker,
