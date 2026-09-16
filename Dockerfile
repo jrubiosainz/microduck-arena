@@ -26,7 +26,7 @@ FROM python:3.13-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends chromium ffmpeg fonts-liberation \
  && rm -rf /var/lib/apt/lists/* \
- && chromium --version && ffmpeg -version | head -1
+ && chromium --version && ffmpeg -version
 ENV CHROME=/usr/bin/chromium
 
 RUN useradd -m -u 1000 user
