@@ -161,19 +161,19 @@
   .duck:hover .duckhead { rotate: calc(-1 * var(--rotate-4-0)); translate: 0 -4px; }
 }
 
-/* The locker plate swings like a flyer does, from its top edge. It carries no
-   tape, so it pivots on its own top centre rather than on a point off it. */
-.player-card-you, .player-card-in { transform-origin: 50% 0; }
+/* The locker RISES rather than turning. A flyer is taped to a wall and swings
+   from that tape; a plate is screwed flat and the only honest thing it can do
+   is come off the surface. The shadow steps up a token with it, which is what
+   makes the rise read as height rather than as a slide. */
+.player-card-you, .player-card-in { --fx-shadow-size: var(--shadow-card-min); }
 
 @media (prefers-reduced-motion: no-preference) {
   .player-card-you, .player-card-in {
-    transition:
-      rotate 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
-      translate 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+    transition: translate 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
   }
   .player-card-you:hover, .player-card-in:hover {
-    rotate: calc(-1 * var(--rotate-2-5));
-    translate: 0 -5px;
+    --fx-shadow-size: var(--shadow-card-max);
+    translate: 0 -6px;
   }
 }
 
