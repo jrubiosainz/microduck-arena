@@ -780,9 +780,10 @@ table.board .withdraw:focus-visible,
 .run-links { display: flex; flex-wrap: wrap; gap: 18px; margin: 0; }
 .run-links a { color: var(--orange-inked); }
 
-/* ── the seeds, one line each, one at a time ──────────────────────────── */
+/* ── the seeds, folded away under their summary ───────────────────────── */
 
 .run-seedlist { margin: 26px 0; }
+.run-seedlist summary { cursor: pointer; }
 .run-seedlist ol {
   list-style: none;
   display: flex;
@@ -794,12 +795,6 @@ table.board .withdraw:focus-visible,
 .seed { display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
 .seed strong { font: 400 1.35rem/1 var(--display); }
 .seed.replayed strong { color: var(--orange-inked); }
-/* A line lands as it is revealed: from just under its place, in a flip. */
-.seed.seed-in { animation: seed-in var(--t-flip) var(--ease-hard) both; }
-@keyframes seed-in {
-  from { opacity: 0; translate: 0 8px; }
-  to { opacity: 1; translate: 0 0; }
-}
 
 /* ── points as a shower of stars ──────────────────────────────────────── */
 

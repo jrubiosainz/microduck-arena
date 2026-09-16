@@ -5,7 +5,7 @@
 // signal jumps every wait to its end, and `settle` puts the page in the state
 // plain mode renders directly.
 
-import { climb, confetti, ended, flipTiles, rollCounter, slam } from "./animation.js";
+import { climb, confetti, flipTiles, rollCounter, slam } from "./animation.js";
 import { credit, shower } from "./points.js";
 import { followCounter, play } from "./sound.js";
 
@@ -45,14 +45,14 @@ export function setRanks(pegRows, order) {
  * Play the reveal on a page run.js built.
  *
  * Nothing but the race shows until the author's lane reaches its last frame
- * (`raced`). Then, in order: the celebration, the seeds one by one, the stamp,
- * the time, the climb, and the points as showers of stars. `onSeen` is called
- * once, when the theatre ends or is skipped — not when the page is left
- * mid-way (`signal.reason === "leave"`), so the dot stays for a result that
- * was not actually seen.
+ * (`raced`). Then, in order: the celebration, the stamp, the time, the climb,
+ * and the points as showers of stars. `onSeen` is called once, when the
+ * theatre ends or is skipped — not when the page is left mid-way
+ * (`signal.reason === "leave"`), so the dot stays for a result that was not
+ * actually seen.
  */
 export async function reveal(parts, show, signal) {
-  const { page, chip, chipFlip, seedsBox, seedRows, score, stamp, crt, flip } = parts;
+  const { page, chip, chipFlip, seedsBox, score, stamp, crt, flip } = parts;
   const { boardBox, pegboard, pegRows, pointsBox, stickers } = parts;
   const { run, plan, receipts, raced, startPoints, onSeen } = show;
   const act = (name) => {
@@ -66,10 +66,6 @@ export async function reveal(parts, show, signal) {
   const settle = () => {
     act("rest");
     seedsBox.hidden = score.hidden = stamp.hidden = boardBox.hidden = pointsBox.hidden = false;
-    for (const row of seedRows) {
-      row.hidden = false;
-      row.classList.remove("seed-in");
-    }
     for (const sticker of stickers) sticker.hidden = false;
     setRanks(pegRows, plan.end);
     pegboard.replaceChildren(...plan.end.map((row) => pegRows.get(row.run_id)));
@@ -87,18 +83,6 @@ export async function reveal(parts, show, signal) {
       act("celebrate");
       play("win");
       await confetti(page, 48, signal);
-      if (signal.aborted) return;
-    }
-
-    act("seeds");
-    reveal(seedsBox);
-    for (const row of seedRows) {
-      row.hidden = false;
-      play("press");
-      const landed = ended(row, "seed-in", "", signal);
-      row.classList.add("seed-in");
-      await landed;
-      row.classList.remove("seed-in");
       if (signal.aborted) return;
     }
 

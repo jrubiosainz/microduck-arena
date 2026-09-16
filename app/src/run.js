@@ -6,7 +6,7 @@
 
 import { getMe, getRun, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
-import { LANE_CSS } from "./course.js";
+import { LANE_COLORS, LANE_CSS } from "./course.js";
 import { formatScore, formatSpeed } from "./format.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
@@ -88,10 +88,10 @@ export async function renderRun(root, runId, state) {
     <p class="run-byline mono-label" id="byline"></p>
     <div class="stage"><canvas id="stage"></canvas></div>
     <ul class="key run-legend" id="legend"></ul>
-    <section class="run-seedlist" id="seedlist">
-      <h3 class="eyebrow">Seeds</h3>
+    <details class="run-seedlist" id="seedlist">
+      <summary class="eyebrow">Seeds</summary>
       <ol id="seeds"></ol>
-    </section>
+    </details>
     <section class="run-score" id="score">
       <div class="scoreboard"><span class="mono-label">time</span><div class="flip" id="flip"></div></div>
       <div class="crt-screen" id="crt"><span class="stamp" id="stamp"></span></div>
@@ -134,17 +134,16 @@ export async function renderRun(root, runId, state) {
   $("points").append(...stickers);
   if (!stickers.length) $("points").append(el("p", "mono-label", "no points from this run"));
 
-  // One line per seed, shown one by one in a reveal: the time, or how it ended.
-  const seedRows = run.per_seed.map((s) => {
+  // One line per seed: the time, or how it ended. Folded away by default —
+  // it is a detail you go and look up, not a step of the show.
+  for (const s of run.per_seed) {
     const row = el("li", s.seed === run.trace_seed ? "seed replayed" : "seed");
     row.append(
       el("span", "mono-label", `seed ${s.seed}`),
       el("strong", null, s.time_s == null ? s.status : `${s.time_s.toFixed(3)}s`),
     );
-    row.hidden = revealing;
-    return row;
-  });
-  $("seeds").append(...seedRows);
+    $("seeds").append(row);
+  }
   const back = el("a", null, `Back to ${run.event.title}`);
   back.href = raceHref(run.event.id);
   $("links").append(back);
@@ -208,7 +207,10 @@ export async function renderRun(root, runId, state) {
       runId: lane.run_id,
       trace: traces[i],
       livery: lane.livery,
-      tier: i === 0 ? "leader" : "ghost",
+      // The ring under each duck takes the lane's own colour, the one the key
+      // above and the ground stripe already wear. A tier colour here would say
+      // leader-and-ghosts, which is not what this stage shows: four real runs.
+      colour: LANE_COLORS[i % LANE_COLORS.length],
       opacity: 1,
     })),
     run.event,
@@ -253,7 +255,6 @@ export async function renderRun(root, runId, state) {
       chip,
       chipFlip,
       seedsBox: $("seedlist"),
-      seedRows,
       score: $("score"),
       stamp,
       crt: $("crt"),
