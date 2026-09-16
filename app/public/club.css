@@ -202,13 +202,18 @@
   inset: -6%;
   pointer-events: none;
   transform: rotate(calc(-1 * var(--rotate-2-5)));
+  /* Stronger than the site's 20% / 7.1%: its dot layer sits on a short hero,
+     where 7% of the height is a wide stripe. This band is the page's tallest
+     block, so the same 7% was a hairline nobody could see. The dot size and
+     the 16px grid are the site's, untouched — it is the reach and the weight
+     that changed, not the rhythm. */
   background-image: radial-gradient(
-    color-mix(in srgb, var(--orange) 20%, transparent) 3.2px,
+    color-mix(in srgb, var(--orange) 34%, transparent) 3.2px,
     transparent 3.9px
   );
   background-size: 16px 16px;
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 7.1%);
-  mask-image: linear-gradient(to bottom, #000 0%, transparent 7.1%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 34%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 34%);
 }
 /* The pitch keeps the charter's 66-character measure; the board takes what is
    left and never drops below a readable frame. */
