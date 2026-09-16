@@ -43,6 +43,24 @@
   letter-spacing: var(--type-hero-title-tracking);
 }
 
+.duck { position: relative; display: inline-flex; flex: none; }
+.duck-quack {
+  position: absolute;
+  top: -10px;
+  left: 100%;
+  margin-left: -8px;
+  opacity: 0;
+  rotate: var(--rotate-3-0);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .duck .duckhead { transition: rotate 140ms ease, translate 140ms ease; }
+  .duck-quack { transition: opacity 120ms ease; }
+  .duck:hover .duckhead { rotate: calc(-1 * var(--rotate-4-0)); translate: 0 -4px; }
+  .duck:hover .duck-quack { opacity: 1; }
+}
+
 /* ── Door: the hero over the hall ──────────────────────────────────────────── */
 
 .door { padding: 0 0 var(--space-gutter-max); }

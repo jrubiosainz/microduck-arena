@@ -28,13 +28,29 @@ export function wordmark({ variant = "strip" } = {}) {
   return el;
 }
 
-/** The duck head that sits in the corner of the Pollen page, and now of this one. */
-export function duckHead() {
+/**
+ * The duck head from the Pollen page.
+ *
+ * `quacks` wraps it with a sticker that appears on hover. There is only one
+ * sprite — a beak that never opens — so the hover is a tilt and a shout rather
+ * than two frames. Dropping an open-beak sprite in later swaps the tilt for a
+ * real alternation without touching this markup.
+ */
+export function duckHead({ quacks = false } = {}) {
   const img = document.createElement("img");
   img.className = "duckhead";
   img.src = "/duck-head-mark.webp";
   // Decorative: the wordmark beside it already names the page, and announcing
   // "duck head" after "Microduck Arena" is noise in a screen reader.
   img.alt = "";
-  return img;
+  if (!quacks) return img;
+
+  const box = document.createElement("span");
+  box.className = "duck";
+  const shout = document.createElement("span");
+  shout.className = "duck-quack sticker";
+  shout.textContent = "QUACK!";
+  shout.setAttribute("aria-hidden", "true");
+  box.append(img, shout);
+  return box;
 }

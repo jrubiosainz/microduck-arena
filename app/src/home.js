@@ -114,7 +114,7 @@ export function masthead(me) {
   const head = document.createElement("header");
   head.className = "masthead fx-ray-fan";
   const lockup = el("div", "masthead-lockup");
-  lockup.append(wordmark({ variant: "cover" }), duckHead());
+  lockup.append(wordmark({ variant: "cover" }), duckHead({ quacks: true }));
   const nav = document.createElement("nav");
   nav.className = "masthead-player";
   nav.setAttribute("aria-label", "Player");

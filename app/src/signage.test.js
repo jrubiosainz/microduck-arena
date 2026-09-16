@@ -76,6 +76,21 @@ describe("the mark's two variants", () => {
   });
 });
 
+describe("the duck", () => {
+  it("is a bare image in the strip", () => {
+    expect(duckHead().tagName).toBe("IMG");
+  });
+
+  it("carries a quack on the cover", () => {
+    const duck = duckHead({ quacks: true });
+    expect(duck.className).toBe("duck");
+    expect(duck.querySelector("img.duckhead")).not.toBeNull();
+    expect(duck.querySelector(".duck-quack").textContent).toBe("QUACK!");
+    // Decorative twice over: the sticker repeats nothing a reader needs.
+    expect(duck.querySelector(".duck-quack").getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
 describe("footer", () => {
   it("is the strip on deep ink, with the flock and the store as stickers in a new tab", () => {
     const el = footer();
