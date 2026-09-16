@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { LIVELY_POSE, cameraFor, renderDuckPortrait, renderThumbnails } from "./thumbnail.js";
+import { PORTRAIT_POSE, cameraFor, renderDuckPortrait, renderThumbnails } from "./thumbnail.js";
 
 describe("cameraFor", () => {
   it("pulls back and aims further down a longer course", () => {
@@ -57,7 +57,7 @@ describe("the portrait's pose", () => {
       "utf8",
     ));
     const actuated = new Set(kinematics.actuated_joints);
-    for (const joint of Object.keys(LIVELY_POSE)) {
+    for (const joint of Object.keys(PORTRAIT_POSE)) {
       expect(actuated.has(joint), `${joint} is not a joint on this rig`).toBe(true);
     }
   });

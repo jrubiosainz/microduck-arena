@@ -36,24 +36,25 @@ export const HEIGHT = 198;
 export const PORTRAIT = 440;
 
 /**
- * Mid-stride, head turned out of the walk toward whoever is looking.
+ * Sitting, the way the robot is photographed on the product page: hips folded,
+ * knees up, head level and turned a little toward whoever is looking.
  *
  * Every value is clamped to the joint's own range by setJoint, so a sign that
- * turns out to be the other way round reads as a smaller step rather than as a
- * broken duck. The default pose is a machine standing to attention, which is
+ * turns out to be the other way round reads as a shallower sit rather than as
+ * a broken duck. The default pose is a machine standing to attention, which is
  * the one thing a picture on a front page should not be.
  */
-export const LIVELY_POSE = {
-  left_hip_pitch: 0.42,
-  left_knee: -0.34,
-  left_ankle: 0.14,
-  right_hip_pitch: -0.34,
-  right_knee: 0.28,
-  right_ankle: -0.12,
-  neck_pitch: -0.12,
-  head_pitch: -0.14,
-  head_yaw: 0.34,
-  head_roll: 0.14,
+export const PORTRAIT_POSE = {
+  left_hip_pitch: 1.1,
+  left_knee: -1.3,
+  left_ankle: 0.5,
+  right_hip_pitch: 1.1,
+  right_knee: -1.3,
+  right_ankle: 0.5,
+  neck_pitch: -0.14,
+  head_pitch: -0.1,
+  head_yaw: 0.3,
+  head_roll: 0.12,
 };
 
 // The two liveries that read most distinctly against the dark ground, so the
@@ -137,7 +138,7 @@ export async function renderDuckPortrait({
   size = PORTRAIT,
   rig: rigName = "legs",
   livery = "purple",
-  pose = LIVELY_POSE,
+  pose = PORTRAIT_POSE,
 } = {}) {
   let renderer;
   try {
@@ -155,6 +156,10 @@ export async function renderDuckPortrait({
     // than in a box of some other colour.
     renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = ACESFilmicToneMapping;
+    // Down from the stills' 1.0. Those sit on deep ink, where the key light
+    // has to carve the robot out of the dark; this one sits on pale paper,
+    // where the same exposure blew the shells out to white.
+    renderer.toneMappingExposure = 0.68;
 
     const pmrem = new PMREMGenerator(renderer);
     const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -166,6 +171,9 @@ export async function renderDuckPortrait({
 
     const scene = new Scene();
     scene.environment = environment;
+    // The room's own bounce, halved with the exposure: lavender reads as a
+    // colour at this level and as a pale grey above it.
+    scene.environmentIntensity = 0.55;
     light(scene);
 
     const duck = buildRigTree(kinematics);
@@ -174,11 +182,11 @@ export async function renderDuckPortrait({
     duck.placer.position.set(0, 0, 0);
     scene.add(duck.placer);
 
-    // Three-quarter view, a little above the beak: the pose the robot is
-    // photographed in on the product page.
+    // Three-quarter view, and lower than the standing shot was — a sitting
+    // duck's mass is nearer the floor, and the old eyeline looked down on it.
     const camera = new PerspectiveCamera(30, 1, 0.02, 60);
-    camera.position.set(0.46, 0.27, 0.6);
-    camera.lookAt(0, 0.15, 0);
+    camera.position.set(0.42, 0.20, 0.55);
+    camera.lookAt(0, 0.11, 0);
 
     renderer.render(scene, camera);
     // PNG, not WebP: the alpha has to survive, and this is one small image.
