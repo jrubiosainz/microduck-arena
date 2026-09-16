@@ -154,13 +154,17 @@ export function flyer(event, rows) {
 export function masthead(me, standing) {
   const head = document.createElement("header");
   head.className = "masthead fx-ray-fan";
+  const row = el("div", "masthead-row");
   const lockup = el("div", "masthead-lockup");
   lockup.append(wordmark({ variant: "cover" }), duckHead({ quacks: true }));
   const nav = document.createElement("nav");
   nav.className = "masthead-player";
   nav.setAttribute("aria-label", "Player");
   nav.append(playerCard(me, standing));
-  head.append(nav, lockup);
+  // The mark first in the DOM, so the heading is announced before the handle;
+  // the row puts them on one line with the locker pushed to the right.
+  row.append(lockup, nav);
+  head.append(row);
   return head;
 }
 

@@ -35,32 +35,39 @@
   background-color: var(--deep-ink);
   padding: var(--space-gutter-max) var(--space-gutter-min);
 }
+/* The mark and the locker on ONE line, not stacked: the locker was sitting
+   above the mark like a second header. */
+.masthead-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-gutter-max);
+  max-width: var(--space-content-column);
+  margin-inline: auto;
+}
 .masthead-lockup {
   display: flex;
   align-items: center;
   gap: clamp(1rem, 4vw, 3rem);
-  max-width: var(--space-content-column);
-  margin-inline: auto;
+  min-width: 0;
 }
-.masthead-player {
-  display: flex;
-  justify-content: flex-end;
-  max-width: var(--space-content-column);
-  margin-inline: auto;
-  margin-bottom: var(--space-gutter-min);
-}
+.masthead-player { flex: none; }
 
 /* A square card, paper on the cover's ink: your picture, your handle, and
    where you stand. Square because it reads as a locker plate rather than as
    another line of the header. */
 .player-card-you, .player-card-in {
-  --fx-shadow-color: var(--cyan);
+  /* Orange, which is the page's carrying accent. The charter names the
+     magenta/cyan pair for an offset shadow; this is the one place it is
+     spent on the accent instead, on the page's own locker plate. */
+  --fx-shadow-color: var(--orange);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  width: 9.5rem;
+  gap: 8px;
+  width: 12.5rem;
   aspect-ratio: 1;
   padding: var(--space-card-padding-min);
   border: 3px solid var(--ink);
@@ -70,14 +77,23 @@
   text-decoration: none;
   overflow-wrap: anywhere;
 }
+.player-card-name { overflow-wrap: anywhere; }
 .player-card-you:hover, .player-card-in:hover { background: var(--warm-paper); }
 .player-card-you:focus-visible, .player-card-in:focus-visible {
   outline: 3px solid var(--cyan);
   outline-offset: 3px;
 }
-.player-card-in { --fx-shadow-color: var(--magenta); background: var(--orange); }
+.player-card-in { background: var(--orange); }
 .player-card-glyph { font-size: 30px; line-height: 1; }
-.player-card-you .avatar { width: 52px; height: 52px; font-size: 31px; }
+/* The Hugging Face picture IS the plate: it takes every pixel the handle and
+   the score do not, rather than sitting in it as a stamp. */
+.player-card-you .avatar {
+  flex: 1 1 auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  font-size: 44px;
+}
 .player-card-name {
   font-family: var(--type-card-title-family);
   font-weight: var(--type-card-title-weight);
@@ -86,6 +102,9 @@
   letter-spacing: var(--type-card-title-tracking);
 }
 .player-card-score {
+  /* The place and the score are one line. Wrapped, "#2" and "360 PTS" read as
+     two unrelated figures. */
+  white-space: nowrap;
   font-family: var(--type-mono-label-family);
   font-weight: var(--type-mono-label-weight);
   font-size: var(--type-mono-label-size);
