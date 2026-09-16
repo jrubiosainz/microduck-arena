@@ -338,37 +338,36 @@ describe("the polaroid caption", () => {
 });
 
 describe("the flock band", () => {
-  it("carries the four ways out, each opening safely", () => {
+  it("carries the four ways out, in order, each opening safely", () => {
     const band = flockBand();
-    const hrefs = [...band.querySelectorAll("a")].map((a) => a.getAttribute("href"));
-    expect(hrefs).toHaveLength(4);
-    expect(hrefs.some((h) => h.includes("discord.com"))).toBe(true);
-    expect(hrefs.some((h) => h.includes("github.com/pollen-robotics/microduck-arena"))).toBe(true);
-    expect(hrefs.some((h) => h.includes("store.pollen-robotics.com"))).toBe(true);
-    expect(hrefs.some((h) => h.includes("pollen-robotics.com/microduck"))).toBe(true);
-    for (const a of band.querySelectorAll("a")) {
+    const links = [...band.querySelectorAll("a")];
+    // Order is the point: discover it, buy it, join the people, train a
+    // policy. A set comparison would let them be shuffled.
+    expect(links.map((a) => a.textContent)).toEqual([
+      "Discover Microduck",
+      "Buy Microduck",
+      "Join the flock",
+      "Create policies",
+    ]);
+    const hrefs = links.map((a) => a.getAttribute("href"));
+    expect(hrefs[0]).toContain("pollen-robotics.com/microduck");
+    expect(hrefs[1]).toContain("store.pollen-robotics.com");
+    expect(hrefs[2]).toContain("discord.com");
+    // The RL repo, where a policy is trained — not this Space's own source.
+    expect(hrefs[3]).toBe("https://github.com/pollen-robotics/microduck_rl");
+    for (const a of links) {
       expect(a.getAttribute("rel")).toBe("noopener");
       expect(a.getAttribute("target")).toBe("_blank");
     }
   });
 
-  it("leans the opposite way from the rule below the band", () => {
-    // CSS-only. The pair of opposed 1° leans is the effect; make them agree in
-    // sign and the page just looks crooked.
-    const css = readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
-      "utf8",
-    ).replace(/\/\*[\s\S]*?\*\//g, "");
-    const band = css.match(/\.flock-band\s*\{([^}]*)\}/);
-    const rule = css.match(/\.chapter-rule--left\s*\{([^}]*)\}/);
-    expect(band, ".flock-band rule not found").not.toBeNull();
-    expect(band[1], "the yellow band does not lean").toMatch(/rotate:\s*var\(--rotate-1-0\)/);
-    expect(rule[1], "the black rule does not lean the other way")
-      .toMatch(/rotate:\s*calc\(-1 \* var\(--rotate-1-0\)\)/);
-    // Wider than the window, or the turn opens a triangle of bare paper at
-    // each edge of the screen.
-    expect(band[1], "the band is not wide enough to hide the turn's corners")
-      .toMatch(/width:\s*10[0-9]vw/);
+  it("puts Discord's mark on the Discord link and nowhere else", () => {
+    const band = flockBand();
+    const marks = [...band.querySelectorAll("svg.flock-mark")];
+    expect(marks).toHaveLength(1);
+    expect(marks[0].closest("a").getAttribute("href")).toContain("discord.com");
+    // Decorative: the word beside it already says what the link is.
+    expect(marks[0].getAttribute("aria-hidden")).toBe("true");
   });
 
   it("does not move", () => {

@@ -6,4 +6,6 @@ export const FLOCK = "https://discord.com/invite/pollen-community-51909805437734
 export const STORE = "https://store.pollen-robotics.com/products/microduck";
 export const POLLEN = "https://pollen-robotics.com/";
 export const MICRODUCK = "https://pollen-robotics.com/microduck/";
-export const SOURCE = "https://github.com/pollen-robotics/microduck-arena";
+// Where a policy is trained, which is what "create policies" means: the RL
+// repo, not this Space's own source.
+export const MICRODUCK_RL = "https://github.com/pollen-robotics/microduck_rl";
