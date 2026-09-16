@@ -29,6 +29,9 @@ def event_summary(manifest: Manifest) -> dict:
         "title": manifest.title,
         "rig": manifest.rig,
         "status": manifest.status,
+        # What kind of event this is, for the flyer's label and its shadow
+        # colour. The board and the race page do not read it.
+        "category": manifest.category,
         "metric": manifest.metric,
         # The whole vote configuration, or null. The page reads this to decide
         # whether the VOTE badge, the vote button and the #/v/ route exist.

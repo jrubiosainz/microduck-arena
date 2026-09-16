@@ -494,3 +494,13 @@ def test_voting_puts_points_on_the_ladder(client):
 
     rows = {r["user"]: r["points"] for r in api.get("/api/standings").json()["rows"]}
     assert rows["coralie"] == 2
+
+
+def test_every_event_tells_the_page_what_kind_it_is(client):
+    """The flyer used to label all eight "Race". Three are not, and one is not
+    even timed — so the page has to be told, not left to guess from `metric`."""
+    api, _ = client
+    events = {e["id"]: e.get("category") for e in api.get("/api/events").json()["events"]}
+    assert events["sprint-2m"] == "race"
+    assert events["rough-ground"] == "challenge"
+    assert events["swag-contest"] == "showcase"
