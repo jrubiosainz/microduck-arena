@@ -4,7 +4,7 @@
 // Two modes. Plain shows all of it at once and loops the replay. Reveal — the
 // author's first look — hides the result and plays it in beats (reveal.js).
 
-import { getMe, getRun, getTrace, markSeen } from "./api.js";
+import { getClip, getMe, getRun, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { LANE_COLORS, LANE_CSS } from "./course.js";
 import { formatScore, formatSpeed } from "./format.js";
@@ -12,6 +12,7 @@ import { lanesFor } from "./lanes.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
 import { playerHref, raceHref, runHref } from "./router.js";
+import { shareStrip, wireShare } from "./share.js";
 import { footer, signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
 import { createViewer } from "./viewer.js";
@@ -165,6 +166,22 @@ export async function renderRun(root, runId, state) {
   $("points").append(...stickers);
   if (!stickers.length) $("points").append(el("p", "mono-label", "no points from this run"));
 
+  // Sharing, under the points: the row stands there from the first frame,
+  // veiled through a reveal like everything else in this column, and the
+  // clip stickers follow the render while it is owed.
+  const strip = shareStrip(run, { origin: location.origin });
+  strip.nav.classList.toggle("veiled", revealing);
+  $("points").after(strip.nav);
+  wireShare(strip, run, { origin: location.origin });
+  const leaving = new AbortController();
+  async function followClip() {
+    const clip = await getClip(run.run_id).catch(() => ({ state: "none" }));
+    if (leaving.signal.aborted) return;
+    strip.setClip(clip);
+    if (clip.state === "pending") setTimeout(followClip, 5000);
+  }
+  followClip();
+
   // One line per seed: the time, or how it ended. Folded away by default —
   // it is a detail you go and look up, not a step of the show.
   for (const s of run.per_seed) {
@@ -184,11 +201,12 @@ export async function renderRun(root, runId, state) {
   if (revealing) {
     theatre = new AbortController();
     lifetime = new AbortController();
-    state.teardown = () => {
-      lifetime.abort();
-      theatre.abort("leave");
-    };
   }
+  state.teardown = () => {
+    leaving.abort();
+    lifetime?.abort();
+    theatre?.abort("leave");
+  };
 
   // The stage: this run in lane one, the three under it beside, all solid.
   const viewer = await createViewer($("stage"), { rig: run.event.rig });
@@ -275,6 +293,7 @@ export async function renderRun(root, runId, state) {
       pegboard: $("pegboard"),
       pegRows,
       stickers,
+      share: strip.nav,
     },
     {
       run,

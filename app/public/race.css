@@ -812,7 +812,7 @@ table.board .withdraw:focus-visible,
    is where the next thing this page grows will go. */
 .run-score {
   display: grid;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   align-content: start;
   gap: 22px;
   margin: 0;
@@ -840,6 +840,15 @@ table.board .withdraw:focus-visible,
 /* What the run earned, one sticker per receipt. */
 .run-receipts { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; }
 .run-receipts .mono-label { color: var(--ink-70); }
+
+/* Share the run: the four networks as marks, the two clips as cyan stickers,
+   and one line under them saying what a press did. Present from the first
+   frame and veiled through a reveal, like everything in this column. */
+.run-share { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0; }
+.run-share .sticker-mark { padding: 8px 12px; line-height: 0; }
+.run-share .sticker-logo { width: 22px; height: 22px; fill: currentColor; }
+.run-share [aria-disabled="true"] { opacity: 0.55; cursor: default; box-shadow: none; }
+.run-share-said { flex-basis: 100%; margin: 0; color: var(--ink-70); }
 
 /* The pegboard: a window of the board, this run's row in lime, each row a link.
    One line per row here, the repo beside the handle instead of under it —
