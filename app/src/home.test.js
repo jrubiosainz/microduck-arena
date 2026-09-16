@@ -62,21 +62,27 @@ describe("the player card", () => {
   });
 });
 
-describe("the standings panel", () => {
-  it("wears the polka dots as a pattern, not as a button gradient", () => {
-    // CSS-only, so read the sheet — the charter forbids a gradient on a
-    // button and permits one as a repeating pattern, which is how
-    // components.css already draws the gym floor.
+describe("the first chapter's band", () => {
+  it("is a full-width sheet of grained paper, not a boxed panel", () => {
+    // CSS-only, so read the sheet. The regular dot pattern this replaced was
+    // the wrong texture, and the box around the scoreboard was a second
+    // border fighting the ladder's own.
     const css = readFileSync(
       resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
       "utf8",
     );
-    const rule = css.match(/\.door-board\s*\{([^}]*)\}/);
-    expect(rule, ".door-board rule not found in club.css").not.toBeNull();
-    expect(rule[1], ".door-board has no dot pattern").toMatch(/radial-gradient/);
-    expect(rule[1], "the dots have no grid to repeat on").toMatch(/background-size\s*:/);
+    const door = css.match(/\n\.door\s*\{([^}]*)\}/);
+    expect(door, ".door rule not found in club.css").not.toBeNull();
+    expect(door[1], ".door does not span the viewport").toMatch(/width\s*:\s*100vw/);
+    expect(door[1], ".door does not break out of the column")
+      .toMatch(/margin-left\s*:\s*calc\(50% - 50vw\)/);
+    expect(door[1], ".door carries no ground for the grain to sit on")
+      .toMatch(/background-color\s*:/);
+    const board = css.match(/\.door-board\s*\{([^}]*)\}/);
+    expect(board[1], ".door-board is boxed again").not.toMatch(/border\s*:/);
+    expect(board[1], "the regular dot pattern is back").not.toMatch(/radial-gradient/);
   });
-});
+});;
 
 describe("the page texture", () => {
   it("is decorative and lets clicks through", () => {

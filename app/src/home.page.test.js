@@ -28,9 +28,13 @@ describe("the whole front page", () => {
 
     expect(root.querySelector(".masthead .wordmark--cover")).not.toBeNull();
     expect(root.querySelector(".flock-band")).not.toBeNull();
-    // One rule now: the pitch and the season standings are one chapter, and a
-    // rule between them divided a thing from its own scoreboard.
-    expect(root.querySelectorAll(".chapter-rule")).toHaveLength(1);
+    // Two rules, and the first chapter sits BETWEEN them: the pitch and the
+    // season standings are one band, so a rule above it and a rule below.
+    const hall = [...root.querySelector(".hall").children].map((n) => n.className);
+    expect(hall.filter((c) => c.startsWith("chapter-rule"))).toHaveLength(2);
+    expect(hall[0]).toMatch(/^chapter-rule/);
+    expect(hall[1]).toMatch(/^door\b/);
+    expect(hall[2]).toMatch(/^chapter-rule/);
     expect(root.querySelector(".door-board .ladder-scroll")).not.toBeNull();
     expect(root.querySelector(".ladder-scroll")).not.toBeNull();
     expect(root.querySelector(".challenge-note--race")).not.toBeNull();

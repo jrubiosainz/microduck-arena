@@ -147,30 +147,29 @@
 /* ── Door: the hero over the hall ──────────────────────────────────────────── */
 
 /* What this is, on the left; who is winning it, on the right. Wide enough for
-   both, they sit side by side; below that they stack, pitch first. */
+   both, they sit side by side; below that they stack, pitch first.
+   A band between two rules, running the window's full width: warm paper with
+   the charter's grain over it at the heavier of the two opacities, so the
+   chapter reads as its own sheet of paper without a box around anything
+   inside it. The horizontal padding centres the content back into the column
+   the rest of the page keeps. */
 .door {
+  --fx-grain-opacity: var(--grain-opacity-max);
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--space-chapter-top-min) var(--space-gutter-max);
-  padding: 0 0 var(--space-gutter-max);
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding:
+    var(--space-chapter-top-min)
+    max(var(--space-gutter-min), calc(50vw - var(--space-content-column) / 2));
+  background-color: var(--warm-paper);
 }
 /* The pitch keeps the charter's 66-character measure; the board takes what is
    left and never drops below a readable frame. */
 .door-pitch { flex: 1 1 28rem; min-width: 0; }
-/* Polka dots behind the standings, so the scoreboard reads as its own panel
-   without a second border fighting the ladder's own. A gradient used as a
-   PATTERN, which is how components.css already draws the gym floor's
-   checkerboard — not the button gradient the charter forbids. */
-.door-board {
-  flex: 1 1 22rem;
-  min-width: 0;
-  padding: var(--space-card-padding-max);
-  background-color: var(--warm-paper);
-  background-image: radial-gradient(var(--ink) 1.7px, transparent 1.8px);
-  background-size: 16px 16px;
-  border: 3px solid var(--ink);
-}
+.door-board { flex: 1 1 22rem; min-width: 0; }
 .door-board > .eyebrow {
   display: block;
   margin-bottom: var(--space-gutter-min);
@@ -247,6 +246,7 @@
   margin-top: var(--space-chapter-top-min);
   background: var(--ink);
 }
+.door + .chapter-rule { margin-top: 0; }
 .chapter-rule--left { rotate: calc(-1 * var(--rotate-1-0)); }
 .chapter-rule--right { rotate: var(--rotate-1-0); }
 /* The rule already carries the space above its chapter. */

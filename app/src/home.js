@@ -260,7 +260,7 @@ export async function renderHome(root) {
   // The pitch and the season are ONE chapter: what this is, on the left, and
   // who is winning it, on the right. They were two, and a rule between them
   // divided a thing from its own scoreboard.
-  const door = el("section", "door");
+  const door = el("section", "door fx-grain");
 
   const pitch = el("div", "door-pitch");
   pitch.append(
@@ -286,7 +286,7 @@ export async function renderHome(root) {
   }
 
   door.append(pitch, board);
-  hall.append(door);
+  hall.append(chapterRule(0), door);
 
   // Only an open event has a board worth asking for.
   const boards = await Promise.all(
@@ -301,7 +301,7 @@ export async function renderHome(root) {
   const flyers = events.map((event, i) => flyer(event, boards[i].rows));
   wall.append(...flyers);
   rounds.append(el("h3", "eyebrow", "Pick your round"), wall);
-  hall.append(chapterRule(0), rounds);
+  hall.append(chapterRule(1), rounds);
 
   // After the wall is on screen: the stills replace the dark frames as they
   // arrive, rather than holding the whole page for WebGL and a 1.3 MB GLB.
