@@ -16,6 +16,7 @@ status       = "planned"
 order        = 140
 id           = "hold-your-ground"
 title        = "Hold Your Ground"
+category     = "challenge"
 rig          = "legs"
 time_limit_s = 50.0
 metric       = "mean_finish_time"

@@ -15,6 +15,7 @@ status       = "planned"
 order        = 130
 id           = "rough-ground"
 title        = "Rough Ground"
+category     = "challenge"
 rig          = "legs"
 time_limit_s = 50.0
 metric       = "mean_finish_time"

@@ -5,8 +5,8 @@ from arena.manifest import EVENTS_DIR, ManifestError, all_events, load_event, lo
 # A well-formed manifest, as TOML sections. Tests override one entry to build a
 # specific malformation, so each test names only what it is breaking.
 GOOD = {
-    "root": 'id="probe"\ntitle="Probe"\nrig="legs"\ntime_limit_s=10.0\n'
-            'metric="mean_finish_time"\nseeds=[1]\n',
+    "root": 'id="probe"\ntitle="Probe"\nrig="legs"\ncategory="race"\n'
+            'time_limit_s=10.0\nmetric="mean_finish_time"\nseeds=[1]\n',
     "course": '[course]\nkind="lane"\nlength_m=1.0\nwidth_m=0.8\n'
               'wall_height_m=0.15\nslope_deg=0.0\n',
     "command": '[command]\nvel=[0.25,0,0]\nhead=[0,0,0,0]\nbody=[0,0,0,0,0,0]\n',
@@ -85,7 +85,7 @@ def test_the_probe_fixture_is_itself_valid(tmp_path):
 def test_unknown_metric_is_rejected(tmp_path):
     path = write_manifest(
         tmp_path,
-        root='id="probe"\ntitle="Probe"\nrig="legs"\ntime_limit_s=10.0\n'
+        root='id="probe"\ntitle="Probe"\nrig="legs"\ncategory="race"\ntime_limit_s=10.0\n'
              'metric="vibes"\nseeds=[1]\n',
     )
     with pytest.raises(ManifestError, match="unknown metric"):
@@ -95,7 +95,7 @@ def test_unknown_metric_is_rejected(tmp_path):
 def test_unknown_rig_is_rejected(tmp_path):
     path = write_manifest(
         tmp_path,
-        root='id="probe"\ntitle="Probe"\nrig="hovercraft"\ntime_limit_s=10.0\n'
+        root='id="probe"\ntitle="Probe"\nrig="hovercraft"\ncategory="race"\ntime_limit_s=10.0\n'
              'metric="mean_finish_time"\nseeds=[1]\n',
     )
     with pytest.raises(ManifestError, match="unknown rig"):
@@ -115,7 +115,7 @@ def test_empty_seeds_is_rejected(tmp_path):
     """An event with no seeds would score every entry as a mean of nothing."""
     path = write_manifest(
         tmp_path,
-        root='id="probe"\ntitle="Probe"\nrig="legs"\ntime_limit_s=10.0\n'
+        root='id="probe"\ntitle="Probe"\nrig="legs"\ncategory="race"\ntime_limit_s=10.0\n'
              'metric="mean_finish_time"\nseeds=[]\n',
     )
     with pytest.raises(ManifestError, match="seeds must not be empty"):
@@ -126,7 +126,7 @@ def test_duplicate_seeds_are_rejected(tmp_path):
     """A repeated seed would run the same episode twice and weight it double."""
     path = write_manifest(
         tmp_path,
-        root='id="probe"\ntitle="Probe"\nrig="legs"\ntime_limit_s=10.0\n'
+        root='id="probe"\ntitle="Probe"\nrig="legs"\ncategory="race"\ntime_limit_s=10.0\n'
              'metric="mean_finish_time"\nseeds=[1,1,2]\n',
     )
     with pytest.raises(ManifestError, match="duplicate seeds"):
@@ -222,6 +222,39 @@ def test_the_four_new_ones_are_planned_rather_than_racing_a_borrowed_course():
         "rough-ground",
         "hold-your-ground",
     }
+
+
+# The programme as designed on 2026-09-16. Written out rather than derived, so
+# that adding an event fails this test until someone chooses its category on
+# purpose — which is the whole reason the field is required.
+EXPECTED_CATEGORIES = {
+    "sprint-2m": "race",
+    "roller-sprint-2m": "race",
+    "hill-climb-1m5": "race",
+    "roller-slide": "race",
+    "highest-jump": "challenge",
+    "hold-your-ground": "challenge",
+    "rough-ground": "challenge",
+    "swag-contest": "showcase",
+}
+
+
+def test_the_programme_is_categorised_as_designed():
+    assert {m.id: m.category for m in all_events()} == EXPECTED_CATEGORIES
+
+
+def test_an_unknown_category_is_refused(tmp_path):
+    path = write_manifest(tmp_path, root=GOOD["root"].replace('category="race"', 'category="sprint"'))
+    with pytest.raises(ManifestError, match="unknown category"):
+        load_manifest(path)
+
+
+def test_a_missing_category_is_refused(tmp_path):
+    """No default: `status` and `order` have a safe one, `category` does not.
+    Defaulting to "race" is exactly the bug this field exists to fix."""
+    path = write_manifest(tmp_path, root=GOOD["root"].replace('category="race"\n', ""))
+    with pytest.raises(ManifestError, match="missing 'category'"):
+        load_manifest(path)
 
 
 def test_a_missing_status_defaults_to_open(tmp_path):

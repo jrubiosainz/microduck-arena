@@ -15,6 +15,13 @@ EVENTS_DIR = Path(__file__).parent / "events"
 
 RIGS = ("legs", "rollers")
 STATUSES = {"open", "planned"}
+
+# What KIND of event this is, which is not derivable from anything else the
+# manifest holds: `highest-jump` and `rough-ground` both score on
+# `mean_finish_time` today and are a challenge and a challenge only by
+# intent. A race is timed over a course, a challenge measures something
+# else, a showcase is judged by vote rather than measured at all.
+CATEGORIES = {"race", "challenge", "showcase"}
 METRICS = ("mean_finish_time", "votes")
 COURSE_KINDS = ("lane",)
 
@@ -111,6 +118,9 @@ class Manifest:
     # false result on a board other people read. Flipping it to "open" is what
     # makes it real, and is meant to happen alongside a real course.
     status: str
+    # "race", "challenge" or "showcase". Presentation only: the front page
+    # labels and colours a flyer by it. Nothing that scores a run may read it.
+    category: str
     # Where this sits on the programme. Declared rather than derived, because
     # neither alphabetical nor filesystem order is the order a person wants to
     # read a race card in. Lower is earlier; ties fall back to the title.
@@ -168,6 +178,11 @@ def load_manifest(path: Path) -> Manifest:
     status = raw.get("status", "open")
     if status not in STATUSES:
         raise ManifestError(f"{path}: unknown status {status!r}, expected one of {STATUSES}")
+    category = _require(raw, "category", str(path))
+    if category not in CATEGORIES:
+        raise ManifestError(
+            f"{path}: unknown category {category!r}, expected one of {CATEGORIES}"
+        )
     rig = _require(raw, "rig", str(path))
     if rig not in RIGS:
         raise ManifestError(f"{path}: unknown rig {rig!r}, expected one of {RIGS}")
@@ -237,6 +252,7 @@ def load_manifest(path: Path) -> Manifest:
         title=_require(raw, "title", str(path)),
         rig=rig,
         status=status,
+        category=category,
         order=order,
         time_limit_s=float(_require(raw, "time_limit_s", str(path))),
         metric=metric,

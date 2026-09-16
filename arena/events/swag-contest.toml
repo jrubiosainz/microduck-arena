@@ -1,6 +1,7 @@
 id           = "swag-contest"
 order        = 15
 title        = "Swag Contest"
+category     = "showcase"
 rig          = "legs"
 time_limit_s = 50.0
 metric       = "votes"

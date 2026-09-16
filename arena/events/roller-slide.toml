@@ -15,6 +15,7 @@ status       = "planned"
 order        = 120
 id           = "roller-slide"
 title        = "Roller Slide"
+category     = "race"
 rig          = "rollers"
 time_limit_s = 40.0
 metric       = "mean_finish_time"

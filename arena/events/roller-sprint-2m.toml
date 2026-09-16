@@ -1,6 +1,7 @@
 id           = "roller-sprint-2m"
 order        = 20
 title        = "2 m Roller Sprint"
+category     = "race"
 rig          = "rollers"
 time_limit_s = 40.0
 metric       = "mean_finish_time"
