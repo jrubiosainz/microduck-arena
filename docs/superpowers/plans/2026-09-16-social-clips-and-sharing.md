@@ -1774,8 +1774,13 @@ git commit -m "Recorder: Chromium over the DevTools protocol, and a probe that p
 
 | layout | draw | png shot | jpeg shot | jpeg in page | VideoFrame | vp9 |
 | --- | --- | --- | --- | --- | --- | --- |
-| landscape | | | | | | |
-| vertical | | | | | | |
+| landscape | 1.7 ms | 413.8 ms | 417.9 ms | 402.8 ms | 172.2 ms | 562.5 ms (40 chunks) |
+| vertical | 1.8 ms | 411.2 ms | 404.8 ms | 367.0 ms | 18.5 ms | 536.5 ms (40 chunks) |
+
+Measured on `01M2KH4QB0ZVTZ6DX6DX0X`, `--frames 40`, this Mac's Chrome under SwiftShader
+software rendering. A repeat landscape run for stability-checking gave `draw + VideoFrame`
+342.1 ms instead of 172.2 ms (everything else within a few ms) — see Task 6's report for the
+full second run.
 
 ---
 

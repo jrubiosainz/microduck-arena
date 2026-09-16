@@ -29,6 +29,7 @@ dependencies = [
     "uvicorn>=0.30",
     "python-multipart>=0.0.9",
     "httpx>=0.27,<1",
+    "websockets>=13",  # The recorder's DevTools client (arena/recorder.py).
 ]
 
 [project.optional-dependencies]
