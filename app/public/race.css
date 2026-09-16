@@ -807,20 +807,21 @@ table.board .withdraw:focus-visible,
    its foot. There is no screen behind the stamp any more — a stamp wants a
    corner to be slapped on, not a panel of its own to be centred in, and the
    panel was the biggest thing on the page for the least it had to say. */
+/* Each block as tall as it needs to be, stacked from the top: the column is
+   deliberately shorter than the picture beside it, and the room left under it
+   is where the next thing this page grows will go. */
 .run-score {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-content: start;
   gap: 22px;
   margin: 0;
   min-height: 0;
 }
-/* The board is the height of the picture beside it, its three lines centred:
-   the label, the time, and the corner the stamp comes down on. The result is
-   the headline of this page and should read as one. */
+/* Three lines: the label, the time, and the lane the stamp comes down in. */
 .run-score .scoreboard {
   display: grid;
   grid-template-rows: auto auto auto;
-  align-content: center;
   justify-items: center;
   gap: 6px;
 }

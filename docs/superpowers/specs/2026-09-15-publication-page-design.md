@@ -70,8 +70,10 @@ scrolls again like every other.
 3. **Stage and result, side by side.** Left: the viewer with the run's trace in
    lane one and the traces of the three board rows just below it in the next
    lanes, all at full opacity, all in the livery they raced in. Right, a
-   `.scoreboard` the height of the picture beside it, holding three centred
-   lines — the `time` label, `.flip-digit` tiles for the time (`8.412`, three
+   `.scoreboard` as tall as it needs to be and no taller — the column is
+   deliberately shorter than the picture beside it, and the room left under it
+   is where the next thing this page grows will go. It holds three centred
+   lines: the `time` label, `.flip-digit` tiles for the time (`8.412`, three
    decimals, matching `formatScore`), and a lane for the `.stamp`
    (`FINISHED 5/5`, or `DNF`), tilted into the corner. There is no screen
    behind the stamp: a stamp wants a corner to be slapped on, not a panel of
