@@ -13,6 +13,7 @@ which world it is in.
 import hmac
 import re
 import secrets
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -20,7 +21,7 @@ from fastapi.responses import RedirectResponse
 
 from ..points import receipts, standings
 from .oauth import OAuthError, authorize_url, exchange_code, userinfo
-from .routes_read import _all_runs, _withdrawn
+from .routes_read import _all_runs, _ballots, _voted, _withdrawn
 from .session import COOKIE_NAME, Session, sign, unsign
 
 STATE_COOKIE = "arena_oauth_state"
@@ -38,7 +39,7 @@ RETURN_COOKIE = "arena_oauth_return"
 # can name a host, because no part of what it sends reaches the host position.
 # "//evil.com", "https://evil.com" and "/\evil.com" all simply fail to match
 # and fall back to the menu.
-_SAFE_ROUTE = re.compile(r"^/(e|p)/[A-Za-z0-9._-]{1,64}/?$")
+_SAFE_ROUTE = re.compile(r"^/(e|p|r|v)/[A-Za-z0-9._-]{1,64}/?$")
 
 
 def return_target(route: str | None) -> str:
@@ -133,8 +134,14 @@ def me(request: Request, response: Response) -> dict:
         # results you have never opened.
         store = request.app.state.store
         runs, withdrawn = _all_runs(store), _withdrawn(store)
+        rules, now = _voted(), datetime.now(UTC)
+        ballots = _ballots(request, rules, now)
         card = next(
-            (c for c in standings(receipts(runs, withdrawn)) if c.user == session.username),
+            (
+                c
+                for c in standings(receipts(runs, withdrawn, ballots, rules, now))
+                if c.user == session.username
+            ),
             None,
         )
         seen = store.seen()

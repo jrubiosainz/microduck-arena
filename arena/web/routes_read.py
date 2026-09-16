@@ -200,17 +200,20 @@ def player_page(user: str, request: Request) -> dict:
     by_event: dict[str, list[RunRecord]] = defaultdict(list)
     for run in runs:
         by_event[run.event_id].append(run)
-    # A voted event's count per run, read off its board the way the podium is.
-    votes_by_run = {
-        row.record.run_id: row.votes
+    # A voted event ranks on votes, not on time, so its rows come off its own
+    # board the way the podium does: the run in the pool holds a rank and a
+    # count, an older run of the same person holds neither.
+    voted_rows = {
+        row.record.run_id: row
         for event_id, rows in boards_by_user(runs, withdrawn, ballots, rules, now).items()
         if events[event_id].metric == "votes"
         for row in rows
     }
     publications = []
     for run in mine:
-        place = standing(by_event[run.event_id], run.run_id, withdrawn=withdrawn)
         voted = events[run.event_id].metric == "votes"
+        place = standing(by_event[run.event_id], run.run_id, withdrawn=withdrawn)
+        row = voted_rows.get(run.run_id)
         publications.append({
             "run_id": run.run_id,
             "event_id": run.event_id,
@@ -219,8 +222,8 @@ def player_page(user: str, request: Request) -> dict:
             "score": run.score,
             "seeds_finished": run.seeds_finished,
             "seeds_total": len(run.per_seed),
-            "rank": place.rank,
-            "on_board": place.on_board,
+            "rank": (row.rank if row else None) if voted else place.rank,
+            "on_board": row is not None if voted else place.on_board,
             "withdrawn": run.run_id in withdrawn,
             "submitted_at": run.submitted_at,
             "seen": run.run_id in seen,
@@ -228,7 +231,7 @@ def player_page(user: str, request: Request) -> dict:
             # can tell a reader what the rank next to it was EARNED by. A
             # bare "#1 · 18.46s" reads as a time on a board actually ranked
             # by votes.
-            "votes": votes_by_run.get(run.run_id) if voted else None,
+            "votes": (row.votes if row else 0) if voted else None,
         })
     return {
         "user": user,

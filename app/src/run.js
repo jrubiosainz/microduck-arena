@@ -11,7 +11,7 @@ import { formatScore, formatSpeed } from "./format.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
 import { playerHref, raceHref, runHref } from "./router.js";
-import { signage } from "./signage.js";
+import { footer, signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
 import { createViewer } from "./viewer.js";
 
@@ -101,7 +101,7 @@ export async function renderRun(root, runId, state) {
       <p class="run-links" id="links"></p>
     </section>
   `;
-  root.append(page);
+  root.append(page, footer());
   const $ = (id) => page.querySelector(`#${id}`);
 
   $("title").textContent = run.event.title;

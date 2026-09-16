@@ -6,7 +6,7 @@
 // plain mode renders directly.
 
 import { climb, confetti, ended, flipTiles, fly, rollCounter, slam } from "./animation.js";
-import { cue, followCounter } from "./sound.js";
+import { followCounter, play } from "./sound.js";
 
 /** Whether this visit reveals: the author, a result never seen, motion allowed. */
 export function revealFor(run, me, reducedMotion = false) {
@@ -75,7 +75,7 @@ export async function reveal(parts, show, signal) {
 
     if (run.seeds_finished > 0) {
       act("celebrate");
-      cue("win");
+      play("win");
       await confetti(page, 48, signal);
       if (signal.aborted) return;
     }
@@ -83,7 +83,7 @@ export async function reveal(parts, show, signal) {
     act("verdict");
     score.hidden = false;
     score.scrollIntoView({ block: "center", behavior: "smooth" });
-    await slam(stamp, { support: crt, signal, contact: () => cue("stamp") });
+    await slam(stamp, { support: crt, signal, contact: () => play("stamp") });
     if (signal.aborted) return;
 
     act("time");
@@ -97,8 +97,8 @@ export async function reveal(parts, show, signal) {
     if (plan.start !== plan.end) {
       act("climb");
       boardBox.scrollIntoView({ block: "center", behavior: "smooth" });
-      cue("climb");
-      cue("chirp");
+      play("climb");
+      play("chirp");
       setRanks(pegRows, plan.end);
       const rows = plan.end.map((row) => pegRows.get(row.run_id));
       await climb(pegboard, rows, pegRows.get(run.run_id), signal);

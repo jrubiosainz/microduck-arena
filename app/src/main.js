@@ -54,7 +54,6 @@ async function show() {
         return;
       }
       await renderVote(root, { event, state });
-
     } else if (route.view === "run") {
       await renderRun(root, route.runId, state);
     } else if (route.view === "player") {
