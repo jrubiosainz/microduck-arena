@@ -151,12 +151,16 @@ export function flyer(event, rows) {
  * the front. Who you are is not up here: a chip in the corner of a cover is
  * the strip again in miniature, and it is `playerCard` below instead.
  */
-export function masthead() {
+export function masthead(me, standing) {
   const head = document.createElement("header");
   head.className = "masthead fx-ray-fan";
   const lockup = el("div", "masthead-lockup");
   lockup.append(wordmark({ variant: "cover" }), duckHead({ quacks: true }));
-  head.append(lockup);
+  const nav = document.createElement("nav");
+  nav.className = "masthead-player";
+  nav.setAttribute("aria-label", "Player");
+  nav.append(playerCard(me, standing));
+  head.append(nav, lockup);
   return head;
 }
 
@@ -168,21 +172,28 @@ export function masthead() {
  * null when /api/me could not be reached, and then the box is empty — a
  * sign-in link to a server that is not answering is worse than a blank.
  */
-export function playerCard(me) {
-  const box = el("div", "door-player");
+export function playerCard(me, standing) {
+  const box = el("div", "player-card");
   if (!me) return box;
   if (!me.signed_in) {
-    box.append(el("p", "door-player-label", "Race your own duck"));
-    const link = el("a", "button");
+    const link = el("a", "player-card-in fx-shadow-card");
     link.href = signInHref();
-    link.textContent = "Sign in with Hugging Face";
+    link.append(
+      el("span", "player-card-glyph", "\u{1F986}"),
+      el("span", "player-card-name", "Sign in"),
+      el("span", "player-card-score", "with Hugging Face"),
+    );
     box.append(link);
     return box;
   }
-  box.append(el("p", "door-player-label", "Your locker"));
-  const link = el("a", "door-player-you fx-shadow-card");
+  const link = el("a", "player-card-you fx-shadow-card");
   link.href = playerHref(me.user);
-  link.append(avatar(me.user), el("span", "door-player-name", me.user));
+  link.append(avatar(me.user), el("span", "player-card-name", me.user));
+  // The score only exists once you have published something. Saying "0 PTS"
+  // to someone who has not raced yet is a scoreline about nothing.
+  if (standing) {
+    link.append(el("span", "player-card-score", `#${standing.rank} \u00b7 ${standing.points} PTS`));
+  }
   box.append(link);
   return box;
 }
@@ -239,7 +250,10 @@ export function chapterRule(index) {
 
 export async function renderHome(root) {
   const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
-  root.replaceChildren(pageTexture(), masthead(), flockBand());
+  // Your own rung, for the card up top. The REAL standings, never the padded
+  // ones — a demo rank beside your name would be a score you did not earn.
+  const mine = me?.signed_in ? standings.find((row) => row.user === me.user) : undefined;
+  root.replaceChildren(pageTexture(), masthead(me, mine), flockBand());
   const hall = el("main", "hall");
   root.append(hall);
 
@@ -259,7 +273,7 @@ export async function renderHome(root) {
     ),
   );
   const meet = el("div", "door-meet");
-  meet.append(duckHead(), playerCard(me));
+  meet.append(duckHead());
   pitch.append(meet);
 
   const board = el("div", "door-board");

@@ -47,6 +47,50 @@
   justify-content: flex-end;
   max-width: var(--space-content-column);
   margin-inline: auto;
+  margin-bottom: var(--space-gutter-min);
+}
+
+/* A square card, paper on the cover's ink: your picture, your handle, and
+   where you stand. Square because it reads as a locker plate rather than as
+   another line of the header. */
+.player-card-you, .player-card-in {
+  --fx-shadow-color: var(--cyan);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 9.5rem;
+  aspect-ratio: 1;
+  padding: var(--space-card-padding-min);
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.player-card-you:hover, .player-card-in:hover { background: var(--warm-paper); }
+.player-card-you:focus-visible, .player-card-in:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 3px;
+}
+.player-card-in { --fx-shadow-color: var(--magenta); background: var(--orange); }
+.player-card-glyph { font-size: 30px; line-height: 1; }
+.player-card-you .avatar { width: 52px; height: 52px; font-size: 31px; }
+.player-card-name {
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: var(--type-lede-size);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+}
+.player-card-score {
+  font-family: var(--type-mono-label-family);
+  font-weight: var(--type-mono-label-weight);
+  font-size: var(--type-mono-label-size);
+  letter-spacing: var(--type-mono-label-tracking);
+  text-transform: uppercase;
 }
 .masthead .duckhead { width: clamp(72px, 14vw, 148px); }
 
@@ -114,7 +158,19 @@
 /* The pitch keeps the charter's 66-character measure; the board takes what is
    left and never drops below a readable frame. */
 .door-pitch { flex: 1 1 28rem; min-width: 0; }
-.door-board { flex: 1 1 22rem; min-width: 0; }
+/* Polka dots behind the standings, so the scoreboard reads as its own panel
+   without a second border fighting the ladder's own. A gradient used as a
+   PATTERN, which is how components.css already draws the gym floor's
+   checkerboard — not the button gradient the charter forbids. */
+.door-board {
+  flex: 1 1 22rem;
+  min-width: 0;
+  padding: var(--space-card-padding-max);
+  background-color: var(--warm-paper);
+  background-image: radial-gradient(var(--ink) 1.7px, transparent 1.8px);
+  background-size: 16px 16px;
+  border: 3px solid var(--ink);
+}
 .door-board > .eyebrow {
   display: block;
   margin-bottom: var(--space-gutter-min);
@@ -136,43 +192,6 @@
 }
 .door-meet .duckhead { width: clamp(64px, 11vw, 112px); }
 
-.door-player { flex: 1 1 15rem; min-width: 0; }
-.door-player-label {
-  margin: 0 0 12px;
-  font-family: var(--type-eyebrow-family);
-  font-weight: var(--type-eyebrow-weight);
-  font-size: var(--type-eyebrow-size);
-  letter-spacing: var(--type-eyebrow-tracking);
-  text-transform: uppercase;
-  color: var(--orange-inked);
-}
-.door-player-you {
-  --fx-shadow-color: var(--ink);
-  display: flex;
-  align-items: center;
-  gap: var(--space-gutter-min);
-  padding: var(--space-card-padding-max);
-  border: 3px solid var(--ink);
-  background: var(--paper);
-  color: var(--ink);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-.door-player-you:hover { background: var(--warm-paper); }
-.door-player-you:focus-visible, .door-player .button:focus-visible {
-  outline: 3px solid var(--cyan);
-  outline-offset: 3px;
-}
-/* Big enough to read across the page, which is the whole point of moving it
-   down here off the cover. */
-.door-player-you .avatar { width: 64px; height: 64px; font-size: 38px; }
-.door-player-name {
-  font-family: var(--type-card-title-family);
-  font-weight: var(--type-card-title-weight);
-  font-size: var(--type-card-title-size);
-  line-height: var(--type-card-title-line);
-  letter-spacing: var(--type-card-title-tracking);
-}
 
 .hero {
   margin: 4px 0 0;

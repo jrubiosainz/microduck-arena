@@ -16,37 +16,42 @@ const planned = { ...open, id: "best-jump", title: "Best Jump", status: "planned
 const held = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
 
 describe("the masthead", () => {
-  it("carries the mark at cover size and the duck, and nothing else", () => {
-    const head = masthead();
+  it("carries the mark at cover size, the duck, and your locker top right", () => {
+    const head = masthead({ signed_in: true, user: "cdeplanne" }, { rank: 2, points: 360 });
     expect(head.querySelector(".wordmark--cover")).not.toBeNull();
     expect(head.querySelector("img.duckhead")).not.toBeNull();
-    // Who you are lives beside the hero now. A chip in the corner of a cover
-    // is the strip again in miniature, which is what the cover replaced.
-    expect(head.querySelector(".profile-chip")).toBeNull();
-    expect(head.querySelector("a.sticker")).toBeNull();
+    expect(head.querySelector(".masthead-player .player-card-you")).not.toBeNull();
   });
 
   it("is the only element on the page wearing the aberration", () => {
     // The charter draws it on a cover. A second one is a printing fault.
-    expect(masthead().querySelectorAll(".fx-aberration")).toHaveLength(1);
+    expect(masthead(null).querySelectorAll(".fx-aberration")).toHaveLength(1);
   });
 });
 
 describe("the player card", () => {
-  it("shows your picture and your handle, linking to your page", () => {
-    const card = playerCard({ signed_in: true, user: "cdeplanne" });
-    const link = card.querySelector("a.door-player-you");
+  it("shows your picture, your handle and where you stand", () => {
+    const card = playerCard({ signed_in: true, user: "cdeplanne" }, { rank: 2, points: 360 });
+    const link = card.querySelector("a.player-card-you");
     expect(link.getAttribute("href")).toBe("#/p/cdeplanne");
     expect(link.querySelector(".avatar")).not.toBeNull();
-    expect(link.querySelector(".door-player-name").textContent).toBe("cdeplanne");
+    expect(link.querySelector(".player-card-name").textContent).toBe("cdeplanne");
+    expect(link.querySelector(".player-card-score").textContent).toBe("#2 · 360 PTS");
   });
 
-  it("offers the way in when signed out, as the section's one orange button", () => {
+  it("leaves the score off until you have published something", () => {
+    // "0 PTS" to someone who has not raced yet is a scoreline about nothing.
+    const card = playerCard({ signed_in: true, user: "newcomer" }, undefined);
+    expect(card.querySelector(".player-card-name").textContent).toBe("newcomer");
+    expect(card.querySelector(".player-card-score")).toBeNull();
+  });
+
+  it("offers the way in when signed out", () => {
     const card = playerCard({ signed_in: false });
-    const link = card.querySelector("a.button");
-    expect(link.textContent).toBe("Sign in with Hugging Face");
+    const link = card.querySelector("a.player-card-in");
+    expect(link.textContent).toContain("Sign in");
     // Signed out there is no page of yours to link to.
-    expect(card.querySelector(".door-player-you")).toBeNull();
+    expect(card.querySelector(".player-card-you")).toBeNull();
   });
 
   it("shows nothing at all when the server did not answer", () => {
@@ -54,6 +59,22 @@ describe("the player card", () => {
     const card = playerCard(null);
     expect(card.querySelector("a")).toBeNull();
     expect(card.textContent).toBe("");
+  });
+});
+
+describe("the standings panel", () => {
+  it("wears the polka dots as a pattern, not as a button gradient", () => {
+    // CSS-only, so read the sheet — the charter forbids a gradient on a
+    // button and permits one as a repeating pattern, which is how
+    // components.css already draws the gym floor.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    );
+    const rule = css.match(/\.door-board\s*\{([^}]*)\}/);
+    expect(rule, ".door-board rule not found in club.css").not.toBeNull();
+    expect(rule[1], ".door-board has no dot pattern").toMatch(/radial-gradient/);
+    expect(rule[1], "the dots have no grid to repeat on").toMatch(/background-size\s*:/);
   });
 });
 
