@@ -83,6 +83,19 @@ describe("the first chapter's band", () => {
     expect(door[1], ".door's edges are square while the rules are tilted")
       .toMatch(/clip-path\s*:\s*polygon/);
     expect(door[1], ".door has no slant to cut its edges by").toMatch(/--slant\s*:/);
+
+    // The dot field, as pollen-robotics.com/microduck draws it. Each of these
+    // is a thing that was asked for by name and that a later tidy-up would
+    // quietly undo: orange rather than ink, tilted rather than square, and
+    // masked so the dots sit only at the top.
+    const dots = css.match(/\.door::after\s*\{([^}]*)\}/);
+    expect(dots, ".door::after rule not found in club.css").not.toBeNull();
+    expect(dots[1], "the dots are not built from the orange token")
+      .toMatch(/color-mix\(in srgb, var\(--orange\)/);
+    expect(dots[1], "the dots sit square instead of leaning with the page")
+      .toMatch(/rotate\(calc\(-1 \* var\(--rotate-2-5\)\)\)/);
+    expect(dots[1], "the dots are not masked away below the top")
+      .toMatch(/[^-]mask-image\s*:\s*linear-gradient\(to bottom/);
     const board = css.match(/\.door-board\s*\{([^}]*)\}/);
     expect(board[1], ".door-board is boxed again").not.toMatch(/border\s*:/);
     expect(board[1], "the regular dot pattern is back").not.toMatch(/radial-gradient/);

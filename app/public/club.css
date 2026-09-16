@@ -154,12 +154,9 @@
    inside it. The horizontal padding centres the content back into the column
    the rest of the page keeps. */
 .door {
-  /* Above the charter's 0.04-0.06 ceiling, deliberately. At the charter's own
-     value the grain is a print artifact you find when you look for it; here it
-     has to read as the band's texture from across the room, which is what it
-     was asked to do. Dial it back to var(--grain-opacity-max) to return to
-     the charter exactly. */
-  --fx-grain-opacity: 0.16;
+  /* Back to the charter's own ceiling. The visible texture is the dot field
+     below, not the grain — the grain is the print artifact underneath it. */
+  --fx-grain-opacity: var(--grain-opacity-max);
   /* The rise of a 1° line across the window — tan(1°) = 0.01746. The rules
      above and below are rotated by that angle, so the band's own top and
      bottom edges are cut to the same slope and the three read as one shape
@@ -187,6 +184,31 @@
      rotated -1°, which is counter-clockwise — its left end drops and its right
      end lifts, and the cut has to do the same or the two cross. */
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--slant)), 0 100%);
+}
+
+/* The dot field, read off pollen-robotics.com/microduck rather than invented:
+   orange at a fifth, 3.2px dots on a 16px grid, the whole layer tilted -2.5°
+   and masked away by 7% down the band. Three things follow from that recipe
+   and each one was asked for by name — the dots are ORANGE and not ink, they
+   are only at the TOP, and they lean with the rest of the page instead of
+   sitting square. `inset: -6%` is the site's too: it gives the rotation room
+   so the turn never drags a bare corner into view.
+   The alpha is mixed from the token, so this adds no hex the charter has not
+   already named. `.door`'s clip-path trims this layer to the band's own
+   slanted shape. */
+.door::after {
+  content: "";
+  position: absolute;
+  inset: -6%;
+  pointer-events: none;
+  transform: rotate(calc(-1 * var(--rotate-2-5)));
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--orange) 20%, transparent) 3.2px,
+    transparent 3.9px
+  );
+  background-size: 16px 16px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 7.1%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 7.1%);
 }
 /* The pitch keeps the charter's 66-character measure; the board takes what is
    left and never drops below a readable frame. */
