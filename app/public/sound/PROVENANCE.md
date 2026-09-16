@@ -16,8 +16,10 @@ Every file below is computed sample by sample -- noise bursts, filters and pitch
 `build-kit.mjs` in that repository; no third-party recording or sample library enters it. The
 kit's own `LICENSES.md` dedicates that original material to the public domain under
 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/): "this repository made them,
-nothing here needs attribution, and all of it may be redistributed, modified and re-cut." These
-seven files are unmodified copies, so that dedication carries over unchanged.
+nothing here needs attribution, and all of it may be redistributed, modified and re-cut." The
+CC0-1.0 rows below are unmodified copies of files `build-kit.mjs` computed, so that dedication
+carries over unchanged for them; the microduck voice files are the exception the closing section
+explains.
 
 ## The cues
 
@@ -30,7 +32,7 @@ seven files are unmodified copies, so that dedication carries over unchanged.
 | `microduck-victory.wav` | 1.16 s | The author's duck crosses the line on the publication page. | Apache-2.0 (see below) |
 | `rank-climb.wav` | 0.62 s | The author's row climbs the pegboard. | CC0-1.0 |
 | `microduck-chirp.wav` | 0.16 s | With the climb: the duck's own note as it lands on its peg. | CC0-1.0 |
-| `round-0.wav` … `round-4.wav` | 1.2 s | The clip's title card: an event's jingle, one variant per event (`hash(event.id) mod 5`, or `[clip] jingle`). | CC0-1.0 |
+| `round-0.wav` … `round-4.wav` | 1.39–1.51 s | The clip's title card: an event's jingle, one variant per event (`hash(event.id) mod 5`, or `[clip] jingle`). | CC0-1.0 |
 | `microduck-fall.wav` | 0.58 s | The clip's outro after a DNF stamp: the duck's own falling note. | Apache-2.0 (see below) |
 
 `app/src/sound.js` is the only code that plays them. The booth plays from a click; the
