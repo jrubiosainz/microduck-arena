@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { avatar, chip, footer, signage } from "./signage.js";
+import { duckHead, wordmark } from "./wordmark.js";
 
 describe("avatar", () => {
   it("asks the Hub for the user's picture", () => {
@@ -59,6 +60,19 @@ describe("signage", () => {
     expect(home.getAttribute("href")).toBe("#/");
     expect(home.querySelector(".wordmark__solid").textContent).toBe("Microduck");
     expect(home.querySelector(".wordmark__arena").textContent).toBe("Arena");
+  });
+});
+
+describe("the mark's two variants", () => {
+  it("leaves the strip's mark flat", () => {
+    // Two ghosts beside a handle and a picture read as a printing fault.
+    expect(wordmark().className).toBe("wordmark");
+  });
+
+  it("gives the cover's mark the charter's aberration", () => {
+    const mark = wordmark({ variant: "cover" });
+    expect(mark.className).toContain("wordmark--cover");
+    expect(mark.className).toContain("fx-aberration");
   });
 });
 

@@ -9,6 +9,40 @@
 .ladder-row:focus-visible, .challenge-link:focus-visible,
 .profile-results a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 
+/* ── Masthead: the charter's cover, whole ──────────────────────────────────── */
+
+/* Deep ink, because that is the only ground the charter puts a yellow word on:
+   #FFD23F on #FAF8F2 cannot be read at any size. The fan is this page's one —
+   tilted by its own --ray-fan-from and never by a rotate(). Bottom padding is
+   the gutter, not the chapter gap: the charter's cover lockup is the deep-ink
+   block with the yellow band immediately beneath it, not 104px of empty ink
+   before that band. */
+.masthead {
+  position: relative;
+  background-color: var(--deep-ink);
+  padding: var(--space-gutter-max) var(--space-gutter-min) var(--space-gutter-max);
+}
+.masthead-lockup {
+  display: flex;
+  align-items: center;
+  gap: clamp(1rem, 4vw, 3rem);
+  max-width: var(--space-content-column);
+  margin-inline: auto;
+}
+.masthead-player {
+  display: flex;
+  justify-content: flex-end;
+  max-width: var(--space-content-column);
+  margin-inline: auto;
+}
+.masthead .duckhead { width: clamp(72px, 14vw, 148px); }
+
+.wordmark--cover {
+  font-size: var(--type-hero-title-size);
+  line-height: var(--type-hero-title-line);
+  letter-spacing: var(--type-hero-title-tracking);
+}
+
 /* ── Door: the hero over the hall ──────────────────────────────────────────── */
 
 .door { padding: 0 0 var(--space-gutter-max); }

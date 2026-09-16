@@ -7,9 +7,10 @@
 import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
 import { formatEventFacts, formatScore } from "./format.js";
 import { playerHref, raceHref } from "./router.js";
-import { footer, signage } from "./signage.js";
+import { chip } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { voteButton } from "./votebutton.js";
+import { duckHead, wordmark } from "./wordmark.js";
 
 const SHELLS = ["cream", "graphite", "lavender", "sky"];
 const LADDER_ROWS = 10;
@@ -104,11 +105,29 @@ export function flyer(event, rows) {
   return note;
 }
 
+/**
+ * The front's cover: the mark at hero size on deep ink, the duck beside it,
+ * and who you are floating top right. No strip — the strip's job is to be the
+ * way back to the front, and this IS the front.
+ */
+export function masthead(me) {
+  const head = document.createElement("header");
+  head.className = "masthead fx-ray-fan";
+  const lockup = el("div", "masthead-lockup");
+  lockup.append(wordmark({ variant: "cover" }), duckHead());
+  const nav = document.createElement("nav");
+  nav.className = "masthead-player";
+  nav.setAttribute("aria-label", "Player");
+  nav.append(chip(me));
+  head.append(nav, lockup);
+  return head;
+}
+
 export async function renderHome(root) {
   const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
-  root.replaceChildren(signage(me));
+  root.replaceChildren(masthead(me));
   const hall = el("main", "hall");
-  root.append(hall, footer());
+  root.append(hall);
 
   const door = el("section", "door");
   door.append(

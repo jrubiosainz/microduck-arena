@@ -6,9 +6,18 @@
 // here — the mark lives in the strip over the door, beside a handle and a
 // picture, where two ghosts read as a printing fault rather than as a device.
 
-export function wordmark() {
+/**
+ * The site's mark. Two variants, one component.
+ *
+ * `strip` is the small flat mark in the strip over the door, where the
+ * chromatic offset would read as a printing fault beside a handle and a
+ * picture. `cover` is the front page's, at the charter's hero step and with
+ * the aberration the charter draws on its own cover — over deep ink, which is
+ * the only ground the charter ever puts a yellow word on.
+ */
+export function wordmark({ variant = "strip" } = {}) {
   const el = document.createElement("h1");
-  el.className = "wordmark";
+  el.className = variant === "cover" ? "wordmark wordmark--cover fx-aberration" : "wordmark";
   const solid = document.createElement("span");
   solid.className = "wordmark__solid";
   solid.textContent = "Microduck";

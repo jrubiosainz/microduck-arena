@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flyer, ladder, shellOf } from "./home.js";
+import { flyer, ladder, masthead, shellOf } from "./home.js";
 
 const open = {
   id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", rig: "legs",
@@ -8,6 +8,26 @@ const open = {
 };
 const planned = { ...open, id: "best-jump", title: "Best Jump", status: "planned", category: "challenge" };
 const held = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
+
+describe("the masthead", () => {
+  it("carries the mark at cover size, the duck and the player chip", () => {
+    const head = masthead({ signed_in: true, user: "cdeplanne" });
+    expect(head.querySelector(".wordmark--cover")).not.toBeNull();
+    expect(head.querySelector("img.duckhead")).not.toBeNull();
+    expect(head.querySelector("a.profile-chip").getAttribute("href")).toBe("#/p/cdeplanne");
+  });
+
+  it("offers the way in when signed out", () => {
+    expect(masthead({ signed_in: false }).querySelector("a.sticker").textContent)
+      .toBe("Sign in with Hugging Face");
+  });
+
+  it("is the only element on the page wearing the aberration", () => {
+    // The charter draws it on a cover. A second one is a printing fault.
+    const head = masthead({ signed_in: false });
+    expect(head.querySelectorAll(".fx-aberration")).toHaveLength(1);
+  });
+});
 
 describe("the ladder", () => {
   it("hangs one rung per player, linking to their page", () => {
