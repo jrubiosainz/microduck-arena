@@ -9,6 +9,7 @@ import { castVote, getBallot, getBallotTrace, getMe } from "./api.js";
 import { LANE_COLORS, LANE_CSS } from "./course.js";
 import { raceHref } from "./router.js";
 import { signInHref } from "./session.js";
+import { credit, shower } from "./points.js";
 import { footer, signage } from "./signage.js";
 import { isMuted, play, toggleMuted } from "./sound.js";
 import { createViewer } from "./viewer.js";
@@ -56,8 +57,7 @@ function muteToggle() {
 // Timings from the spec, in ms, each measured from the step before it.
 const FLIGHT_TO_ENVELOPE = 150; // press → the envelope starts sliding up
 const ENVELOPE_TO_ARRIVE = 300; // → the post-it arrives inside (450ms from the click)
-const STAMP_TO_TOKENS = 150; // seal confirmed → the "+1"s appear and set off
-const TOKENS_TO_LAND = 100; // → they land on the chip (250ms from confirmation)
+const STAMP_TO_STARS = 150; // seal confirmed → the stars are born
 const ENVELOPE_OUT = 300; // → the envelope finishes leaving (550ms from confirmation)
 
 /**
@@ -94,32 +94,25 @@ async function runCeremony(lane, settle) {
     postit.classList.add("vote-ceremony__postit--in");
 
     // Wait here for the server, exactly as long as it takes: closing the
-    // envelope and flying points before it answers would celebrate a vote
-    // that has not happened, and votes really do fail.
-    const ok = await Promise.resolve(settle).then(
-      () => true,
-      () => false,
+    // envelope and raining points before it answers would celebrate a vote
+    // that has not happened, and votes really do fail. What it answers with
+    // says how many points the ballot paid.
+    const counted = await Promise.resolve(settle).then(
+      (result) => result ?? {},
+      () => null,
     );
 
-    if (ok) {
+    if (counted) {
       envelope.classList.add("vote-ceremony__envelope--sealed");
       play("stamp");
-      await wait(STAMP_TO_TOKENS);
-      const chip = document.querySelector(".profile-chip")?.getBoundingClientRect();
-      for (let i = 0; i < 2; i += 1) {
-        const token = el("span", "vote-ceremony__token", "+1");
-        if (chip) {
-          token.style.setProperty("--tx", `${chip.left + chip.width / 2}px`);
-          token.style.setProperty("--ty", `${chip.top + chip.height / 2}px`);
-        }
-        overlay.append(token);
+      await wait(STAMP_TO_STARS);
+      // One star per point, born around the envelope, landing on the chip,
+      // whose counter then rolls — the same shower a publication's points get.
+      const chip = document.querySelector(".profile-chip");
+      if (chip && counted.points) {
+        await shower(envelope, chip, counted.points);
+        await credit(chip, counted.points);
       }
-      // A tick to let the tokens' resting state paint before the class that
-      // sends them flying, or the transition has no "from" to animate away.
-      await wait(0);
-      overlay.classList.add("vote-ceremony__token--go");
-      await wait(TOKENS_TO_LAND);
-      play("points");
     }
     envelope.classList.add("vote-ceremony__envelope--out");
     await wait(ENVELOPE_OUT);
@@ -285,8 +278,10 @@ export async function renderVote(root, { event, state }) {
         if (busy) return;
         busy = true;
         try {
-          await castVote(event.id, ballot.ballot, lane);
+          const cast = await castVote(event.id, ballot.ballot, lane);
           await next();
+          // The ceremony reads the points off this once the field has moved on.
+          return cast;
         } catch (error) {
           if (error.message === DEAD_BALLOT_MESSAGE) {
             // This ballot cannot be retried into working — draw a fresh

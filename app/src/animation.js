@@ -141,29 +141,3 @@ export async function climb(pegboard, rows, climber, signal) {
     }
   }
 }
-
-/**
- * A copy of the sticker flies to the target and shrinks into it (race.css's
- * `fly-to-chip`), then is gone. The sticker itself stays where it is.
- */
-export async function fly(sticker, target, signal) {
-  if (signal?.aborted) return;
-  const from = sticker.getBoundingClientRect();
-  const to = target.getBoundingClientRect();
-  const ghost = sticker.cloneNode(true);
-  ghost.classList.add("fly");
-  ghost.setAttribute("aria-hidden", "true");
-  ghost.inert = true;
-  Object.assign(ghost.style, {
-    position: "fixed",
-    left: `${from.left}px`,
-    top: `${from.top}px`,
-    margin: "0",
-  });
-  ghost.style.setProperty("--fly-x", `${to.left + to.width / 2 - (from.left + from.width / 2)}px`);
-  ghost.style.setProperty("--fly-y", `${to.top + to.height / 2 - (from.top + from.height / 2)}px`);
-  const flown = ended(ghost, "fly-to-chip", "", signal);
-  document.body.append(ghost);
-  await flown;
-  ghost.remove();
-}

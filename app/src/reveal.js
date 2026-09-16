@@ -5,7 +5,8 @@
 // signal jumps every wait to its end, and `settle` puts the page in the state
 // plain mode renders directly.
 
-import { climb, confetti, ended, flipTiles, fly, rollCounter, slam } from "./animation.js";
+import { climb, confetti, ended, flipTiles, rollCounter, slam } from "./animation.js";
+import { credit, shower } from "./points.js";
 import { followCounter, play } from "./sound.js";
 
 /** Whether this visit reveals: the author, a result never seen, motion allowed. */
@@ -43,23 +44,32 @@ export function setRanks(pegRows, order) {
 /**
  * Play the reveal on a page run.js built.
  *
- * `raced` resolves when the author's lane reaches its last frame. `onSeen` is
- * called once, when the theatre ends or is skipped — not when the page is left
- * mid-way (`signal.reason === "leave"`), so the dot stays for a result that was
- * not actually seen.
+ * Nothing but the race shows until the author's lane reaches its last frame
+ * (`raced`). Then, in order: the celebration, the seeds one by one, the stamp,
+ * the time, the climb, and the points as showers of stars. `onSeen` is called
+ * once, when the theatre ends or is skipped — not when the page is left
+ * mid-way (`signal.reason === "leave"`), so the dot stays for a result that
+ * was not actually seen.
  */
 export async function reveal(parts, show, signal) {
-  const { page, chip, chipFlip, score, stamp, crt, flip } = parts;
+  const { page, chip, chipFlip, seedsBox, seedRows, score, stamp, crt, flip } = parts;
   const { boardBox, pegboard, pegRows, pointsBox, stickers } = parts;
   const { run, plan, receipts, raced, startPoints, onSeen } = show;
   const act = (name) => {
     page.dataset.act = name;
   };
-  let total = startPoints;
+  const reveal = (box) => {
+    box.hidden = false;
+    box.scrollIntoView({ block: "center", behavior: "smooth" });
+  };
 
   const settle = () => {
     act("rest");
-    score.hidden = stamp.hidden = boardBox.hidden = pointsBox.hidden = false;
+    seedsBox.hidden = score.hidden = stamp.hidden = boardBox.hidden = pointsBox.hidden = false;
+    for (const row of seedRows) {
+      row.hidden = false;
+      row.classList.remove("seed-in");
+    }
     for (const sticker of stickers) sticker.hidden = false;
     setRanks(pegRows, plan.end);
     pegboard.replaceChildren(...plan.end.map((row) => pegRows.get(row.run_id)));
@@ -80,9 +90,19 @@ export async function reveal(parts, show, signal) {
       if (signal.aborted) return;
     }
 
+    act("seeds");
+    reveal(seedsBox);
+    for (const row of seedRows) {
+      row.hidden = false;
+      play("press");
+      row.classList.add("seed-in");
+      await ended(row, "seed-in", "", signal);
+      row.classList.remove("seed-in");
+      if (signal.aborted) return;
+    }
+
     act("verdict");
-    score.hidden = false;
-    score.scrollIntoView({ block: "center", behavior: "smooth" });
+    reveal(score);
     await slam(stamp, { support: crt, signal, contact: () => play("stamp") });
     if (signal.aborted) return;
 
@@ -96,7 +116,7 @@ export async function reveal(parts, show, signal) {
     boardBox.hidden = false;
     if (plan.start !== plan.end) {
       act("climb");
-      boardBox.scrollIntoView({ block: "center", behavior: "smooth" });
+      reveal(boardBox);
       play("climb");
       play("chirp");
       setRanks(pegRows, plan.end);
@@ -106,19 +126,12 @@ export async function reveal(parts, show, signal) {
     }
 
     act("points");
-    pointsBox.hidden = false;
-    pointsBox.scrollIntoView({ block: "center", behavior: "smooth" });
+    reveal(pointsBox);
     for (const [i, sticker] of stickers.entries()) {
       sticker.hidden = false;
-      await fly(sticker, chip, signal);
+      await shower(sticker, chip, receipts[i].points, signal);
       if (signal.aborted) return;
-      total += receipts[i].points;
-      chipFlip.replaceChildren(...flipTiles(total));
-      // The class was removed one iteration ago; fly()'s measurement in between
-      // flushed that removal, which is what lets adding it again restart the beat.
-      chip.classList.add("jolt");
-      await Promise.all([ended(chip, "jolt", "", signal), rollCounter(chipFlip, signal)]);
-      chip.classList.remove("jolt");
+      await credit(chip, receipts[i].points, signal);
       if (signal.aborted) return;
     }
   } finally {

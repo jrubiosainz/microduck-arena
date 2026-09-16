@@ -88,6 +88,10 @@ export async function renderRun(root, runId, state) {
     <p class="run-byline mono-label" id="byline"></p>
     <div class="stage"><canvas id="stage"></canvas></div>
     <ul class="key run-legend" id="legend"></ul>
+    <section class="run-seedlist" id="seedlist">
+      <h3 class="eyebrow">Seeds</h3>
+      <ol id="seeds"></ol>
+    </section>
     <section class="run-score" id="score">
       <div class="scoreboard"><span class="mono-label">time</span><div class="flip" id="flip"></div></div>
       <div class="crt-screen" id="crt"><span class="stamp" id="stamp"></span></div>
@@ -96,8 +100,6 @@ export async function renderRun(root, runId, state) {
     <section class="run-board" id="board"><div class="pegboard" id="pegboard"></div></section>
     <section class="run-receipts" id="points"></section>
     <section class="run-details">
-      <h3 class="eyebrow">Seeds</h3>
-      <table class="run-seeds"><tbody id="seeds"></tbody></table>
       <p class="run-links" id="links"></p>
     </section>
   `;
@@ -132,15 +134,17 @@ export async function renderRun(root, runId, state) {
   $("points").append(...stickers);
   if (!stickers.length) $("points").append(el("p", "mono-label", "no points from this run"));
 
-  for (const s of run.per_seed) {
-    const tr = el("tr", s.seed === run.trace_seed ? "replayed" : null);
-    tr.append(
-      el("td", null, `seed ${s.seed}`),
-      el("td", null, s.status),
-      el("td", null, s.time_s == null ? "—" : `${s.time_s.toFixed(3)}s`),
+  // One line per seed, shown one by one in a reveal: the time, or how it ended.
+  const seedRows = run.per_seed.map((s) => {
+    const row = el("li", s.seed === run.trace_seed ? "seed replayed" : "seed");
+    row.append(
+      el("span", "mono-label", `seed ${s.seed}`),
+      el("strong", null, s.time_s == null ? s.status : `${s.time_s.toFixed(3)}s`),
     );
-    $("seeds").append(tr);
-  }
+    row.hidden = revealing;
+    return row;
+  });
+  $("seeds").append(...seedRows);
   const back = el("a", null, `Back to ${run.event.title}`);
   back.href = raceHref(run.event.id);
   $("links").append(back);
@@ -158,7 +162,7 @@ export async function renderRun(root, runId, state) {
     $("links").append(env);
   }
 
-  for (const box of [$("score"), $("board"), $("points")]) box.hidden = revealing;
+  for (const box of [$("seedlist"), $("score"), $("board"), $("points")]) box.hidden = revealing;
 
   // The reveal's lifetime opens before the loads it must survive leaving
   // during: a first visit's GLB fetch and the trace downloads are both slow
@@ -186,13 +190,11 @@ export async function renderRun(root, runId, state) {
     viewer.dispose();
     return;
   }
+  // Who wears which stripe. The times are on the board below, not here.
   lanes.forEach((lane, i) => {
     const item = el("li");
     item.style.setProperty("--lane", LANE_CSS[i % LANE_CSS.length]);
-    item.append(
-      el("strong", null, `@${lane.user}`),
-      ` ${formatScore(lane.score, { finished: lane.seeds_finished })}`,
-    );
+    item.append(el("strong", null, `@${lane.user}`));
     $("legend").append(item);
   });
   let crossed;
@@ -250,6 +252,8 @@ export async function renderRun(root, runId, state) {
       page,
       chip,
       chipFlip,
+      seedsBox: $("seedlist"),
+      seedRows,
       score: $("score"),
       stamp,
       crt: $("crt"),

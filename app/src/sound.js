@@ -15,6 +15,7 @@ const FILES = {
   press: ["/sound/press.wav", 0.4],
   stamp: ["/sound/stamp.wav", 0.6],
   points: ["/sound/points.wav", 0.4],
+  tick: ["/sound/queue-tick.wav", 0.4],
   win: ["/sound/microduck-victory.wav", 0.4],
   climb: ["/sound/rank-climb.wav", 0.4],
   chirp: ["/sound/microduck-chirp.wav", 0.4],

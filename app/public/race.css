@@ -722,53 +722,13 @@ table.board .withdraw:focus-visible,
 }
 .vote-ceremony__envelope--sealed .vote-ceremony__flap { rotate: x 0deg; }
 
-/* The two "+1"s. Appended only once the vote is confirmed, resting at the
-   envelope until the next class sends them to the player chip -- see
-   vote.js, which sets --tx/--ty from .profile-chip's own position, falling
-   back to the chip's usual corner when it cannot find one. */
-.vote-ceremony__token {
-  position: fixed;
-  left: 50%;
-  bottom: 12%;
-  translate: -50% 0;
-  padding: 2px 8px;
-  font: 700 0.85rem/1 var(--display);
-  color: var(--ink);
-  background: var(--yellow);
-  border: 2px solid var(--ink);
-  opacity: 0;
-  transition: left 0.25s var(--ease-hard), top 0.25s var(--ease-hard), opacity 0.2s ease;
-}
-.vote-ceremony__token:nth-of-type(2) { transition-delay: 0.03s; }
-/* vote.js adds this modifier to the overlay itself, once both tokens have
-   had one frame at rest to paint -- see runCeremony's own comment on why. */
-.vote-ceremony.vote-ceremony__token--go > .vote-ceremony__token {
-  left: var(--tx, 92%);
-  top: var(--ty, 8%);
-  bottom: auto;
-  opacity: 1;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .vote-pick,
   .vote-ceremony__postit,
   .vote-ceremony__envelope,
-  .vote-ceremony__flap,
-  .vote-ceremony__token {
+  .vote-ceremony__flap {
     transition: none;
   }
-
-/* ── a receipt on its way to the chip ─────────────────────────────────── */
-
-/* The copy travels the vector the page measured and shrinks into the chip. */
-.sticker.fly {
-  z-index: 3;
-  pointer-events: none;
-  animation: fly-to-chip var(--t-roll) var(--ease-hard) both;
-}
-@keyframes fly-to-chip {
-  to { translate: var(--fly-x) var(--fly-y); scale: 0.3; opacity: 0.4; }
-}
 
 /* ── a publication: the run page ─────────────────────────────────────── */
 
@@ -817,8 +777,55 @@ table.board .withdraw:focus-visible,
 .run-receipts .mono-label { color: var(--ink-70); }
 
 .run-details { margin-top: 26px; }
-.run-seeds { border-collapse: collapse; margin: 8px 0 18px; }
-.run-seeds td { padding: 4px 14px 4px 0; font-variant-numeric: tabular-nums; }
-.run-seeds .replayed { color: var(--orange-inked); }
 .run-links { display: flex; flex-wrap: wrap; gap: 18px; margin: 0; }
 .run-links a { color: var(--orange-inked); }
+
+/* ── the seeds, one line each, one at a time ──────────────────────────── */
+
+.run-seedlist { margin: 26px 0; }
+.run-seedlist ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.seed { display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
+.seed strong { font: 400 1.35rem/1 var(--display); }
+.seed.replayed strong { color: var(--orange-inked); }
+/* A line lands as it is revealed: from just under its place, in a flip. */
+.seed.seed-in { animation: seed-in var(--t-flip) var(--ease-hard) both; }
+@keyframes seed-in {
+  from { opacity: 0; translate: 0 8px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+/* ── points as a shower of stars ──────────────────────────────────────── */
+
+/* The overlay is the viewport; points.js places every star in it. The glyph
+   pops in (star-in) after its --spawn; the star itself waits --wait more,
+   then flies the --dx/--dy the page measured to the chip (star-fly). Two
+   elements because both beats fill both ways, and one element cannot hold
+   two animations that disagree about its scale. */
+.shower { position: fixed; inset: 0; z-index: 61; pointer-events: none; }
+.star {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  font: 700 1.1rem/1 var(--display);
+  color: var(--yellow);
+  text-shadow: 1px 1px 0 var(--ink);
+  animation: star-fly var(--t-roll) var(--ease-hard) calc(var(--spawn) + var(--wait)) both;
+}
+.star > span {
+  display: block;
+  animation: star-in var(--t-flip) var(--ease-drop) var(--spawn) both;
+}
+@keyframes star-in {
+  from { opacity: 0; scale: 0.2; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes star-fly {
+  to { translate: var(--dx) var(--dy); scale: 0.5; opacity: 0.7; }
+}
