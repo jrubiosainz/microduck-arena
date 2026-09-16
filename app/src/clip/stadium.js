@@ -1,4 +1,7 @@
-// Ported unchanged from Duck Jam, design/sound/stadium.mjs at 2d35443b.
+// Ported from Duck Jam, design/sound/stadium.mjs at 2d35443b, trimmed to what
+// soundtrack.js uses: `renderStadium`, the standalone offline-buffer helper,
+// has no caller here — soundtrack.js does its own offline render — and is
+// dropped.
 // Synthesizer extracted from stadium-crowd-source.html: sawtooth/breath formants,
 // independent voices, overlapping applause and filtered stereo echoes.
 import { stadiumDirection } from './direction.js';
@@ -95,7 +98,6 @@ export async function prepareStadium(Ctor){
 /** Call prepareStadium once, then scheduleUntil(currentTime + .45) every ~40 ms.
  * Direction takes replay seconds; offset maps a new engine to a seek position.
  * Keep this instance across mood changes so phrases and room tails finish.
- * Use stadiumTransitions for explicit targets with the reference's 0.65 s glide.
  * Stop/dispose the previous engine on pause or seek. Destination may be a mixer.
  * Both offline and realtime scheduling use the same chronological random stream.
  */
@@ -263,24 +265,4 @@ export class StadiumAmbience {
     for(const group of this.groups)for(const source of group.sources){try{source.stop(at+.09);}catch{}}
   }
   dispose(){this.stop();for(const group of [...this.groups])this.release(group);for(const node of this.fixedNodes){try{node.disconnect();}catch{}}this.fixedNodes.length=0;}
-}
-
-/** Render a finite stereo buffer, with the same scheduler and direction as live audio.
- * Batches keep active nodes bounded. The final 90 ms fade includes the echo tail.
- */
-export async function renderStadium(Ctor,{duration,sampleRate=48000,batchSeconds=.5,...options}) {
-  if(!Number.isFinite(duration)||duration<.1||!Number.isFinite(batchSeconds)||batchSeconds<.05||batchSeconds>.5)throw new RangeError('Invalid render duration or batch size');
-  await prepareStadium(Ctor);
-  const context=new Ctor(2,Math.ceil(duration*sampleRate),sampleRate);
-  const engine=new StadiumAmbience(context,options),end=duration-.09;
-  const queue=time=>{engine.scheduleUntil(Math.min(time,end));if(time>=end)engine.stop(end);};
-  queue(batchSeconds);
-  const pauses=[];
-  // Suspend one render quantum before the horizon: Chrome rounds suspension
-  // times to block boundaries, which otherwise skips unscheduled boundary events.
-  for(let time=batchSeconds;time<duration;time+=batchSeconds){
-    pauses.push(context.suspend(time-128/sampleRate).then(()=>{queue(time+batchSeconds);return context.resume();}));
-  }
-  try {const [buffer]=await Promise.all([context.startRendering(),...pauses]);return buffer;}
-  finally {engine.dispose();}
 }

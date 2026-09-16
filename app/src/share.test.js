@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { intentUrl, postText, shareStrip, wireShare, xLength } from "./share.js";
+import { intentUrl, postText, shareStrip, wireShare } from "./share.js";
+
+/** X's count: every link is 23 characters, whatever its length. Test-only —
+ * nothing in share.js needs its own count of what X will display. */
+const xLength = (text) => text.replace(/(https?:\/\/)?[\w.-]+\.\w+\/\S*/g, "x".repeat(23)).length;
 
 const run = {
   run_id: "01M2X", user: "alice", policy_name: "walker v2", score: 2.314,

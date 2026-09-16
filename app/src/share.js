@@ -38,9 +38,6 @@ export function postText(run, { origin, network }) {
 
 export const intentUrl = (network, text) => INTENTS[network](text);
 
-/** X's count: every link is 23 characters, whatever its length. */
-export const xLength = (text) => text.replace(/(https?:\/\/)?[\w.-]+\.\w+\/\S*/g, "x".repeat(23)).length;
-
 // Each network's mark as one path on its own grid: a row of names all in the
 // same sticker face reads as four words, and a player looking for their
 // network recognises it. The name stays as the label a screen reader says.

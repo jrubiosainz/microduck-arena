@@ -1,4 +1,6 @@
-// Ported unchanged from Duck Jam, design/sound/stadium-direction.mjs at 2d35443b.
+// Ported from Duck Jam, design/sound/stadium-direction.mjs at 2d35443b, trimmed
+// to what soundtrack.js uses: `stadiumTransitions`, the reference's explicit-
+// target easing for live playback, has no caller here and is dropped.
 // Shared playback-time direction. Progress must come from the challenge, never
 // from elapsed time or a guess about what a robot's coordinates mean.
 const smooth = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x) }
@@ -41,41 +43,5 @@ export function stadiumDirection({ start = 0, end = 0, progress = [], verdict = 
       joy, encouragement: Math.max(encouragement, .6 * joy), sadness,
       impact: (verdict === 'fail' ? .45 : 1) * result * (1 - smooth((elapsed - 2.6) / 2.2)),
     }
-  }
-}
-
-/** Preserve the reference's 0.65 s exponential transition between explicit targets.
- * Cues are ordered {second, action?, joy?, encouragement?, sadness?, impact?}.
- * An interrupted transition starts from its current value, never the old target.
- * This only interpolates supplied evidence; callers still own verdict timing.
- * Pass the returned playback-time function to one live or offline StadiumAmbience.
- */
-export function stadiumTransitions(cues) {
-  const calm = { action: 0, joy: 0, encouragement: 0, sadness: 0, impact: 0 }
-  const between = (cue, second) => {
-    const weight = 1 - Math.exp(-Math.max(0, second - cue.second) / .65)
-    return Object.fromEntries(Object.keys(calm).map(key =>
-      [key, cue.from[key] + (cue.target[key] - cue.from[key]) * weight]))
-  }
-  const transitions = []
-  for (const { second, ...changes } of cues) {
-    const previous = transitions.at(-1)
-    if (!Number.isFinite(second) || second < 0 || (previous && second <= previous.second))
-      throw new RangeError('Invalid transition time')
-    for (const [key, value] of Object.entries(changes)) {
-      if (!Object.hasOwn(calm, key) || !Number.isFinite(value) || value < 0 || value > 1)
-        throw new RangeError('Invalid intention')
-    }
-    transitions.push({ second, from: previous ? between(previous, second) : calm,
-      target: { ...(previous?.target ?? calm), ...changes } })
-  }
-  return second => {
-    if (!Number.isFinite(second)) throw new RangeError('Invalid playback time')
-    let current
-    for (const cue of transitions) {
-      if (cue.second > second) break
-      current = cue
-    }
-    return current ? between(current, second) : { ...calm }
   }
 }
