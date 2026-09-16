@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { chapterRule, demoRows, flockBand, flyer, ladder, masthead, shellOf } from "./home.js";
+import {
+  chapterRule, demoRows, flockBand, flyer, ladder, masthead, pageTexture, playerCard, shellOf,
+} from "./home.js";
 
 const open = {
   id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", rig: "legs",
@@ -13,22 +15,85 @@ const planned = { ...open, id: "best-jump", title: "Best Jump", status: "planned
 const held = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
 
 describe("the masthead", () => {
-  it("carries the mark at cover size, the duck and the player chip", () => {
-    const head = masthead({ signed_in: true, user: "cdeplanne" });
+  it("carries the mark at cover size and the duck, and nothing else", () => {
+    const head = masthead();
     expect(head.querySelector(".wordmark--cover")).not.toBeNull();
     expect(head.querySelector("img.duckhead")).not.toBeNull();
-    expect(head.querySelector("a.profile-chip").getAttribute("href")).toBe("#/p/cdeplanne");
-  });
-
-  it("offers the way in when signed out", () => {
-    expect(masthead({ signed_in: false }).querySelector("a.sticker").textContent)
-      .toBe("Sign in with Hugging Face");
+    // Who you are lives beside the hero now. A chip in the corner of a cover
+    // is the strip again in miniature, which is what the cover replaced.
+    expect(head.querySelector(".profile-chip")).toBeNull();
+    expect(head.querySelector("a.sticker")).toBeNull();
   });
 
   it("is the only element on the page wearing the aberration", () => {
     // The charter draws it on a cover. A second one is a printing fault.
-    const head = masthead({ signed_in: false });
-    expect(head.querySelectorAll(".fx-aberration")).toHaveLength(1);
+    expect(masthead().querySelectorAll(".fx-aberration")).toHaveLength(1);
+  });
+});
+
+describe("the player card", () => {
+  it("shows your picture and your handle, linking to your page", () => {
+    const card = playerCard({ signed_in: true, user: "cdeplanne" });
+    const link = card.querySelector("a.door-player-you");
+    expect(link.getAttribute("href")).toBe("#/p/cdeplanne");
+    expect(link.querySelector(".avatar")).not.toBeNull();
+    expect(link.querySelector(".door-player-name").textContent).toBe("cdeplanne");
+  });
+
+  it("offers the way in when signed out, as the section's one orange button", () => {
+    const card = playerCard({ signed_in: false });
+    const link = card.querySelector("a.button");
+    expect(link.textContent).toBe("Sign in with Hugging Face");
+    // Signed out there is no page of yours to link to.
+    expect(card.querySelector(".door-player-you")).toBeNull();
+  });
+
+  it("shows nothing at all when the server did not answer", () => {
+    // A sign-in link to a server that is not answering is worse than a blank.
+    const card = playerCard(null);
+    expect(card.querySelector("a")).toBeNull();
+    expect(card.textContent).toBe("");
+  });
+});
+
+describe("the page texture", () => {
+  it("is decorative and lets clicks through", () => {
+    const skin = pageTexture();
+    expect(skin.className).toBe("page-fx fx-grain fx-scanlines");
+    expect(skin.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("covers the window rather than the content column", () => {
+    // jsdom loads no stylesheet, so the class name above proves nothing about
+    // reach. Read the sheet: hung on `.hall` the texture stopped at 1120px and
+    // left the cover and the band bare, which is the regression this guards.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    );
+    const rule = css.match(/\.page-fx\s*\{([^}]*)\}/);
+    expect(rule, ".page-fx rule not found in club.css").not.toBeNull();
+    expect(rule[1], ".page-fx is not fixed to the window").toMatch(/position\s*:\s*fixed/);
+    expect(rule[1], ".page-fx does not fill the window").toMatch(/inset\s*:\s*0/);
+    expect(rule[1], ".page-fx would swallow clicks").toMatch(/pointer-events\s*:\s*none/);
+    expect(css, "the texture is back on .hall, where it stops at the column")
+      .not.toMatch(/\.hall\s*\{[^}]*--fx-grain-opacity/);
+  });
+});
+
+describe("the chapter rules", () => {
+  it("run the full width of the window, not the content column", () => {
+    // A bar that stops at the column reads as an underline on the text rather
+    // than as a division of the page. CSS-only, so read the sheet.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    );
+    const rule = css.match(/\.chapter-rule\s*\{([^}]*)\}/);
+    expect(rule, ".chapter-rule rule not found in club.css").not.toBeNull();
+    expect(rule[1], ".chapter-rule does not span the viewport").toMatch(/width\s*:\s*100vw/);
+    expect(rule[1], ".chapter-rule does not break out of the column")
+      .toMatch(/margin-left\s*:\s*calc\(50% - 50vw\)/);
   });
 });
 

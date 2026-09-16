@@ -6,11 +6,18 @@
  * are shell.css's, now that the race pages wear them too. This file places
  * what is left, which is the front and a player's page. */
 
-/* Grain and scanlines cover the page, as the charter asks of every render and
-   photograph on it. Both are ::before/::after with `pointer-events: none`, and
-   both set their own `position: relative` — `.hall` already has it, so the
-   only thing to declare here is the lighter of the two grain opacities. */
-.hall { --fx-grain-opacity: var(--grain-opacity-min); }
+/* Grain and scanlines cover the WHOLE window, as the charter asks — hung on
+   the content column they stopped at 1120px and left the cover and the band
+   bare. Fixed and pointer-events-none, above the page so the texture reads on
+   the deep-ink cover as well as on paper; z-index beats the flyers, which are
+   `position: relative` and would otherwise paint over it. */
+.page-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  --fx-grain-opacity: var(--grain-opacity-min);
+}
 
 .ladder-row:focus-visible, .challenge-link:focus-visible,
 .profile-results a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
@@ -95,7 +102,55 @@
 
 /* ── Door: the hero over the hall ──────────────────────────────────────────── */
 
-.door { padding: 0 0 var(--space-gutter-max); }
+.door {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-gutter-max);
+  padding: 0 0 var(--space-gutter-max);
+}
+/* The pitch keeps the charter's 66-character measure; the locker takes what
+   is left and never drops below a readable box. */
+.door-pitch { flex: 1 1 26rem; min-width: 0; }
+
+.door-player { flex: 0 1 20rem; min-width: 0; }
+.door-player-label {
+  margin: 0 0 12px;
+  font-family: var(--type-eyebrow-family);
+  font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size);
+  letter-spacing: var(--type-eyebrow-tracking);
+  text-transform: uppercase;
+  color: var(--orange-inked);
+}
+.door-player-you {
+  --fx-shadow-color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: var(--space-gutter-min);
+  padding: var(--space-card-padding-max);
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.door-player-you:hover { background: var(--warm-paper); }
+.door-player-you:focus-visible, .door-player .button:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 3px;
+}
+/* Big enough to read across the page, which is the whole point of moving it
+   down here off the cover. */
+.door-player-you .avatar { width: 64px; height: 64px; font-size: 38px; }
+.door-player-name {
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: var(--type-card-title-size);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+}
 
 .hero {
   margin: 4px 0 0;
@@ -124,13 +179,28 @@
    always beats this rule's own margin-top (0,1,0), so that's the one actually
    delivering the gap. Nothing else on the site uses .chapter alone. */
 .chapter:last-child { margin-bottom: var(--space-chapter-bottom-min); }
-.chapter > .eyebrow { margin-bottom: var(--space-title-to-grid-min); }
+/* A chapter's head is a SECTION title, not a caption: at the eyebrow's 0.8rem
+   it read as a label on the thing below rather than as the thing's name. The
+   card-title step is the charter's next one up in the display face. */
+.chapter > .eyebrow {
+  margin-bottom: var(--space-title-to-grid-min);
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: var(--type-card-title-size);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+  color: var(--ink);
+}
 
 /* A hand-torn divider: 3 px of ink, tilted within the charter's ceiling and
-   alternating in sense. It overhangs the column on purpose; `overflow-x:
-   hidden` on body already absorbs it. */
+   alternating in sense. It breaks OUT of the content column and runs the full
+   width of the window — a bar that stops at 1120px reads as an underline on
+   the text, not as a division of the page. `overflow-x: hidden` on body
+   absorbs both the bleed and the tilt's overhang. */
 .chapter-rule {
   height: 3px;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
   margin-top: var(--space-chapter-top-min);
   background: var(--ink);
 }

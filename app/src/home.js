@@ -8,13 +8,14 @@ import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
 import { formatEventFacts, formatScore } from "./format.js";
 import { FLOCK, MICRODUCK, SOURCE, STORE } from "./links.js";
 import { playerHref, raceHref } from "./router.js";
-import { chip } from "./signage.js";
+import { signInHref } from "./session.js";
+import { avatar } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { voteButton } from "./votebutton.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
 const SHELLS = ["cream", "graphite", "lavender", "sky"];
-const DEMO_ROWS = 18;
+const DEMO_ROWS = 15;
 
 /** Which of the four duck shells a player drives: a stable hash of the name. */
 export function shellOf(user) {
@@ -125,21 +126,59 @@ export function flyer(event, rows) {
 }
 
 /**
- * The front's cover: the mark at hero size on deep ink, the duck beside it,
- * and who you are floating top right. No strip — the strip's job is to be the
- * way back to the front, and this IS the front.
+ * The front's cover: the mark at hero size on deep ink, the duck beside it.
+ * No strip — the strip's job is to be the way back to the front, and this IS
+ * the front. Who you are is not up here: a chip in the corner of a cover is
+ * the strip again in miniature, and it is `playerCard` below instead.
  */
-export function masthead(me) {
+export function masthead() {
   const head = document.createElement("header");
   head.className = "masthead fx-ray-fan";
   const lockup = el("div", "masthead-lockup");
   lockup.append(wordmark({ variant: "cover" }), duckHead({ quacks: true }));
-  const nav = document.createElement("nav");
-  nav.className = "masthead-player";
-  nav.setAttribute("aria-label", "Player");
-  nav.append(chip(me));
-  head.append(nav, lockup);
+  head.append(lockup);
   return head;
+}
+
+/**
+ * Who you are, beside the hero, at a size you can read across the room.
+ *
+ * Signed in: your picture and your handle, linking to your page. Signed out:
+ * the charter's one orange button per section, which is the way in. `me` is
+ * null when /api/me could not be reached, and then the box is empty — a
+ * sign-in link to a server that is not answering is worse than a blank.
+ */
+export function playerCard(me) {
+  const box = el("div", "door-player");
+  if (!me) return box;
+  if (!me.signed_in) {
+    box.append(el("p", "door-player-label", "Race your own duck"));
+    const link = el("a", "button");
+    link.href = signInHref();
+    link.textContent = "Sign in with Hugging Face";
+    box.append(link);
+    return box;
+  }
+  box.append(el("p", "door-player-label", "Your locker"));
+  const link = el("a", "door-player-you fx-shadow-card");
+  link.href = playerHref(me.user);
+  link.append(avatar(me.user), el("span", "door-player-name", me.user));
+  box.append(link);
+  return box;
+}
+
+/**
+ * Grain and scanlines over the WHOLE window, not just the column.
+ *
+ * Fixed rather than laid out, so the cover and the band carry it too — the
+ * charter asks that both cover the page, and hanging them on `.hall` stopped
+ * them at the content column. It is the first child of the view, so leaving
+ * the page takes it away with everything else.
+ */
+export function pageTexture() {
+  const skin = el("div", "page-fx fx-grain fx-scanlines");
+  skin.setAttribute("aria-hidden", "true");
+  return skin;
 }
 
 const FLOCK_LINKS = [
@@ -180,12 +219,13 @@ export function chapterRule(index) {
 
 export async function renderHome(root) {
   const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
-  root.replaceChildren(masthead(me), flockBand());
-  const hall = el("main", "hall fx-grain fx-scanlines");
+  root.replaceChildren(pageTexture(), masthead(), flockBand());
+  const hall = el("main", "hall");
   root.append(hall);
 
   const door = el("section", "door");
-  door.append(
+  const pitch = el("div", "door-pitch");
+  pitch.append(
     el("p", "eyebrow", "Official competition"),
     el("h2", "hero", "The pinnacle of Microducks athletics."),
     el(
@@ -194,6 +234,7 @@ export async function renderHome(root) {
       "Train, submit, compete, repeat.",
     ),
   );
+  door.append(pitch, playerCard(me));
   hall.append(door);
 
   const season = el("section", "chapter");
