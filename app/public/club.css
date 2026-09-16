@@ -424,16 +424,16 @@
 
 .cabinets {
   display: grid;
-  /* Three to a row, and the floor is what makes auto-fit settle there rather
-     than a hard repeat(3) that would not fold on a phone. The arithmetic, in
-     the 1120px column with the 48px gutter below: three tracks need
-     3x260 + 2x48 = 876, which fits; four need 4x260 + 3x48 = 1184, which does
-     not. Each sheet ends up (1120 - 96) / 3 = 341px. Narrow the window and
-     auto-fit drops to two, then one, on its own.
-     Between the charter's medium (230) and wide (300) steps on purpose: 230
-     let a fourth in, 300 was wider than wanted. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  gap: var(--space-title-to-grid-max);
+  /* Three to a row, at a width between the two tried before: 355px was the
+     original and 259px was too narrow, so the gutter does the work instead of
+     the track. In the 1120px column, three tracks with a 104px gutter leave
+     (1120 - 208) / 3 = 304px a sheet; a fourth would need 4x230 + 3x104 =
+     1232, which does not fit, so auto-fit settles on three.
+     Both figures are the charter's own: the medium grid step and the
+     chapter-top space. Narrow the window and auto-fit folds to two, then one,
+     which a hard repeat(3) would not. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-medium)), 1fr));
+  gap: var(--space-title-to-grid-max) var(--space-chapter-top-min);
   align-items: stretch;
   margin-top: var(--space-gutter-min);
 }
