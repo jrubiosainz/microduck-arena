@@ -92,18 +92,19 @@ export async function renderRun(root, runId, state) {
       <p class="run-byline mono-label" id="byline"></p>
     </header>
     <div class="run-top">
-      <div class="run-stagebox">
-        <div class="stage"><canvas id="stage"></canvas></div>
-        <div class="run-caption">
-          <ul class="key run-legend" id="legend"></ul>
-          <p class="mono-label run-facts" id="facts"></p>
+      <div class="stage"><canvas id="stage"></canvas></div>
+      <section class="run-score">
+        <div class="scoreboard" id="scoreboard">
+          <span class="mono-label">time</span>
+          <div class="flip" id="flip"></div>
+          <span class="stamp" id="stamp"></span>
         </div>
-      </div>
-      <section class="run-score" id="score">
-        <div class="scoreboard"><span class="mono-label">time</span><div class="flip" id="flip"></div></div>
-        <div class="crt-screen" id="crt"><span class="stamp" id="stamp"></span></div>
         <section class="run-receipts" id="points"></section>
       </section>
+      <div class="run-caption">
+        <ul class="key run-legend" id="legend"></ul>
+        <p class="mono-label run-facts" id="facts"></p>
+      </div>
     </div>
     <section class="run-board" id="board"><div class="pegboard" id="pegboard"></div></section>
     <details class="run-seedlist" id="seedlist">
@@ -138,26 +139,37 @@ export async function renderRun(root, runId, state) {
     $("byline").append(" · ", env);
   }
 
-  // The score is in the DOM before any theatre: the roll is drawn over it.
-  $("flip").append(...flipTiles(dnf ? "DNF" : run.score.toFixed(3)));
+  // `rollCounter` rolls each tile to the digit it already shows, so the number
+  // is in the DOM before any theatre. A reveal starts on a constant 00.000
+  // instead: a DNF's three tiles beside a time's six would give the verdict
+  // away before the stamp, and the time beat swaps the real number in. The
+  // tile count changes with it, but a width in this column costs no height.
+  const score = dnf ? "DNF" : run.score.toFixed(3);
+  $("flip").append(...flipTiles(revealing ? "00.000" : score));
   const stamp = $("stamp");
   stamp.textContent = dnf ? "DNF" : `FINISHED ${run.seeds_finished}/${run.seeds_total}`;
   stamp.classList.add(dnf ? "stamp-fail" : "stamp-pass");
-  stamp.hidden = revealing;
+  stamp.classList.toggle("veiled", revealing);
   // "median finisher" says the run finished, so the caption waits for the stamp.
+  // Veiled, not hidden: on a page of fixed height a box that leaves the flow
+  // hands its height to the stage, and the picture jumps mid-beat.
   $("facts").textContent = replayLine(run);
-  $("facts").hidden = revealing;
+  $("facts").classList.toggle("veiled", revealing);
 
   // The pegboard, in its starting order when revealing: you at the bottom.
   const pegRows = new Map(plan.end.map((row) => [row.run_id, pegRow(row)]));
   const order = revealing ? plan.start : plan.end;
   setRanks(pegRows, order);
   $("pegboard").append(...order.map((row) => pegRows.get(row.run_id)));
+  // The board stands there from the first frame, you at the bottom — but your
+  // own time only goes up on it once the split-flap has rolled it.
+  const yourScore = pegRows.get(run.run_id).querySelector(".pegboard-score");
+  yourScore.classList.toggle("veiled", revealing);
 
   const stickers = run.receipts.map((r) =>
     el("span", `sticker ${TONES[r.act]}`, receiptLabel(r, run.event.title)),
   );
-  for (const sticker of stickers) sticker.hidden = revealing;
+  for (const sticker of stickers) sticker.classList.toggle("veiled", revealing);
   $("points").append(...stickers);
   if (!stickers.length) $("points").append(el("p", "mono-label", "no points from this run"));
 
@@ -171,8 +183,6 @@ export async function renderRun(root, runId, state) {
     );
     $("seeds").append(row);
   }
-
-  for (const box of [$("seedlist"), $("score"), $("board"), $("points")]) box.hidden = revealing;
 
   // The reveal's lifetime opens before the loads it must survive leaving
   // during: a first visit's GLB fetch and the trace downloads are both slow
@@ -265,16 +275,13 @@ export async function renderRun(root, runId, state) {
       page,
       chip,
       chipFlip,
-      seedsBox: $("seedlist"),
-      score: $("score"),
       facts: $("facts"),
+      scoreboard: $("scoreboard"),
       stamp,
-      crt: $("crt"),
       flip: $("flip"),
-      boardBox: $("board"),
+      yourScore,
       pegboard: $("pegboard"),
       pegRows,
-      pointsBox: $("points"),
       stickers,
     },
     {
@@ -283,6 +290,7 @@ export async function renderRun(root, runId, state) {
       receipts: run.receipts,
       raced,
       startPoints,
+      score,
       onSeen: () => {
         markSeen(run.run_id).catch(() => {});
         if (me.unseen <= 1) chip.classList.remove("unread");

@@ -44,33 +44,40 @@ export function setRanks(pegRows, order) {
 /**
  * Play the reveal on a page run.js built.
  *
- * Nothing but the race shows until the author's lane reaches its last frame
- * (`raced`). Then, in order: the celebration, the stamp, the time, the climb,
- * and the points as showers of stars. `onSeen` is called once, when the
- * theatre ends or is skipped — not when the page is left mid-way
+ * Every box stands in its place from the first frame — the empty scoreboard,
+ * the board with you at the bottom, the stickers you have not earned yet —
+ * because the page is exactly one window tall and anything that leaves the
+ * flow hands its height to the stage, which makes the picture jump mid-beat.
+ * So a beat unveils content, it never inserts it.
+ *
+ * Nothing but the race is readable until the author's lane reaches its last
+ * frame (`raced`). Then, in order: the celebration, the stamp, the time, the
+ * climb, and the points as showers of stars. `onSeen` is called once, when
+ * the theatre ends or is skipped — not when the page is left mid-way
  * (`signal.reason === "leave"`), so the dot stays for a result that was not
  * actually seen.
  */
 export async function reveal(parts, show, signal) {
-  const { page, chip, chipFlip, seedsBox, score, facts, stamp, crt, flip } = parts;
-  const { boardBox, pegboard, pegRows, pointsBox, stickers } = parts;
-  const { run, plan, receipts, raced, startPoints, onSeen } = show;
+  const { page, chip, chipFlip, facts, scoreboard, stamp, flip, yourScore } = parts;
+  const { pegboard, pegRows, stickers } = parts;
+  const { run, plan, receipts, raced, startPoints, score, onSeen } = show;
   const act = (name) => {
     page.dataset.act = name;
   };
-  // Instant, not smooth: `shower` measures the sticker the moment it is shown,
-  // and a smooth scroll is still travelling then — which spawned every star
-  // below the fold. On a page that fits the window this scrolls nothing at all.
-  const reveal = (box) => {
-    box.hidden = false;
-    box.scrollIntoView({ block: "center", behavior: "instant" });
-  };
+  // Only the scrolling fallback needs this: on a page that fits the window it
+  // scrolls nothing. Instant, never smooth — `shower` measures the sticker the
+  // moment it appears, and a smooth scroll still travelling then spawned every
+  // star below the fold.
+  const bring = (box) => box.scrollIntoView({ block: "center", behavior: "instant" });
+  const unveil = (node) => node.classList.remove("veiled");
 
   const settle = () => {
     act("rest");
-    seedsBox.hidden = score.hidden = stamp.hidden = boardBox.hidden = pointsBox.hidden = false;
-    facts.hidden = false;
-    for (const sticker of stickers) sticker.hidden = false;
+    unveil(stamp);
+    flip.replaceChildren(...flipTiles(score));
+    unveil(facts);
+    unveil(yourScore);
+    for (const sticker of stickers) unveil(sticker);
     setRanks(pegRows, plan.end);
     pegboard.replaceChildren(...plan.end.map((row) => pegRows.get(row.run_id)));
     chipFlip.replaceChildren(...flipTiles(startPoints + receipts.reduce((s, r) => s + r.points, 0)));
@@ -90,23 +97,28 @@ export async function reveal(parts, show, signal) {
       if (signal.aborted) return;
     }
 
+    // The stamp lands on the corner of the scoreboard, which takes the recoil.
     act("verdict");
-    reveal(score);
-    facts.hidden = false;
-    await slam(stamp, { support: crt, signal, contact: () => play("stamp") });
+    bring(scoreboard);
+    unveil(facts);
+    unveil(stamp);
+    await slam(stamp, { support: scoreboard, signal, contact: () => play("stamp") });
     if (signal.aborted) return;
 
+    // The real number replaces the zeros, then rolls to itself; once it has, it
+    // goes up on the board, and only then does the row carrying it climb.
     act("time");
+    flip.replaceChildren(...flipTiles(score));
     const tile = flip.querySelector(".flip-digit");
     const silence = tile ? followCounter(tile) : () => {};
     await rollCounter(flip, signal);
     silence();
     if (signal.aborted) return;
+    unveil(yourScore);
 
-    boardBox.hidden = false;
     if (plan.start !== plan.end) {
       act("climb");
-      reveal(boardBox);
+      bring(pegboard);
       play("climb");
       play("chirp");
       setRanks(pegRows, plan.end);
@@ -116,9 +128,9 @@ export async function reveal(parts, show, signal) {
     }
 
     act("points");
-    reveal(pointsBox);
+    bring(stickers[0] ?? pegboard);
     for (const [i, sticker] of stickers.entries()) {
-      sticker.hidden = false;
+      unveil(sticker);
       await shower(sticker, chip, receipts[i].points, signal);
       if (signal.aborted) return;
       await credit(chip, receipts[i].points, signal);

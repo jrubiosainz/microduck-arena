@@ -69,16 +69,18 @@ scrolls again like every other.
    offers one and the training-environment link when there is one.
 3. **Stage and result, side by side.** Left: the viewer with the run's trace in
    lane one and the traces of the three board rows just below it in the next
-   lanes, all at full opacity, all in the livery they raced in; under it one
-   line carrying the legend (lane colour, `@user`) and
-   `0.85 m/s · replay: seed 3, median finisher`. Right, in a column: the
-   `.scoreboard` with `.flip-digit` tiles for the time (`8.412`, three
-   decimals, matching `formatScore`); a `.crt-screen` carrying a `.stamp`
-   (`FINISHED 5/5`, or `DNF`); and one `.sticker` per receipt of this run
-   (`+100 first entry on 2 m Sprint`, `+10 run`, `+25 personal best`,
-   `+250 podium · held`), empty when the run earned nothing. The right column
-   keeps its width while it is still hidden, so the picture does not move
-   sideways when the verdict lands.
+   lanes, all at full opacity, all in the livery they raced in. Right, a
+   `.scoreboard` the height of the picture beside it, holding three centred
+   lines — the `time` label, `.flip-digit` tiles for the time (`8.412`, three
+   decimals, matching `formatScore`), and a lane for the `.stamp`
+   (`FINISHED 5/5`, or `DNF`), tilted into the corner. There is no screen
+   behind the stamp: a stamp wants a corner to be slapped on, not a panel of
+   its own to be centred in, and the panel was the biggest thing on the page
+   for the least it had to say. Under the board, one `.sticker` per receipt of
+   this run (`+100 first entry on 2 m Sprint`, `+10 run`, `+25 personal best`,
+   `+250 podium · held`), empty when the run earned nothing. Under both, the
+   full width of the column, one line carrying the legend (lane colour,
+   `@user`) and `0.85 m/s · replay: seed 3, median finisher`.
 4. **Pegboard**: the window of the board described above. Columns: rank,
    `@user`, policy, time. The run's row is `.pegboard-row-you`. A row is a link
    to its own run page. One line per row here, the policy name beside the
@@ -99,9 +101,16 @@ better run outranks it).
 **Plain.** Everything is shown at once. The replay loops, as on the race page.
 
 **Reveal.** The section carries `data-act`, one value per beat, as Duck Jam
-does; the scoreboard, pegboard, seeds and points are hidden until their beat —
-the replay caption among them, since "median finisher" says the run finished.
-Every
+does. **A beat unveils content; it never inserts it.** Every box stands in its
+place from the first frame — the scoreboard on a constant `00.000`, the board
+with the author at the bottom and their own score cell blank, the stickers not
+yet earned, the replay caption whose "median finisher" would say the run
+finished — and each is `visibility: hidden` (`.veiled`), never the `hidden`
+attribute. On a page exactly one window tall anything that leaves the flow
+hands its height to the stage, and the picture jumps in the middle of the
+theatre: measured, the stage stepped 516 → 410 → 393 px across three beats
+before this rule. The time's placeholder is a constant six tiles because a
+DNF's three beside a finish's six would give the verdict away. Every
 beat sequences on `animationend`, never on a timer; the final number is in the
 DOM before the theatre starts. Space skips to the end state.
 
@@ -109,11 +118,11 @@ DOM before the theatre starts. Space skips to the end state.
 | --- | --- |
 | `race` | The replay plays once, not looping. It ends when the author's lane reaches its last frame. |
 | `celebrate` | Finisher: `microduck-victory.wav` and confetti, Duck Jam's `confetti()` verbatim. DNF: neither; straight to the next act. |
-| `verdict` | The scoreboard appears. The stamp slams onto the CRT panel, `stamp.wav` at contact. |
-| `time` | The digits roll, `rollCounter()` verbatim, a `points.wav` tick per flap, driven off the rendered `--flip-at` as Duck Jam does. |
-| `climb` | The pegboard appears with the author's row in the last slot. `.rank-climb` lifts it and slides it to its place; each displaced row gets `.rank-shuffle`. `rank-climb.wav`. Skipped when nothing is below. |
+| `verdict` | The replay caption is unveiled. The stamp slams into the corner of the scoreboard, which takes the recoil, `stamp.wav` at contact. |
+| `time` | The real number replaces the zeros and the digits roll to it, `rollCounter()` verbatim, a `points.wav` tick per flap, driven off the rendered `--flip-at` as Duck Jam does. The author's score then goes up on the board. |
+| `climb` | The author's row, standing in the last slot since the first frame, is lifted by `.rank-climb` and slid to its place; each displaced row gets `.rank-shuffle`. `rank-climb.wav`. Skipped when nothing is below. |
 | `points` | Each receipt sticker appears in turn and flies to the chip; the chip gets `.jolt` and its counter rolls to the new total. In reveal mode the chip starts at `me.points` minus this run's receipts, since `/api/me` already counts them. |
-| `rest` | `POST seen`. The seeds fold appears. The replay resumes looping. |
+| `rest` | `POST seen`. The replay resumes looping. |
 
 `rollCounter`, `slam`, `confetti`, `ended` and `spread` are ported from
 `dome/web/shared/animation.mjs` into `app/src/animation.js`; the climb and the
