@@ -352,6 +352,25 @@ describe("the flock band", () => {
     }
   });
 
+  it("leans the opposite way from the rule below the band", () => {
+    // CSS-only. The pair of opposed 1° leans is the effect; make them agree in
+    // sign and the page just looks crooked.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    const band = css.match(/\.flock-band\s*\{([^}]*)\}/);
+    const rule = css.match(/\.chapter-rule--left\s*\{([^}]*)\}/);
+    expect(band, ".flock-band rule not found").not.toBeNull();
+    expect(band[1], "the yellow band does not lean").toMatch(/rotate:\s*var\(--rotate-1-0\)/);
+    expect(rule[1], "the black rule does not lean the other way")
+      .toMatch(/rotate:\s*calc\(-1 \* var\(--rotate-1-0\)\)/);
+    // Wider than the window, or the turn opens a triangle of bare paper at
+    // each edge of the screen.
+    expect(band[1], "the band is not wide enough to hide the turn's corners")
+      .toMatch(/width:\s*10[0-9]vw/);
+  });
+
   it("does not move", () => {
     // A scrolling marquee was taken off this page on purpose, and must never
     // come back in any form. jsdom never loads club.css, so a check on the
