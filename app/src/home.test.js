@@ -90,12 +90,19 @@ describe("the first chapter's band", () => {
     // masked so the dots sit only at the top.
     const dots = css.match(/\.door::after\s*\{([^}]*)\}/);
     expect(dots, ".door::after rule not found in club.css").not.toBeNull();
-    expect(dots[1], "the dots are not built from the orange token")
+    // Declarations only. A comment explaining why a property is NOT used must
+    // not read as that property being used — which is exactly what happened.
+    const dotRules = dots[1].replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(dotRules, "the dots are not built from the orange token")
       .toMatch(/color-mix\(in srgb, var\(--orange\)/);
-    expect(dots[1], "the dots sit square instead of leaning with the page")
+    expect(dotRules, "the dots sit square instead of leaning with the page")
       .toMatch(/rotate\(calc\(-1 \* var\(--rotate-2-5\)\)\)/);
-    expect(dots[1], "the dots are not masked away below the top")
-      .toMatch(/[^-]mask-image\s*:\s*linear-gradient\(to bottom/);
+    // The fade must stay a background layer. `mask-image` resolves through
+    // `mask-mode`, which browsers have differed on, and it put the dots at
+    // the wrong end of the band once already.
+    expect(dotRules, "the dots have no wash to fade them out below the top")
+      .toMatch(/linear-gradient\(to bottom, transparent 0%, var\(--warm-paper\)/);
+    expect(dotRules, "the fade went back to being a mask").not.toMatch(/mask-image/);
     const board = css.match(/\.door-board\s*\{([^}]*)\}/);
     expect(board[1], ".door-board is boxed again").not.toMatch(/border\s*:/);
     expect(board[1], "the regular dot pattern is back").not.toMatch(/radial-gradient/);

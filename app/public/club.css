@@ -207,13 +207,20 @@
      block, so the same 7% was a hairline nobody could see. The dot size and
      the 16px grid are the site's, untouched — it is the reach and the weight
      that changed, not the rhythm. */
-  background-image: radial-gradient(
-    color-mix(in srgb, var(--orange) 34%, transparent) 3.2px,
-    transparent 3.9px
-  );
-  background-size: 16px 16px;
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 34%);
-  mask-image: linear-gradient(to bottom, #000 0%, transparent 34%);
+  /* The fade is a background LAYER, not a mask. `mask-image` resolves through
+     `mask-mode: match-source`, which browsers have differed on, and the dots
+     were reported coming out at the wrong end. A paper-coloured wash painted
+     OVER the dots — clear at the top, solid by 40% down — cannot be read two
+     ways: what it covers is gone, whatever the engine thinks a mask is. The
+     first layer listed paints on top. */
+  background-image:
+    linear-gradient(to bottom, transparent 0%, var(--warm-paper) 40%),
+    radial-gradient(
+      color-mix(in srgb, var(--orange) 34%, transparent) 3.2px,
+      transparent 3.9px
+    );
+  background-size: 100% 100%, 16px 16px;
+  background-repeat: no-repeat, repeat;
 }
 /* The pitch keeps the charter's 66-character measure; the board takes what is
    left and never drops below a readable frame. */
