@@ -154,17 +154,38 @@
    inside it. The horizontal padding centres the content back into the column
    the rest of the page keeps. */
 .door {
-  --fx-grain-opacity: var(--grain-opacity-max);
+  /* Above the charter's 0.04-0.06 ceiling, deliberately. At the charter's own
+     value the grain is a print artifact you find when you look for it; here it
+     has to read as the band's texture from across the room, which is what it
+     was asked to do. Dial it back to var(--grain-opacity-max) to return to
+     the charter exactly. */
+  --fx-grain-opacity: 0.16;
+  /* The rise of a 1° line across the window — tan(1°) = 0.01746. The rules
+     above and below are rotated by that angle, so the band's own top and
+     bottom edges are cut to the same slope and the three read as one shape
+     instead of a rectangle wedged between two tilted sticks. */
+  --slant: calc(100vw * 0.01746);
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--space-chapter-top-min) var(--space-gutter-max);
   width: 100vw;
   margin-left: calc(50% - 50vw);
+  /* Half the rise, up and down, so the cut edges meet the rules rather than
+     leaving a wedge of paper between them. */
+  margin-block: calc(-0.5 * var(--slant));
   padding:
-    var(--space-chapter-top-min)
+    calc(var(--space-chapter-top-min) + var(--slant))
     max(var(--space-gutter-min), calc(50vw - var(--space-content-column) / 2));
   background-color: var(--warm-paper);
+  /* Top edge rises to the right, matching .chapter-rule--left's -1°; bottom
+     edge falls to the right, matching .chapter-rule--right's +1°. */
+  clip-path: polygon(
+    0 var(--slant),
+    100% 0,
+    100% 100%,
+    0 calc(100% - var(--slant))
+  );
 }
 /* The pitch keeps the charter's 66-character measure; the board takes what is
    left and never drops below a readable frame. */

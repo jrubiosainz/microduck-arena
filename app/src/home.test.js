@@ -78,6 +78,11 @@ describe("the first chapter's band", () => {
       .toMatch(/margin-left\s*:\s*calc\(50% - 50vw\)/);
     expect(door[1], ".door carries no ground for the grain to sit on")
       .toMatch(/background-color\s*:/);
+    // The band's edges must be cut to the same 1° the rules are rotated by,
+    // or it reads as a rectangle wedged between two tilted sticks.
+    expect(door[1], ".door's edges are square while the rules are tilted")
+      .toMatch(/clip-path\s*:\s*polygon/);
+    expect(door[1], ".door has no slant to cut its edges by").toMatch(/--slant\s*:/);
     const board = css.match(/\.door-board\s*\{([^}]*)\}/);
     expect(board[1], ".door-board is boxed again").not.toMatch(/border\s*:/);
     expect(board[1], "the regular dot pattern is back").not.toMatch(/radial-gradient/);
