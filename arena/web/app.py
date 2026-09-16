@@ -39,7 +39,8 @@ def create_app(config: ArenaConfig) -> FastAPI:
     from ..clips import ClipRenderer
 
     app.state.clips = ClipRenderer(
-        app.state.store, config.origin, config.frontend_dir, config.clip_parallel
+        app.state.store, config.origin, config.frontend_dir, config.clip_parallel,
+        enabled=config.clips_enabled,
     )
     if config.clip_worker and app.state.clips.available:
         @app.on_event("startup")

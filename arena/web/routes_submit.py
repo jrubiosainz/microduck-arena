@@ -367,8 +367,15 @@ async def submit(
     clips = request.app.state.clips
     if clips.available:
         # Owed now, rendered later: the response does not wait for a video.
-        store.mark_clip_pending(record.run_id, record.user, record.event_id, record.submitted_at)
-        clips.enqueue(record.run_id)
+        # The run is already on the board at this point, so a marker that
+        # fails to write must not turn a successful publish into a 500.
+        try:
+            store.mark_clip_pending(
+                record.run_id, record.user, record.event_id, record.submitted_at
+            )
+            clips.enqueue(record.run_id)
+        except Exception as exc:  # noqa: BLE001 — see above
+            print(f"clip: {record.run_id} not queued ({type(exc).__name__}: {exc})")
 
     return {
         "run_id": record.run_id,

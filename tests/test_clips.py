@@ -1,10 +1,20 @@
 """Clips: three write-once files per run, and a worker that owes one per publish."""
 
 import json
+from pathlib import Path
 
+import numpy as np
 import pytest
+from fastapi.testclient import TestClient
 
+from arena.clips import CLIP_VERSION, ClipRenderer, clip_manifest
+from arena.recorder import RenderedLayout, RenderedRun, ffmpeg_args
 from arena.store import LocalStore
+from arena.trace import encode as encode_trace
+from arena.web.app import create_app
+from arena.web.config import ArenaConfig
+from tests.test_routes_submit import REFERENCE, submit
+from tests.test_store import make_record
 
 
 def test_clip_state_is_read_by_presence(tmp_path):
@@ -49,11 +59,6 @@ def test_a_clip_is_never_written_twice(tmp_path):
         store.put_clip("R3", {"clip.json": b"{}"})
 
 
-from pathlib import Path
-
-from arena.recorder import ffmpeg_args
-
-
 def test_the_encode_is_h264_with_the_pcm_muxed_and_the_live_tag_set():
     args = ffmpeg_args(25, Path("/tmp/s.f32"), Path("/tmp/out.mp4"))
     assert args[:2] == ["ffmpeg", "-y"]
@@ -65,15 +70,8 @@ def test_the_encode_is_h264_with_the_pcm_muxed_and_the_live_tag_set():
                         ("-c:a", "aac"), ("-b:a", "192k"), ("-metadata", "crowdMixed=true"),
                         ("-movflags", "+faststart+use_metadata_tags")):
         assert args[args.index(value) - 1] == flag
+    assert "-shortest" in args
     assert args[-1] == "/tmp/out.mp4"
-
-
-from fastapi.testclient import TestClient
-
-from arena.clips import CLIP_VERSION, ClipRenderer, clip_manifest
-from arena.recorder import RenderedLayout, RenderedRun
-from arena.web.app import create_app
-from arena.web.config import ArenaConfig
 
 
 def rendered(seconds=7.52):
@@ -104,7 +102,7 @@ def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
     store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
     store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:01:00Z")
 
-    def render(origin, run_id, parallel):
+    def render(origin, run_id, parallel, budget_s):
         if run_id == "R2":
             raise RuntimeError("ffmpeg exited 1")
         return rendered()
@@ -123,8 +121,6 @@ def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
 
 
 def test_a_publish_owes_a_clip_only_where_a_renderer_exists(tmp_path, monkeypatch):
-    from tests.test_routes_submit import REFERENCE, submit
-
     # An absent frontend_dir resolves to None regardless of what this machine
     # has built, so `available` starts False whether or not app/dist exists.
     config = ArenaConfig.from_env(
@@ -140,14 +136,6 @@ def test_a_publish_owes_a_clip_only_where_a_renderer_exists(tmp_path, monkeypatc
     run_id = submit(api, REFERENCE).json()["run_id"]
     assert app.state.store.clip_state(run_id) == ("pending", None)
     assert list(app.state.clips.queue.queue) == [run_id]
-
-
-import json as _json
-
-import numpy as np
-
-from arena.trace import encode as encode_trace
-from tests.test_store import make_record
 
 
 def app_with_run(tmp_path):
@@ -170,7 +158,7 @@ def test_the_clip_route_says_none_pending_then_ready_with_its_files(tmp_path):
     assert api.get(url).json() == {"state": "pending"}
 
     manifest = clip_manifest(record.run_id, rendered(), "2026-09-16T10:05:00Z")
-    store.put_clip(record.run_id, {"clip.json": _json.dumps(manifest).encode(),
+    store.put_clip(record.run_id, {"clip.json": json.dumps(manifest).encode(),
                                    "landscape.mp4": b"L", "vertical.mp4": b"V", "poster.png": b"P"})
     body = api.get(url).json()
     assert body["state"] == "ready"
@@ -205,7 +193,7 @@ def test_a_run_link_unfurls_with_the_poster_once_the_clip_is_ready(tmp_path, mon
     assert f'url=/#/r/{record.run_id}' in page.text
 
     manifest = clip_manifest(record.run_id, rendered(), "2026-09-16T10:05:00Z")
-    app.state.store.put_clip(record.run_id, {"clip.json": _json.dumps(manifest).encode(),
+    app.state.store.put_clip(record.run_id, {"clip.json": json.dumps(manifest).encode(),
                                              "landscape.mp4": b"L", "vertical.mp4": b"V",
                                              "poster.png": b"P"})
     page = api.get(f"/r/{record.run_id}").text

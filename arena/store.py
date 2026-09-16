@@ -679,7 +679,9 @@ class HubStore:
         from huggingface_hub import hf_hub_download
 
         # One file, cached by the Hub cache: the second read costs nothing.
-        return Path(hf_hub_download(self.repo_id, f"clips/{run_id}/{name}", repo_type="dataset"))
+        return Path(hf_hub_download(
+            self.repo_id, f"clips/{run_id}/{name}", repo_type="dataset", token=self.api.token
+        ))
 
     def pending_clips(self) -> list[str]:
         return self.snapshot().pending_clips()

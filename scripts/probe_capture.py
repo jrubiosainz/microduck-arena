@@ -8,6 +8,11 @@ PNG screenshot, a JPEG q92 screenshot, an in-page JPEG readback (raster +
 encode, no protocol), a VideoFrame readback and a VP9 WebCodecs encode. The
 spec's rule: if rasterisation dominates, JPEG screenshots; if the capture
 does, WebCodecs.
+
+This script stays in the tree, not as leftover scaffolding: cpu-basic prices
+frames differently from a developer laptop, so re-run it there, against the
+Space's own origin, whenever the choice of screenshot format is worth
+re-checking.
 """
 
 import argparse

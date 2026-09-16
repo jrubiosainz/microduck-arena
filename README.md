@@ -77,6 +77,27 @@ under the signer's own account, public, and the board's `.onnx` link resolves
 straight to the Hub. A signed-in user whose token lacks Hub write access can
 still race and watch replays; only Publish is disabled for them.
 
+## Social clips
+
+Every published run gets two clips — landscape and vertical — rendered in the
+background, inside the Space itself, the moment the publish completes: a
+headless Chromium photographs the arena's own stage frame by frame and ffmpeg
+encodes the video, both under `nice`. That costs minutes of CPU per publish on
+cpu-basic, and it is why the image carries Chromium and ffmpeg.
+
+| name | kind | value |
+| --- | --- | --- |
+| `CHROME` | variable | the browser binary, if not at one of the usual paths |
+| `ARENA_CLIPS` | variable | `0` turns rendering off |
+| `ARENA_CLIP_PARALLEL` | variable | layouts rendered at once, default half the cores |
+| `ARENA_ORIGIN` | variable | where the recorder's Chrome loads `clip.html`, if not this server's own loopback address |
+
+Each event's `[clip]` manifest section tunes its framing, duration and sounds
+— see `arena/manifest.py`.
+
+To render one run's clips by hand — a historical run, or a retry — run
+`arena clip <run_id> --store DIR`.
+
 ## Recovering the board
 
 The run log can be lost — without `ARENA_DATASET` and `HF_TOKEN` it lives on a

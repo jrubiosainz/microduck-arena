@@ -7,6 +7,7 @@ a message with an id and the reply that carries the same id.
 """
 
 import base64
+import contextlib
 import json
 import os
 import platform
@@ -200,6 +201,9 @@ def ffmpeg_args(fps: int, pcm: Path, out: Path) -> list[str]:
         "-map", "0:v", "-map", "1:a",
         "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",
+        # AAC pads to its own frame size, which can outlast the video by a
+        # fraction of a frame; -shortest keeps the container the video's length.
+        "-shortest",
         "-metadata", "crowdMixed=true", "-movflags", "+faststart+use_metadata_tags",
         str(out),
     ]
@@ -237,7 +241,9 @@ def _soundtrack(tab: Tab) -> bytes:
     return bytes(pcm)
 
 
-def _record_layout(tab: Tab, pcm_path: Path, out: Path, nice: int) -> tuple[RenderedLayout, bytes]:
+def _record_layout(
+    tab: Tab, pcm_path: Path, out: Path, nice: int, deadline: float
+) -> tuple[RenderedLayout, bytes]:
     plan = tab.evaluate("window.clip.plan")
     crowd = tab.evaluate("window.clip.score.crowd")
     opened = time.monotonic()
@@ -247,6 +253,10 @@ def _record_layout(tab: Tab, pcm_path: Path, out: Path, nice: int) -> tuple[Rend
     completed = False
     try:
         for i in range(plan["frames"]):
+            # Checked once per frame, not once per run: a stuck tab or a slow
+            # machine is caught close to where it went over, not minutes later.
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"render past its budget at frame {i} of {plan['frames']}")
             asked = time.monotonic()
             tab.evaluate(f"window.clip.draw({i})")
             drawn = time.monotonic()
@@ -258,7 +268,10 @@ def _record_layout(tab: Tab, pcm_path: Path, out: Path, nice: int) -> tuple[Rend
             ffmpeg.stdin.write(base64.b64decode(shot["data"]))
         completed = True
     finally:
-        ffmpeg.stdin.close()
+        # Closing stdin can itself raise once ffmpeg has already died; that
+        # must never mask whatever the loop above was already failing with.
+        with contextlib.suppress(OSError):
+            ffmpeg.stdin.close()
         if not completed:
             # A frame raised mid-loop: ffmpeg must not be left blocked on stdin.
             ffmpeg.kill()
@@ -278,15 +291,20 @@ def _record_layout(tab: Tab, pcm_path: Path, out: Path, nice: int) -> tuple[Rend
 
 
 def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None = None,
-               nice: int = 10) -> RenderedRun:
+               nice: int = 10, budget_s: float = 900.0) -> RenderedRun:
     """Every layout of one run. One browser; the first tab renders the
     soundtrack every layout shares; tabs are recorded `parallel` at a time.
-    The poster is the landscape clip's."""
+    The poster is the landscape clip's.
+
+    `budget_s` bounds the whole render, from here — a stuck tab or an
+    overloaded machine fails the clip rather than occupying the worker
+    forever and leaving every publish behind it stuck `pending`."""
     binary = binary or find_chrome()
     if binary is None:
         raise RuntimeError("no Chrome found: set $CHROME")
     if not ffmpeg_available():
         raise RuntimeError("no ffmpeg on the PATH")
+    deadline = time.monotonic() + budget_s
     with Chrome(binary, nice) as chrome, tempfile.TemporaryDirectory(prefix="arena-clip-") as work:
         work = Path(work)
         tabs = {"landscape": _open(chrome, origin, run_id, "landscape")}
@@ -298,7 +316,9 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
 
         def one(layout: str) -> tuple[str, RenderedLayout, bytes]:
             try:
-                rendered, poster = _record_layout(tabs[layout], pcm_path, work / f"{layout}.mp4", nice)
+                rendered, poster = _record_layout(
+                    tabs[layout], pcm_path, work / f"{layout}.mp4", nice, deadline
+                )
             finally:
                 tabs[layout].close()
             return layout, rendered, poster

@@ -140,13 +140,25 @@ def _cmd_clip(args) -> int:
             if httpx.get(f"{origin}/api/health", timeout=1).status_code == 200:
                 break
         except httpx.HTTPError:
-            time.sleep(0.1)
+            pass
+        # Outside the except: a non-200 answer is not an error either, and
+        # must not spin the loop any faster than a connection refused does.
+        time.sleep(0.1)
+    else:
+        print(f"the app did not come up on {origin}", file=sys.stderr)
+        server.should_exit = True
+        return 1
 
     renderer = ClipRenderer(
         app.state.store, origin, config.frontend_dir, args.parallel or config.clip_parallel
     )
     if not renderer.available:
         print("no renderer here: needs a Chrome ($CHROME or the usual paths), ffmpeg, and a built clip.html",
+              file=sys.stderr)
+        server.should_exit = True
+        return 1
+    if app.state.store.clip_state(args.run_id)[0] == "ready":
+        print(f"{args.run_id} already has a clip; delete clips/{args.run_id} to render it again",
               file=sys.stderr)
         server.should_exit = True
         return 1

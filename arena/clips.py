@@ -18,6 +18,9 @@ from .recorder import SIZES, RenderedRun, ffmpeg_available, find_chrome, record_
 # Written into every clip.json. Bumping it does not re-render older clips.
 CLIP_VERSION = 1
 
+# The spec's fifteen minutes; a render past it fails the clip and frees the queue.
+RENDER_BUDGET_S = 900.0
+
 
 def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -49,15 +52,16 @@ def clip_manifest(run_id: str, rendered: RenderedRun, rendered_at: str) -> dict:
 
 class ClipRenderer:
     def __init__(self, store, origin: str, frontend_dir: Path | None, parallel: int = 1,
-                 render=record_run, log=print):
+                 render=record_run, log=print, enabled: bool = True):
         self.store = store
         self.origin = origin
         self.parallel = parallel
         self.render = render
         self.log = log
         # No Chrome, no ffmpeg or no built clip page is a supported setup — a
-        # developer machine — not an error: publishes then owe no clip.
-        self.available = bool(
+        # developer machine — not an error: publishes then owe no clip. Nor is
+        # ARENA_CLIPS=0, the documented off switch for a running Space.
+        self.available = enabled and bool(
             frontend_dir and (frontend_dir / "clip.html").is_file()
             and find_chrome() and ffmpeg_available()
         )
@@ -72,10 +76,16 @@ class ClipRenderer:
             self.enqueue(run_id)
 
     def start(self) -> None:
-        self.drain()
         threading.Thread(target=self._work, name="arena-clips", daemon=True).start()
 
     def _work(self) -> None:
+        # drain() is a Hub call. Run from the worker thread, not from start():
+        # a transient Hub error here must never raise inside Starlette's
+        # startup, which would take the whole process down with it.
+        try:
+            self.drain()
+        except Exception as exc:  # noqa: BLE001 — see above
+            self.log(f"clip: nothing drained ({type(exc).__name__}: {exc})")
         # The worker outlives every failure, or the next publish owes a clip
         # nobody renders: nothing raised by one run may end the loop.
         while True:
@@ -88,7 +98,8 @@ class ClipRenderer:
     def render_one(self, run_id: str) -> None:
         self.log(f"clip: rendering {run_id}")
         try:
-            rendered = self.render(self.origin, run_id, parallel=self.parallel)
+            rendered = self.render(self.origin, run_id, parallel=self.parallel,
+                                    budget_s=RENDER_BUDGET_S)
             files = {"clip.json": json.dumps(clip_manifest(run_id, rendered, _now()), indent=2).encode(),
                      "poster.png": rendered.poster,
                      **{f"{name}.mp4": layout.mp4 for name, layout in rendered.layouts.items()}}

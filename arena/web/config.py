@@ -66,6 +66,10 @@ class ArenaConfig:
     # Whether this process runs the clip worker. `arena clip` turns it off so
     # its one render is not raced by a drain of everything else owed.
     clip_worker: bool = True
+    # The documented way to stop rendering on a running Space: set ARENA_CLIPS=0
+    # and nothing new is queued. Existing clips and the routes serving them are
+    # unaffected — this only stops making more.
+    clips_enabled: bool = True
 
     @classmethod
     def from_env(
@@ -98,6 +102,19 @@ class ArenaConfig:
         oauth = OAuthSettings.from_env(dict(os.environ), os.environ.get("SPACE_HOST"))
         secret = (os.environ.get("OAUTH_CLIENT_SECRET") or "").strip() or secrets.token_urlsafe(32)
 
+        parallel_env = os.environ.get("ARENA_CLIP_PARALLEL")
+        if parallel_env:
+            try:
+                clip_parallel = int(parallel_env)
+            except ValueError:
+                clip_parallel = 0
+            if clip_parallel < 1:
+                raise ValueError(
+                    f"ARENA_CLIP_PARALLEL must be a positive integer, got {parallel_env!r}"
+                )
+        else:
+            clip_parallel = max(1, (os.cpu_count() or 2) // 2)
+
         return cls(
             store_dir=store,
             dev_user=user,
@@ -110,8 +127,9 @@ class ArenaConfig:
             session_secret=secret,
             origin=os.environ.get("ARENA_ORIGIN") or origin or "http://127.0.0.1:8000",
             public_origin=(f"https://{host}" if (host := os.environ.get("SPACE_HOST")) else None),
-            clip_parallel=int(os.environ.get("ARENA_CLIP_PARALLEL") or max(1, (os.cpu_count() or 2) // 2)),
+            clip_parallel=clip_parallel,
             clip_worker=clip_worker,
+            clips_enabled=(os.environ.get("ARENA_CLIPS") or "1").strip() not in {"0", "false", "no"},
         )
 
     @property
