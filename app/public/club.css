@@ -434,6 +434,8 @@
    charter's À ÉVITER panel. */
 .challenge-note {
   --fx-shadow-color: var(--ink);
+  /* Lying flat. It steps to the max token on hover, as the sheet lifts. */
+  --fx-shadow-size: var(--shadow-card-min);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -442,6 +444,9 @@
   border: 2px solid var(--ink);
   background: var(--paper);
   rotate: calc(-1 * var(--rotate-1-0));
+  /* The tape, which components.css puts at left: calc(50% - 32px); top: -12px
+     — so a hover turns the sheet about the point it is actually stuck by. */
+  transform-origin: 50% -12px;
 }
 .challenge-note:nth-child(2n) { rotate: var(--rotate-1-0); }
 
@@ -508,9 +513,30 @@
 .challenge-star { width: 18px; height: 18px; align-self: center; }
 .challenge-link .eyebrow { display: block; margin-top: var(--space-gutter-min); color: var(--orange-inked); }
 
+/* Hovering a flyer swings it on its tape. The pivot is the tape itself —
+   `.flyer-tape` sits at `left: calc(50% - 32px); top: -12px` in
+   components.css, so the sheet turns about the point it is actually stuck by,
+   the way paper on a pinboard does. A straight lift moved the whole card as a
+   rigid tile, which is what it was doing before.
+   The tilt goes to the charter's 2.5° step and keeps the sign of the card's
+   own resting lean, so each flyer swings further the way it already hangs
+   rather than snapping across to the other side. The shadow steps up one
+   token as it lifts; it is not transitioned, because two pixels under a
+   turning card is not something an eye follows. */
 @media (prefers-reduced-motion: no-preference) {
-  .challenge-note { transition: transform 160ms ease; }
-  .challenge-note:has(.challenge-link):hover { transform: translateY(-3px); }
+  .challenge-note {
+    transition:
+      rotate 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
+      translate 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  .challenge-note:has(.challenge-link):hover {
+    --fx-shadow-size: var(--shadow-card-max);
+    rotate: calc(-1 * var(--rotate-2-5));
+    translate: 0 -5px;
+  }
+  .challenge-note:nth-child(2n):has(.challenge-link):hover {
+    rotate: var(--rotate-2-5);
+  }
 }
 
 /* ── Profile: a paper scrapbook ────────────────────────────────────────────── */

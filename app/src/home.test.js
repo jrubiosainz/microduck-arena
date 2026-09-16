@@ -279,6 +279,31 @@ describe("the flyer's category", () => {
     expect(shadowOf("showcase")).toContain("challenge-note--showcase");
   });
 
+  it("swings on its tape rather than sliding, and only where motion is wanted", () => {
+    // CSS-only. The pivot must be the tape's own position from components.css
+    // (left: calc(50% - 32px); top: -12px), or the sheet turns about its
+    // middle and reads as a spinning tile instead of hanging paper.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    const note = css.match(/\n\.challenge-note \{([^}]*)\}/);
+    expect(note[1], "the flyer does not pivot on its tape")
+      .toMatch(/transform-origin:\s*50% -12px/);
+    // Every bit of the swing lives inside the reduced-motion guard.
+    const guarded = [...css.matchAll(
+      /@media \(prefers-reduced-motion: no-preference\) \{\n([\s\S]*?)\n\}/g,
+    )].map(([, body]) => body).join("\n");
+    expect(guarded, "the flyer's hover swing is not behind the media query")
+      .toMatch(/\.challenge-note:has\(\.challenge-link\):hover \{[^}]*rotate:/);
+    const unguarded = css.replace(
+      /@media \(prefers-reduced-motion: no-preference\) \{\n[\s\S]*?\n\}/g,
+      "",
+    );
+    expect(unguarded, "a flyer hover transition escapes the media query")
+      .not.toMatch(/\.challenge-note[^{]*:hover/);
+  });
+
   it("uses the charter's shadow primitive rather than its own box-shadow", () => {
     expect(flyer(open, []).className).toContain("fx-shadow-card");
 
