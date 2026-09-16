@@ -370,7 +370,8 @@
 .ladders {
   --ladder-rung: 44px;
   --fx-shadow-color: var(--ink);
-  background: var(--warm-paper);
+  /* The charter's whitest ground, against the band's warm one. */
+  background: var(--paper);
   border: 3px solid var(--ink);
   color: var(--ink);
 }
