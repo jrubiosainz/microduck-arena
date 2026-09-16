@@ -297,14 +297,6 @@
   margin-top: 10px;
 }
 .door-meet .duckhead { width: clamp(64px, 11vw, 112px); }
-/* The rendered duck, on transparent ground so it stands on the band's own
-   grained paper. Same box as the head it replaces, so nothing reflows when
-   the render lands. */
-.door-duck {
-  width: clamp(150px, 22vw, 240px);
-  height: auto;
-  display: block;
-}
 
 
 .hero {

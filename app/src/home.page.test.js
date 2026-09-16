@@ -36,10 +36,7 @@ describe("the whole front page", () => {
     expect(hall[1]).toMatch(/^chapter-rule/);
     expect(hall.filter((c) => c.startsWith("chapter-rule"))).toHaveLength(1);
     expect(root.querySelector(".door-board .ladder-scroll")).not.toBeNull();
-    // No WebGL under jsdom, so the rendered duck never lands and the head it
-    // stood in for is still there — the fallback, exercised end to end.
     expect(root.querySelector(".door-meet img.duckhead")).not.toBeNull();
-    expect(root.querySelector(".door-duck")).toBeNull();
     expect(root.querySelector(".ladder-scroll")).not.toBeNull();
     expect(root.querySelector(".challenge-note--race")).not.toBeNull();
     // The strip and the footer belong to the pages you can come back FROM.

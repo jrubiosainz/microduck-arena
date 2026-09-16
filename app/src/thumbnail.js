@@ -25,45 +25,10 @@ import {
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { buildCourse, laneOffsetZ, laneSpacing } from "./course.js";
-import {
-  MODEL_DIR, attachMeshes, buildRigTree, loadKinematics, rigGeometries, setJoint,
-} from "./rig.js";
+import { MODEL_DIR, attachMeshes, buildRigTree, loadKinematics, rigGeometries } from "./rig.js";
 
 export const WIDTH = 480;
 export const HEIGHT = 198;
-
-/** The lone duck's portrait. Square, so the band can size it by height. */
-export const PORTRAIT = 440;
-
-/**
- * Sitting, as the product page photographs it: legs out in front and SPLAYED,
- * feet flat, knees only slightly bent, trunk upright, head level.
- *
- * The splay is the half of it that reads — a sit with the legs together is a
- * squat, and the page's duck is sitting on the floor. Hip roll only opens 22°
- * either way, so the yaw carries the rest of it.
- *
- * Every value is clamped to the joint's own range by setJoint, so a sign that
- * turns out to be the other way round reads as a shallower sit rather than as
- * a broken duck. The mirrored joints (roll, yaw) are the uncertain ones: if
- * only one leg opens, they mirror with the SAME sign, not opposite ones.
- */
-export const PORTRAIT_POSE = {
-  left_hip_pitch: 1.35,
-  left_hip_roll: 0.38,
-  left_hip_yaw: 0.45,
-  left_knee: -0.55,
-  left_ankle: 0.7,
-  right_hip_pitch: 1.35,
-  right_hip_roll: -0.38,
-  right_hip_yaw: -0.45,
-  right_knee: -0.55,
-  right_ankle: 0.7,
-  neck_pitch: -0.1,
-  head_pitch: -0.05,
-  head_yaw: 0.12,
-  head_roll: 0.06,
-};
 
 // The two liveries that read most distinctly against the dark ground, so the
 // pair looks like a race rather than a duplicate.
@@ -132,79 +97,6 @@ export async function renderThumbnails(events, { width = WIDTH, height = HEIGHT 
     renderer?.dispose();
   }
   return out;
-}
-
-/**
- * One microduck, standing, on transparent ground.
- *
- * The same rig the races use — not a photograph of the robot, which would be
- * an asset to fetch, to keep and to get wrong the day the model changes. Null
- * on any failure, exactly as renderThumbnails returns an empty map: a picture
- * of the duck is a nicety and must never take the page with it.
- */
-export async function renderDuckPortrait({
-  size = PORTRAIT,
-  rig: rigName = "legs",
-  livery = "purple",
-  pose = PORTRAIT_POSE,
-} = {}) {
-  let renderer;
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    renderer = new WebGLRenderer({
-      canvas,
-      antialias: true,
-      alpha: true,
-      preserveDrawingBuffer: true,
-    });
-    renderer.setSize(size, size, false);
-    // Transparent, so the duck stands on the band's own grained paper rather
-    // than in a box of some other colour.
-    renderer.setClearColor(0x000000, 0);
-    renderer.toneMapping = ACESFilmicToneMapping;
-    // Down from the stills' 1.0. Those sit on deep ink, where the key light
-    // has to carve the robot out of the dark; this one sits on pale paper,
-    // where the same exposure blew the shells out to white.
-    renderer.toneMappingExposure = 0.68;
-
-    const pmrem = new PMREMGenerator(renderer);
-    const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmrem.dispose();
-
-    const gltf = await new GLTFLoader().loadAsync(`${MODEL_DIR}/microduck.glb`);
-    const kinematics = await loadKinematics(rigName);
-    const geometries = await rigGeometries(kinematics, gltf.scene);
-
-    const scene = new Scene();
-    scene.environment = environment;
-    // The room's own bounce, halved with the exposure: lavender reads as a
-    // colour at this level and as a pale grey above it.
-    scene.environmentIntensity = 0.55;
-    light(scene);
-
-    const duck = buildRigTree(kinematics);
-    attachMeshes(duck, kinematics, geometries, { livery });
-    for (const [joint, angle] of Object.entries(pose)) setJoint(duck, joint, angle);
-    duck.placer.position.set(0, 0, 0);
-    scene.add(duck.placer);
-
-    // Nearly head-on, as the product page shoots it — the duck faces +x, so
-    // the camera stands in front of it rather than behind, where the course
-    // stills put theirs. Low, because a sitting duck's mass is near the floor.
-    const camera = new PerspectiveCamera(30, 1, 0.02, 60);
-    camera.position.set(0.66, 0.16, 0.2);
-    camera.lookAt(0, 0.1, 0);
-
-    renderer.render(scene, camera);
-    // PNG, not WebP: the alpha has to survive, and this is one small image.
-    return renderer.domElement.toDataURL("image/png");
-  } catch {
-    return null;
-  } finally {
-    renderer?.dispose();
-  }
 }
 
 /**

@@ -10,7 +10,7 @@ import { FLOCK, MICRODUCK, MICRODUCK_RL, STORE } from "./links.js";
 import { playerHref, raceHref } from "./router.js";
 import { signInHref } from "./session.js";
 import { avatar } from "./signage.js";
-import { renderDuckPortrait, renderThumbnails } from "./thumbnail.js";
+import { renderThumbnails } from "./thumbnail.js";
 import { voteButton } from "./votebutton.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
@@ -287,9 +287,6 @@ export async function renderHome(root) {
       "Train, submit, compete, repeat.",
     ),
   );
-  // The head stands alone until the rendered duck arrives, and stays beside it
-  // once it does, so the band never reflows and a machine with no WebGL keeps
-  // something.
   const meet = el("div", "door-meet");
   meet.append(duckHead());
   pitch.append(meet);
@@ -321,15 +318,6 @@ export async function renderHome(root) {
 
   // After the wall is on screen: the stills replace the dark frames as they
   // arrive, rather than holding the whole page for WebGL and a 1.3 MB GLB.
-  const portrait = await renderDuckPortrait();
-  if (portrait) {
-    const img = document.createElement("img");
-    img.className = "door-duck";
-    img.src = portrait;
-    img.alt = "";
-    meet.append(img);
-  }
-
   const stills = await renderThumbnails(events);
   events.forEach((event, i) => {
     const url = stills.get(event.id);

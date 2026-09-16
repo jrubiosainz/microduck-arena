@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { PORTRAIT_POSE, cameraFor, renderDuckPortrait, renderThumbnails } from "./thumbnail.js";
+import { cameraFor, renderThumbnails } from "./thumbnail.js";
 
 describe("cameraFor", () => {
   it("pulls back and aims further down a longer course", () => {
@@ -38,27 +38,4 @@ describe("renderThumbnails", () => {
   });
 });
 
-describe("the duck's portrait", () => {
-  it("answers null rather than throwing where there is no WebGL", async () => {
-    // jsdom has no WebGL, which is also a real browser on a machine with it
-    // disabled. A picture of the duck is a nicety; the contract is that it
-    // can never take the page with it, and the caller keeps the head.
-    await expect(renderDuckPortrait()).resolves.toBeNull();
-  });
-});
 
-describe("the portrait's pose", () => {
-  it("names only joints the rig actually has", () => {
-    // setJoint returns early on a name it does not know, so a typo here poses
-    // nothing and says nothing — the duck just stands to attention and the
-    // picture looks like the pose was never written.
-    const kinematics = JSON.parse(readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), "../public/robot/kinematics.json"),
-      "utf8",
-    ));
-    const actuated = new Set(kinematics.actuated_joints);
-    for (const joint of Object.keys(PORTRAIT_POSE)) {
-      expect(actuated.has(joint), `${joint} is not a joint on this rig`).toBe(true);
-    }
-  });
-});
