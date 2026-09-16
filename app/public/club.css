@@ -200,7 +200,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: var(--space-chapter-top-min) var(--space-gutter-max);
+  gap: var(--space-chapter-top-min) var(--space-title-to-grid-max);
   width: 100vw;
   margin-left: calc(50% - 50vw);
   /* Flush under the yellow strip — cancelling the hall's own top padding —
@@ -273,14 +273,14 @@
 }
 /* The pitch keeps the charter's 66-character measure; the board takes what is
    left and never drops below a readable frame. */
-.door-pitch { flex: 1 1 28rem; min-width: 0; }
-.door-board { flex: 1 1 22rem; min-width: 0; }
+.door-pitch { flex: 1 1 26rem; max-width: 34rem; min-width: 0; }
+.door-board { flex: 1 1 20rem; max-width: 26rem; min-width: 0; }
 .door-board > .eyebrow {
   display: block;
   margin-bottom: var(--space-gutter-min);
   font-family: var(--type-card-title-family);
   font-weight: var(--type-card-title-weight);
-  font-size: var(--type-card-title-size);
+  font-size: min(var(--type-card-title-size), 1.7rem);
   line-height: var(--type-card-title-line);
   letter-spacing: var(--type-card-title-tracking);
   color: var(--ink);
@@ -295,6 +295,14 @@
   margin-top: var(--space-gutter-max);
 }
 .door-meet .duckhead { width: clamp(64px, 11vw, 112px); }
+/* The rendered duck, on transparent ground so it stands on the band's own
+   grained paper. Same box as the head it replaces, so nothing reflows when
+   the render lands. */
+.door-duck {
+  width: clamp(150px, 22vw, 240px);
+  height: auto;
+  display: block;
+}
 
 
 .hero {
@@ -303,8 +311,10 @@
   font-family: var(--type-hero-title-family);
   font-weight: var(--type-hero-title-weight);
   /* A step down from section-title: beside a scoreboard it was shouting over
-     the thing it introduces. */
-  font-size: var(--type-display-subtitle-size);
+     the thing it introduces. Capped rather than re-scaled — the token still
+     sets the size, this only stops its vw term running away on a wide screen
+     where the band gives it a narrower column than a full-width hero. */
+  font-size: min(var(--type-display-subtitle-size), 3rem);
   line-height: var(--type-hero-title-line);
   letter-spacing: var(--type-hero-title-tracking);
   text-transform: uppercase;
@@ -364,7 +374,7 @@
    frame shows — the seventh is the invitation to scroll, so the frame must
    cut a row rather than land between two. */
 .ladders {
-  --ladder-rung: 48px;
+  --ladder-rung: 44px;
   --fx-shadow-color: var(--ink);
   background: var(--warm-paper);
   border: 3px solid var(--ink);
@@ -376,19 +386,6 @@
   overscroll-behavior: contain;
 }
 
-/* Only ever drawn beside invented rows. Magenta, because it is a warning. */
-.demo-note {
-  margin: 10px 0 0;
-  padding: 6px 10px;
-  border: 2px solid var(--ink);
-  background: var(--magenta);
-  color: var(--paper);
-  font-family: var(--type-mono-label-family);
-  font-weight: var(--type-mono-label-weight);
-  font-size: var(--type-mono-label-size);
-  letter-spacing: var(--type-mono-label-tracking);
-  text-transform: uppercase;
-}
 
 .ladder-row {
   display: grid;

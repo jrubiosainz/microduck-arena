@@ -30,6 +30,9 @@ import { MODEL_DIR, attachMeshes, buildRigTree, loadKinematics, rigGeometries } 
 export const WIDTH = 480;
 export const HEIGHT = 198;
 
+/** The lone duck's portrait. Square, so the band can size it by height. */
+export const PORTRAIT = 440;
+
 // The two liveries that read most distinctly against the dark ground, so the
 // pair looks like a race rather than a duplicate.
 const PAIR = ["classic", "blue"];
@@ -97,6 +100,69 @@ export async function renderThumbnails(events, { width = WIDTH, height = HEIGHT 
     renderer?.dispose();
   }
   return out;
+}
+
+/**
+ * One microduck, standing, on transparent ground.
+ *
+ * The same rig the races use — not a photograph of the robot, which would be
+ * an asset to fetch, to keep and to get wrong the day the model changes. Null
+ * on any failure, exactly as renderThumbnails returns an empty map: a picture
+ * of the duck is a nicety and must never take the page with it.
+ */
+export async function renderDuckPortrait({
+  size = PORTRAIT,
+  rig: rigName = "legs",
+  livery = "classic",
+} = {}) {
+  let renderer;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    renderer = new WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true,
+    });
+    renderer.setSize(size, size, false);
+    // Transparent, so the duck stands on the band's own grained paper rather
+    // than in a box of some other colour.
+    renderer.setClearColor(0x000000, 0);
+    renderer.toneMapping = ACESFilmicToneMapping;
+
+    const pmrem = new PMREMGenerator(renderer);
+    const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+
+    const gltf = await new GLTFLoader().loadAsync(`${MODEL_DIR}/microduck.glb`);
+    const kinematics = await loadKinematics(rigName);
+    const geometries = await rigGeometries(kinematics, gltf.scene);
+
+    const scene = new Scene();
+    scene.environment = environment;
+    light(scene);
+
+    const duck = buildRigTree(kinematics);
+    attachMeshes(duck, kinematics, geometries, { livery });
+    duck.placer.position.set(0, 0, 0);
+    scene.add(duck.placer);
+
+    // Three-quarter view, a little above the beak: the pose the robot is
+    // photographed in on the product page.
+    const camera = new PerspectiveCamera(30, 1, 0.02, 60);
+    camera.position.set(0.46, 0.27, 0.6);
+    camera.lookAt(0, 0.15, 0);
+
+    renderer.render(scene, camera);
+    // PNG, not WebP: the alpha has to survive, and this is one small image.
+    return renderer.domElement.toDataURL("image/png");
+  } catch {
+    return null;
+  } finally {
+    renderer?.dispose();
+  }
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cameraFor, renderThumbnails } from "./thumbnail.js";
+import { cameraFor, renderDuckPortrait, renderThumbnails } from "./thumbnail.js";
 
 describe("cameraFor", () => {
   it("pulls back and aims further down a longer course", () => {
@@ -32,5 +32,14 @@ describe("renderThumbnails", () => {
     ];
     const out = await renderThumbnails(events);
     expect(out.size).toBe(0);
+  });
+});
+
+describe("the duck's portrait", () => {
+  it("answers null rather than throwing where there is no WebGL", async () => {
+    // jsdom has no WebGL, which is also a real browser on a machine with it
+    // disabled. A picture of the duck is a nicety; the contract is that it
+    // can never take the page with it, and the caller keeps the head.
+    await expect(renderDuckPortrait()).resolves.toBeNull();
   });
 });
