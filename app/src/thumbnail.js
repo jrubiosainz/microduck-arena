@@ -25,13 +25,36 @@ import {
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { buildCourse, laneOffsetZ, laneSpacing } from "./course.js";
-import { MODEL_DIR, attachMeshes, buildRigTree, loadKinematics, rigGeometries } from "./rig.js";
+import {
+  MODEL_DIR, attachMeshes, buildRigTree, loadKinematics, rigGeometries, setJoint,
+} from "./rig.js";
 
 export const WIDTH = 480;
 export const HEIGHT = 198;
 
 /** The lone duck's portrait. Square, so the band can size it by height. */
 export const PORTRAIT = 440;
+
+/**
+ * Mid-stride, head turned out of the walk toward whoever is looking.
+ *
+ * Every value is clamped to the joint's own range by setJoint, so a sign that
+ * turns out to be the other way round reads as a smaller step rather than as a
+ * broken duck. The default pose is a machine standing to attention, which is
+ * the one thing a picture on a front page should not be.
+ */
+export const LIVELY_POSE = {
+  left_hip_pitch: 0.42,
+  left_knee: -0.34,
+  left_ankle: 0.14,
+  right_hip_pitch: -0.34,
+  right_knee: 0.28,
+  right_ankle: -0.12,
+  neck_pitch: -0.12,
+  head_pitch: -0.14,
+  head_yaw: 0.34,
+  head_roll: 0.14,
+};
 
 // The two liveries that read most distinctly against the dark ground, so the
 // pair looks like a race rather than a duplicate.
@@ -113,7 +136,8 @@ export async function renderThumbnails(events, { width = WIDTH, height = HEIGHT 
 export async function renderDuckPortrait({
   size = PORTRAIT,
   rig: rigName = "legs",
-  livery = "classic",
+  livery = "purple",
+  pose = LIVELY_POSE,
 } = {}) {
   let renderer;
   try {
@@ -146,6 +170,7 @@ export async function renderDuckPortrait({
 
     const duck = buildRigTree(kinematics);
     attachMeshes(duck, kinematics, geometries, { livery });
+    for (const [joint, angle] of Object.entries(pose)) setJoint(duck, joint, angle);
     duck.placer.position.set(0, 0, 0);
     scene.add(duck.placer);
 

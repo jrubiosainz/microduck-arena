@@ -200,7 +200,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: var(--space-chapter-top-min) var(--space-title-to-grid-max);
+  gap: var(--space-title-to-grid-max);
   width: 100vw;
   margin-left: calc(50% - 50vw);
   /* Flush under the yellow strip — cancelling the hall's own top padding —
@@ -210,9 +210,9 @@
   margin-top: calc(-1 * var(--space-gutter-max));
   margin-bottom: calc(-0.5 * var(--slant));
   padding:
-    var(--space-chapter-top-min)
+    var(--space-title-to-grid-max)
     max(var(--space-gutter-min), calc(50vw - var(--space-content-column) / 2))
-    calc(var(--space-chapter-top-min) + var(--slant));
+    calc(var(--space-title-to-grid-max) + var(--slant));
   background-color: var(--warm-paper);
   /* Guarantees the stacking context the z-index: -1 layers below depend on.
      clip-path happens to create one too, but then the layering would quietly
@@ -291,8 +291,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-gutter-max);
-  margin-top: var(--space-gutter-max);
+  gap: var(--space-gutter-min);
+  /* Tucked up against the lede: the duck belongs to the pitch, and a chapter
+     gap between them made it read as its own block. */
+  margin-top: 10px;
 }
 .door-meet .duckhead { width: clamp(64px, 11vw, 112px); }
 /* The rendered duck, on transparent ground so it stands on the band's own
