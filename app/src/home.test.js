@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { chapterRule, flockBand, flyer, ladder, masthead, shellOf } from "./home.js";
 
@@ -204,11 +207,28 @@ describe("the flock band", () => {
   });
 
   it("does not move", () => {
-    // A scrolling marquee was taken off this page on purpose. The band says the
-    // same things standing still.
-    const band = flockBand();
-    expect(band.className).not.toMatch(/marquee|scroll|ticker/);
-    expect(band.querySelector("[class*=marquee]")).toBeNull();
+    // A scrolling marquee was taken off this page on purpose, and must never
+    // come back in any form. jsdom never loads club.css, so a check on the
+    // rendered DOM (class names, computed style) cannot see an `animation`
+    // declared in the stylesheet — it would pass right through a marquee
+    // re-added there. Read the sheet's own source instead: no @keyframes may
+    // exist anywhere in it, and no rule touching .flock-band may declare an
+    // `animation` or `animation-name` property.
+    // A plain `new URL(relative, import.meta.url)` resolves against jsdom's
+    // window.URL here, not Node's, and silently lands on a fake
+    // http://localhost origin instead of this file's real path — so the path
+    // is built with node:path against this file's own directory instead.
+    const cssPath = resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css");
+    const css = readFileSync(cssPath, "utf8");
+    expect(css, "a @keyframes block exists in club.css — the marquee is back").not.toMatch(/@keyframes/);
+    const flockRules = [...css.matchAll(/([^{}]*\.flock-band[^{}]*)\{([^}]*)\}/g)];
+    expect(flockRules.length).toBeGreaterThan(0);
+    for (const [, selector, body] of flockRules) {
+      expect(
+        body,
+        `${selector.trim()} declares an animation — the marquee is back`,
+      ).not.toMatch(/animation(-name)?\s*:/);
+    }
   });
 });
 
