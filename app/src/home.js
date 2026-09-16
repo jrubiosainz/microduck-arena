@@ -48,8 +48,19 @@ export function demoAsked(search, hash) {
   return query ? new URLSearchParams(query).has("demo") : false;
 }
 
-export function demoRows(rows, search = location.search, hash = location.hash) {
-  if (!demoAsked(search, hash)) return rows;
+/**
+ * True on the Vite dev server, false in anything built.
+ *
+ * This is the line that decides who can ever see a fabricated row: the
+ * padding is on by default while designing the page and CANNOT be on in the
+ * bundle the Space serves. A URL flag was the wrong interface — it asks the
+ * one person who needs the padding to know a secret, and its absence looks
+ * exactly like a bug.
+ */
+const IS_DEV = typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV);
+
+export function demoRows(rows, search = location.search, hash = location.hash, dev = IS_DEV) {
+  if (!dev && !demoAsked(search, hash)) return rows;
   const padded = [...rows];
   while (padded.length < DEMO_ROWS) {
     const rank = padded.length + 1;
@@ -247,7 +258,13 @@ export async function renderHome(root) {
   hall.append(door);
 
   const season = el("section", "chapter");
-  season.append(el("h3", "eyebrow", "Season standings"), ladder(demoRows(standings)));
+  const rungs = demoRows(standings);
+  season.append(el("h3", "eyebrow", "Season standings"), ladder(rungs));
+  // Say so, loudly, whenever a row on screen was invented. A placeholder that
+  // looks like a person is how a screenshot becomes a lie.
+  if (rungs.length !== standings.length) {
+    season.append(el("p", "demo-note", `${rungs.length - standings.length} placeholder rows — not on the live board`));
+  }
   hall.append(chapterRule(0), season);
 
   // Only an open event has a board worth asking for.

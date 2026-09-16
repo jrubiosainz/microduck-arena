@@ -228,6 +228,21 @@
   overscroll-behavior: contain;
 }
 
+/* Only ever drawn beside invented rows. Magenta, because it is a warning. */
+.demo-note {
+  max-width: 640px;
+  margin: 10px 0 0;
+  padding: 6px 10px;
+  border: 2px solid var(--ink);
+  background: var(--magenta);
+  color: var(--paper);
+  font-family: var(--type-mono-label-family);
+  font-weight: var(--type-mono-label-weight);
+  font-size: var(--type-mono-label-size);
+  letter-spacing: var(--type-mono-label-tracking);
+  text-transform: uppercase;
+}
+
 .ladder-row {
   display: grid;
   grid-template-columns: auto auto 1fr auto;

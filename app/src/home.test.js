@@ -331,23 +331,36 @@ describe("the demo padding", () => {
   });
 
   it("pads from the hash spelling too", () => {
-    expect(demoRows([], "", "#/?demo=1").length).toBe(15);
+    expect(demoRows([], "", "#/?demo=1", false).length).toBe(15);
+  });
+
+  it("pads on the dev server with no flag at all", () => {
+    // The flag was the wrong interface: it asked the one person who needed the
+    // padding to know a secret, and its absence looked exactly like a bug.
+    // Designing the page is the case that needs it, so that is the default.
+    expect(demoRows([], "", "#/", true).length).toBe(15);
+  });
+
+  it("can never pad in a build, whatever the URL says", () => {
+    // This is the line that keeps an invented handle off the live board.
+    const real = [{ rank: 1, user: "ann", points: 360 }];
+    expect(demoRows(real, "", "#/", false)).toBe(real);
   });
 
   it("leaves the real standings alone without ?demo", () => {
     const real = [{ rank: 1, user: "ann", points: 360 }];
-    expect(demoRows(real, "", "#/")).toBe(real);
-    expect(demoRows(real, "?foo=1", "#/?foo=1")).toBe(real);
+    expect(demoRows(real, "", "#/", false)).toBe(real);
+    expect(demoRows(real, "?foo=1", "#/?foo=1", false)).toBe(real);
   });
 
   it("pads past the frame's ten rungs so the scroll can be exercised", () => {
-    const padded = demoRows([{ rank: 1, user: "ann", points: 360 }], "?demo=1", "#/");
+    const padded = demoRows([{ rank: 1, user: "ann", points: 360 }], "?demo=1", "#/", false);
     expect(padded.length).toBeGreaterThan(10);
     expect(padded[0]).toEqual({ rank: 1, user: "ann", points: 360 });
   });
 
   it("makes its placeholders obviously fake and correctly ranked", () => {
-    const padded = demoRows([], "?demo=1", "#/");
+    const padded = demoRows([], "?demo=1", "#/", false);
     expect(padded.every((r) => r.user.startsWith("demo-"))).toBe(true);
     expect(padded.map((r) => r.rank)).toEqual(padded.map((_, i) => i + 1));
     // Points must fall with rank, or the frame shows a board that ranks wrong.
