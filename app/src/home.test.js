@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flockBand, flyer, ladder, masthead, shellOf } from "./home.js";
+import { chapterRule, flockBand, flyer, ladder, masthead, shellOf } from "./home.js";
 
 const open = {
   id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", rig: "legs",
@@ -209,5 +209,18 @@ describe("the flock band", () => {
     const band = flockBand();
     expect(band.className).not.toMatch(/marquee|scroll|ticker/);
     expect(band.querySelector("[class*=marquee]")).toBeNull();
+  });
+});
+
+describe("the chapter rules", () => {
+  it("alternates the sense of the tilt from one rule to the next", () => {
+    // The charter: "réunir le sens des rotations d'un élément au suivant".
+    expect(chapterRule(0).className).toContain("chapter-rule--left");
+    expect(chapterRule(1).className).toContain("chapter-rule--right");
+    expect(chapterRule(2).className).toContain("chapter-rule--left");
+  });
+
+  it("is decorative, so a screen reader does not announce a line", () => {
+    expect(chapterRule(0).getAttribute("aria-hidden")).toBe("true");
   });
 });

@@ -153,10 +153,17 @@ export function flockBand() {
   return band;
 }
 
+/** A slanted rule between chapters, tilting the other way each time. */
+export function chapterRule(index) {
+  const rule = el("div", `chapter-rule chapter-rule--${index % 2 ? "right" : "left"}`);
+  rule.setAttribute("aria-hidden", "true");
+  return rule;
+}
+
 export async function renderHome(root) {
   const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
   root.replaceChildren(masthead(me), flockBand());
-  const hall = el("main", "hall");
+  const hall = el("main", "hall fx-grain fx-scanlines");
   root.append(hall);
 
   const door = el("section", "door");
@@ -173,7 +180,7 @@ export async function renderHome(root) {
 
   const season = el("section", "chapter");
   season.append(el("h3", "eyebrow", "Season standings"), ladder(standings.slice(0, LADDER_ROWS)));
-  hall.append(season);
+  hall.append(chapterRule(0), season);
 
   // Only an open event has a board worth asking for.
   const boards = await Promise.all(
@@ -188,7 +195,7 @@ export async function renderHome(root) {
   const flyers = events.map((event, i) => flyer(event, boards[i].rows));
   wall.append(...flyers);
   rounds.append(el("h3", "eyebrow", "Pick your round"), wall);
-  hall.append(rounds);
+  hall.append(chapterRule(1), rounds);
 
   // After the wall is on screen: the stills replace the dark frames as they
   // arrive, rather than holding the whole page for WebGL and a 1.3 MB GLB.

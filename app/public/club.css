@@ -6,6 +6,12 @@
  * are shell.css's, now that the race pages wear them too. This file places
  * what is left, which is the front and a player's page. */
 
+/* Grain and scanlines cover the page, as the charter asks of every render and
+   photograph on it. Both are ::before/::after with `pointer-events: none`, and
+   both set their own `position: relative` — `.hall` already has it, so the
+   only thing to declare here is the lighter of the two grain opacities. */
+.hall { --fx-grain-opacity: var(--grain-opacity-min); }
+
 .ladder-row:focus-visible, .challenge-link:focus-visible,
 .profile-results a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 
@@ -110,8 +116,25 @@
   line-height: var(--type-lede-line);
 }
 
-.chapter { margin-top: var(--space-gutter-max); }
-.chapter > .eyebrow { margin-bottom: var(--space-gutter-min); }
+/* The charter's own rhythm. These four tokens were defined and referenced
+   nowhere: a chapter opened on a 28 px grid gutter, which is why the hero, the
+   ladder and the wall read as one column. */
+.chapter { margin-top: var(--space-chapter-top-min); }
+.chapter:last-child { margin-bottom: var(--space-chapter-bottom-min); }
+.chapter > .eyebrow { margin-bottom: var(--space-title-to-grid-min); display: block; }
+
+/* A hand-torn divider: 3 px of ink, tilted within the charter's ceiling and
+   alternating in sense. It overhangs the column on purpose; `overflow-x:
+   hidden` on body already absorbs it. */
+.chapter-rule {
+  height: 3px;
+  margin-top: var(--space-chapter-top-min);
+  background: var(--ink);
+}
+.chapter-rule--left { rotate: calc(-1 * var(--rotate-1-0)); }
+.chapter-rule--right { rotate: var(--rotate-1-0); }
+/* The rule already carries the space above its chapter. */
+.chapter-rule + .chapter { margin-top: var(--space-title-to-grid-max); }
 
 /* ── Ladder: one rung per player ───────────────────────────────────────────── */
 
