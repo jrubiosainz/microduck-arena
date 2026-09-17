@@ -4,9 +4,16 @@ only says which part of it to serve."""
 import json
 from itertools import pairwise
 
+import numpy as np
+from fastapi.testclient import TestClient
+
 from arena.live import HEAD, SHUTTER_MS, Entry, Programme, cycle, pool, slots_for
 from arena.store import LocalStore, Withdrawal
+from arena.trace import encode
+from arena.web.app import create_app
+from arena.web.config import ArenaConfig
 from tests.test_store import make_record
+from tests.test_withdraw import sign_in, spaced  # noqa: F401 — spaced is a fixture
 
 
 def entry(run_id, at="2026-09-10T10:00:00Z", replay_ms=8000, booth_ms=20000, user="alice"):
@@ -103,3 +110,43 @@ def test_an_empty_pool_is_off_air_until_something_lands():
     assert programme.slots() == []
     entries.append(entry("A"))
     assert programme.slots()[0]["at_ms"] == 10_000_000
+
+
+def ready(app, run_id, user="alice", seconds=8.0, booth_ms=None):
+    app.state.store.append(make_record(run_id=run_id, user=user), encode(np.zeros((5, 21), "f4")))
+    files = {"clip.json": json.dumps({"layouts": {"landscape": {"seconds": seconds}}}).encode()}
+    if booth_ms:
+        files["commentary.json"] = json.dumps({"plan": {"duration_ms": booth_ms}}).encode()
+    app.state.store.put_clip(run_id, files)
+
+
+def test_the_route_serves_the_clock_the_build_and_the_window(tmp_path):
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
+    app = create_app(config)
+    api = TestClient(app)
+    empty = api.get("/api/live")
+    assert empty.status_code == 200
+    assert empty.headers["cache-control"] == "no-store"
+    body = empty.json()
+    assert body["version"] == 1 and body["slots"] == []
+    assert isinstance(body["now_ms"], int) and body["build"]
+    ready(app, "A", booth_ms=20000)
+    app.state.programme.invalidate()
+    body = api.get("/api/live").json()
+    assert [s["kind"] for s in body["slots"][:4]] == ["shutter", "replay", "shutter", "booth"]
+    assert body["slots"][0]["at_ms"] <= body["now_ms"]
+
+
+def test_a_landed_clip_and_a_withdrawal_rebuild_the_future(spaced):  # noqa: F811
+    api, app = spaced
+    ready(app, "A")
+    app.state.clips.landed("A")
+    assert {s.get("run_id") for s in api.get("/api/live").json()["slots"]} >= {"A"}
+    ready(app, "B", user="bob")
+    app.state.clips.landed("B")
+    assert {s.get("run_id") for s in api.get("/api/live").json()["slots"]} >= {"A", "B"}
+    sign_in(api, app, "bob")
+    assert api.post("/api/runs/B/withdraw").status_code == 200
+    slots = api.get("/api/live").json()["slots"]
+    future = [s for s in slots if s["at_ms"] > slots[0]["at_ms"] + slots[0]["duration_ms"]]
+    assert "B" not in {s.get("run_id") for s in future}

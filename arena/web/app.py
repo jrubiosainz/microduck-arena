@@ -5,15 +5,19 @@ command needed and the local setup is the same code path that will run in a
 Space later.
 """
 
+import hashlib
 import threading
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
+from ..live import Programme, pool
 from ..manifest import all_events
 from .config import ArenaConfig
 from .routes_auth import router as auth_router
+from .routes_live import now_ms
+from .routes_live import router as live_router
 from .routes_read import router as read_router
 from .routes_submit import router as submit_router
 from .routes_unfurl import router as unfurl_router
@@ -36,6 +40,12 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.state.ballot_book = BallotBook()
     app.state.sessions = Sessions()
 
+    # The programme reads the pool on every rebuild, never per request; the
+    # build hash lets a page that has run for days reload after a deploy.
+    app.state.programme = Programme(lambda: pool(app.state.store), now_ms)
+    index = config.frontend_dir / "index.html" if config.frontend_dir else None
+    app.state.build = hashlib.sha256(index.read_bytes()).hexdigest()[:12] if index else "dev"
+
     from .. import commentary
     from ..clips import ClipRenderer
     from ..commentary.lore import load
@@ -54,6 +64,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.state.clips = ClipRenderer(
         app.state.store, config.origin, config.frontend_dir, config.clip_parallel,
         enabled=config.clips_enabled, backfill=config.clip_backfill, commentary=writer,
+        landed=lambda run_id: app.state.programme.invalidate(),
     )
     if config.clip_worker and app.state.clips.available:
         @app.on_event("startup")
@@ -103,6 +114,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(vote_router)
     app.include_router(unfurl_router)
+    app.include_router(live_router)
 
     if config.frontend_dir is None:
         @app.get("/")

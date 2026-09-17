@@ -439,6 +439,8 @@ def withdraw(run_id: str, request: Request) -> dict:
             revision=source.get("revision"),
         )
     )
+    # The channel must not play a run its author just took off the board.
+    request.app.state.programme.invalidate()
     return {"withdrawn": record.run_id, "event_id": record.event_id}
 
 
