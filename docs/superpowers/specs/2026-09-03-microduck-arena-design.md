@@ -224,7 +224,8 @@ quietly flatten that.
 2. Reset to the `STAND` keyframe. Apply the seed's perturbation (±0.01 rad per joint,
    ±2° yaw), drawn from a generator seeded by `(event_id, seed)` so it is reproducible.
 3. Settle for `settle_s` with the policy running and the clock stopped. Nobody is timed on
-   standing up.
+   standing up. Its frames — the reset pose, then one per settle step — are kept beside the
+   trace, so a replay can start where the simulation did (the social clip does).
 4. Step the loop: build the 61-D observation, run the policy, apply 14 position targets,
    step physics 4 × 0.005 s. Command held at the manifest's pinned value throughout.
 5. Stop on one of:
@@ -238,7 +239,7 @@ quietly flatten that.
    been tipped for the full `fall_hold_s`, so a step where both fire is a robot that was
    collapsing and slid across the line — not a winner. A sprinter who falls *past* the tape is
    unaffected: it has no accumulated tipped time at the moment it crosses.
-6. Return the outcome and the pose trace.
+6. Return the outcome, the pose trace and the settle's frames.
 
 The start line is `x = 0`, the duck's trunk x at the end of settling; the finish is
 `x = length_m`. The clock starts at the first stepped frame after settling.
@@ -272,6 +273,8 @@ which is the intended balance.
 
 Per run, the trace of the **median-finishing seed**: trunk position (3) + quaternion (4) +
 14 joint angles, float16 at 50 Hz. ~42 KB for a 20 s sprint (1000 frames × 21 × 2 bytes).
+Beside it in the same file, that seed's settle in the same format (26 frames for 0.5 s);
+traces stored before 2026-09-17 have none.
 
 Median, not best — a lane shows typical behaviour, and every entry's replay is selected the
 same way.
@@ -326,8 +329,9 @@ locking is needed.
 
 ```
 runs/<event_id>/<run_id>.json     entry, per-seed times, score, provenance
-traces/<run_id>.npz               median-seed replay, float16 (no event_id: run_id is
-                                  globally unique, and the route is /api/runs/{run_id}/trace)
+traces/<run_id>.npz               median-seed replay and its settle, float16 (no event_id:
+                                  run_id is globally unique, and the routes are
+                                  /api/runs/{run_id}/trace and /settle)
 models/<sha256>.onnx              uploads only; content-addressed, so a re-submitted
                                   identical file costs nothing
 index/<event_id>.parquet          nightly compaction, keeps boot fast
@@ -361,6 +365,7 @@ Physics only ever runs server-side.
 | `GET /api/events/{id}/leaderboard` | Ranked entries, one row per entrant |
 | `GET /api/runs/{run_id}` | One run: per-seed detail, provenance |
 | `GET /api/runs/{run_id}/trace` | Replay bytes |
+| `GET /api/runs/{run_id}/settle` | The untimed settle before the replay, same format; empty for older runs |
 | `POST /api/events/{id}/submit` | Validate, run, return result |
 | `GET /api/me` | Signed-in user, or anonymous |
 

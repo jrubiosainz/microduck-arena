@@ -228,7 +228,8 @@ carries the `[clip]` configuration (see below).
 25 fps. The author's trace is 50 Hz, so one clip frame is two trace frames.
 
 ```
-steps  = min(frameCount(author), tape_max_s / CTRL_DT)
+settle = the lanes' settle frames  # 26 for 0.5 s; 0 if none of them was stored with one
+steps  = settle + min(frameCount(author), tape_max_s / CTRL_DT)
 intro  = 75                       # 3 s
 travel = 60                       # 2.4 s of it: the camera's travel to the chase
 tape   = ceil(steps / 2)
@@ -236,6 +237,12 @@ outro  = 63                       # 2.5 s
 frames = intro + tape + outro
 poster = intro + floor(tape × 0.6)
 ```
+
+Each lane plays `leadIn(settle, trace)`: its settle, then its trace, so the
+tape starts where the simulation did — the ducks standing in the `STAND` pose
+under the title, the settle from the horn — with a missing settle made up by
+holding the trace's first frame, so older runs keep in step. The clock reads
+`00:00.00` until the settle is over.
 
 `draw(i)`: intro frames pose step 0 under the title, the camera
 `travelPose(chase, min(1, i / travel))` of the way round from ahead of the line
