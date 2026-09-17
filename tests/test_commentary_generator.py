@@ -77,12 +77,25 @@ def test_a_checked_dialogue_keeps_the_prose_and_maps_indices_to_references():
     system = write_messages[0]["content"]
     assert LORE.characters["peter"]["sheet"][:60] in system
     assert "earlier this season" in system
+    assert LORE.characters["peter"]["sheet"][:60] in check_messages[0]["content"]
     user = json.loads(write_messages[1]["content"])
     assert [f["index"] for f in user["facts"]] == list(range(6))
     assert user["facts"][4]["memory"] is True
     assert user["recent_broadcasts"] == [{"index": 5, "turns": RECENT[0]["turns"]}]
     audit = json.loads(check_messages[1]["content"])
     assert audit["dialogue"] == TURNS
+
+
+def test_the_writing_prompt_shape_example_shows_three_turns():
+    # The example must match TURNS (3 to 6, alternating peter then ray) or a
+    # model that copies its shape produces a dialogue the length check rejects.
+    _, provider = run_case()
+    (write_messages, _), _ = provider.calls
+    system = write_messages[0]["content"]
+    start = system.index("Shape: ") + len("Shape: ")
+    end = system.index("]. ", start) + 1
+    shape = json.loads(system[start:end])
+    assert [turn["speaker"] for turn in shape] == ["peter", "ray", "peter"]
 
 
 @pytest.mark.parametrize("turns, why", [
