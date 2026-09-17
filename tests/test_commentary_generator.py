@@ -156,6 +156,32 @@ def test_an_invalid_provider_answer_is_rejected(changes):
         write("R1", FACTS, RECENT, lore=LORE, provider=provider, model="m")
 
 
+def test_a_name_spoken_in_a_facts_own_text_is_grounded_by_that_fact_alone():
+    # A notable fact can name the participant in its own text without declaring
+    # an identity itself (context.py's own detectors do exactly this); citing
+    # that fact alone, not the participant fact, still grounds the name.
+    facts = FACTS + [Fact("notable#/personal-best",
+                          "@alice beats their previous best on the 2 m Sprint, 13.00 s, by 0.60 s.",
+                          "notable", ("pb",))]
+    turns = [{**TURNS[0], "text": "Alice smashes a personal best, Ray!", "fact_refs": [6]},
+             TURNS[1], TURNS[2]]
+    written, _ = run_case(turns=turns, facts=facts)
+    assert written["turns"][0]["fact_refs"] == ["notable#/personal-best"]
+
+
+def test_two_facts_establishing_the_same_name_need_only_one_cited():
+    # The sprint-like shape this fix exists for: the participant fact and a
+    # second fact both establish @alice. Citing either one alone is enough;
+    # the bug was demanding both.
+    facts = FACTS + [Fact("notable#/personal-best",
+                          "@alice beats their previous best on the 2 m Sprint, 13.00 s, by 0.60 s.",
+                          "notable", ("pb",))]
+    turns = [{**TURNS[0], "text": "Alice makes it look easy, Ray!", "fact_refs": [1]},
+             TURNS[1], TURNS[2]]
+    written, _ = run_case(turns=turns, facts=facts)
+    assert written["turns"][0]["fact_refs"] == ["run#/participant"]
+
+
 def test_a_recent_run_may_be_called_back_only_by_its_fact():
     turns = [
         {**TURNS[0]},

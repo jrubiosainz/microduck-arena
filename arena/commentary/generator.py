@@ -92,6 +92,7 @@ UNSUPPORTED_PERSONAL_WORDS = frozenset((
 ))
 FALLS = frozenset({"fall", "fell", "fallen", "falls", "falling"})
 SPEAKER = r"(?:Peter(?: Duckry)?|Ray(?: Quackson)?)"
+AT_NAME = re.compile(r"@([\w-]+)")
 
 
 class Rejected(Exception):
@@ -130,6 +131,20 @@ def _technical(text: str, names: set[str]) -> bool:
     return technical_text(text)
 
 
+def _establishing_facts(facts: list[Fact], names: set[str]) -> dict[str, set[int]]:
+    """Fact indices that back each name: those declaring it in `identities`, plus
+    those whose own text speaks it as @name, so a fact naming its own subject
+    grounds that name without also declaring it."""
+    establishes = {name: set() for name in names}
+    for i, fact in enumerate(facts):
+        for name in fact.identities:
+            establishes[name].add(i)
+        for name in AT_NAME.findall(fact.text):
+            if name in establishes:
+                establishes[name].add(i)
+    return establishes
+
+
 def _ask(provider, system: str, user: dict, max_tokens: int) -> tuple:
     messages = [{"role": "system", "content": system},
                 {"role": "user",
@@ -156,13 +171,14 @@ def write(run_id: str, facts: list[Fact], recent: list[dict], *, lore: Lore, pro
     """Facts in, a checked dialogue out, or Rejected with the reason."""
     by_ref = {fact.ref: i for i, fact in enumerate(facts)}
     names = {name for fact in facts for name in fact.identities}
-    identities = [(i, words(name)) for i, fact in enumerate(facts) for name in fact.identities]
+    establishes = _establishing_facts(facts, names)
+    identities = {name: words(name) for name in names}
     characters = {speaker: {"name": sheet["name"], "sheet": sheet["sheet"]}
                   for speaker, sheet in lore.characters.items()}
     characters_json = json.dumps(characters, separators=(",", ":"), ensure_ascii=False)
     system = (STYLE + GROUNDING + BOOTH_CONTEXT + "Characters: " + characters_json
               + " Identity indices for EVERY name mention: "
-              + json.dumps({name: i for i, fact in enumerate(facts) for name in fact.identities}))
+              + json.dumps({name: sorted(indices) for name, indices in establishes.items()}))
     fact_texts = [
         {"index": i, "text": fact.text, **({"memory": True} if fact.kind == "lore" else {})}
         for i, fact in enumerate(facts)
@@ -201,11 +217,12 @@ def write(run_id: str, facts: list[Fact], recent: list[dict], *, lore: Lore, pro
         spoken = words(text)
         if spoken & UNSUPPORTED_PERSONAL_WORDS:
             raise Rejected("gendered or kinship words")
-        if any(name_words & spoken and index not in refs for index, name_words in identities):
+        if any(name_words & spoken and not establishes[name] & set(refs)
+               for name, name_words in identities.items()):
             raise Rejected("a name is spoken without citing the fact that establishes it")
         if spoken & FALLS and not any(facts[n].outcome == "fell" for n in refs):
             raise Rejected("fall vocabulary without a fall in the cited facts")
-        subjects = {re.escape(word) for _, name_words in identities for word in name_words}
+        subjects = {re.escape(word) for name_words in identities.values() for word in name_words}
         subjects.update(("the participant", "the player", "they"))
         # The predicate must name the booth itself: "in the lead" or "at the
         # line" is not a placement, only "in/at the booth" is.
