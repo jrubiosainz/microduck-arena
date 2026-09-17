@@ -280,11 +280,10 @@ Before any frame, the page builds the **score**:
   sadness is full 0.2 s before the line, as a real crowd sees it coming, and
   holds over the outro.
 - `cues`: `air-horn.mp3` at the tape start, `stamp.wav` at the tape end, the
-  verdict voice at tape end + 0.16 s — each `{ at, file, gain, room }`, only
-  from the sources the event lists. A cue in the `room` (the fall) is heard
-  only as the stadium's reverb and echoes of it, never dry; the horn and the
-  victory, whose echo Nicolas put in their files, and the stamp go to the mix
-  dry.
+  verdict voice at tape end + 0.16 s — each `{ at, file, gain }`, only from
+  the sources the event lists. Every cue goes straight to the mix: the horn
+  and the victory carry the stadium echo Nicolas put in their files, and the
+  fall has none.
 
 `soundtrack()` renders **one** `OfflineAudioContext` of `frames / fps`
 seconds at 48 kHz stereo: `renderStadium`'s voices driven by the direction,
@@ -294,10 +293,10 @@ sample reaches ±1 — the live programme refuses a clip that clips. The
 interleaved float32 buffer is the whole soundtrack; it is rendered once per
 run and given to both layouts' ffmpeg as `-f f32le`. Gains are measured on a
 real render: the stadium at half its own volume so its protection compressor
-leaves the crowd room to build, made up by ×3 after it; horn 2, stamp 0.6 and
-victory 7 dry; fall 0.45 into the stadium's echo (it plays over a crowd gone
-quiet). Chrome's limiter adds make-up gain, so the sprint's joy and victory
-together peak at 0.95: pushing either higher clips.
+leaves the crowd room to build, made up by ×3 after it; horn 2, stamp 0.6,
+victory 7, fall 0.45 (it plays over a crowd gone quiet). Chrome's limiter adds
+make-up gain, so the sprint's joy and victory together peak at 0.95: pushing
+either higher clips.
 
 `app/src/clip/stadium.js` and `app/src/clip/direction.js` are Duck Jam's
 `design/sound/stadium.mjs` and `stadium-direction.mjs`, ported with their

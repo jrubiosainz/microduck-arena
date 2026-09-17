@@ -1,9 +1,7 @@
 // The whole soundtrack in one offline render: the stadium's voices under a
-// continuous direction, every cue at its instant — a cue in the `room` heard
-// only as the stadium's reverb and echoes of it, as if from across the stands —
-// and a limiter at the end so no sample reaches ±1 (the live programme
-// refuses a clip that clips). No segments, no smoothing afterwards, no mixing
-// left to ffmpeg.
+// continuous direction, every cue at its instant, a limiter at the end so no
+// sample reaches ±1 (the live programme refuses a clip that clips). No
+// segments, no smoothing afterwards, no mixing left to ffmpeg.
 
 import { stadiumDirection } from "./direction.js";
 import { StadiumAmbience, prepareStadium } from "./stadium.js";
@@ -30,19 +28,6 @@ function interleave(buffer) {
   return pcm;
 }
 
-async function stadium(context, score, limiter, Context) {
-  await prepareStadium(Context);
-  const crowd = context.createGain();
-  crowd.gain.value = CROWD_GAIN;
-  crowd.connect(limiter);
-  return new StadiumAmbience(context, {
-    direction: stadiumDirection(score.crowd),
-    seed: score.seed,
-    volume: CROWD_VOLUME,
-    destination: crowd,
-  });
-}
-
 /** Interleaved stereo float32 at 48 kHz, exactly `seconds` long. */
 export async function renderSoundtrack(score, seconds, { Context = OfflineAudioContext, load = fetchWav } = {}) {
   const context = new Context(2, Math.ceil(seconds * RATE), RATE);
@@ -57,25 +42,28 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
   const cues = await Promise.all(
     score.cues.map(async (cue) => ({ ...cue, buffer: await context.decodeAudioData(await load(cue.file)) })),
   );
-  const engine = score.crowd ? await stadium(context, score, limiter, Context) : null;
   for (const cue of cues) {
     const source = context.createBufferSource();
     source.buffer = cue.buffer;
     const gain = context.createGain();
     gain.gain.value = cue.gain;
     source.connect(gain);
-    if (cue.room && engine) {
-      // The wet sends alone: the dry cue under its echo made the echo too faint.
-      gain.connect(engine.convolver);
-      gain.connect(engine.echoSend);
-    } else {
-      // No crowd, no stands to ring round: the cue goes to the mix dry.
-      gain.connect(limiter);
-    }
+    gain.connect(limiter);
     source.start(cue.at);
   }
 
-  if (!engine) return interleave(await context.startRendering());
+  if (!score.crowd) return interleave(await context.startRendering());
+
+  await prepareStadium(Context);
+  const crowd = context.createGain();
+  crowd.gain.value = CROWD_GAIN;
+  crowd.connect(limiter);
+  const engine = new StadiumAmbience(context, {
+    direction: stadiumDirection(score.crowd),
+    seed: score.seed,
+    volume: CROWD_VOLUME,
+    destination: crowd,
+  });
 
   // renderStadium's batching: schedule half a second ahead, suspending one
   // render quantum before each horizon, because Chrome rounds suspension

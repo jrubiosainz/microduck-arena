@@ -5,8 +5,8 @@
 import { CTRL_DT, frameAt } from "../replay.js";
 
 /** Cue gains, measured on a real render: the horn 5 dB over the crowd's surge,
- * the victory level with the crowd's cheer, and the fall — heard in the
- * stadium's echo, over a crowd gone quiet — just over the stamp. */
+ * the victory level with the crowd's cheer, and the fall — over a crowd gone
+ * quiet — just over the stamp. */
 const GAINS = { horn: 2, stamp: 0.6, victory: 7, fall: 0.45 };
 /** How often the crowd learns where the duck is, in seconds of tape. */
 const PROGRESS_EVERY_S = 0.5;
@@ -28,15 +28,14 @@ function progress(trace, plan, lengthM, start) {
   return samples;
 }
 
-/** A cue in the `room` is heard only as the stadium's echo of it; the others go straight to the mix. */
 const SOURCES = {
-  // Nicolas's samples carry their own stadium echo, so they play dry.
-  horn: ({ start }) => [{ at: start, file: "air-horn.mp3", gain: GAINS.horn, room: false }],
+  // Nicolas's samples carry their own stadium echo.
+  horn: ({ start }) => [{ at: start, file: "air-horn.mp3", gain: GAINS.horn }],
   verdict: ({ end, verdict }) => [
-    { at: end, file: "stamp.wav", gain: GAINS.stamp, room: false },
+    { at: end, file: "stamp.wav", gain: GAINS.stamp },
     verdict === "pass"
-      ? { at: end + 0.16, file: "microduck-victory-echo.mp3", gain: GAINS.victory, room: false }
-      : { at: end + 0.16, file: "microduck-fall.wav", gain: GAINS.fall, room: true },
+      ? { at: end + 0.16, file: "microduck-victory-echo.mp3", gain: GAINS.victory }
+      : { at: end + 0.16, file: "microduck-fall.wav", gain: GAINS.fall },
   ],
 };
 

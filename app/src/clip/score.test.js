@@ -21,17 +21,6 @@ describe("clipScore", () => {
     expect(score.crowd.progress.at(-1).value).toBeGreaterThan(0.9);
   });
 
-  it("plays the horn and the victory, which carry their own echo, and the stamp dry, and rings the fall round the stadium", () => {
-    const score = clipScore({ run: { run_id: "R1", event, seeds_finished: 5 }, plan, trace });
-    expect(score.cues.map((c) => [c.file, c.room])).toEqual([
-      ["air-horn.mp3", false],
-      ["stamp.wav", false],
-      ["microduck-victory-echo.mp3", false],
-    ]);
-    const dnf = clipScore({ run: { run_id: "R2", event, seeds_finished: 0 }, plan, trace });
-    expect(dnf.cues.at(-1)).toMatchObject({ file: "microduck-fall.wav", room: true });
-  });
-
   it("falls after a DNF, and only plays the sources the event lists", () => {
     const dnf = clipScore({ run: { run_id: "R2", event, seeds_finished: 0 }, plan, trace });
     expect(dnf.cues.at(-1).file).toBe("microduck-fall.wav");
