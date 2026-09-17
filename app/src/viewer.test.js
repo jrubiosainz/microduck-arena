@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cameraPose } from "./viewer.js";
+import { cameraPose, travelPose } from "./viewer.js";
 
 describe("cameraPose", () => {
   it("chases the leader from behind and trackside by default, exactly as before", () => {
@@ -21,5 +21,25 @@ describe("cameraPose", () => {
   it("holds a fixed camera where the event put it", () => {
     const spec = { kind: "fixed", position: [1, 0.6, 2.2], target: [1, 0.1, 0], fov: 40 };
     expect(cameraPose(spec, 5, 1.15)).toEqual({ position: [1, 0.6, 2.2], target: [1, 0.1, 0] });
+  });
+});
+
+describe("travelPose", () => {
+  const chase = cameraPose({ kind: "chase", distance: 0.7 }, 0, 3.1);
+  const reach = (pose) => Math.hypot(pose.position[0] - pose.target[0], pose.position[2] - pose.target[2]);
+
+  it("ends on the chase itself", () => {
+    expect(travelPose(chase, 1)).toBe(chase);
+  });
+
+  it("starts ahead of the line, farther out, looking at the same spot", () => {
+    const start = travelPose(chase, 0);
+    expect(start.position[0]).toBeGreaterThan(chase.target[0]);
+    expect(reach(start)).toBeGreaterThan(reach(chase));
+    expect(start.target).toEqual(chase.target);
+  });
+
+  it("never comes closer to the ducks than the chase does", () => {
+    for (let u = 0; u < 1; u += 0.1) expect(reach(travelPose(chase, u))).toBeGreaterThanOrEqual(reach(chase) - 1e-9);
   });
 });

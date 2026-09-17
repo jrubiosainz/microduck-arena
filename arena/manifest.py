@@ -103,9 +103,7 @@ class Vote:
 CAMERA_KINDS = ("chase", "fixed")
 # The sound sources a clip can draw on (app/src/clip/score.js). A name here is
 # a function there; an event lists the ones it wants.
-SOUND_SOURCES = ("crowd", "jingle", "verdict")
-# The five variants of Duck Jam's round-drop jingle in app/public/sound/.
-JINGLES = tuple(f"round-{i}" for i in range(5))
+SOUND_SOURCES = ("crowd", "horn", "verdict")
 
 
 @dataclass(frozen=True)
@@ -142,12 +140,11 @@ class ClipConfig:
 
     tape_max_s: float = 12.0
     sounds: tuple[str, ...] = SOUND_SOURCES
-    jingle: str | None = None  # None: picked from the event id
     camera: ClipCamera = ClipCamera()
 
     def to_dict(self) -> dict:
         return {"tape_max_s": self.tape_max_s, "sounds": list(self.sounds),
-                "jingle": self.jingle, "camera": self.camera.to_dict()}
+                "camera": self.camera.to_dict()}
 
 
 @dataclass(frozen=True)
@@ -250,7 +247,7 @@ def _camera(raw: dict | None, where: str) -> ClipCamera:
 def _clip(raw: dict | None, where: str) -> ClipConfig:
     if raw is None:
         return ClipConfig()
-    _refuse_unknown(raw, {"tape_max_s", "sounds", "jingle", "camera"}, where)
+    _refuse_unknown(raw, {"tape_max_s", "sounds", "camera"}, where)
     tape = float(raw.get("tape_max_s", 12.0))
     if tape <= 0:
         raise ManifestError(f"{where}: tape_max_s must be positive")
@@ -258,11 +255,7 @@ def _clip(raw: dict | None, where: str) -> ClipConfig:
     for name in sounds:
         if name not in SOUND_SOURCES:
             raise ManifestError(f"{where}: unknown sound source {name!r}, expected among {SOUND_SOURCES}")
-    jingle = raw.get("jingle")
-    if jingle is not None and jingle not in JINGLES:
-        raise ManifestError(f"{where}: unknown jingle {jingle!r}, expected one of {JINGLES}")
-    return ClipConfig(tape_max_s=tape, sounds=sounds, jingle=jingle,
-                      camera=_camera(raw.get("camera"), f"{where}.camera"))
+    return ClipConfig(tape_max_s=tape, sounds=sounds, camera=_camera(raw.get("camera"), f"{where}.camera"))
 
 
 def load_manifest(path: Path) -> Manifest:

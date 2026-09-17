@@ -1,11 +1,13 @@
-// The clip's frame plan: a title card, the tape at speed, an outro on the last
-// frame. Pure, so the recorder's expectations and the page's drawing are
-// pinned by one test.
+// The clip's frame plan: a title over the waiting ducks while the camera travels
+// to the chase, the tape at speed, an outro on the last frame. Pure, so the
+// recorder's expectations and the page's drawing are pinned by one test.
 
 import { CTRL_DT } from "../replay.js";
 
 export const FPS = 25;
-const INTRO_S = 1;
+const INTRO_S = 3;
+/** The camera's travel to the chase, inside the intro: it settles before the start. */
+const TRAVEL_S = 2.4;
 const OUTRO_S = 2.5;
 /** Trace frames per clip frame: the trace is 50 Hz, the clip 25 fps. */
 export const STRIDE = Math.round(1 / FPS / CTRL_DT);
@@ -26,6 +28,7 @@ export function clipPlan(authorFrames, tapeMaxS) {
     stride: STRIDE,
     steps,
     intro,
+    travel: FPS * TRAVEL_S,
     tape,
     outro,
     frames,
@@ -39,6 +42,11 @@ export function clipPlan(authorFrames, tapeMaxS) {
 export function stepAt(plan, i) {
   if (i < plan.intro) return 0;
   return Math.min(plan.steps - 1, (i - plan.intro) * plan.stride);
+}
+
+/** How far through its travel to the chase the camera is at clip frame `i`, 0 to 1. */
+export function travelAt(plan, i) {
+  return Math.min(1, i / plan.travel);
 }
 
 export function actAt(plan, i) {

@@ -360,29 +360,26 @@ def test_every_shipped_events_metric_has_a_scoring_function():
 def test_an_event_without_a_clip_section_gets_the_defaults():
     clip = load_event("sprint-2m").clip
     assert clip.tape_max_s == 12.0
-    assert clip.sounds == ("crowd", "jingle", "verdict")
-    assert clip.jingle is None
+    assert clip.sounds == ("crowd", "horn", "verdict")
     assert clip.camera.kind == "chase"
     assert clip.camera.side is None
     assert clip.to_dict() == {
         "tape_max_s": 12.0,
-        "sounds": ["crowd", "jingle", "verdict"],
-        "jingle": None,
+        "sounds": ["crowd", "horn", "verdict"],
         "camera": {"kind": "chase", "back": 0.35, "height": 0.34, "side": None,
                    "target_height": 0.12, "fov": 42.0},
     }
 
 
-def test_a_clip_section_pins_the_tape_a_fixed_camera_and_the_jingle(tmp_path):
+def test_a_clip_section_pins_the_tape_a_fixed_camera_and_the_sounds(tmp_path):
     path = write_manifest(
         tmp_path,
-        clip='[clip]\ntape_max_s=6.0\nsounds=["crowd"]\njingle="round-3"\n'
+        clip='[clip]\ntape_max_s=6.0\nsounds=["crowd"]\n'
              '[clip.camera]\nkind="fixed"\nposition=[1.0,0.6,2.2]\ntarget=[1.0,0.1,0.0]\nfov=40\n',
     )
     clip = load_manifest(path).clip
     assert clip.tape_max_s == 6.0
     assert clip.sounds == ("crowd",)
-    assert clip.jingle == "round-3"
     assert clip.camera.to_dict() == {
         "kind": "fixed", "position": [1.0, 0.6, 2.2], "target": [1.0, 0.1, 0.0], "fov": 40.0
     }
@@ -392,7 +389,6 @@ def test_a_clip_section_pins_the_tape_a_fixed_camera_and_the_jingle(tmp_path):
     "section, said",
     [
         ('[clip]\nsounds=["crowd","organ"]\n', "unknown sound source"),
-        ('[clip]\njingle="round-9"\n', "unknown jingle"),
         ('[clip]\ntape_max_s=0\n', "tape_max_s must be positive"),
         ('[clip]\nfoo=1\n', "unknown keys"),
         ('[clip]\n[clip.camera]\nkind="drone"\n', "unknown camera kind"),

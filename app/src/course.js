@@ -102,7 +102,7 @@ export function buildWalls(walls = [], lanes = 1, spacing = LANE_SPACING) {
   return group;
 }
 
-export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = [] }, lanes = 1) {
+export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = [] }, lanes = 1, stripes = []) {
   const course = new Group();
   course.name = "course";
   // Climbing toward +x is a positive rotation about z: it lifts +x into +y.
@@ -138,12 +138,13 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   // Deliberately quiet. At full brightness and 35 mm these were the loudest
   // thing on the stage, which inverted the hierarchy: the stripes read first
   // and the robots second. The ring travelling under each duck already
-  // identifies a lane while it moves, so the stripe only has to be findable.
+  // identifies a lane while it moves, so the stripe only has to be findable —
+  // in its duck's colour when `stripes` gives one, the charter's order otherwise.
   for (let i = 0; i < lanes; i += 1) {
     const stripe = new Mesh(
       new BoxGeometry(length_m + OVERRUN * 2, 0.002, 0.02),
       new MeshStandardMaterial({
-        color: LANE_COLORS[i % LANE_COLORS.length],
+        color: stripes[i] ?? LANE_COLORS[i % LANE_COLORS.length],
         roughness: 0.8,
         transparent: true,
         opacity: 0.5,

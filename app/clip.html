@@ -16,12 +16,17 @@
         <p class="participant" id="top-participant"></p>
       </section>
 
-      <div class="screen fx-scanlines fx-scanlines-screen">
+      <div class="screen">
         <canvas id="stage" aria-label="The run against the ducks ranked under it"></canvas>
         <p class="crt-osd crt-osd-rec mono-label"><b>●</b> <span id="osd-rec">REC</span></p>
         <p class="crt-osd crt-osd-clock mono-label" id="osd-clock">00:00.00</p>
         <p class="crt-osd osd-event mono-label" id="osd-event"></p>
         <div class="stamp fx-tilt-2-5" id="stamp" hidden></div>
+        <section class="card" id="intro">
+          <p class="eyebrow">Microduck Arena</p>
+          <h1 class="marquee-title" id="intro-title">Event</h1>
+          <p class="mono-label" id="intro-line"></p>
+        </section>
       </div>
 
       <section class="band band-bottom" id="sheet" hidden>
@@ -31,12 +36,6 @@
           <div class="figure"><span class="figure-value" id="fig-points">—</span><span class="mono-label">points</span></div>
         </div>
         <p class="mono-label weights" id="weights"></p>
-      </section>
-
-      <section class="card" id="intro">
-        <p class="eyebrow">Microduck Arena</p>
-        <h1 class="marquee-title" id="intro-title">Event</h1>
-        <p class="mono-label" id="intro-line"></p>
       </section>
 
       <div class="jam" id="jam" hidden>

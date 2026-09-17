@@ -105,8 +105,8 @@ export function cameraSideOffset(lanes, spacing) {
  * re-race, and a fresh wall group starts hidden — so without this the walls
  * would silently vanish while the button still read "Hide walls".
  */
-export function attachCourse(scene, event, lanes, wallsVisible) {
-  const course = buildCourse(event, lanes);
+export function attachCourse(scene, event, lanes, wallsVisible, stripes) {
+  const course = buildCourse(event, lanes, stripes);
   const walls = course.getObjectByName("walls");
   if (walls) walls.visible = Boolean(wallsVisible);
   scene.add(course);
@@ -141,6 +141,36 @@ export function cameraPose(spec, lead, sideOffset) {
   return {
     position: [lead - back * distance, height * distance, side * distance],
     target: [lead, spec?.target_height ?? 0.12, 0],
+  };
+}
+
+// Where a clip's opening travel starts, relative to the chase it ends on: turned
+// this far round towards the front of the line, this much farther out and higher.
+const TRAVEL_TURN = (30 * Math.PI) / 180;
+const TRAVEL_REACH = 1.3;
+const TRAVEL_LIFT = 8;
+
+/**
+ * The camera `u` of the way through a clip's opening travel, 0 to 1: an orbit
+ * round the chase's target, from ahead of the line where the waiting ducks face
+ * it, to the chase itself. An orbit rather than a straight line, so it never
+ * cuts through the lanes. Pure, so it is testable.
+ */
+export function travelPose(chase, u) {
+  if (u >= 1) return chase;
+  const left = 1 - u * u * (3 - 2 * u);
+  const [x, y, z] = chase.target;
+  const dx = chase.position[0] - x;
+  const dz = chase.position[2] - z;
+  const turn = TRAVEL_TURN * left;
+  const out = 1 + (TRAVEL_REACH - 1) * left;
+  return {
+    position: [
+      x + out * (dx * Math.cos(turn) + dz * Math.sin(turn)),
+      y + (chase.position[1] - y) * (1 + (TRAVEL_LIFT - 1) * left),
+      z + out * (dz * Math.cos(turn) - dx * Math.sin(turn)),
+    ],
+    target: chase.target,
   };
 }
 
@@ -290,7 +320,13 @@ export async function createViewer(
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
     if (event) {
-      course = attachCourse(scene, event, Math.max(1, entries.length), wallsVisible);
+      course = attachCourse(
+        scene,
+        event,
+        Math.max(1, entries.length),
+        wallsVisible,
+        entries.map((entry) => entry.colour),
+      );
     }
     lanes = entries.map((entry, i) => {
       const tier = entry.tier ?? "ghost";
@@ -370,7 +406,7 @@ export async function createViewer(
   const _trunk = new Vector3();
   let raf = null;
 
-  function draw() {
+  function draw(travel = 1) {
     const indices = player.frameIndices();
     lanes.forEach((lane, i) => {
       const frame = frameAt(lane.trace, indices[i]);
@@ -387,7 +423,7 @@ export async function createViewer(
       // Follow the leader along +x, the direction of travel, from behind and
       // slightly to one side so the gait is visible rather than end-on.
       const lead = Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]));
-      const pose = cameraPose(spec, lead, sideOffset);
+      const pose = travelPose(cameraPose(spec, lead, sideOffset), travel);
       camera.position.set(...pose.position);
       _target.set(...pose.target);
       if (controls) controls.target.copy(_target);
@@ -403,10 +439,11 @@ export async function createViewer(
     raf = requestAnimationFrame(tick);
   }
 
-  /** Manual mode: pose every lane at `seconds` and render once. */
-  function frame(seconds) {
+  /** Manual mode: pose every lane at `seconds` and render once, the camera
+   * `travel` of the way through its opening travel (travelPose). */
+  function frame(seconds, travel = 1) {
     player.seek(seconds);
-    draw();
+    draw(travel);
   }
 
   resize();

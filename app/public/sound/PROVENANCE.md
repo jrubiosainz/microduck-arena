@@ -1,7 +1,8 @@
 # The arena's sound kit
 
 Do not edit these by hand. Re-vendor by copying the named files from
-`design/sound/` in the `duckJam` repository, at or after the commit below.
+`design/sound/` in the `duckJam` repository, at or after the commit below;
+the foghorn alone is made here, by its script (see below).
 
 | field | value |
 | --- | --- |
@@ -18,8 +19,8 @@ kit's own `LICENSES.md` dedicates that original material to the public domain un
 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/): "this repository made them,
 nothing here needs attribution, and all of it may be redistributed, modified and re-cut." The
 CC0-1.0 rows below are unmodified copies of files `build-kit.mjs` computed, so that dedication
-carries over unchanged for them; the microduck voice files are the exception the closing section
-explains.
+carries over unchanged for them; the foghorn and the microduck voice files are the exceptions the
+closing sections explain.
 
 ## The cues
 
@@ -32,12 +33,20 @@ explains.
 | `microduck-victory.wav` | 1.16 s | The author's duck crosses the line on the publication page. | Apache-2.0 (see below) |
 | `rank-climb.wav` | 0.62 s | The author's row climbs the pegboard. | CC0-1.0 |
 | `microduck-chirp.wav` | 0.16 s | With the climb: the duck's own note as it lands on its peg. | CC0-1.0 |
-| `round-0.wav` … `round-4.wav` | 1.39–1.51 s | The clip's title card: an event's jingle, one variant per event (`hash(event.id) mod 5`, or `[clip] jingle`). | CC0-1.0 |
+| `foghorn.wav` | 1.78 s | The clip's start: the horn as the title leaves and the ducks set off. | CC0-1.0 (see below) |
 | `microduck-fall.wav` | 0.58 s | The clip's outro after a DNF stamp: the duck's own falling note. | Apache-2.0 (see below) |
 
 `app/src/sound.js` is the only code that plays them. The booth plays from a click; the
 publication page's reveal may start from a deep link with no gesture yet, and a play the
 browser refuses is silence, never an error.
+
+## The foghorn
+
+`foghorn.wav` is not vendored: `scripts/synth_foghorn.py` in this repository computes it sample by
+sample — two detuned harmonic stacks a fifth apart, an envelope and a soft clip, no recording —
+and re-running it writes the same bytes. It is dedicated to the public domain under the same
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) as the kit. Change the sound by
+changing the script, never the file.
 
 ## The microduck voice
 

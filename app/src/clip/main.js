@@ -8,7 +8,7 @@ import { formatScore } from "../format.js";
 import { lanesFor } from "../lanes.js";
 import { CTRL_DT, frameCount } from "../replay.js";
 import { createViewer } from "../viewer.js";
-import { actAt, clipPlan, stepAt } from "./plan.js";
+import { actAt, clipPlan, stepAt, travelAt } from "./plan.js";
 import { clipScore } from "./score.js";
 import { renderSoundtrack } from "./soundtrack.js";
 
@@ -66,15 +66,19 @@ async function main() {
   const camera = { ...config.camera, distance: DISTANCE[layout] };
   const viewer = await createViewer($("stage"), { rig: run.event.rig, manual: true, camera });
   viewer.setLanes(
-    lanes.map((lane, i) => ({
-      runId: lane.run_id,
-      trace: traces[i],
-      livery: lane.livery,
-      colour: LANE_COLORS[i % LANE_COLORS.length],
-      opacity: 1,
-      name: `@${lane.user}`,
-      nameColour: LANE_CSS[i % LANE_CSS.length],
-    })),
+    lanes
+      .map((lane, i) => ({
+        runId: lane.run_id,
+        trace: traces[i],
+        livery: lane.livery,
+        colour: LANE_COLORS[i % LANE_COLORS.length],
+        opacity: 1,
+        name: `@${lane.user}`,
+        nameColour: LANE_CSS[i % LANE_CSS.length],
+      }))
+      // The camera stands beyond the last lane: reversed, the author's duck is
+      // the one in the foreground, still in the colour its page gives it.
+      .reverse(),
     run.event,
     { loop: false },
   );
@@ -86,8 +90,9 @@ async function main() {
   function draw(i) {
     const act = actAt(plan, i);
     const step = stepAt(plan, i);
-    viewer.frame(step * CTRL_DT);
+    viewer.frame(step * CTRL_DT, travelAt(plan, i));
     $("osd-clock").textContent = clock(step);
+    document.documentElement.dataset.act = act;
     $("intro").hidden = act !== "intro";
     $("stamp").hidden = act !== "outro";
     $("sheet").hidden = !(act === "outro" || layout === "vertical");
