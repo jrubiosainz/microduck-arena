@@ -10,8 +10,8 @@ background the moment the publish completes. Each clip is the arena's own
 stage: the author's duck racing the three ducks ranked just under it, every
 duck wearing its `@name`, a stadium crowd that follows the race and reacts to
 the verdict, a title over the waiting ducks while the camera travels to the
-start, a foghorn for the off, the `FINISHED n/N` or `DNF`
-stamp slamming down at the end with the time, the place and the points.
+start, an air horn for the off, a crowd that builds to the line, the `VICTORY` or
+`DNF` stamp slamming down on the author's duck with the time, the place and the points.
 
 On the publication page (`#/r/<run_id>`), under the points, a row of stickers
 shares the result: X and LinkedIn open with the post pre-filled; Instagram and
@@ -253,9 +253,9 @@ The recorder reads and calls nothing else.
 
 | Act | Picture | Sound |
 | --- | --- | --- |
-| Title | The waiting ducks on the stage, the author's in the foreground; over the sky, eyebrow `Microduck Arena`, the event title, `@user · policy` on a shade of ink. No OSD yet, and the vertical top band keeps its words for the horn | the crowd waiting; the foghorn at the intro's end, as the title leaves |
+| Title | The waiting ducks on the stage, the author's in the foreground; over the sky, eyebrow `Microduck Arena`, the event title, `@user · policy` on a shade of ink. No OSD yet, and the vertical top band keeps its words for the horn | the crowd waiting; the air horn at the intro's end, as the title leaves |
 | Tape | The stage full frame, four named ducks. OSD: `● REC · @user · policy` top-left, the clock `00:00.00` bottom-right, the event title bottom-left (landscape). Vertical: a top band with eyebrow, title and `@user · policy`, and the figures band at the bottom throughout | the crowd |
-| Outro | The last frame frozen. The stamp `FINISHED n/N` (lime) or `DNF` (magenta), `fx-tilt-2-5`, top-right of the screen. The figures band: the time (`formatScore`), the place (`#rank`, or `—` off the board or withdrawn), the points (`+N`, or `—` at zero); under it the weights' address without its scheme when `policy_url` is set | `stamp.wav` at the tape end; `microduck-victory.wav` or `microduck-fall.wav` 160 ms later; the crowd turns to the verdict |
+| Outro | The last frame frozen. The stamp `VICTORY` (lime) or `DNF` (magenta), `fx-tilt-2-5`, centred on the author's duck where the viewer's `spot` says it stands. The figures band: the time (`formatScore`), the place (`#rank`, or `—` off the board or withdrawn), the points (`+N`, or `—` at zero); under it the weights' address without its scheme when `policy_url` is set | `stamp.wav` at the tape end; `microduck-victory.wav` or `microduck-fall.wav` 160 ms later; the crowd turns to the verdict |
 
 Landscape shows the figures band only in the outro, over the frozen frame.
 
@@ -268,12 +268,15 @@ Before any frame, the page builds the **score**:
   `fail`, and `progress` samples the author's trunk `x / length_m`, clamped to
   `[0, 1]`, every 0.5 s of tape. `stadiumDirection` turns it into a pure
   function of time: play rises with the tape, encouragement follows progress,
-  the start horn raises a surge that settles back by +3.7 s, joy or sadness is
-  full as the duck reaches the line and holds over the outro.
-- `cues`: `foghorn.wav` at the tape start, `stamp.wav` at the tape end, the
+  the start horn raises a surge that never settles back — it builds with the
+  author's progress, joy creeping in with its square on a pass — and joy or
+  sadness is full 0.2 s before the line, as a real crowd sees it coming, and
+  holds over the outro.
+- `cues`: `air-horn.mp3` at the tape start, `stamp.wav` at the tape end, the
   verdict voice at tape end + 0.16 s — each `{ at, file, gain, room }`, only
-  from the sources the event lists. A cue in the `room` (the horn, the voice)
-  goes through the stadium's own bus, its reverb and echoes; the stamp is dry.
+  from the sources the event lists. A cue in the `room` (the verdict voice) is
+  heard only as the stadium's reverb and echoes of it, never dry; the horn,
+  whose echo is in its file, and the stamp go to the mix dry.
 
 `soundtrack()` renders **one** `OfflineAudioContext` of `frames / fps`
 seconds at 48 kHz stereo: `renderStadium`'s voices driven by the direction,
@@ -282,13 +285,17 @@ its instant, a `DynamicsCompressor` set as a limiter at the output so no
 sample reaches ±1 — the live programme refuses a clip that clips. The
 interleaved float32 buffer is the whole soundtrack; it is rendered once per
 run and given to both layouts' ffmpeg as `-f f32le`. Gains are measured on a
-real render: horn 0.1, victory 0.8 and fall 0.15 through the stadium (the fall's
-file is 9 dB hotter, and plays over a crowd gone quiet), stamp 0.6 dry.
+real render: the stadium at half its own volume so its protection compressor
+leaves the crowd room to build, made up by ×3 after it; horn 2 and stamp 0.6
+dry; victory 4 and fall 0.45 into the stadium's echo (the fall's file is 9 dB
+hotter, and plays over a crowd gone quiet). Chrome's limiter adds make-up gain,
+so the sprint's joy and victory together peak at 0.97: pushing either higher
+clips.
 
 `app/src/clip/stadium.js` and `app/src/clip/direction.js` are Duck Jam's
 `design/sound/stadium.mjs` and `stadium-direction.mjs`, ported with their
-origin in a header comment; the direction's start surge and its prompt verdict
-are this repository's.
+origin in a header comment; the direction's start surge, its build to the line
+and its early verdict are this repository's.
 
 ### Sound sources
 
@@ -301,8 +308,8 @@ exists.
 
 ### The horn
 
-`foghorn.wav` is synthesised by `scripts/synth_foghorn.py` (CC0-1.0, two
-detuned reeds a fifth apart), the same file for every event.
+`air-horn.mp3`, made for the arena by Nicolas Rabault with its echo in the
+file, the same for every event.
 
 ### The live contract
 
