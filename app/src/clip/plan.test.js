@@ -15,13 +15,16 @@ describe("clipPlan", () => {
     expect(clipPlan(5000, 12, 26)).toMatchObject({ steps: 626, tape: 313 });
   });
 
-  it("shows the reset pose under the title, the settle and the tape at speed, and holds the last step in the outro", () => {
+  it("shows the reset pose under the title, the settle and the tape at speed, and keeps the race running through the outro", () => {
     const plan = clipPlan(200, 12, 26);
     expect(stepAt(plan, 0)).toBe(0);
     expect(stepAt(plan, 75)).toBe(0);
     expect(stepAt(plan, 76)).toBe(2);
     expect(stepAt(plan, 187)).toBe(224);
-    expect(stepAt(plan, 250)).toBe(225);
+    // Past the author's last step: its lane holds there (the player holds a
+    // finished lane), the rivals still running go on.
+    expect(stepAt(plan, 188)).toBe(226);
+    expect(stepAt(plan, 250)).toBe(350);
     expect([actAt(plan, 0), actAt(plan, 75), actAt(plan, 188)]).toEqual(["intro", "tape", "outro"]);
   });
 

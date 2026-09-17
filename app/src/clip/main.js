@@ -97,8 +97,9 @@ async function main() {
     const act = actAt(plan, i);
     const step = stepAt(plan, i);
     viewer.frame(step * CTRL_DT, travelAt(plan, i));
-    // The clock starts where the record's does: after the settle.
-    $("osd-clock").textContent = clock(Math.max(0, step - plan.settle));
+    // The clock starts where the record's does, after the settle, and stops on
+    // the author's last step while the rivals race on.
+    $("osd-clock").textContent = clock(Math.max(0, Math.min(step, plan.steps - 1) - plan.settle));
     document.documentElement.dataset.act = act;
     $("intro").hidden = act !== "intro";
     $("stamp").hidden = act !== "outro";

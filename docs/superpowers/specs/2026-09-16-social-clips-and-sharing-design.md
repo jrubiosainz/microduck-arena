@@ -247,9 +247,11 @@ holding the trace's first frame, so older runs keep in step. The clock reads
 `draw(i)`: intro frames pose step 0 under the title, the camera
 `travelPose(chase, min(1, i / travel))` of the way round from ahead of the line
 to the chase, which it holds for the last 0.6 s; tape frames pose
-step `(i − intro) × 2`; outro frames hold the last step under the stamp and
-the figures. Rivals that finish first wait at the line; rivals still running
-when the author's trace ends are cut with it, as the reveal does. A run longer
+step `(i − intro) × 2`, and the outro goes on counting under the stamp and the
+figures: the author's duck holds its last frame, as the player holds any
+finished lane, rivals that finished first wait at the line, and rivals still
+running race on for the outro's 2.5 s. The clock stops on the author's last
+step. A run longer
 than `tape_max_s` — a timeout — is cut at the ceiling and stamped anyway: the
 verdict is the record's, not the tape's.
 

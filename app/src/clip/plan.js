@@ -1,6 +1,7 @@
 // The clip's frame plan: a title over the waiting ducks while the camera travels
-// to the chase, the tape at speed, an outro on the last frame. Pure, so the
-// recorder's expectations and the page's drawing are pinned by one test.
+// to the chase, the tape at speed, an outro while the rest of the race runs on.
+// Pure, so the recorder's expectations and the page's drawing are pinned by one
+// test.
 
 import { CTRL_DT } from "../replay.js";
 
@@ -41,10 +42,12 @@ export function clipPlan(authorFrames, tapeMaxS, settle) {
   };
 }
 
-/** The trace step clip frame `i` shows. */
+/** The trace step clip frame `i` shows. The clock runs on through the outro:
+ * the author's lane holds its last frame, as the player holds any finished
+ * lane, while the rivals still racing go on. */
 export function stepAt(plan, i) {
   if (i < plan.intro) return 0;
-  return Math.min(plan.steps - 1, (i - plan.intro) * plan.stride);
+  return (i - plan.intro) * plan.stride;
 }
 
 /** How far through its travel to the chase the camera is at clip frame `i`, 0 to 1. */
