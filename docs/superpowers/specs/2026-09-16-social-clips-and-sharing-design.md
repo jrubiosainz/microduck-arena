@@ -457,9 +457,14 @@ Under them, once `ready`, a small player for the landscape clip — `controls`,
 `preload="none"` so nothing is fetched before a press, the poster standing in,
 the API serving ranges. It lives in `.run-share-screen`, which takes whatever
 room the column has left under the stickers (a size container): the video fills
-that height at 16:9 up to 22rem wide, and steps aside under 88 px so it never
-spills onto the board. Measured: 352×198 at 1920×1080, 217×122 at 1440×900,
-absent at 1536×864, 1366×768 and 1280×800, 352×198 in the scrolling fallback.
+that height at 16:9 up to 22rem wide, and steps aside under 72 px so it never
+spills onto the board. To make that room, the scoreboard is one line — label,
+time, and the stamp's lane beside it — where it was three (172 px at
+1440×900), and the column's gaps are 12 px. Measured with one row of receipts:
+352×198 at 1920×1080, 1536×864 and 1440×900, 292×164 at 1280×800, 231×130 at
+1366×768, 159×89 at 1100×720, 352×198 in the scrolling fallback; with an
+author's two rows of receipts at 1366×768, 154×87 through the whole reveal,
+the stamp landing in its lane beside the rolling digits.
 
 ### Behaviour — `app/src/share.js`
 
