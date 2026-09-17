@@ -50,16 +50,28 @@ def create_app(config: ArenaConfig) -> FastAPI:
     from ..clips import ClipRenderer
     from ..commentary.lore import load
 
-    token = commentary.hub_token(config) if config.commentary_enabled else None
+    # Why the booth is off, for the boot to say in one line, or None when it is
+    # on. The bible is edited by hand and deployed without a test job, so a
+    # malformed one costs the arena its booth, never its board.
     writer = None
-    if token:
-        lore = load()
-        provider = commentary.router_provider(config.commentary_model, token)
+    if not config.commentary_enabled:
+        app.state.booth_off = "ARENA_COMMENTARY=0"
+    elif not (token := commentary.hub_token(config)):
+        app.state.booth_off = "no Hub token"
+    else:
+        try:
+            lore = load()
+        except (OSError, ValueError) as why:
+            app.state.booth_off = f"the commentators' bible does not load: {why}"
+        else:
+            app.state.booth_off = None
+            provider = commentary.router_provider(config.commentary_model, token)
 
-        def writer(run_id: str) -> dict:
-            return commentary.compose(
-                app.state.store, run_id, lore=lore, provider=provider, model=config.commentary_model
-            )
+            def writer(run_id: str) -> dict:
+                return commentary.compose(
+                    app.state.store, run_id, lore=lore, provider=provider,
+                    model=config.commentary_model,
+                )
 
     app.state.clips = ClipRenderer(
         app.state.store, config.origin, config.frontend_dir, config.clip_parallel,

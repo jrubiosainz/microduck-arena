@@ -14,7 +14,7 @@ from ..manifest import Manifest, all_events
 from ..points import counting, receipts
 from ..store import RunRecord
 from .context import Fact, result_facts
-from .generator import complete, write
+from .generator import AT_NAME, complete, write
 from .lore import Lore, select_memories
 from .notable import notable_facts, pick, situation
 
@@ -65,9 +65,9 @@ def used_memories(store, exclude: str | None, cooldown: int = COOLDOWN) -> set[s
 
 def _recent_fact(body: dict) -> Fact:
     about = " ".join(f["text"] for f in body["facts"] if f["kind"] == "result")
-    # The names that commentary established are the ones a callback may speak.
-    names = tuple(word.lstrip("@").rstrip(".,;:!?")
-                  for word in about.split() if word.startswith("@"))
+    # The names that commentary established are the ones a callback may speak,
+    # read with the writer's own pattern so "@alice's" yields the same identity.
+    names = AT_NAME.findall(about)
     return Fact(f"recent:{body['run_id']}", f"Earlier this season: {about}", "recent",
                 identities=tuple(dict.fromkeys(names)))
 
@@ -96,7 +96,7 @@ def compose(store, run_id: str, *, lore: Lore, provider, model: str) -> dict:
     """A checked dialogue for one run, or Rejected from the writer."""
     record = find_run(store, run_id)
     facts, recent = gather(store, record, lore)
-    written = write(run_id, facts, recent, lore=lore, provider=provider, model=model)
+    written = write(facts, recent, lore=lore, provider=provider, model=model)
     cited = {ref for turn in written["turns"] for ref in turn["fact_refs"]}
     return {
         "run_id": run_id, **written,

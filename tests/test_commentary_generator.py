@@ -2,10 +2,18 @@
 
 import json
 
+import httpx
 import pytest
 
 from arena.commentary.context import Fact
-from arena.commentary.generator import CHECK_LIMIT, WRITE_LIMIT, Rejected, write
+from arena.commentary.generator import (
+    CHECK_LIMIT,
+    ROUTER,
+    WRITE_LIMIT,
+    Rejected,
+    complete,
+    write,
+)
 from arena.commentary.lore import load
 
 LORE = load()
@@ -61,7 +69,7 @@ def run_case(turns=TURNS, verdict=CHECK, facts=FACTS, recent=RECENT):
     # The audit answers a small JSON object of booleans: its completion_tokens
     # must fit CHECK_LIMIT, unlike the write call's much larger budget.
     provider = provider_for(reply(turns), reply(verdict, completion_tokens=80))
-    return write("R1", facts, recent, lore=LORE, provider=provider, model="fake/model"), provider
+    return write(facts, recent, lore=LORE, provider=provider, model="fake/model"), provider
 
 
 def test_a_checked_dialogue_keeps_the_prose_and_maps_indices_to_references():
@@ -153,7 +161,7 @@ def test_the_audit_must_say_true_four_times(verdict):
 def test_an_invalid_provider_answer_is_rejected(changes):
     provider = provider_for(reply(TURNS, **changes), reply(CHECK, completion_tokens=80))
     with pytest.raises(Rejected):
-        write("R1", FACTS, RECENT, lore=LORE, provider=provider, model="m")
+        write(FACTS, RECENT, lore=LORE, provider=provider, model="m")
 
 
 def test_a_name_spoken_in_a_facts_own_text_is_grounded_by_that_fact_alone():
@@ -193,3 +201,50 @@ def test_a_recent_run_may_be_called_back_only_by_its_fact():
     assert written["turns"][1]["fact_refs"] == ["recent:R9"]
     with pytest.raises(Rejected, match="name"):
         run_case(turns=[TURNS[0], {**turns[1], "fact_refs": [2]}, TURNS[2]])
+
+
+class Answered:
+    """What the router sends back when it is happy."""
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"model": "served/model", "usage": {"prompt_tokens": 7, "completion_tokens": 9},
+                "choices": [{"message": {"content": "[]"}, "finish_reason": "stop"}]}
+
+
+def test_complete_posts_the_routers_contract_and_retries_a_transport_error_once(monkeypatch):
+    posts = []
+
+    def post(url, *, headers, json, timeout):
+        posts.append({"url": url, "headers": headers, "body": json, "timeout": timeout})
+        if len(posts) == 1:
+            raise httpx.TransportError("connection reset")
+        return Answered()
+
+    monkeypatch.setattr(httpx, "post", post)
+    messages = [{"role": "user", "content": "hi"}]
+    answer = complete(messages, WRITE_LIMIT, model="a/model", token="t")
+    assert answer == {"content": "[]", "finish_reason": "stop", "model": "served/model",
+                      "prompt_tokens": 7, "completion_tokens": 9}
+    assert posts[0] == {
+        "url": ROUTER, "headers": {"Authorization": "Bearer t"}, "timeout": 15.0,
+        "body": {"model": "a/model", "messages": messages, "max_tokens": WRITE_LIMIT,
+                 "temperature": 0.3, "reasoning_effort": "none"},
+    }
+    # The retry is the same request to the same provider: there is no failover.
+    assert posts == [posts[0], posts[0]]
+
+
+def test_a_second_transport_error_is_not_retried_again(monkeypatch):
+    posts = []
+
+    def post(url, **sent):
+        posts.append(url)
+        raise httpx.TransportError("connection reset")
+
+    monkeypatch.setattr(httpx, "post", post)
+    with pytest.raises(httpx.TransportError):
+        complete([], CHECK_LIMIT, model="a/model", token="t")
+    assert posts == [ROUTER, ROUTER]

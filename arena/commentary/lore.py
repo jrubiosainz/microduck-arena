@@ -32,6 +32,10 @@ class Lore:
 
 def load(path: Path = LORE_PATH) -> Lore:
     raw = json.loads(Path(path).read_text())
+    # A ValueError, not the TypeError ruff would prefer, here and below: every
+    # malformed bible fails one way, so the boot catches the lot in one clause.
+    if not isinstance(raw, dict):
+        raise ValueError("lore: the bible must be an object")  # noqa: TRY004
     characters = raw.get("characters")
     if not isinstance(characters, dict) or set(characters) != {"peter", "ray"}:
         raise ValueError("lore: characters must be exactly peter and ray")
@@ -40,6 +44,8 @@ def load(path: Path = LORE_PATH) -> Lore:
             raise ValueError(f"lore: {speaker} needs a name and a sheet")
     memories = []
     for entry in raw.get("memories", []):
+        if not isinstance(entry, dict):
+            raise ValueError("lore: every memory must be an object")  # noqa: TRY004 — see above
         ident, tags, memory = entry.get("id"), entry.get("tags"), entry.get("memory")
         if not isinstance(ident, str) or not ident or not isinstance(tags, list) or not tags:
             raise ValueError(f"lore: memory {ident!r} needs an id and tags")

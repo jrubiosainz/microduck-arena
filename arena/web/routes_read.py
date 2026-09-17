@@ -445,8 +445,9 @@ _CLIP_TYPES = {"mp4": "video/mp4", "png": "image/png", "json": "application/json
 @router.get("/runs/{run_id}/clip/{name}")
 def run_clip_file(run_id: str, name: str, request: Request, download: int = 0) -> FileResponse:
     """A clip's file. Streamed from here because the dataset is private; the
-    bytes behind a ready clip never change, so cached hard. `download=1` makes
-    the answer an attachment with a name worth keeping."""
+    bytes behind a ready clip never change, so cached hard — all but the
+    rewritable commentary. `download=1` makes the answer an attachment with a
+    name worth keeping."""
     store = request.app.state.store
     record = _find_run(store, run_id)
     if name not in CLIP_MEDIA or store.clip_state(run_id)[0] != "ready":

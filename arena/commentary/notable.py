@@ -86,14 +86,6 @@ def first_runs(s: Situation) -> list[Fact]:
     return []
 
 
-def opens_board(s: Situation) -> list[Fact]:
-    if s.timed and len(s.on_event()) == 1:
-        return [Fact("notable#/opens-board",
-                     f"@{s.user} opens the {s.manifest.title}: nobody had published on it before.",
-                     "notable", ("open-board", "first-run"), score=0.8)]
-    return []
-
-
 def busy_day(s: Situation) -> list[Fact]:
     day = s.record.submitted_at[:10]
     n = sum(1 for r in s.mine() if r.submitted_at[:10] == day)
@@ -255,8 +247,8 @@ def opponents(s: Situation) -> list[Fact]:
     return out
 
 
-DETECTORS = (first_runs, opens_board, busy_day, milestone, personal_best, climb, dnf_streaks,
-             leads_events, regular, rivalry, opponents)
+DETECTORS = (first_runs, busy_day, milestone, personal_best, climb, dnf_streaks, leads_events,
+             regular, rivalry, opponents)
 
 
 def notable_facts(s: Situation) -> list[Fact]:

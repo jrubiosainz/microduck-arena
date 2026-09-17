@@ -110,12 +110,13 @@ def _cmd_recover(args) -> int:
     return 0
 
 
-def _cmd_clip(args) -> int:
-    """Render one run's clips into a local store, by hand.
+def _app_on_loopback(store_dir) -> tuple | None:
+    """The app on a free loopback port, answering, with its clip worker off.
 
-    The recorder's Chrome needs the clip page and the API, so the app is
-    started here on a free loopback port, without its own clip worker — this
-    one render must not be raced by a drain of everything else owed.
+    The recorder's Chrome needs the clip page and the API; the worker is off
+    because one render by hand must not be raced by a drain of everything else
+    owed. The config, the app, the running server and its origin — or None,
+    the failure already reported.
     """
     import socket
     import threading
@@ -123,7 +124,6 @@ def _cmd_clip(args) -> int:
     import httpx
     import uvicorn
 
-    from .clips import ClipRenderer
     from .web.app import create_app
     from .web.config import ArenaConfig
 
@@ -131,23 +131,32 @@ def _cmd_clip(args) -> int:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     origin = f"http://127.0.0.1:{port}"
-    config = ArenaConfig.from_env(store_dir=args.store, origin=origin, clip_worker=False)
+    config = ArenaConfig.from_env(store_dir=store_dir, origin=origin, clip_worker=False)
     app = create_app(config)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     threading.Thread(target=server.run, daemon=True).start()
     for _ in range(100):
         try:
             if httpx.get(f"{origin}/api/health", timeout=1).status_code == 200:
-                break
+                return config, app, server, origin
         except httpx.HTTPError:
             pass
         # Outside the except: a non-200 answer is not an error either, and
         # must not spin the loop any faster than a connection refused does.
         time.sleep(0.1)
-    else:
-        print(f"the app did not come up on {origin}", file=sys.stderr)
-        server.should_exit = True
+    print(f"the app did not come up on {origin}", file=sys.stderr)
+    server.should_exit = True
+    return None
+
+
+def _cmd_clip(args) -> int:
+    """Render one run's clips into a local store, by hand."""
+    from .clips import ClipRenderer
+
+    started = _app_on_loopback(args.store)
+    if started is None:
         return 1
+    config, app, server, origin = started
 
     renderer = ClipRenderer(
         app.state.store, origin, config.frontend_dir, args.parallel or config.clip_parallel
@@ -182,32 +191,22 @@ def _cmd_commentary(args) -> int:
     loopback port for the clip page, like `arena clip`, and overwrites the
     run's commentary.json.
     """
-    import socket
-    import threading
-
-    import httpx
-    import uvicorn
-
     from . import commentary
     from .clips import ClipRenderer
     from .commentary.generator import Rejected
     from .commentary.lore import load
-    from .web.app import create_app
     from .web.config import ArenaConfig
 
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    origin = f"http://127.0.0.1:{port}"
-    config = ArenaConfig.from_env(store_dir=args.store, origin=origin, clip_worker=False)
+    config = ArenaConfig.from_env(store_dir=args.store)
     token = commentary.hub_token(config)
     if not token:
         print("no Hub token: set HF_TOKEN or run `hf auth login`", file=sys.stderr)
         return 1
     lore = load()
-    provider = commentary.router_provider(config.commentary_model, token)
-    store = config.build_store()
+    model = config.commentary_model
+    provider = commentary.router_provider(model, token)
     if args.dry_run:
+        store = config.build_store()
         try:
             record = commentary.find_run(store, args.run_id)
         except LookupError as exc:
@@ -218,7 +217,7 @@ def _cmd_commentary(args) -> int:
             print(f"[{i}] {fact.text}" + ("  (memory)" if fact.kind == "lore" else ""))
         try:
             written = commentary.compose(store, args.run_id, lore=lore, provider=provider,
-                                         model=config.commentary_model)
+                                         model=model)
         except Rejected as why:
             print(f"\nnot on air: {why}", file=sys.stderr)
             return 1
@@ -229,28 +228,17 @@ def _cmd_commentary(args) -> int:
               f"{written['usage']['completion_tokens']} tokens")
         return 0
 
-    app = create_app(config)
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
-    threading.Thread(target=server.run, daemon=True).start()
-    for _ in range(100):
-        try:
-            if httpx.get(f"{origin}/api/health", timeout=1).status_code == 200:
-                break
-        except httpx.HTTPError:
-            pass
-        time.sleep(0.1)
-    else:
-        print(f"the app did not come up on {origin}", file=sys.stderr)
-        server.should_exit = True
+    started = _app_on_loopback(args.store)
+    if started is None:
         return 1
+    config, app, server, origin = started
     if app.state.store.clip_state(args.run_id)[0] != "ready":
         print(f"{args.run_id} has no ready clip; render it first with `arena clip`", file=sys.stderr)
         server.should_exit = True
         return 1
     worker = ClipRenderer(app.state.store, origin, config.frontend_dir, log=print,
                           commentary=lambda run_id: commentary.compose(
-                              app.state.store, run_id, lore=lore, provider=provider,
-                              model=config.commentary_model))
+                              app.state.store, run_id, lore=lore, provider=provider, model=model))
     if not worker.available:
         print("needs a Chrome ($CHROME or the usual paths), ffmpeg, and a built clip.html",
               file=sys.stderr)
@@ -280,8 +268,7 @@ def _cmd_serve(args) -> int:
         print(f"frontend  {config.frontend_dir}")
     clips = "on" if app.state.clips.available else "off (no Chrome, ffmpeg or clip page)"
     print(f"clips  {clips}")
-    booth = "on" if app.state.clips.writes_commentary else (
-        "off (ARENA_COMMENTARY=0)" if not config.commentary_enabled else "off (no Hub token)")
+    booth = "on" if app.state.booth_off is None else f"off ({app.state.booth_off})"
     print(f"booth  {booth}")
     print(f"\n  http://{args.host}:{args.port}\n")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")

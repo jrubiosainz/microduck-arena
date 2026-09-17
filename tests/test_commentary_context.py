@@ -30,6 +30,8 @@ def test_technical_text_catches_paths_ids_and_filenames_but_not_prose():
     assert technical_text("the sprint_2m event")
     assert not technical_text("a 12.40 s sprint, every seed finished")
     assert label("walker-v3") and not label("<b>walker</b>") and not label("x" * 81)
+    # Machine-shaped: a fact quoting it would have every turn that spoke it refused.
+    assert not label("walker_v3")
 
 
 def test_nature_reads_the_manifest():

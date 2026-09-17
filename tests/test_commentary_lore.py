@@ -27,7 +27,9 @@ def test_a_malformed_bible_is_refused(tmp_path):
         {**good, "memories": [{"id": "a", "tags": [], "memory": "Once."}]},             # no tags
         {**good, "memories": [{"id": "a", "tags": ["hill"], "memory": "x" * 401}]},     # too long
         {**good, "memories": [{"id": "a", "tags": ["hill"], "memory": "see /tmp/x"}]},  # technical
+        {**good, "memories": ["Once."]},                                          # not an object
         {**good, "characters": {"peter": good["characters"]["peter"]}},               # ray missing
+        ["a bible that is a list"],                                              # not an object
     ):
         path.write_text(json.dumps(broken))
         with pytest.raises(ValueError):

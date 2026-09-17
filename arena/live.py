@@ -46,6 +46,11 @@ def pool(store) -> list[Entry]:
             replay_ms = round(clip["layouts"]["landscape"]["seconds"] * 1000)
             commentary = store.commentary(record.run_id)
             booth_ms = commentary["plan"]["duration_ms"] if commentary else None
+            # A length that is not a whole number of frames cannot be laid on
+            # the grid; such a run stays off the programme, like a run with no
+            # clip, rather than breaking the channel for everyone.
+            if replay_ms % 40 or (booth_ms or 0) % 40:
+                continue
             entries.append(Entry(record.run_id, record.user, manifest.title, record.submitted_at,
                                  replay_ms, booth_ms))
     return entries
@@ -95,6 +100,10 @@ class Programme:
         self._cycle = 0
 
     def _extend(self, until_ms: int) -> None:
+        # A process nobody read from for days leaves the cursor far behind, and
+        # every cycle built from there is pruned the moment it is built: start
+        # at the edge of the window that is actually served.
+        self._cursor = max(self._cursor, until_ms - HORIZON_MS - BEHIND_MS)
         while self._cursor < until_ms:
             entries = cycle(self._source(), self._cycle)
             if not entries:

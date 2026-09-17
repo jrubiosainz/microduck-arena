@@ -45,9 +45,11 @@ def technical_text(text: str) -> bool:
 
 
 def label(value, limit: int = 80) -> bool:
-    """Submitter-supplied text a fact may quote: short, printable, no markup."""
+    """Submitter-supplied text a fact may quote: short, printable, no markup,
+    nothing machine-shaped — a fact quoting it would have the turn refused."""
     return (isinstance(value, str) and 0 < len(value.strip()) <= limit
-            and value.isprintable() and not any(c in value for c in "<>"))
+            and value.isprintable() and not any(c in value for c in "<>")
+            and not technical_text(value))
 
 
 def nature(manifest: Manifest) -> tuple[str, tuple[str, ...]]:

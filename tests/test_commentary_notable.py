@@ -7,23 +7,25 @@ from tests.test_commentary_context import run
 EVENTS = {m.id: m for m in all_events() if m.status == "open"}
 
 
-def facts_for(record, *others, withdrawn=frozenset()):
-    s = situation(record, [record, *others], withdrawn, EVENTS)
+def facts_for(record, *others):
+    s = situation(record, [record, *others], frozenset(), EVENTS)
     return {f.ref: f for f in notable_facts(s)}
 
 
-def test_a_first_publication_opens_a_board_and_is_a_first():
+def test_a_first_publication_is_a_first_in_the_arena():
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
     facts = facts_for(mine)
+    # The only angle a lone first run has: that it also opens the board is the
+    # board fact's to say, and it says it.
+    assert list(facts) == ["notable#/first-ever"]
     assert facts["notable#/first-ever"].text == "This is @alice's first publication in the arena."
-    assert facts["notable#/opens-board"].text == "@alice opens the 2 m Sprint: nobody had published on it before."
-    assert facts["notable#/first-ever"].score > facts["notable#/opens-board"].score
 
 
 def test_the_log_after_the_publish_is_invisible():
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
     later = run("carol", 11.0, "2026-09-12T10:00:00Z")
-    assert "notable#/opens-board" in facts_for(mine, later)
+    s = situation(mine, [mine, later], frozenset(), EVENTS)
+    assert [r.run_id for r in s.on_event()] == [mine.run_id]
 
 
 def test_a_first_time_under_a_threshold_is_a_record_for_the_event_or_a_milestone_for_the_player():
@@ -106,4 +108,5 @@ def test_pick_keeps_the_best_and_varies_the_angle():
 def test_a_withdrawn_run_is_not_in_the_world():
     gone = run("carol", 10.0, "2026-09-10T10:00:00Z", run_id="GONE")
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
-    assert "notable#/opens-board" in facts_for(mine, gone, withdrawn=frozenset({"GONE"}))
+    s = situation(mine, [mine, gone], frozenset({"GONE"}), EVENTS)
+    assert [r.run_id for r in s.on_event()] == [mine.run_id]

@@ -166,8 +166,7 @@ def _ask(provider, system: str, user: dict, max_tokens: int) -> tuple:
         raise Rejected("model answer is not JSON") from exc
 
 
-def write(run_id: str, facts: list[Fact], recent: list[dict], *, lore: Lore, provider,
-          model: str) -> dict:
+def write(facts: list[Fact], recent: list[dict], *, lore: Lore, provider, model: str) -> dict:
     """Facts in, a checked dialogue out, or Rejected with the reason."""
     by_ref = {fact.ref: i for i, fact in enumerate(facts)}
     names = {name for fact in facts for name in fact.identities}
