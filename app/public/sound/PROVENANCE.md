@@ -34,7 +34,7 @@ closing sections explain.
 | `microduck-victory-echo.mp3` | 4.59 s | The clip's outro on a pass: the victory with a stadium's echo. | Apache-2.0 (see below) |
 | `rank-climb.wav` | 0.62 s | The author's row climbs the pegboard. | CC0-1.0 |
 | `microduck-chirp.wav` | 0.16 s | With the climb: the duck's own note as it lands on its peg. | CC0-1.0 |
-| `air-horn.mp3` | 2.10 s | The clip's start: the horn as the title leaves and the ducks set off, its stadium echo in the file. | Nicolas Rabault's (see below) |
+| `air-horn.mp3` | 2.10 s | The clip's start: the horn as the title leaves and the ducks set off, its stadium echo in the file. | CC0-1.0 (see below) |
 | `microduck-fall.wav` | 0.58 s | The clip's outro after a DNF stamp: the duck's own falling note. | Apache-2.0 (see below) |
 
 `app/src/sound.js` is the only code that plays them. The booth plays from a click; the
@@ -44,8 +44,9 @@ browser refuses is silence, never an error.
 ## The air horn
 
 `air-horn.mp3` is not a `build-kit.mjs` cue: Nicolas Rabault made it for the arena on
-2026-09-17 (the Audacity project `HORNAir`), echo included, so the clip plays it dry. It is
-his to license; it does not travel with the CC0 dedication above.
+2026-09-17 (the Audacity project `HORNAir`), echo included, so the clip plays it dry. He
+dedicates it to the public domain under the same
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) as the kit.
 
 ## The microduck voice
 
