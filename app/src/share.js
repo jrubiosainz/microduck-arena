@@ -62,9 +62,10 @@ function mark(tag, id, tilt) {
 
 /**
  * Under the points: a row of the networks — X and LinkedIn as links, Instagram
- * and TikTok as buttons — then a row of one cyan sticker per clip, then the
- * line that says what a press did. `setClip` takes the `/clip` body and
- * dresses the clip stickers for its state.
+ * and TikTok as buttons — then a row of one cyan sticker per clip, the line
+ * that says what a press did, and a small player for the landscape clip, to
+ * watch it here without downloading it. `setClip` takes the `/clip` body and
+ * dresses the clip stickers and the player for its state.
  */
 export function shareStrip(run, { origin }) {
   const root = document.createElement("section");
@@ -100,7 +101,18 @@ export function shareStrip(run, { origin }) {
   const said = document.createElement("p");
   said.className = "mono-label run-share-said";
   said.hidden = true;
-  root.append(nav, clips, said);
+  // The player sits in a screen that takes whatever room the column has left:
+  // race.css sizes the video to it, and drops it where there is too little.
+  const screen = document.createElement("div");
+  screen.className = "run-share-screen";
+  screen.hidden = true;
+  const player = document.createElement("video");
+  player.controls = true;
+  // Nothing crosses the wire until a press: the poster stands in until then.
+  player.preload = "none";
+  player.playsInline = true;
+  screen.append(player);
+  root.append(nav, clips, said, screen);
 
   function setClip(clip) {
     for (const sticker of clips.querySelectorAll("[data-clip]")) {
@@ -117,6 +129,11 @@ export function shareStrip(run, { origin }) {
         sticker.setAttribute("aria-disabled", "true");
         sticker.textContent = "Clip · rendering…";
       }
+    }
+    screen.hidden = clip.state !== "ready";
+    if (clip.state === "ready") {
+      player.poster = clip.poster;
+      player.src = clip.layouts.landscape.url;
     }
   }
   return { root, said, setClip };

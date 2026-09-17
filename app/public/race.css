@@ -812,7 +812,7 @@ table.board .withdraw:focus-visible,
    is where the next thing this page grows will go. */
 .run-score {
   display: grid;
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
   align-content: start;
   gap: 22px;
   margin: 0;
@@ -845,13 +845,21 @@ table.board .withdraw:focus-visible,
    stickers on the next, and one line under them saying what a press did.
    Present from the first frame and veiled through a reveal, like everything
    in this column. */
-.run-share { display: grid; gap: 10px; margin: 0; }
+.run-share { display: flex; flex-direction: column; gap: 10px; margin: 0; min-height: 0; }
 .run-share-networks,
 .run-share-clips { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .run-share .sticker-mark { padding: 8px 12px; line-height: 0; }
 .run-share .sticker-logo { width: 22px; height: 22px; fill: currentColor; }
 .run-share [aria-disabled="true"] { opacity: 0.55; cursor: default; box-shadow: none; }
 .run-share-said { margin: 0; color: var(--ink-70); }
+/* The landscape clip, small, in the room this column keeps under its stickers:
+   the screen takes what is left of the column, the video fills its height at
+   16:9 up to 22rem wide, and where the room is too short to watch anything —
+   a 768px window leaves none — the video steps aside rather than spill onto
+   the board. */
+.run-share-screen { flex: 1 1 0; min-height: 0; container-type: size; }
+.run-share-screen video { display: block; height: 100%; max-height: 12.375rem; max-width: 100%; aspect-ratio: 16 / 9; background: var(--deep-ink); }
+@container (max-height: 88px) { .run-share-screen video { display: none; } }
 
 /* The pegboard: a window of the board, this run's row in lime, each row a link.
    One line per row here, the repo beside the handle instead of under it —
@@ -876,6 +884,7 @@ table.board .withdraw:focus-visible,
   .run-top .stage canvas { height: 44vh; }
   .run-board .pegboard-row { padding: 14px var(--space-card-padding-min); }
   .run-board .pegboard-repo { display: block; margin-left: 0; }
+  .run-share-screen { flex: none; height: 12.375rem; }
 }
 
 /* ── the seeds, folded away under their summary ───────────────────────── */

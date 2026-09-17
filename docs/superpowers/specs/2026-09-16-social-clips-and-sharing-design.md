@@ -453,6 +453,14 @@ Clip stickers by state: `pending` → `Clip · rendering…`, no `href`,
 `aria-disabled`, polled every 5 s; `ready` → the two downloads; `failed` or
 `none` → the two stickers are absent.
 
+Under them, once `ready`, a small player for the landscape clip — `controls`,
+`preload="none"` so nothing is fetched before a press, the poster standing in,
+the API serving ranges. It lives in `.run-share-screen`, which takes whatever
+room the column has left under the stickers (a size container): the video fills
+that height at 16:9 up to 22rem wide, and steps aside under 88 px so it never
+spills onto the board. Measured: 352×198 at 1920×1080, 217×122 at 1440×900,
+absent at 1536×864, 1366×768 and 1280×800, 352×198 in the scrolling fallback.
+
 ### Behaviour — `app/src/share.js`
 
 Ported from `sharing.mjs`, with the page's own words:

@@ -55,7 +55,7 @@ describe("intentUrl", () => {
 describe("shareStrip", () => {
   it("is a row of two links and two buttons, then a row of two clip stickers that follow the clip's state", () => {
     const strip = shareStrip(run, { origin });
-    expect([...strip.root.children].map((el) => el.tagName)).toEqual(["NAV", "DIV", "P"]);
+    expect([...strip.root.children].map((el) => el.tagName)).toEqual(["NAV", "DIV", "P", "DIV"]);
     const marks = [...strip.root.querySelector("nav").children];
     expect(marks.map((el) => el.tagName)).toEqual(["A", "A", "BUTTON", "BUTTON"]);
     expect(marks[0].href).toMatch(/^https:\/\/x\.com\/intent\/post\?text=/);
@@ -75,6 +75,29 @@ describe("shareStrip", () => {
 
     strip.setClip({ state: "failed" });
     expect(clips[0].hidden && clips[1].hidden).toBe(true);
+  });
+
+  it("plays the landscape clip under the stickers once it is ready, fetching nothing before a press", () => {
+    const strip = shareStrip(run, { origin });
+    const player = strip.root.querySelector("video");
+    const screen = player.parentElement;
+    strip.setClip({ state: "pending" });
+    expect(screen.hidden).toBe(true);
+    expect(player.hasAttribute("src")).toBe(false);
+
+    strip.setClip({
+      state: "ready",
+      poster: "/p.png",
+      layouts: { landscape: { url: "/l.mp4" }, vertical: { url: "/v.mp4" } },
+    });
+    expect(screen.hidden).toBe(false);
+    expect(player.getAttribute("src")).toBe("/l.mp4");
+    expect(player.getAttribute("poster")).toBe("/p.png");
+    expect(player.controls).toBe(true);
+    expect(player.getAttribute("preload")).toBe("none");
+
+    strip.setClip({ state: "failed" });
+    expect(screen.hidden).toBe(true);
   });
 });
 
