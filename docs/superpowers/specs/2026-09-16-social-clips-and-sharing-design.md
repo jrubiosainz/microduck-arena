@@ -9,7 +9,8 @@ landscape 1920×1080 and a vertical 1080×1920 — rendered on the server in the
 background the moment the publish completes. Each clip is the arena's own
 stage: the author's duck racing the three ducks ranked just under it, every
 duck wearing its `@name`, a stadium crowd that follows the race and reacts to
-the verdict, the event's jingle on the title card, the `FINISHED n/N` or `DNF`
+the verdict, a title over the waiting ducks while the camera travels to the
+start, a foghorn for the off, the `FINISHED n/N` or `DNF`
 stamp slamming down at the end with the time, the place and the points.
 
 On the publication page (`#/r/<run_id>`), under the points, a row of stickers
@@ -52,7 +53,7 @@ are **configured per event** in its manifest; the post text is composed
 | **The soundtrack is one offline render** | Everything is known before the first frame — the trace, the tape end, the verdict — so the page computes the whole score and renders crowd and cues in a single `OfflineAudioContext` pass with a limiter. Rules out segment-by-segment crowd renders smoothed afterwards, and ffmpeg's `adelay`/`amix` graph: ffmpeg receives one PCM track and muxes it. |
 | **The stage is the arena's viewer in a manual mode** | `viewer.js` gains `manual: true` (no animation loop, no controls) and `frame(seconds)`. The clip and the publication page share one drawing, so they cannot drift. Rules out a second stage module. |
 | **Names are 3D nameplates over each duck** | Ported from Duck Jam's `plate.mjs`: a canvas-textured sprite in the lane's colour, hung above the trunk. Four ducks on one stage need names on the ducks, not in a corner. The publication page does not enable them yet. |
-| **Per-event `[clip]` configuration** | Tape ceiling, camera, sounds and jingle live in the event manifest with defaults, so a jump or a hold can frame and score its clip differently without a code change. |
+| **Per-event `[clip]` configuration** | Tape ceiling, camera and sounds live in the event manifest with defaults, so a jump or a hold can frame and score its clip differently without a code change. |
 | **Clip state is three write-once files** | `pending.json`, then either `clip.json` with the media or `failed.json`. The store stays append-only: no file is rewritten. State is read by presence. |
 | **Media files stay out of the Hub snapshot** | `HubStore` ignores `*.mp4` and `*.png` when it downloads the run log and fetches a clip file on demand, cached. Otherwise every boot would download the whole video library. |
 | **Downloads stream through the Space** | The dataset is private, so there is no Hub URL to redirect to. Same-origin also means `<a download>` works without Duck Jam's `?download=true` trick; `?download=1` is still honoured so a link opened in a new tab saves rather than plays. |
@@ -228,14 +229,17 @@ carries the `[clip]` configuration (see below).
 
 ```
 steps  = min(frameCount(author), tape_max_s / CTRL_DT)
-intro  = 25                       # 1 s
+intro  = 75                       # 3 s
+travel = 60                       # 2.4 s of it: the camera's travel to the chase
 tape   = ceil(steps / 2)
 outro  = 63                       # 2.5 s
 frames = intro + tape + outro
 poster = intro + floor(tape × 0.6)
 ```
 
-`draw(i)`: intro frames pose step 0 under the title card; tape frames pose
+`draw(i)`: intro frames pose step 0 under the title, the camera
+`travelPose(chase, min(1, i / travel))` of the way round from ahead of the line
+to the chase, which it holds for the last 0.6 s; tape frames pose
 step `(i − intro) × 2`; outro frames hold the last step under the stamp and
 the figures. Rivals that finish first wait at the line; rivals still running
 when the author's trace ends are cut with it, as the reveal does. A run longer
@@ -249,7 +253,7 @@ The recorder reads and calls nothing else.
 
 | Act | Picture | Sound |
 | --- | --- | --- |
-| Title card | Eyebrow `Microduck Arena`, the event title, `@user · policy`, full frame on ink | the event's jingle at 0 s |
+| Title | The waiting ducks on the stage, the author's in the foreground; over the sky, eyebrow `Microduck Arena`, the event title, `@user · policy` on a shade of ink. No OSD yet, and the vertical top band keeps its words for the horn | the crowd waiting; the foghorn at the intro's end, as the title leaves |
 | Tape | The stage full frame, four named ducks. OSD: `● REC · @user · policy` top-left, the clock `00:00.00` bottom-right, the event title bottom-left (landscape). Vertical: a top band with eyebrow, title and `@user · policy`, and the figures band at the bottom throughout | the crowd |
 | Outro | The last frame frozen. The stamp `FINISHED n/N` (lime) or `DNF` (magenta), `fx-tilt-2-5`, top-right of the screen. The figures band: the time (`formatScore`), the place (`#rank`, or `—` off the board or withdrawn), the points (`+N`, or `—` at zero); under it the weights' address without its scheme when `policy_url` is set | `stamp.wav` at the tape end; `microduck-victory.wav` or `microduck-fall.wav` 160 ms later; the crowd turns to the verdict |
 
@@ -264,10 +268,12 @@ Before any frame, the page builds the **score**:
   `fail`, and `progress` samples the author's trunk `x / length_m`, clamped to
   `[0, 1]`, every 0.5 s of tape. `stadiumDirection` turns it into a pure
   function of time: play rises with the tape, encouragement follows progress,
-  joy or sadness begins at the verdict and fades over the outro.
-- `cues`: the jingle at 0 s, `stamp.wav` at the tape end, the verdict voice at
-  tape end + 0.16 s — each `{ at, file, gain }`, only from the sources the
-  event lists.
+  the start horn raises a surge that settles back by +3.7 s, joy or sadness is
+  full as the duck reaches the line and holds over the outro.
+- `cues`: `foghorn.wav` at the tape start, `stamp.wav` at the tape end, the
+  verdict voice at tape end + 0.16 s — each `{ at, file, gain, room }`, only
+  from the sources the event lists. A cue in the `room` (the horn, the voice)
+  goes through the stadium's own bus, its reverb and echoes; the stamp is dry.
 
 `soundtrack()` renders **one** `OfflineAudioContext` of `frames / fps`
 seconds at 48 kHz stereo: `renderStadium`'s voices driven by the direction,
@@ -275,28 +281,28 @@ every cue decoded with `decodeAudioData` and scheduled as a `BufferSource` at
 its instant, a `DynamicsCompressor` set as a limiter at the output so no
 sample reaches ±1 — the live programme refuses a clip that clips. The
 interleaved float32 buffer is the whole soundtrack; it is rendered once per
-run and given to both layouts' ffmpeg as `-f f32le`. Gains start at Duck Jam's
-(crowd 30 on the stadium's own scale, stamp 0.6, voice 0.4, jingle 0.5) and
-are tuned by ear on the first real render.
+run and given to both layouts' ffmpeg as `-f f32le`. Gains are measured on a
+real render: horn 0.1, victory 0.8 and fall 0.15 through the stadium (the fall's
+file is 9 dB hotter, and plays over a crowd gone quiet), stamp 0.6 dry.
 
 `app/src/clip/stadium.js` and `app/src/clip/direction.js` are Duck Jam's
-`design/sound/stadium.mjs` and `stadium-direction.mjs`, ported unchanged but
-for the import path, with their origin in a header comment.
+`design/sound/stadium.mjs` and `stadium-direction.mjs`, ported with their
+origin in a header comment; the direction's start surge and its prompt verdict
+are this repository's.
 
 ### Sound sources
 
 A source is a function `(run, traces, plan) → cues[]`, registered by name.
 Three exist: `crowd` (which contributes the direction rather than cues),
-`jingle`, `verdict`. An event's `sounds` list says which contribute; adding a
+`horn`, `verdict`. An event's `sounds` list says which contribute; adding a
 source — a `duck` foley track computed from the trace, a simulator's own
 audio — is one function and one name, and is out of scope until such a sound
 exists.
 
-### The jingle
+### The horn
 
-Duck Jam's five `round-{0..4}.wav` are vendored. The variant is
-`hash(event.id) mod 5` unless the event's `[clip]` names one, so an event
-keeps the same jingle without any new synthesis.
+`foghorn.wav` is synthesised by `scripts/synth_foghorn.py` (CC0-1.0, two
+detuned reeds a fifth apart), the same file for every event.
 
 ### The live contract
 
@@ -313,8 +319,7 @@ defaults, and `event_summary` exposes it as `clip`:
 ```toml
 [clip]
 tape_max_s = 12.0                       # the tape's ceiling in the clip
-sounds     = ["crowd", "jingle", "verdict"]
-jingle     = "round-2"                  # optional; default hash(event.id) mod 5
+sounds     = ["crowd", "horn", "verdict"]
 
 [clip.camera]
 kind          = "chase"                 # the default: today's chase camera
@@ -496,7 +501,6 @@ public, max-age=60`, so a crawler's re-fetch after the clip lands is soon.
 ## Vendored assets and licences
 
 Into `app/public/sound/`, with `PROVENANCE.md` extended one row each:
-`round-0.wav` … `round-4.wav` (CC0-1.0, `build-kit.mjs`) and
 `microduck-fall.wav` (Apache-2.0, pollen-robotics/microduck's synthesiser,
 "modified audio" per Duck Jam's `LICENSES.md`), with `MICRODUCK-LICENSE.txt`
 beside them. Duck Jam's `LICENSES.md` also lists `microduck-victory.wav` as
