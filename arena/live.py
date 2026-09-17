@@ -1,0 +1,121 @@
+"""The channel's programme: an infinite grid every screen reads its place in.
+
+Nothing is broadcast. The grid is a list of slots at absolute wall-clock
+milliseconds, built cycle after cycle from the ready clips; a screen reads the
+server's clock once, finds the slot that contains now, and plays it from the
+right offset. Two screens agree because they read the same grid and the same
+clock, not because a stream was pushed at them.
+"""
+
+import random
+import threading
+from dataclasses import dataclass
+
+from .manifest import all_events
+
+SHUTTER_MS = 1600
+HORIZON_MS = 5 * 60_000  # how far ahead the grid is built and served
+BEHIND_MS = 60_000  # how far back it is served, so a late poll still finds now
+KEEP_MS = 120_000  # slots older than this are forgotten
+HEAD = 3  # the newest runs open every cycle
+
+
+@dataclass(frozen=True)
+class Entry:
+    run_id: str
+    user: str
+    event_title: str
+    submitted_at: str
+    replay_ms: int
+    booth_ms: int | None
+
+
+def pool(store) -> list[Entry]:
+    """Every run of an open event with a ready clip, not withdrawn."""
+    withdrawn = {w.run_id for w in store.withdrawals()}
+    entries = []
+    for manifest in all_events():
+        if manifest.status != "open":
+            continue
+        for record in store.runs(manifest.id):
+            if record.run_id in withdrawn:
+                continue
+            state, clip = store.clip_state(record.run_id)
+            if state != "ready":
+                continue
+            replay_ms = round(clip["layouts"]["landscape"]["seconds"] * 1000)
+            commentary = store.commentary(record.run_id)
+            booth_ms = commentary["plan"]["duration_ms"] if commentary else None
+            entries.append(Entry(record.run_id, record.user, manifest.title, record.submitted_at,
+                                 replay_ms, booth_ms))
+    return entries
+
+
+def cycle(entries: list[Entry], k: int) -> list[Entry]:
+    """One pass over the pool: the newest runs first, the rest shuffled by the
+    cycle number, so every screen computes the same order."""
+    newest = sorted(entries, key=lambda e: (e.submitted_at, e.run_id), reverse=True)
+    head, rest = newest[:HEAD], newest[HEAD:]
+    random.Random(k).shuffle(rest)
+    return head + rest
+
+
+def slots_for(entries: list[Entry], start_ms: int) -> list[dict]:
+    slots: list[dict] = []
+    at = start_ms
+
+    def add(slot: dict) -> None:
+        nonlocal at
+        if slot["duration_ms"] % 40:
+            raise ValueError(f"{slot['kind']} for {slot.get('run_id')} is not a whole number of frames")
+        slots.append({**slot, "at_ms": at})
+        at += slot["duration_ms"]
+
+    for entry in entries:
+        add({"kind": "shutter", "duration_ms": SHUTTER_MS,
+             "next": {"run_id": entry.run_id, "event": entry.event_title, "user": entry.user}})
+        add({"kind": "replay", "duration_ms": entry.replay_ms, "run_id": entry.run_id})
+        if entry.booth_ms:
+            add({"kind": "shutter", "duration_ms": SHUTTER_MS, "next": None})
+            add({"kind": "booth", "duration_ms": entry.booth_ms, "run_id": entry.run_id})
+    return slots
+
+
+class Programme:
+    """The grid, built lazily as far as the horizon, rebuilt from the slot
+    playing now whenever the pool changes."""
+
+    def __init__(self, source, now_ms):
+        self._source = source
+        self._now = now_ms
+        self._lock = threading.Lock()
+        self.origin_ms = now_ms()
+        self._slots: list[dict] = []
+        self._cursor = self.origin_ms  # where the next cycle starts
+        self._cycle = 0
+
+    def _extend(self, until_ms: int) -> None:
+        while self._cursor < until_ms:
+            entries = cycle(self._source(), self._cycle)
+            if not entries:
+                return
+            self._slots.extend(slots_for(entries, self._cursor))
+            self._cursor = self._slots[-1]["at_ms"] + self._slots[-1]["duration_ms"]
+            self._cycle += 1
+
+    def slots(self) -> list[dict]:
+        now = self._now()
+        with self._lock:
+            self._extend(now + HORIZON_MS)
+            self._slots = [s for s in self._slots if s["at_ms"] + s["duration_ms"] > now - KEEP_MS]
+            return [s for s in self._slots
+                    if s["at_ms"] + s["duration_ms"] > now - BEHIND_MS and s["at_ms"] <= now + HORIZON_MS]
+
+    def invalidate(self) -> None:
+        """Keep what is playing, forget the future; the next read rebuilds it
+        from a fresh pool. A restart is the same thing with nothing kept."""
+        now = self._now()
+        with self._lock:
+            kept = [s for s in self._slots if s["at_ms"] <= now]
+            self._slots = kept
+            self._cursor = (kept[-1]["at_ms"] + kept[-1]["duration_ms"]) if kept else now
