@@ -506,3 +506,48 @@ def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
     assert all(chrome.closed for chrome in opened)
     assert set(run.layouts) == set(recorder.SIZES) and run.poster == b"png"
     assert steps[:2] == ["opening", "soundtrack"]
+
+def test_a_commentary_needs_a_ready_clip_and_may_be_rewritten(tmp_path):
+    store = LocalStore(tmp_path)
+    with pytest.raises(FileNotFoundError):
+        store.put_commentary("R1", b'{"version": 1}')
+    assert store.commentary("R1") is None
+    store.put_clip("R1", {"clip.json": b'{"run_id": "R1"}', "landscape.mp4": b"mp4"})
+    store.put_commentary("R1", b'{"version": 1, "take": 1}')
+    assert store.commentary("R1") == {"version": 1, "take": 1}
+    # The one rewritable clip file: a bad text is fixed by writing it again.
+    store.put_commentary("R1", b'{"version": 1, "take": 2}')
+    assert store.commentary("R1") == {"version": 1, "take": 2}
+
+
+def test_ready_clips_are_listed_by_run_id(tmp_path):
+    store = LocalStore(tmp_path)
+    assert store.clips_ready() == []
+    store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:00:00Z")
+    store.put_clip("R3", {"clip.json": b"{}"})
+    store.put_clip("R1", {"clip.json": b"{}", "commentary.json": b'{"plan": {}}'})
+    assert store.clips_ready() == ["R1", "R3"]
+    # A commentary written with the clip is read like one written after it.
+    assert store.commentary("R1") == {"plan": {}}
+
+
+def test_the_commentary_file_is_served_as_json(tmp_path):
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
+    app = create_app(config)
+    api = TestClient(app)
+    record = make_record()
+    app.state.store.append(record, encode_trace(np.zeros((5, 21), dtype=np.float32)))
+    assert api.get(f"/api/runs/{record.run_id}/clip/commentary.json").status_code == 404
+    app.state.store.put_clip(record.run_id, {
+        "clip.json": json.dumps({"run_id": record.run_id, "poster": "poster.png", "layouts": {}}).encode(),
+        "poster.png": b"png",
+    })
+    assert api.get(f"/api/runs/{record.run_id}/clip/commentary.json").status_code == 404
+    app.state.store.put_commentary(record.run_id, b'{"version": 1}')
+    answer = api.get(f"/api/runs/{record.run_id}/clip/commentary.json")
+    assert answer.status_code == 200
+    assert answer.headers["content-type"].startswith("application/json")
+    assert answer.json() == {"version": 1}
+    # Rewritable, so never the media's immutable header — a cached bad text
+    # would stick, and its plan length would stop matching the programme.
+    assert answer.headers["cache-control"] == "no-cache"

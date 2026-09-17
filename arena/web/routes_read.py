@@ -439,6 +439,9 @@ def run_clip(run_id: str, request: Request) -> JSONResponse:
     return JSONResponse(body, headers={"Cache-Control": "no-store"})
 
 
+_CLIP_TYPES = {"mp4": "video/mp4", "png": "image/png", "json": "application/json"}
+
+
 @router.get("/runs/{run_id}/clip/{name}")
 def run_clip_file(run_id: str, name: str, request: Request, download: int = 0) -> FileResponse:
     """A clip's file. Streamed from here because the dataset is private; the
@@ -448,12 +451,19 @@ def run_clip_file(run_id: str, name: str, request: Request, download: int = 0) -
     record = _find_run(store, run_id)
     if name not in CLIP_MEDIA or store.clip_state(run_id)[0] != "ready":
         raise HTTPException(status_code=404, detail=f"no clip file {name!r} for run {run_id}")
-    headers = {"Cache-Control": "public, max-age=31536000, immutable"}
+    if name == "commentary.json":
+        if store.commentary(run_id) is None:
+            raise HTTPException(status_code=404, detail=f"no commentary for run {run_id}")
+        # Rewritable, unlike the rest of the clip: a screen that cached a bad
+        # text would keep it after the replay fixed it.
+        headers = {"Cache-Control": "no-cache"}
+    else:
+        headers = {"Cache-Control": "public, max-age=31536000, immutable"}
     if download and name.endswith(".mp4"):
         stem = safe_stem(record.user, record.policy_name, name.removesuffix(".mp4"))
         headers["Content-Disposition"] = f'attachment; filename="microduck-arena-{stem}.mp4"'
     return FileResponse(
         store.clip_file(run_id, name),
-        media_type="video/mp4" if name.endswith(".mp4") else "image/png",
+        media_type=_CLIP_TYPES[name.rsplit(".", 1)[-1]],
         headers=headers,
     )
