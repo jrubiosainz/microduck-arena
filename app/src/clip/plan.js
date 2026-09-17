@@ -13,12 +13,14 @@ const OUTRO_S = 2.5;
 export const STRIDE = Math.round(1 / FPS / CTRL_DT);
 
 /**
- * `authorFrames` is the author's trace length; `tapeMaxS` the event's ceiling.
- * A run longer than the ceiling — a timeout — is cut there and stamped anyway:
- * the verdict is the record's, not the tape's.
+ * `authorFrames` is the author's trace length; `tapeMaxS` the event's ceiling;
+ * `settle` the frames of untimed settle the lanes play first (leadIn), so the
+ * tape starts where the simulation did. A run longer than the ceiling — a
+ * timeout — is cut there and stamped anyway: the verdict is the record's, not
+ * the tape's.
  */
-export function clipPlan(authorFrames, tapeMaxS) {
-  const steps = Math.max(1, Math.min(authorFrames, Math.round(tapeMaxS / CTRL_DT)));
+export function clipPlan(authorFrames, tapeMaxS, settle) {
+  const steps = settle + Math.max(1, Math.min(authorFrames, Math.round(tapeMaxS / CTRL_DT)));
   const intro = FPS * INTRO_S;
   const tape = Math.ceil(steps / STRIDE);
   const outro = Math.round(FPS * OUTRO_S);
@@ -26,6 +28,7 @@ export function clipPlan(authorFrames, tapeMaxS) {
   return {
     fps: FPS,
     stride: STRIDE,
+    settle,
     steps,
     intro,
     travel: FPS * TRAVEL_S,

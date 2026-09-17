@@ -7,7 +7,7 @@ const trace = new Float32Array(200 * 21);
 for (let i = 0; i < 200; i++) trace[i * 21] = i / 100; // x from 0 to 2 m
 
 describe("clipScore", () => {
-  const plan = clipPlan(200, 12);
+  const plan = clipPlan(200, 12, 0);
 
   it("sounds the horn at the start, the stamp at the tape end and the victory after it", () => {
     const score = clipScore({ run: { run_id: "R1", event, seeds_finished: 5 }, plan, trace });

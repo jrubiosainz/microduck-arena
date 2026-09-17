@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { JOINT_NAMES, buildRigTree } from "./rig.js";
-import { CTRL_DT, Player, TRACE_WIDTH, applyFrame, frameAt, frameCount } from "./replay.js";
+import { CTRL_DT, Player, TRACE_WIDTH, applyFrame, frameAt, frameCount, leadIn } from "./replay.js";
 
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
 
@@ -34,6 +34,23 @@ describe("trace geometry", () => {
     expect(frame.length).toBe(TRACE_WIDTH);
     expect(frame[0]).toBeCloseTo(0.2, 6);
     expect(frame.buffer).toBe(trace.buffer);
+  });
+});
+
+describe("leadIn", () => {
+  it("plays the settle, then the trace", () => {
+    const settle = traceOf(3).map((v) => v + 100);
+    const lane = leadIn(settle, traceOf(4), 3);
+    expect(frameCount(lane)).toBe(7);
+    expect([...frameAt(lane, 0)]).toEqual([...frameAt(settle, 0)]);
+    expect([...frameAt(lane, 3)]).toEqual([...frameAt(traceOf(4), 0)]);
+  });
+
+  it("holds the trace's first frame for a run stored without a settle, so it keeps in step", () => {
+    const lane = leadIn(new Float32Array(0), traceOf(4), 3);
+    expect(frameCount(lane)).toBe(7);
+    for (const f of [0, 1, 2, 3]) expect([...frameAt(lane, f)]).toEqual([...frameAt(traceOf(4), 0)]);
+    expect([...frameAt(lane, 4)]).toEqual([...frameAt(traceOf(4), 1)]);
   });
 });
 

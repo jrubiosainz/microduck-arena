@@ -2,11 +2,11 @@
 // nothing on a clock of its own — the recorder asks for frame i, gets it, and
 // asks for the soundtrack once. ?run=<id>&layout=landscape|vertical&frame=N.
 
-import { getRun, getTrace } from "../api.js";
+import { getRun, getSettle, getTrace } from "../api.js";
 import { LANE_COLORS, LANE_CSS } from "../course.js";
 import { formatScore } from "../format.js";
 import { lanesFor } from "../lanes.js";
-import { CTRL_DT, frameCount } from "../replay.js";
+import { CTRL_DT, frameCount, leadIn } from "../replay.js";
 import { createViewer } from "../viewer.js";
 import { actAt, clipPlan, stepAt, travelAt } from "./plan.js";
 import { clipScore } from "./score.js";
@@ -61,7 +61,13 @@ function base64(bytes) {
 async function main() {
   const run = await getRun(params.get("run"));
   const lanes = lanesFor(run);
-  const traces = await Promise.all(lanes.map((lane) => getTrace(lane.run_id)));
+  const [traces, settles] = await Promise.all([
+    Promise.all(lanes.map((lane) => getTrace(lane.run_id))),
+    Promise.all(lanes.map((lane) => getSettle(lane.run_id))),
+  ]);
+  // Every lane from where its simulation started, all in step.
+  const settle = Math.max(...settles.map(frameCount));
+  const replays = lanes.map((_, i) => leadIn(settles[i], traces[i], settle));
   const config = run.event.clip;
   const camera = { ...config.camera, distance: DISTANCE[layout] };
   const viewer = await createViewer($("stage"), { rig: run.event.rig, manual: true, camera });
@@ -69,7 +75,7 @@ async function main() {
     lanes
       .map((lane, i) => ({
         runId: lane.run_id,
-        trace: traces[i],
+        trace: replays[i],
         livery: lane.livery,
         colour: LANE_COLORS[i % LANE_COLORS.length],
         opacity: 1,
@@ -82,8 +88,8 @@ async function main() {
     run.event,
     { loop: false },
   );
-  const plan = clipPlan(frameCount(traces[0]), config.tape_max_s);
-  const score = clipScore({ run, plan, trace: traces[0] });
+  const plan = clipPlan(frameCount(traces[0]), config.tape_max_s, settle);
+  const score = clipScore({ run, plan, trace: replays[0] });
   letter(run);
 
   /** Frame `i` of the plan. Returns the trace step it drew. */
@@ -91,7 +97,8 @@ async function main() {
     const act = actAt(plan, i);
     const step = stepAt(plan, i);
     viewer.frame(step * CTRL_DT, travelAt(plan, i));
-    $("osd-clock").textContent = clock(step);
+    // The clock starts where the record's does: after the settle.
+    $("osd-clock").textContent = clock(Math.max(0, step - plan.settle));
     document.documentElement.dataset.act = act;
     $("intro").hidden = act !== "intro";
     $("stamp").hidden = act !== "outro";
