@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from arena.clips import CLIP_VERSION, ClipRenderer, clip_manifest
 from arena.recorder import RenderedLayout, RenderedRun, ffmpeg_args
-from arena.store import LocalStore
+from arena.store import LocalStore, Withdrawal
 from arena.trace import encode as encode_trace
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
@@ -110,9 +110,9 @@ def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
     said = []
     worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=render, log=said.append)
     worker.drain()
-    assert list(worker.queue.queue) == ["R1", "R2"]
+    assert [item[2] for item in sorted(worker.queue.queue)] == ["R1", "R2"]
     while not worker.queue.empty():
-        worker.render_one(worker.queue.get())
+        worker.render_one(worker.queue.get()[2])
     state, manifest = store.clip_state("R1")
     assert state == "ready" and manifest["run_id"] == "R1"
     assert store.clip_file("R1", "vertical.mp4").read_bytes() == b"mp4"
@@ -135,7 +135,31 @@ def test_a_publish_owes_a_clip_only_where_a_renderer_exists(tmp_path, monkeypatc
     monkeypatch.setattr(app.state.clips, "available", True)
     run_id = submit(api, REFERENCE).json()["run_id"]
     assert app.state.store.clip_state(run_id) == ("pending", None)
-    assert list(app.state.clips.queue.queue) == [run_id]
+    assert [item[2] for item in app.state.clips.queue.queue] == [run_id]
+
+
+def test_a_backfill_owes_every_run_without_a_clip_behind_the_fresh_ones(tmp_path):
+    store = LocalStore(tmp_path)
+    old = make_record(user="alice", submitted_at="2026-09-10T10:00:00Z")
+    newer = make_record(user="bob", submitted_at="2026-09-12T10:00:00Z")
+    done = make_record(user="carol", submitted_at="2026-09-13T10:00:00Z")
+    gone = make_record(user="dave", submitted_at="2026-09-14T10:00:00Z")
+    for record in (old, newer, done, gone):
+        store.append(record, encode_trace(np.zeros((5, 21), dtype=np.float32)))
+    store.put_clip(done.run_id, {"clip.json": b"{}"})
+    store.withdraw(Withdrawal(run_id=gone.run_id, event_id="sprint-2m", user="dave",
+                              withdrawn_at="2026-09-15T00:00:00Z"))
+    store.mark_clip_pending("R9", "erin", "sprint-2m", "2026-09-16T10:00:00Z")
+
+    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, backfill=True)
+    worker.drain()
+    # The fresh publish first, then the log newest first; the rendered and the
+    # withdrawn are not owed.
+    assert [item[2] for item in sorted(worker.queue.queue)] == ["R9", newer.run_id, old.run_id]
+
+    quiet = ClipRenderer(store, "http://127.0.0.1:1", tmp_path)
+    quiet.drain()
+    assert [item[2] for item in sorted(quiet.queue.queue)] == ["R9"]
 
 
 def app_with_run(tmp_path):

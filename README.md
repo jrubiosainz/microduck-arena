@@ -90,6 +90,7 @@ cpu-basic, and it is why the image carries Chromium and ffmpeg.
 | `CHROME` | variable | the browser binary, if not at one of the usual paths |
 | `ARENA_CLIPS` | variable | `0` turns rendering off |
 | `ARENA_CLIP_PARALLEL` | variable | layouts rendered at once, default half the cores |
+| `ARENA_CLIP_BACKFILL` | variable | `1` also renders every run that has no clip yet — the log as it stood before clips — newest first, behind fresh publishes; set it on the deploy that brings clips to a Space with history, and leave it: once caught up a boot finds nothing to do |
 | `ARENA_ORIGIN` | variable | where the recorder's Chrome loads `clip.html`, if not this server's own loopback address |
 
 Each event's `[clip]` manifest section tunes its framing, duration and sounds

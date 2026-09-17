@@ -3,9 +3,12 @@
 The publish response never waits for a video. The route marks the run
 `pending`, the worker takes runs one at a time, and the store ends up with
 `clip.json` and the media or `failed.json` and a reason. A redeploy that kills
-a render leaves the marker, and `drain` at the next boot picks it up.
+a render leaves the marker, and `drain` at the next boot picks it up. With
+ARENA_CLIP_BACKFILL the same drain also owes a clip to every run that predates
+clips — the log a launch already has — behind whatever a player just published.
 """
 
+import itertools
 import json
 import queue
 import threading
@@ -13,6 +16,7 @@ import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .manifest import all_events
 from .recorder import SIZES, RenderedRun, ffmpeg_available, find_chrome, record_run
 
 # Written into every clip.json. Bumping it does not re-render older clips.
@@ -52,12 +56,13 @@ def clip_manifest(run_id: str, rendered: RenderedRun, rendered_at: str) -> dict:
 
 class ClipRenderer:
     def __init__(self, store, origin: str, frontend_dir: Path | None, parallel: int = 1,
-                 render=record_run, log=print, enabled: bool = True):
+                 render=record_run, log=print, enabled: bool = True, backfill: bool = False):
         self.store = store
         self.origin = origin
         self.parallel = parallel
         self.render = render
         self.log = log
+        self.backfill = backfill
         # No Chrome, no ffmpeg or no built clip page is a supported setup — a
         # developer machine — not an error: publishes then owe no clip. Nor is
         # ARENA_CLIPS=0, the documented off switch for a running Space.
@@ -65,15 +70,34 @@ class ClipRenderer:
             frontend_dir and (frontend_dir / "clip.html").is_file()
             and find_chrome() and ffmpeg_available()
         )
-        self.queue: queue.Queue[str] = queue.Queue()
+        # Fresh publishes first, then the backfill, each in arrival order: a
+        # player watching the page for their clip must never wait behind the
+        # whole log being caught up.
+        self.queue: queue.PriorityQueue[tuple[int, int, str]] = queue.PriorityQueue()
+        self._arrivals = itertools.count()
 
-    def enqueue(self, run_id: str) -> None:
-        self.queue.put(run_id)
+    def enqueue(self, run_id: str, priority: int = 0) -> None:
+        self.queue.put((priority, next(self._arrivals), run_id))
 
     def drain(self) -> None:
-        """Everything owed and not yet rendered or failed — after a restart."""
+        """Everything owed and not yet rendered or failed — after a restart —
+        and, when backfilling, every run that never owed one, newest first."""
         for run_id in self.store.pending_clips():
             self.enqueue(run_id)
+        if not self.backfill:
+            return
+        # Withdrawn runs keep their page but nobody shares them; a failed one
+        # stays failed until `arena clip` is run by hand.
+        withdrawn = {w.run_id for w in self.store.withdrawals()}
+        records = [
+            record
+            for manifest in all_events()
+            for record in self.store.runs(manifest.id)
+            if record.run_id not in withdrawn
+        ]
+        for record in sorted(records, key=lambda r: r.submitted_at, reverse=True):
+            if self.store.clip_state(record.run_id)[0] == "none":
+                self.enqueue(record.run_id, priority=1)
 
     def start(self) -> None:
         threading.Thread(target=self._work, name="arena-clips", daemon=True).start()
@@ -89,7 +113,7 @@ class ClipRenderer:
         # The worker outlives every failure, or the next publish owes a clip
         # nobody renders: nothing raised by one run may end the loop.
         while True:
-            run_id = self.queue.get()
+            _, _, run_id = self.queue.get()
             try:
                 self.render_one(run_id)
             except Exception as exc:  # noqa: BLE001 — see above

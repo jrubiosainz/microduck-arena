@@ -53,15 +53,17 @@ describe("intentUrl", () => {
 });
 
 describe("shareStrip", () => {
-  it("is two links, two buttons and two clip stickers that follow the clip's state", () => {
+  it("is a row of two links and two buttons, then a row of two clip stickers that follow the clip's state", () => {
     const strip = shareStrip(run, { origin });
-    const items = [...strip.nav.children];
-    expect(items.map((el) => el.tagName)).toEqual(["A", "A", "BUTTON", "BUTTON", "A", "A", "P"]);
-    expect(items[0].href).toMatch(/^https:\/\/x\.com\/intent\/post\?text=/);
-    expect(items[2].dataset.upload).toBe("instagram");
+    expect([...strip.root.children].map((el) => el.tagName)).toEqual(["NAV", "DIV", "P"]);
+    const marks = [...strip.root.querySelector("nav").children];
+    expect(marks.map((el) => el.tagName)).toEqual(["A", "A", "BUTTON", "BUTTON"]);
+    expect(marks[0].href).toMatch(/^https:\/\/x\.com\/intent\/post\?text=/);
+    expect(marks[2].dataset.upload).toBe("instagram");
 
     strip.setClip({ state: "pending" });
-    const clips = strip.nav.querySelectorAll("[data-clip]");
+    const clips = strip.root.querySelectorAll("[data-clip]");
+    expect(clips.length).toBe(2);
     expect(clips[0].textContent).toBe("Clip · rendering…");
     expect(clips[0].getAttribute("aria-disabled")).toBe("true");
     expect(clips[0].hasAttribute("href")).toBe(false);
@@ -86,7 +88,7 @@ describe("wireShare", () => {
       origin, handheld: false, share: undefined,
       clipboard: { writeText: async (text) => copied.push(text) }, open: (url) => opened.push(url),
     });
-    strip.nav.querySelector('[data-upload="instagram"]').click();
+    strip.root.querySelector('[data-upload="instagram"]').click();
     await new Promise((r) => setTimeout(r, 0));
     expect(copied[0]).toBe(postText(run, { origin, network: "instagram" }));
     expect(opened).toEqual(["/v.mp4?download=1"]);
@@ -97,7 +99,7 @@ describe("wireShare", () => {
     const strip = shareStrip(run, { origin });
     const shared = [];
     wireShare(strip, run, { origin, handheld: true, share: async (data) => shared.push(data) });
-    strip.nav.querySelector('[data-upload="tiktok"]').click();
+    strip.root.querySelector('[data-upload="tiktok"]').click();
     await new Promise((r) => setTimeout(r, 0));
     expect(shared).toEqual([{ text: postText(run, { origin, network: "tiktok" }) }]);
   });

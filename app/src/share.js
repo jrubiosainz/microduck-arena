@@ -61,14 +61,16 @@ function mark(tag, id, tilt) {
 }
 
 /**
- * The row under the points: X and LinkedIn as links, Instagram and TikTok as
- * buttons, one cyan sticker per clip, and the line that says what a press
- * did. `setClip` takes the `/clip` body and dresses the clip stickers for
- * its state.
+ * Under the points: a row of the networks — X and LinkedIn as links, Instagram
+ * and TikTok as buttons — then a row of one cyan sticker per clip, then the
+ * line that says what a press did. `setClip` takes the `/clip` body and
+ * dresses the clip stickers for its state.
  */
 export function shareStrip(run, { origin }) {
+  const root = document.createElement("section");
+  root.className = "run-share";
   const nav = document.createElement("nav");
-  nav.className = "run-share fx-tilt-alternate";
+  nav.className = "run-share-networks fx-tilt-alternate";
   nav.setAttribute("aria-label", "Share this run");
   let i = 0;
   const tilt = () => TILTS[i++ % TILTS.length];
@@ -86,20 +88,22 @@ export function shareStrip(run, { origin }) {
     button.dataset.upload = id;
     nav.append(button);
   }
+  const clips = document.createElement("div");
+  clips.className = "run-share-clips fx-tilt-alternate";
   for (const layout of LAYOUTS) {
     const sticker = document.createElement("a");
     sticker.className = `sticker sticker-cyan fx-tilt-${tilt()}`;
     sticker.dataset.clip = layout;
     sticker.textContent = `Clip · ${layout}`;
-    nav.append(sticker);
+    clips.append(sticker);
   }
   const said = document.createElement("p");
   said.className = "mono-label run-share-said";
   said.hidden = true;
-  nav.append(said);
+  root.append(nav, clips, said);
 
   function setClip(clip) {
-    for (const sticker of nav.querySelectorAll("[data-clip]")) {
+    for (const sticker of clips.querySelectorAll("[data-clip]")) {
       const layout = sticker.dataset.clip;
       sticker.hidden = !["pending", "ready"].includes(clip.state);
       if (clip.state === "ready") {
@@ -115,7 +119,7 @@ export function shareStrip(run, { origin }) {
       }
     }
   }
-  return { nav, said, setClip };
+  return { root, said, setClip };
 }
 
 /**
@@ -140,7 +144,7 @@ export function wireShare(
     strip.said.textContent = line;
     strip.said.hidden = false;
   };
-  for (const button of strip.nav.querySelectorAll("[data-upload]")) {
+  for (const button of strip.root.querySelectorAll("[data-upload]")) {
     const text = postText(run, { origin, network: button.dataset.upload });
     button.addEventListener("click", async () => {
       if (handheld && typeof share === "function") {
@@ -159,7 +163,7 @@ export function wireShare(
       } catch {
         // A clipboard that refuses: the line says so.
       }
-      const tape = strip.nav.querySelector('[data-clip="vertical"]');
+      const tape = strip.root.querySelector('[data-clip="vertical"]');
       const ready = Boolean(tape && !tape.hidden && tape.getAttribute("href"));
       if (ready) open(tape.getAttribute("href"));
       tell(

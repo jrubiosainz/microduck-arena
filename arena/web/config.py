@@ -70,6 +70,11 @@ class ArenaConfig:
     # and nothing new is queued. Existing clips and the routes serving them are
     # unaffected — this only stops making more.
     clips_enabled: bool = True
+    # Render a clip for every run that has none — the log as it stood before
+    # clips existed. Set ARENA_CLIP_BACKFILL=1 on the deploy that brings clips
+    # to a Space with history; the drain at each boot then owes the rest,
+    # newest first, behind fresh publishes, and finds nothing to do once caught up.
+    clip_backfill: bool = False
 
     @classmethod
     def from_env(
@@ -130,6 +135,7 @@ class ArenaConfig:
             clip_parallel=clip_parallel,
             clip_worker=clip_worker,
             clips_enabled=(os.environ.get("ARENA_CLIPS") or "1").strip() not in {"0", "false", "no"},
+            clip_backfill=(os.environ.get("ARENA_CLIP_BACKFILL") or "").strip() in {"1", "true", "yes"},
         )
 
     @property

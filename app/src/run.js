@@ -166,12 +166,13 @@ export async function renderRun(root, runId, state) {
   $("points").append(...stickers);
   if (!stickers.length) $("points").append(el("p", "mono-label", "no points from this run"));
 
-  // Sharing, under the points: the row stands there from the first frame,
-  // veiled through a reveal like everything else in this column, and the
-  // clip stickers follow the render while it is owed.
+  // Sharing, under the points: the networks on one row, the clips on the
+  // next, standing there from the first frame and veiled through a reveal like
+  // everything else in this column; the clip stickers follow the render while
+  // it is owed.
   const strip = shareStrip(run, { origin: location.origin });
-  strip.nav.classList.toggle("veiled", revealing);
-  $("points").after(strip.nav);
+  strip.root.classList.toggle("veiled", revealing);
+  $("points").after(strip.root);
   wireShare(strip, run, { origin: location.origin });
   // Pending is the honest first state: nobody has answered for the clip yet,
   // so the row wears the same face it would for a render still in progress —
@@ -299,7 +300,7 @@ export async function renderRun(root, runId, state) {
       pegboard: $("pegboard"),
       pegRows,
       stickers,
-      share: strip.nav,
+      share: strip.root,
     },
     {
       run,
