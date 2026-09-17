@@ -31,6 +31,7 @@ closing sections explain.
 | `points.wav` | 0.04 s | A tick per flap while the player chip's counter rolls. | CC0-1.0 |
 | `queue-tick.wav` | 0.14 s | A star lands on the player chip (one tick per cluster). | CC0-1.0 |
 | `microduck-victory.wav` | 1.16 s | The author's duck crosses the line on the publication page. | Apache-2.0 (see below) |
+| `microduck-victory-echo.mp3` | 4.59 s | The clip's outro on a pass: the victory with a stadium's echo. | Apache-2.0 (see below) |
 | `rank-climb.wav` | 0.62 s | The author's row climbs the pegboard. | CC0-1.0 |
 | `microduck-chirp.wav` | 0.16 s | With the climb: the duck's own note as it lands on its peg. | CC0-1.0 |
 | `air-horn.mp3` | 2.10 s | The clip's start: the horn as the title leaves and the ducks set off, its stadium echo in the file. | Nicolas Rabault's (see below) |
@@ -54,3 +55,5 @@ renders them with the robot's own Rust synthesiser from
 revision `e597877c5a9460f4c3837dc3cdab088705212c5d`, then modifies the recipe (victory) or the
 audio (fall). That synthesiser is Apache-2.0 — `MICRODUCK-LICENSE.txt` beside them is its
 licence — so these two files travel with it, not with the CC0 dedication above.
+`microduck-victory-echo.mp3` is Nicolas Rabault's echo of `microduck-victory.wav`, made for the
+clip on 2026-09-17, and travels with it.

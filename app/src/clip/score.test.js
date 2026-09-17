@@ -14,20 +14,22 @@ describe("clipScore", () => {
     expect(score.cues.map((c) => [c.at, c.file])).toEqual([
       [3, "air-horn.mp3"],
       [7, "stamp.wav"],
-      [7.16, "microduck-victory.wav"],
+      [7.16, "microduck-victory-echo.mp3"],
     ]);
     expect(score.crowd).toMatchObject({ start: 3, end: 7, verdict: "pass" });
     expect(score.crowd.progress[0]).toEqual({ second: 3, value: 0 });
     expect(score.crowd.progress.at(-1).value).toBeGreaterThan(0.9);
   });
 
-  it("rings the duck's voice round the stadium, and keeps the horn, which has its own echo, and the stamp dry", () => {
+  it("plays the horn and the victory, which carry their own echo, and the stamp dry, and rings the fall round the stadium", () => {
     const score = clipScore({ run: { run_id: "R1", event, seeds_finished: 5 }, plan, trace });
     expect(score.cues.map((c) => [c.file, c.room])).toEqual([
       ["air-horn.mp3", false],
       ["stamp.wav", false],
-      ["microduck-victory.wav", true],
+      ["microduck-victory-echo.mp3", false],
     ]);
+    const dnf = clipScore({ run: { run_id: "R2", event, seeds_finished: 0 }, plan, trace });
+    expect(dnf.cues.at(-1)).toMatchObject({ file: "microduck-fall.wav", room: true });
   });
 
   it("falls after a DNF, and only plays the sources the event lists", () => {
