@@ -233,6 +233,9 @@ class RenderedLayout:
 class RenderedRun:
     layouts: dict[str, RenderedLayout]
     poster: bytes
+    # The timed plan of the run's commentary, prepared by the page from the
+    # dialogue the worker wrote, or None when the run has no dialogue.
+    commentary: dict | None = None
 
 
 def _open(chrome: Chrome, origin: str, run_id: str, layout: str) -> Tab:
@@ -241,6 +244,12 @@ def _open(chrome: Chrome, origin: str, run_id: str, layout: str) -> Tab:
     tab.navigate(f"{origin}/clip.html?run={run_id}&layout={layout}&frame=0")
     tab.wait_ready()
     return tab
+
+
+def _prepare(tab: Tab, dialogue: dict) -> dict:
+    """The page turns a dialogue into the plan the live page will play. Done
+    here, once, so the file the store keeps is exactly what plays."""
+    return tab.evaluate(f"window.clip.commentary({json.dumps(dialogue)})")
 
 
 def _soundtrack(tab: Tab) -> bytes:
@@ -335,7 +344,8 @@ def _record_layout(
 
 def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None = None,
                nice: int = 10, budget_s: float = 900.0,
-               on_progress=lambda stage, done, total: None) -> RenderedRun:
+               on_progress=lambda stage, done, total: None,
+               dialogue: dict | None = None) -> RenderedRun:
     """Every layout of one run, each in a browser of its own; the first one
     renders the soundtrack they all share, and they are recorded `parallel` at
     a time. The poster is the landscape clip's.
@@ -367,6 +377,9 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
             layout: _open(stack.enter_context(Chrome(binary, nice)), origin, run_id, layout)
             for layout in SIZES
         }
+        # While a browser is open anyway: the dialogue's plan is computed by the
+        # page, so what the store keeps is exactly what the live page plays.
+        plan = _prepare(tabs["landscape"], dialogue) if dialogue else None
         on_progress("soundtrack", 0, 0)
         pcm_path = work / "soundtrack.f32"
         pcm_path.write_bytes(_soundtrack(tabs["landscape"]))
@@ -396,4 +409,19 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
             results = list(pool.map(one, SIZES))
     layouts = {layout: rendered for layout, rendered, _ in results}
     poster = next(poster for layout, _, poster in results if layout == "landscape")
-    return RenderedRun(layouts=layouts, poster=poster)
+    return RenderedRun(layouts=layouts, poster=poster, commentary=plan)
+
+
+def prepare_plan(origin: str, run_id: str, dialogue: dict, binary: str | None = None,
+                 nice: int = 10) -> dict:
+    """A plan for a commentary written after its clip: one browser, one tab,
+    nothing recorded."""
+    binary = binary or find_chrome()
+    if binary is None:
+        raise RuntimeError("no Chrome found: set $CHROME")
+    with Chrome(binary, nice) as chrome:
+        tab = _open(chrome, origin, run_id, "landscape")
+        try:
+            return _prepare(tab, dialogue)
+        finally:
+            tab.close()

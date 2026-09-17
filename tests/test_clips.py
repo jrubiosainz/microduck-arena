@@ -102,6 +102,7 @@ def test_the_manifest_carries_the_live_contract_per_layout():
         "timing": {"total_wall_ms": 1},
     }
     assert manifest["layouts"]["vertical"]["width"] == 1080
+    assert rendered().commentary is None
 
 
 def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
