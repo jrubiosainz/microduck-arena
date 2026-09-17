@@ -379,7 +379,13 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
         }
         # While a browser is open anyway: the dialogue's plan is computed by the
         # page, so what the store keeps is exactly what the live page plays.
-        plan = _prepare(tabs["landscape"], dialogue) if dialogue else None
+        plan = None
+        if dialogue:
+            # A dialogue too broken for the page to time (a caption word over
+            # its limit, say) costs the run its commentary, not its clip:
+            # rendering goes on with no plan.
+            with contextlib.suppress(Exception):
+                plan = _prepare(tabs["landscape"], dialogue)
         on_progress("soundtrack", 0, 0)
         pcm_path = work / "soundtrack.f32"
         pcm_path.write_bytes(_soundtrack(tabs["landscape"]))

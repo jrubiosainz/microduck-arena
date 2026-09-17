@@ -110,7 +110,7 @@ def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
     store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
     store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:01:00Z")
 
-    def render(origin, run_id, parallel, budget_s, on_progress=None):
+    def render(origin, run_id, parallel, budget_s, on_progress=None, dialogue=None):
         if run_id == "R2":
             raise RuntimeError("ffmpeg exited 1")
         return rendered()
@@ -118,9 +118,9 @@ def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
     said = []
     worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=render, log=said.append)
     worker.drain()
-    assert [item[2] for item in sorted(worker.queue.queue)] == ["R1", "R2"]
+    assert [item[3] for item in sorted(worker.queue.queue)] == ["R1", "R2"]
     while not worker.queue.empty():
-        worker.render_one(worker.queue.get()[2])
+        worker.render_one(worker.queue.get()[3])
     state, manifest = store.clip_state("R1")
     assert state == "ready" and manifest["run_id"] == "R1"
     assert store.clip_file("R1", "vertical.mp4").read_bytes() == b"mp4"
@@ -143,7 +143,7 @@ def test_a_publish_owes_a_clip_only_where_a_renderer_exists(tmp_path, monkeypatc
     monkeypatch.setattr(app.state.clips, "available", True)
     run_id = submit(api, REFERENCE).json()["run_id"]
     assert app.state.store.clip_state(run_id) == ("pending", None)
-    assert [item[2] for item in app.state.clips.queue.queue] == [run_id]
+    assert [item[3] for item in app.state.clips.queue.queue] == [run_id]
 
 
 def test_a_backfill_owes_every_run_without_a_clip_behind_the_fresh_ones(tmp_path):
@@ -163,11 +163,11 @@ def test_a_backfill_owes_every_run_without_a_clip_behind_the_fresh_ones(tmp_path
     worker.drain()
     # The fresh publish first, then the log newest first; the rendered and the
     # withdrawn are not owed.
-    assert [item[2] for item in sorted(worker.queue.queue)] == ["R9", newer.run_id, old.run_id]
+    assert [item[3] for item in sorted(worker.queue.queue)] == ["R9", newer.run_id, old.run_id]
 
     quiet = ClipRenderer(store, "http://127.0.0.1:1", tmp_path)
     quiet.drain()
-    assert [item[2] for item in sorted(quiet.queue.queue)] == ["R9"]
+    assert [item[3] for item in sorted(quiet.queue.queue)] == ["R9"]
 
 
 def app_with_run(tmp_path):
@@ -552,3 +552,108 @@ def test_the_commentary_file_is_served_as_json(tmp_path):
     # Rewritable, so never the media's immutable header — a cached bad text
     # would stick, and its plan length would stop matching the programme.
     assert answer.headers["cache-control"] == "no-cache"
+
+
+def dialogue_for(run_id):
+    return {"run_id": run_id, "turns": [{"speaker": "peter", "text": "Go!", "fact_refs": ["run#/result"]},
+                                        {"speaker": "ray", "text": "Gone.", "fact_refs": ["run#/result"]},
+                                        {"speaker": "peter", "text": "Ray.", "fact_refs": ["run#/result"]}],
+            "lore_refs": [], "model": "m", "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            "facts": [{"ref": "run#/result", "kind": "result", "text": "The clock."}]}
+
+
+def plan_for(dialogue):
+    return {"version": 1, "run_id": dialogue["run_id"], "duration_ms": 4000, "captions": [], "notes": [],
+            "gestures": []}
+
+
+def test_the_worker_writes_the_dialogue_first_and_stores_it_with_the_clip(tmp_path):
+    from arena.commentary.generator import Rejected
+
+    store = LocalStore(tmp_path)
+    for run_id in ("R1", "R2", "R3"):
+        store.mark_clip_pending(run_id, "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    order = []
+
+    def commentary(run_id):
+        order.append(("write", run_id))
+        if run_id == "R2":
+            raise Rejected("audit refused")
+        if run_id == "R3":
+            raise RuntimeError("router down")
+        return dialogue_for(run_id)
+
+    def render(origin, run_id, parallel, budget_s, dialogue=None):
+        order.append(("render", run_id))
+        made = rendered()
+        return RenderedRun(layouts=made.layouts, poster=made.poster,
+                           commentary=plan_for(dialogue) if dialogue else None)
+
+    landed = []
+    said = []
+    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=render, log=said.append,
+                          commentary=commentary, landed=landed.append)
+    assert worker.writes_commentary
+    for run_id in ("R1", "R2", "R3"):
+        worker.render_one(run_id)
+    assert order[:2] == [("write", "R1"), ("render", "R1")]
+    assert store.commentary("R1")["dialogue"]["turns"][0]["text"] == "Go!"
+    assert store.commentary("R1")["plan"]["duration_ms"] == 4000
+    # A refused or failed dialogue costs the run its booth, never its clip.
+    assert store.clip_state("R2")[0] == "ready" and store.commentary("R2") is None
+    assert store.clip_state("R3")[0] == "ready" and store.commentary("R3") is None
+    assert any("R2" in line and "audit refused" in line for line in said)
+    assert any("R3" in line and "router down" in line for line in said)
+    assert landed == ["R1", "R2", "R3"]
+
+
+def test_a_dialogue_that_cannot_be_timed_costs_the_booth_not_the_clip(tmp_path):
+    store = LocalStore(tmp_path)
+    store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+
+    def render(origin, run_id, parallel, budget_s, dialogue=None):
+        made = rendered()
+        return RenderedRun(layouts=made.layouts, poster=made.poster, commentary=None)
+
+    said = []
+    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=render, log=said.append,
+                          commentary=dialogue_for)
+    worker.render_one("R1")
+    assert store.clip_state("R1")[0] == "ready"
+    assert store.commentary("R1") is None
+    assert any("R1" in line and "did not prepare" in line for line in said)
+
+
+def test_a_commentary_job_writes_prepares_and_overwrites(tmp_path):
+    store = LocalStore(tmp_path)
+    store.put_clip("R1", {"clip.json": b"{}", "commentary.json": b'{"old": true}'})
+    prepared = []
+
+    def prepare(origin, run_id, dialogue):
+        prepared.append(run_id)
+        return plan_for(dialogue)
+
+    landed = []
+    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=None, commentary=dialogue_for,
+                          prepare=prepare, landed=landed.append, log=lambda line: None)
+    worker.commentary_one("R1")
+    assert prepared == ["R1"]
+    assert store.commentary("R1")["dialogue"]["turns"][1]["text"] == "Gone."
+    assert landed == ["R1"]
+
+
+def test_the_backfill_owes_commentaries_to_ready_clips_without_one(tmp_path):
+    store = LocalStore(tmp_path)
+    store.mark_clip_pending("P1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    store.put_clip("C1", {"clip.json": b"{}"})
+    store.put_clip("C2", {"clip.json": b"{}", "commentary.json": b'{"plan": {}}'})
+    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=None, log=lambda line: None,
+                          backfill=True, commentary=dialogue_for)
+    worker.drain()
+    assert [(item[0], item[2], item[3]) for item in sorted(worker.queue.queue)] == [
+        (0, "clip", "P1"), (1, "commentary", "C1")]
+    # Without a writer there is nothing to owe.
+    silent = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=None, log=lambda line: None,
+                          backfill=True)
+    silent.drain()
+    assert [item[3] for item in sorted(silent.queue.queue)] == ["P1"]
