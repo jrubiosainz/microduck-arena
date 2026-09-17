@@ -118,6 +118,19 @@ export function placeLane(rig, laneZ) {
   rig.placer.rotation.set(0, 0, 0);
 }
 
+/**
+ * Put a lane's follow-spot under its duck, at the trace's world `x`.
+ *
+ * The ring is the opposite case to the duck: it has no frame of its own, so it
+ * is parented to the course (or the scene, with no course) and lies on the
+ * ramp, tilted with it. A world x is the ramp's run, so along the slope it is
+ * x / cos. Left in the scene at height zero, it sat 21 cm under the hill's top.
+ */
+export function placeMarker(marker, ground, x, slopeDeg) {
+  if (marker.parent !== ground) ground.add(marker);
+  marker.position.x = x / Math.cos((slopeDeg * Math.PI) / 180);
+}
+
 // A nameplate's height in metres and how far above the trunk it floats. Tuned
 // by eye on the clip page; the publication page hangs none.
 const PLATE_HEIGHT = 0.05;
@@ -130,17 +143,19 @@ const PLATE_LIFT = 0.16;
  * behind the leader, trackside, the side offset widening with the arena. An
  * event's `[clip.camera]` spec overrides its constants or fixes the camera
  * outright; `distance` scales a chase's offsets, which is how the vertical
- * clip fits the same picture in a narrower frame. Pure, so it is testable.
+ * clip fits the same picture in a narrower frame. `rise` is the ramp's height
+ * under the leader: a chase climbs a hill with its duck instead of watching it
+ * walk out of the top of the frame. Pure, so it is testable.
  */
-export function cameraPose(spec, lead, sideOffset) {
+export function cameraPose(spec, lead, sideOffset, rise) {
   if (spec?.kind === "fixed") return { position: [...spec.position], target: [...spec.target] };
   const back = spec?.back ?? 0.35;
   const height = spec?.height ?? 0.34;
   const side = spec?.side ?? sideOffset;
   const distance = spec?.distance ?? 1;
   return {
-    position: [lead - back * distance, height * distance, side * distance],
-    target: [lead, spec?.target_height ?? 0.12, 0],
+    position: [lead - back * distance, height * distance + rise, side * distance],
+    target: [lead, (spec?.target_height ?? 0.12) + rise, 0],
   };
 }
 
@@ -299,12 +314,13 @@ export async function createViewer(
   let course = null;
   let wallsVisible = false;
   let sideOffset = 1.15;
+  let slopeDeg = 0;
   let player = new Player([]);
 
   function clearScene() {
     for (const lane of lanes) {
       scene.remove(lane.rig.placer);
-      if (lane.marker) scene.remove(lane.marker);
+      lane.marker?.removeFromParent();
       lane.plate?.dispose();
       if (lane.plate) scene.remove(lane.plate.sprite);
     }
@@ -319,6 +335,7 @@ export async function createViewer(
     clearScene();
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
+    slopeDeg = event?.slope_deg ?? 0;
     if (event) {
       course = attachCourse(
         scene,
@@ -347,10 +364,9 @@ export async function createViewer(
       placeLane(rig, z);
       scene.add(rig.placer);
 
-      // The follow-spot, parented to the course so it climbs a slope with it.
+      // The follow-spot, on the course so it climbs a slope with it (placeMarker).
       const marker = buildMarker(tier, entry.colour ?? null);
       marker.position.z = z;
-      scene.add(marker);
 
       // The duck's name, hung over its head in its lane's colour: the clip
       // has four ducks and no legend, so the name rides the duck.
@@ -412,7 +428,7 @@ export async function createViewer(
       const frame = frameAt(lane.trace, indices[i]);
       applyFrame(lane.rig, frame);
       // Keep the marker under its duck. frame[0] is MJCF +x, which is three +x.
-      if (lane.marker) lane.marker.position.x = frame[0];
+      if (lane.marker) placeMarker(lane.marker, course ?? scene, frame[0], slopeDeg);
       if (lane.plate) {
         lane.rig.bodies.get("trunk_base").getWorldPosition(_trunk);
         lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);
@@ -423,7 +439,8 @@ export async function createViewer(
       // Follow the leader along +x, the direction of travel, from behind and
       // slightly to one side so the gait is visible rather than end-on.
       const lead = Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]));
-      const pose = travelPose(cameraPose(spec, lead, sideOffset), travel);
+      const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
+      const pose = travelPose(cameraPose(spec, lead, sideOffset, rise), travel);
       camera.position.set(...pose.position);
       _target.set(...pose.target);
       if (controls) controls.target.copy(_target);

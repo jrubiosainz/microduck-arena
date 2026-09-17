@@ -222,6 +222,10 @@ carries the `[clip]` configuration (see below).
   constants tuned in the browser.
 - The vertical layout backs the camera off by a constant factor; the same
   spec serves both layouts.
+- A chase climbs with the course: position and target rise by the ramp's
+  height under the leader, and each follow-spot lies on the ramp, parented to
+  the course. Before, a hill climb walked out of the top of the frame and left
+  its ring 20 cm below it.
 
 ### The plan
 
