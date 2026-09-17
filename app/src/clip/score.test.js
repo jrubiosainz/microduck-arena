@@ -12,7 +12,7 @@ describe("clipScore", () => {
   it("sounds the horn at the start, the stamp at the tape end and the victory after it", () => {
     const score = clipScore({ run: { run_id: "R1", event, seeds_finished: 5 }, plan, trace });
     expect(score.cues.map((c) => [c.at, c.file])).toEqual([
-      [3, "foghorn.wav"],
+      [3, "air-horn.mp3"],
       [7, "stamp.wav"],
       [7.16, "microduck-victory.wav"],
     ]);
@@ -21,10 +21,10 @@ describe("clipScore", () => {
     expect(score.crowd.progress.at(-1).value).toBeGreaterThan(0.9);
   });
 
-  it("rings the horn and the duck's voice round the stadium, and keeps the stamp dry", () => {
+  it("rings the duck's voice round the stadium, and keeps the horn, which has its own echo, and the stamp dry", () => {
     const score = clipScore({ run: { run_id: "R1", event, seeds_finished: 5 }, plan, trace });
     expect(score.cues.map((c) => [c.file, c.room])).toEqual([
-      ["foghorn.wav", true],
+      ["air-horn.mp3", false],
       ["stamp.wav", false],
       ["microduck-victory.wav", true],
     ]);

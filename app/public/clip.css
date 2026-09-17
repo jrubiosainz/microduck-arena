@@ -17,8 +17,9 @@ html, body { margin: 0; background: var(--deep-ink); color: var(--paper); font-f
 .osd-event { left: 18px; bottom: 14px; color: var(--yellow); }
 [data-layout="vertical"] .osd-event { display: none; }
 
-/* The stamp lands on the screen at the outro, over the last thing the duck did. */
-.screen .stamp { position: absolute; right: 6%; top: 10%; z-index: 4; }
+/* The stamp lands at the outro on the author's duck itself, centred where the
+   page puts it (main.js), over the last thing the duck did. */
+.screen .stamp { position: absolute; z-index: 4; translate: -50% -50%; white-space: nowrap; }
 
 /* The bands: the marquee above, the figures below. Vertical has room for both
    for the whole tape; landscape shows the figures only at the outro. */

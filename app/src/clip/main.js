@@ -46,7 +46,7 @@ function letter(run) {
   $("fig-points").textContent = earned > 0 ? `+${earned}` : "—";
   $("weights").textContent = run.policy_url ? run.policy_url.replace(/^https?:\/\//, "") : "";
   const stamp = $("stamp");
-  stamp.textContent = dnf ? "DNF" : `FINISHED ${run.seeds_finished}/${run.seeds_total}`;
+  stamp.textContent = dnf ? "DNF" : "VICTORY";
   stamp.classList.add(dnf ? "stamp-fail" : "stamp-pass");
 }
 
@@ -95,6 +95,11 @@ async function main() {
     document.documentElement.dataset.act = act;
     $("intro").hidden = act !== "intro";
     $("stamp").hidden = act !== "outro";
+    if (act === "outro") {
+      // Reversed for the viewer, the author's lane is its last.
+      const { x, y } = viewer.spot(lanes.length - 1);
+      Object.assign($("stamp").style, { left: `${100 * x}%`, top: `${100 * y}%` });
+    }
     $("sheet").hidden = !(act === "outro" || layout === "vertical");
     return step;
   }

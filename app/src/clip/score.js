@@ -7,7 +7,7 @@ import { CTRL_DT, frameAt } from "../replay.js";
 /** Cue gains, measured on a real render: through the stadium's reverb the horn
  * sits 5 dB over the crowd's surge, the victory level with the crowd's cheer,
  * and the fall — over a crowd gone quiet — just over the stamp. */
-const GAINS = { horn: 0.1, stamp: 0.6, victory: 0.8, fall: 0.15 };
+const GAINS = { horn: 2, stamp: 0.6, victory: 4, fall: 0.45 };
 /** How often the crowd learns where the duck is, in seconds of tape. */
 const PROGRESS_EVERY_S = 0.5;
 
@@ -28,9 +28,10 @@ function progress(trace, plan, lengthM, start) {
   return samples;
 }
 
-/** A cue in the `room` rings round the stadium with the crowd; the others go straight to the mix. */
+/** A cue in the `room` is heard only as the stadium's echo of it; the others go straight to the mix. */
 const SOURCES = {
-  horn: ({ start }) => [{ at: start, file: "foghorn.wav", gain: GAINS.horn, room: true }],
+  // The sample carries its own stadium echo.
+  horn: ({ start }) => [{ at: start, file: "air-horn.mp3", gain: GAINS.horn, room: false }],
   verdict: ({ end, verdict }) => [
     { at: end, file: "stamp.wav", gain: GAINS.stamp, room: false },
     verdict === "pass"

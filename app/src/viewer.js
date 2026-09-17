@@ -446,6 +446,13 @@ export async function createViewer(
     draw(travel);
   }
 
+  /** Where lane `i`'s duck stood in the last frame drawn, as fractions of the
+   * canvas from its top left: what a clip hangs its stamp on. */
+  function spot(i) {
+    lanes[i].rig.bodies.get("trunk_base").getWorldPosition(_trunk).project(camera);
+    return { x: (_trunk.x + 1) / 2, y: (1 - _trunk.y) / 2 };
+  }
+
   resize();
   // The canvas, not the window: on the publication page the stage is a grid
   // row that gives its height to the sections appearing under it, so the box
@@ -463,6 +470,7 @@ export async function createViewer(
     setWallsVisible,
     setBrightness,
     frame,
+    spot,
     get brightness() {
       return brightness;
     },

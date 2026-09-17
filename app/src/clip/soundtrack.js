@@ -1,7 +1,7 @@
 // The whole soundtrack in one offline render: the stadium's voices under a
-// continuous direction, every cue at its instant — a cue in the `room` through
-// the stadium's own reverb and echoes, so it rings round the stands with the
-// crowd — and a limiter at the end so no sample reaches ±1 (the live programme
+// continuous direction, every cue at its instant — a cue in the `room` heard
+// only as the stadium's reverb and echoes of it, as if from across the stands —
+// and a limiter at the end so no sample reaches ±1 (the live programme
 // refuses a clip that clips). No segments, no smoothing afterwards, no mixing
 // left to ffmpeg.
 
@@ -9,10 +9,11 @@ import { stadiumDirection } from "./direction.js";
 import { StadiumAmbience, prepareStadium } from "./stadium.js";
 
 const RATE = 48000;
-/** The stadium's own volume scale (0–100). */
-const CROWD_VOLUME = 100;
-/** Past the stadium's own ceiling: the bed sat at -45 dBFS at 30, under every cue by 25 dB. */
-const CROWD_GAIN = 2;
+/** The stadium's own volume scale (0–100): half, so its protection compressor
+ * leaves the crowd room to build to the line instead of flattening it at 8 s. */
+const CROWD_VOLUME = 50;
+/** Past the stadium's own ceiling, making up the half: the bed sat at -45 dBFS at 30, under every cue by 25 dB. */
+const CROWD_GAIN = 3;
 /** Scheduling horizon, from renderStadium: keeps the engine's active nodes bounded. */
 const BATCH_S = 0.5;
 
@@ -63,8 +64,14 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
     const gain = context.createGain();
     gain.gain.value = cue.gain;
     source.connect(gain);
-    // No crowd, no stands to ring round: the cue goes to the mix dry.
-    gain.connect(cue.room && engine ? engine.mix : limiter);
+    if (cue.room && engine) {
+      // The wet sends alone: the dry cue under its echo made the echo too faint.
+      gain.connect(engine.convolver);
+      gain.connect(engine.echoSend);
+    } else {
+      // No crowd, no stands to ring round: the cue goes to the mix dry.
+      gain.connect(limiter);
+    }
     source.start(cue.at);
   }
 
