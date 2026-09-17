@@ -1,0 +1,109 @@
+"""Every detector is a function of the log as it stood at the publish."""
+
+from arena.commentary.notable import notable_facts, pick, situation
+from arena.manifest import all_events
+from tests.test_commentary_context import run
+
+EVENTS = {m.id: m for m in all_events() if m.status == "open"}
+
+
+def facts_for(record, *others, withdrawn=frozenset()):
+    s = situation(record, [record, *others], withdrawn, EVENTS)
+    return {f.ref: f for f in notable_facts(s)}
+
+
+def test_a_first_publication_opens_a_board_and_is_a_first():
+    mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
+    facts = facts_for(mine)
+    assert facts["notable#/first-ever"].text == "This is @alice's first publication in the arena."
+    assert facts["notable#/opens-board"].text == "@alice opens the 2 m Sprint: nobody had published on it before."
+    assert facts["notable#/first-ever"].score > facts["notable#/opens-board"].score
+
+
+def test_the_log_after_the_publish_is_invisible():
+    mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
+    later = run("carol", 11.0, "2026-09-12T10:00:00Z")
+    assert "notable#/opens-board" in facts_for(mine, later)
+
+
+def test_a_first_time_under_a_threshold_is_a_record_for_the_event_or_a_milestone_for_the_player():
+    old = run("alice", 13.1, "2026-09-10T10:00:00Z")
+    other = run("carol", 12.6, "2026-09-10T11:00:00Z")
+    mine = run("alice", 11.8, "2026-09-11T10:00:00Z")
+    record = facts_for(mine, old, other)["notable#/record"]
+    assert record.text == "At 11.80 s this is the first run under 12 s ever recorded on the 2 m Sprint."
+    assert record.tags == ("record", "milestone")
+    faster = run("carol", 11.5, "2026-09-10T12:00:00Z")
+    milestone = facts_for(mine, old, other, faster)["notable#/milestone"]
+    assert milestone.text == "At 11.80 s this is @alice's first run under 12 s on the 2 m Sprint."
+
+
+def test_a_personal_best_says_the_margin_and_a_climb_names_who_was_passed():
+    old = run("alice", 13.4, "2026-09-10T10:00:00Z")
+    bob = run("bob", 12.0, "2026-09-10T11:00:00Z")
+    carol = run("carol", 12.9, "2026-09-09T12:00:00Z")
+    mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
+    facts = facts_for(mine, old, bob, carol)
+    pb = facts["notable#/personal-best"]
+    assert pb.text == "@alice beats their previous best on the 2 m Sprint, 13.40 s, by 1.00 s."
+    assert pb.tags == ("pb",)
+    climb = facts["notable#/climb"]
+    assert climb.text == "@alice climbs from rank 3 to rank 2 on the 2 m Sprint, passing @carol."
+    assert climb.identities == ("carol",) and "podium" in climb.tags
+    dropped = facts["notable#/opponent/carol"]
+    assert dropped.text == ("@carol drops from rank 2 to rank 3 on the 2 m Sprint; their best "
+                            "time there, 12.90 s, was published a day ago.")
+    assert dropped.identities == ("carol",)
+
+
+def test_a_dnf_after_clean_runs_and_a_dnf_streak():
+    clean = [run("alice", 12.0 + i, f"2026-09-0{i + 1}T10:00:00Z") for i in range(3)]
+    dnf = run("alice", 50.0, "2026-09-11T10:00:00Z", finished=0)
+    assert facts_for(dnf, *clean)["notable#/first-dnf"].text == (
+        "@alice did not finish after 3 clean runs in a row on the 2 m Sprint.")
+    second = run("alice", 50.0, "2026-09-12T10:00:00Z", finished=0)
+    assert facts_for(second, *clean, dnf)["notable#/dnf-streak"].text == (
+        "This is @alice's DNF number 2 in a row on the 2 m Sprint.")
+
+
+def test_leading_two_events_publishing_on_every_event_and_a_busy_day():
+    hill = run("alice", 30.0, "2026-09-10T09:00:00Z", event="hill-climb-1m5")
+    roller = run("alice", 9.0, "2026-09-10T09:30:00Z", event="roller-sprint-2m")
+    first = run("alice", 12.9, "2026-09-11T08:00:00Z")
+    second = run("alice", 12.7, "2026-09-11T09:00:00Z")
+    mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
+    facts = facts_for(mine, hill, roller, first, second)
+    # Titles come in `all_events()` order, which is by event id.
+    assert facts["notable#/leads-events"].text == (
+        "@alice now leads 3 events at once: 1.5 m Hill Climb, 2 m Roller Sprint, 2 m Sprint.")
+    assert facts["notable#/regular"].text == "@alice has published on every open event."
+    assert facts["notable#/busy-day"].text == "This is @alice's publication number 3 today."
+
+
+def test_a_rivalry_counts_the_lead_changes_between_two_players():
+    a1 = run("alice", 12.0, "2026-09-01T10:00:00Z")
+    b1 = run("bob", 11.5, "2026-09-02T10:00:00Z")
+    a2 = run("alice", 11.2, "2026-09-03T10:00:00Z")
+    b2 = run("bob", 11.0, "2026-09-04T10:00:00Z")
+    mine = run("alice", 10.8, "2026-09-05T10:00:00Z")
+    rivalry = facts_for(mine, a1, b1, a2, b2)["notable#/rivalry"]
+    assert rivalry.text == "@alice and @bob have traded the lead of the 2 m Sprint 4 times."
+    assert rivalry.identities == ("bob",)
+
+
+def test_pick_keeps_the_best_and_varies_the_angle():
+    a1 = run("alice", 12.0, "2026-09-01T10:00:00Z")
+    b1 = run("bob", 11.5, "2026-09-02T10:00:00Z")
+    mine = run("alice", 11.2, "2026-09-03T10:00:00Z")
+    s = situation(mine, [mine, a1, b1], frozenset(), EVENTS)
+    ranked = notable_facts(s)
+    assert [f.score for f in ranked] == sorted((f.score for f in ranked), reverse=True)
+    chosen = pick(ranked, limit=2)
+    assert len(chosen) == 2
+    assert chosen[0].tags[0] != chosen[1].tags[0]
+
+
+def test_a_withdrawn_run_is_not_in_the_world():
+    gone = run("carol", 10.0, "2026-09-10T10:00:00Z", run_id="GONE")
+    mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
+    assert "notable#/opens-board" in facts_for(mine, gone, withdrawn=frozenset({"GONE"}))
