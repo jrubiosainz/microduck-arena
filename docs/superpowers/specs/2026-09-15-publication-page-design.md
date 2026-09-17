@@ -50,28 +50,45 @@ in-memory). Those parts are new work built on the same primitives.
 ## The page
 
 Route `^/r/<id>/?$` → `{view: "run", runId}`, `runHref(runId)`. It wears the
-`race` sheet because it has a stage. Top to bottom:
+`race` sheet because it has a stage.
 
-1. **Signage** with the chip, as every page.
-2. **Head**: eyebrow `Publication`, `h2` the event title, a line
-   `@user · policy name · date`.
-3. **Stage**: the viewer with the run's trace in lane one and the traces of the
-   three board rows just below it in the next lanes, all at full opacity, all in
-   the livery they raced in. Under the stage a legend: lane colour, `@user`,
-   time, for each lane.
-4. **Scoreboard**: `.scoreboard` with `.flip-digit` tiles for the time
-   (`8.412`, three decimals, matching `formatScore`), beside a `.crt-screen`
-   carrying a `.stamp`: `FINISHED 5/5`, or `DNF`. A mono line under it:
-   `0.85 m/s · replay: seed 3, median finisher`.
-5. **Pegboard**: the window of the board described above. Columns: rank,
+**The page is one screen, and does not scroll.** Everything the reveal animates
+has to be watched at once: a page three windows long spent its points beat
+below the fold, where nobody saw it. `main.run` is a grid exactly the window
+tall whose four rows are head, stage-and-result, pegboard, seeds — and of those
+only the stage is elastic. The rest are as tall as their content, so the
+picture takes whatever is left, down to a 220px floor. Under 700px of window
+height or 860px of width there is no picture left worth watching, and the page
+scrolls again like every other.
+
+1. **Signage** with the chip, as every page. It stays put during a reveal
+   (`.signage--pinned`), in its own ink, so the stars have somewhere to fly to.
+2. **Head**: eyebrow `Publication`, `h2` the event title — which is the link
+   back to the event, so the page carries no back link of its own — and a line
+   `@user · policy name · date`, carrying the `.onnx` download when the run
+   offers one and the training-environment link when there is one.
+3. **Stage and result, side by side.** Left: the viewer with the run's trace in
+   lane one and the traces of the three board rows just below it in the next
+   lanes, all at full opacity, all in the livery they raced in. Right, a
+   `.scoreboard` as tall as it needs to be and no taller — the column is
+   deliberately shorter than the picture beside it, and the room left under it
+   is where the next thing this page grows will go. It holds three centred
+   lines: the `time` label, `.flip-digit` tiles for the time (`8.412`, three
+   decimals, matching `formatScore`), and a lane for the `.stamp`
+   (`FINISHED 5/5`, or `DNF`), tilted into the corner. There is no screen
+   behind the stamp: a stamp wants a corner to be slapped on, not a panel of
+   its own to be centred in, and the panel was the biggest thing on the page
+   for the least it had to say. Under the board, one `.sticker` per receipt of
+   this run (`+100 first entry on 2 m Sprint`, `+10 run`, `+25 personal best`,
+   `+250 podium · held`), empty when the run earned nothing. Under both, the
+   full width of the column, one line carrying the legend (lane colour,
+   `@user`) and `0.85 m/s · replay: seed 3, median finisher`.
+4. **Pegboard**: the window of the board described above. Columns: rank,
    `@user`, policy, time. The run's row is `.pegboard-row-you`. A row is a link
-   to its own run page.
-6. **Points**: one `.sticker` per receipt of this run: `+100 first entry on
-   2 m Sprint`, `+10 run`, `+25 personal best`, `+250 podium · held`. Empty
-   when the run earned nothing.
-7. **Details**: the five seeds (seed, status, time), the `.onnx` link when the
-   run offers a download, the training-environment link when there is one, a
-   link back to the event.
+   to its own run page. One line per row here, the policy name beside the
+   handle rather than under it: eight two-line rows leave the stage nothing.
+5. **Seeds**: the five seeds (seed, status, time) in a `<details>`, folded shut.
+   A detail you go and look up, not a step of the show.
 
 Notes the page must carry when they apply: `withdrawn` (the run is off the
 board), `not on the board` (an older runner version, or the author's own
@@ -86,7 +103,16 @@ better run outranks it).
 **Plain.** Everything is shown at once. The replay loops, as on the race page.
 
 **Reveal.** The section carries `data-act`, one value per beat, as Duck Jam
-does; the scoreboard, pegboard and points are hidden until their beat. Every
+does. **A beat unveils content; it never inserts it.** Every box stands in its
+place from the first frame — the scoreboard on a constant `00.000`, the board
+with the author at the bottom and their own score cell blank, the stickers not
+yet earned, the replay caption whose "median finisher" would say the run
+finished — and each is `visibility: hidden` (`.veiled`), never the `hidden`
+attribute. On a page exactly one window tall anything that leaves the flow
+hands its height to the stage, and the picture jumps in the middle of the
+theatre: measured, the stage stepped 516 → 410 → 393 px across three beats
+before this rule. The time's placeholder is a constant six tiles because a
+DNF's three beside a finish's six would give the verdict away. Every
 beat sequences on `animationend`, never on a timer; the final number is in the
 DOM before the theatre starts. Space skips to the end state.
 
@@ -94,9 +120,9 @@ DOM before the theatre starts. Space skips to the end state.
 | --- | --- |
 | `race` | The replay plays once, not looping. It ends when the author's lane reaches its last frame. |
 | `celebrate` | Finisher: `microduck-victory.wav` and confetti, Duck Jam's `confetti()` verbatim. DNF: neither; straight to the next act. |
-| `verdict` | The scoreboard appears. The stamp slams onto the CRT panel, `stamp.wav` at contact. |
-| `time` | The digits roll, `rollCounter()` verbatim, a `points.wav` tick per flap, driven off the rendered `--flip-at` as Duck Jam does. |
-| `climb` | The pegboard appears with the author's row in the last slot. `.rank-climb` lifts it and slides it to its place; each displaced row gets `.rank-shuffle`. `rank-climb.wav`. Skipped when nothing is below. |
+| `verdict` | The replay caption is unveiled. The stamp slams into the corner of the scoreboard, which takes the recoil, `stamp.wav` at contact. |
+| `time` | The real number replaces the zeros and the digits roll to it, `rollCounter()` verbatim, a `points.wav` tick per flap, driven off the rendered `--flip-at` as Duck Jam does. The author's score then goes up on the board. |
+| `climb` | The author's row, standing in the last slot since the first frame, is lifted by `.rank-climb` and slid to its place; each displaced row gets `.rank-shuffle`. `rank-climb.wav`. Skipped when nothing is below. |
 | `points` | Each receipt sticker appears in turn and flies to the chip; the chip gets `.jolt` and its counter rolls to the new total. In reveal mode the chip starts at `me.points` minus this run's receipts, since `/api/me` already counts them. |
 | `rest` | `POST seen`. The replay resumes looping. |
 
@@ -120,8 +146,15 @@ holds the last frame and stops instead of restarting. The page detects the
 author's lane crossing the line from the `onTick` callback the Player already
 has, at that lane's last frame. `viewer.setLanes(entries, event, playerOptions)`
 passes the options through, and an entry may carry `opacity` to be drawn solid
-whatever its tier. Nothing else in the viewer changes: the camera follows the
-leader as it does today.
+whatever its tier, and `colour` to override the ring's own — which this page
+uses, one lane colour per lane, so the rings on the ground are the colours the
+legend and the ground stripes already name. A tier colour here would say
+leader-and-ghosts, which is not what the stage shows: four real runs.
+
+The viewer watches its own canvas with a `ResizeObserver` rather than the
+window, because on this page the stage is a grid row that hands its height to
+the sections appearing under it while the window never changes size. The camera
+still follows the leader as it does today.
 
 ## The API
 

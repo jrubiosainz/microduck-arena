@@ -6,6 +6,7 @@ web layer and the CLI can never disagree about who is first.
 """
 
 import re
+from collections import defaultdict
 from datetime import UTC, datetime
 
 import numpy as np
@@ -14,7 +15,7 @@ from fastapi.responses import RedirectResponse, Response
 
 from .. import votes
 from ..course import wall_boxes
-from ..index import leaderboard
+from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, standings
 from ..store import RunRecord
@@ -185,44 +186,62 @@ def player_standings(request: Request) -> dict:
 
 @router.get("/players/{user}")
 def player_page(user: str, request: Request) -> dict:
-    """A player's total, rank, and best run on every event they entered."""
+    """A player's total, rank, and every publication they made, newest first."""
     store = request.app.state.store
     runs, withdrawn = _all_runs(store), _withdrawn(store)
+    mine = sorted((r for r in runs if r.user == user), key=lambda r: r.submitted_at, reverse=True)
+    if not mine:
+        raise HTTPException(status_code=404, detail=f"{user!r} has not published yet")
     rules, now = _voted(), datetime.now(UTC)
     ballots = _ballots(request, rules, now)
     card = next(
-        (
-            c
-            for c in standings(receipts(runs, withdrawn, ballots, rules, now))
-            if c.user == user
-        ),
+        (c for c in standings(receipts(runs, withdrawn, ballots, rules, now)) if c.user == user),
         None,
     )
-    if card is None:
-        raise HTTPException(status_code=404, detail=f"{user!r} has not published yet")
-    boards = boards_by_user(runs, withdrawn, ballots, rules, now)
-    best = []
-    for manifest in sorted(all_events(), key=lambda m: (m.order, m.title)):
-        row = next((r for r in boards.get(manifest.id, []) if r.record.user == user), None)
-        if row is None:
-            continue
-        best.append({
-            "event_id": manifest.id,
-            "event_title": manifest.title,
-            "rank": row.rank,
-            "score": row.record.score,
-            "seeds_finished": row.record.seeds_finished,
-            "seeds_total": len(row.record.per_seed),
-            "policy_name": row.record.policy_name,
-            "run_id": row.record.run_id,
-            "submitted_at": row.record.submitted_at,
-            # None off a timed board, a count off a voted one — so the page
+    events = {m.id: m for m in all_events()}
+    seen = store.seen()
+    by_event: dict[str, list[RunRecord]] = defaultdict(list)
+    for run in runs:
+        by_event[run.event_id].append(run)
+    # A voted event ranks on votes, not on time, so its rows come off its own
+    # board the way the podium does: the run in the pool holds a rank and a
+    # count, an older run of the same person holds neither.
+    voted_rows = {
+        row.record.run_id: row
+        for event_id, rows in boards_by_user(runs, withdrawn, ballots, rules, now).items()
+        if events[event_id].metric == "votes"
+        for row in rows
+    }
+    publications = []
+    for run in mine:
+        voted = events[run.event_id].metric == "votes"
+        place = standing(by_event[run.event_id], run.run_id, withdrawn=withdrawn)
+        row = voted_rows.get(run.run_id)
+        publications.append({
+            "run_id": run.run_id,
+            "event_id": run.event_id,
+            "event_title": events[run.event_id].title,
+            "policy_name": run.policy_name,
+            "score": run.score,
+            "seeds_finished": run.seeds_finished,
+            "seeds_total": len(run.per_seed),
+            "rank": (row.rank if row else None) if voted else place.rank,
+            "on_board": row is not None if voted else place.on_board,
+            "withdrawn": run.run_id in withdrawn,
+            "submitted_at": run.submitted_at,
+            "seen": run.run_id in seen,
+            # None off a timed event, a count off a voted one — so the page
             # can tell a reader what the rank next to it was EARNED by. A
             # bare "#1 · 18.46s" reads as a time on a board actually ranked
             # by votes.
-            "votes": row.votes if manifest.metric == "votes" else None,
+            "votes": (row.votes if row else 0) if voted else None,
         })
-    return {"user": user, "points": card.points, "rank": card.rank, "best": best}
+    return {
+        "user": user,
+        "points": card.points if card else 0,
+        "rank": card.rank if card else None,
+        "publications": publications,
+    }
 
 
 def _find_run(store, run_id: str) -> RunRecord:
@@ -241,25 +260,56 @@ def _find_run(store, run_id: str) -> RunRecord:
 
 @router.get("/runs/{run_id}")
 def run_detail(run_id: str, request: Request) -> dict:
+    """One run and everything its page shows: where it stands, what it earned,
+    whether its author has seen it. Placed by `index.standing`, priced by
+    `points.receipts` — nothing is decided here."""
     store = request.app.state.store
     record = _find_run(store, run_id)
-    frames = decode(store.trace(run_id)).shape[0]
+    runs, withdrawn = _all_runs(store), _withdrawn(store)
+    rules, now = _voted(), datetime.now(UTC)
+    place = standing(store.runs(record.event_id), run_id, withdrawn=withdrawn)
     return {
         "run_id": record.run_id,
-        "event_id": record.event_id,
+        "event": event_summary(load_event(record.event_id)),
         "user": record.user,
         "policy_name": record.policy_name,
+        "livery": record.livery,
         "score": record.score,
+        "command_vx": record.command_vx,
         "seeds_finished": record.seeds_finished,
+        "seeds_total": len(record.per_seed),
         "per_seed": [
             {"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in record.per_seed
         ],
         "trace_seed": record.trace_seed,
         "submitted_at": record.submitted_at,
         "runner_version": record.runner_version,
-        "frames": frames,
         "offers_download": record.offers_download,
         "policy_url": (record.source or {}).get("url"),
+        "env_url": record.env_url,
+        "withdrawn": record.run_id in withdrawn,
+        "on_board": place.on_board,
+        "rank": place.rank,
+        "board": [
+            {
+                "rank": row.rank,
+                "user": row.record.user,
+                "policy_name": row.record.policy_name,
+                "score": row.record.score,
+                "seeds_finished": row.record.seeds_finished,
+                "run_id": row.record.run_id,
+                "livery": row.record.livery,
+                "you": row.record.run_id == record.run_id,
+            }
+            for row in place.board
+        ],
+        # Podium receipts are HELD, so this list can change between two reads.
+        "receipts": [
+            {"act": r.act, "points": r.points}
+            for r in receipts(runs, withdrawn, _ballots(request, rules, now), rules, now)
+            if r.source_id == record.run_id
+        ],
+        "seen": record.run_id in store.seen(),
     }
 
 

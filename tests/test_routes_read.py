@@ -295,7 +295,7 @@ def test_standings_are_empty_before_anyone_publishes(client):
     assert api.get("/api/standings").json() == {"rows": []}
 
 
-def test_a_player_page_carries_points_rank_and_the_best_run_per_event(client):
+def test_a_player_page_carries_points_rank_and_every_publication_newest_first(client):
     api, app = client
     slow = record_run(app, user="ann", event_id="sprint-2m", score=30.0,
                       policy_name="v1", submitted_at="2026-09-03T09:00:00Z")
@@ -307,22 +307,20 @@ def test_a_player_page_carries_points_rank_and_the_best_run_per_event(client):
                submitted_at="2026-09-03T12:00:00Z")
 
     body = api.get("/api/players/ann").json()
-    assert body["user"] == "ann"
-    assert body["rank"] == 1
     # sprint: first 100 + runs 10+10 + own_best 25 + podium 250; hill: first 100 + run 10 + podium 150.
-    assert body["points"] == 655
-    assert [(b["event_id"], b["rank"], b["run_id"]) for b in body["best"]] == [
-        ("sprint-2m", 1, fast.run_id),
-        ("hill-climb-1m5", 2, hill.run_id),
+    assert (body["user"], body["rank"], body["points"]) == ("ann", 1, 655)
+    assert [(p["run_id"], p["rank"], p["on_board"]) for p in body["publications"]] == [
+        (hill.run_id, 2, True),
+        (fast.run_id, 1, True),
+        # Beaten by her own v2, so off the board — and still placed: alone in
+        # a field with nobody else on the sprint, first.
+        (slow.run_id, 1, False),
     ]
-    sprint = body["best"][0]
-    assert sprint["event_title"] == "2 m Sprint"
-    assert sprint["policy_name"] == "v2"
-    assert sprint["score"] == 20.0
-    assert sprint["seeds_finished"] == 5
-    assert sprint["seeds_total"] == 1
-    assert sprint["submitted_at"] == "2026-09-03T10:00:00Z"
-    assert slow.run_id not in {b["run_id"] for b in body["best"]}
+    sprint = body["publications"][1]
+    assert (sprint["event_title"], sprint["policy_name"], sprint["seeds_total"]) == (
+        "2 m Sprint", "v2", 1,
+    )
+    assert (sprint["withdrawn"], sprint["seen"]) == (False, False)
 
 
 def test_a_player_with_no_publication_is_404(client):
@@ -332,14 +330,18 @@ def test_a_player_with_no_publication_is_404(client):
     assert "nobody" in response.json()["detail"]
 
 
-def test_a_withdrawn_run_leaves_the_player_page_and_the_ladder(client):
+def test_a_withdrawn_run_leaves_the_ladder_but_stays_on_the_player_page(client):
     api, app = client
     from arena.store import Withdrawal
     run = record_run(app, user="ann")
     app.state.store.withdraw(Withdrawal(run_id=run.run_id, event_id="sprint-2m", user="ann",
                                         withdrawn_at="2026-09-03T12:00:00Z"))
     assert api.get("/api/standings").json() == {"rows": []}
-    assert api.get("/api/players/ann").status_code == 404
+    body = api.get("/api/players/ann").json()
+    assert (body["points"], body["rank"]) == (0, None)
+    assert [(p["run_id"], p["withdrawn"], p["on_board"]) for p in body["publications"]] == [
+        (run.run_id, True, False),
+    ]
 
 
 def test_an_event_says_whether_it_takes_votes_and_how(client):
@@ -396,11 +398,11 @@ def test_a_players_best_row_on_a_voted_event_carries_its_vote_count(client):
     cast(app, bob.run_id, [ann.run_id, bob.run_id])
 
     winner = api.get("/api/players/bob").json()
-    [swag] = [b for b in winner["best"] if b["event_id"] == "swag-contest"]
+    [swag] = [b for b in winner["publications"] if b["event_id"] == "swag-contest"]
     assert swag["votes"] == 1
 
     runner_up = api.get("/api/players/ann").json()
-    [swag] = [b for b in runner_up["best"] if b["event_id"] == "swag-contest"]
+    [swag] = [b for b in runner_up["publications"] if b["event_id"] == "swag-contest"]
     assert swag["votes"] == 0
 
 
@@ -408,7 +410,7 @@ def test_a_players_best_row_on_a_timed_event_carries_no_vote_count(client):
     api, app = client
     record_run(app, user="ann", event_id="sprint-2m", score=12.0)
     body = api.get("/api/players/ann").json()
-    [sprint] = [b for b in body["best"] if b["event_id"] == "sprint-2m"]
+    [sprint] = [b for b in body["publications"] if b["event_id"] == "sprint-2m"]
     assert sprint["votes"] is None
 
 
@@ -504,3 +506,24 @@ def test_every_event_tells_the_page_what_kind_it_is(client):
     assert events["sprint-2m"] == "race"
     assert events["rough-ground"] == "challenge"
     assert events["swag-contest"] == "showcase"
+
+
+def test_a_run_detail_carries_its_place_its_receipts_and_its_event(client):
+    api, app = client
+    record_run(app, user="bob", score=10.0, submitted_at="2026-09-03T09:00:00Z")
+    mine = record_run(app, user="coralie", score=12.0, submitted_at="2026-09-03T10:00:00Z")
+
+    body = api.get(f"/api/runs/{mine.run_id}").json()
+    assert body["event"]["title"] == "2 m Sprint"
+    assert (body["rank"], body["on_board"], body["withdrawn"], body["seen"]) == (
+        2, True, False, False,
+    )
+    assert [(r["rank"], r["user"], r["you"]) for r in body["board"]] == [
+        (1, "bob", False),
+        (2, "coralie", True),
+    ]
+    # first entry 100 + run 10 + second place 150; no own_best, a lone run beats nothing.
+    assert sorted(r["act"] for r in body["receipts"]) == ["first_event", "podium", "run"]
+    assert sum(r["points"] for r in body["receipts"]) == 260
+    # Dropped: it cost a full trace decode, and the page loads the trace anyway.
+    assert "frames" not in body

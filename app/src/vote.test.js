@@ -219,12 +219,14 @@ describe("the ballot ceremony", () => {
     ]);
   });
 
-  it("plays press, then stamp, then points, in that order, once the server confirms the vote", async () => {
-    const onPick = vi.fn().mockResolvedValue(undefined);
+  it("plays press, then stamp, in that order, once the server confirms the vote", async () => {
+    // The stars and the counter that follow the stamp sequence on CSS animation
+    // events, which jsdom never fires; they are checked in the browser.
+    const onPick = vi.fn().mockResolvedValue({ points: 2, cast_today: 1 });
     const panel = votePanel(ballot(2), onPick);
     panel.querySelector("button.vote-pick").click();
     await vi.advanceTimersByTimeAsync(2000);
-    expect(audioCalls).toEqual(["/sound/press.wav", "/sound/stamp.wav", "/sound/points.wav"]);
+    expect(audioCalls).toEqual(["/sound/press.wav", "/sound/stamp.wav"]);
   });
 
   it("plays press, and never stamp or points, when the vote fails", async () => {

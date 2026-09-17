@@ -245,7 +245,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     }
   }
 
-  function setLanes(entries, event) {
+  function setLanes(entries, event, playerOptions = {}) {
     clearScene();
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
@@ -261,7 +261,9 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
       // instead — the treatment the simulator gives its multiplayer peers.
       attachMeshes(rig, kinematics, geometries, {
         livery: entry.livery ?? "classic",
-        opacity: tier === "ghost" ? GHOST_OPACITY : 1,
+        // A rival on a publication page is a real entry, drawn solid: an
+        // explicit `opacity` overrides what the tier would give it.
+        opacity: entry.opacity ?? (tier === "ghost" ? GHOST_OPACITY : 1),
       });
       // The same spacing buildCourse used: the ducks must stand between their
       // own walls, not between someone else's.
@@ -276,7 +278,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
 
       return { ...entry, rig, marker, tier };
     });
-    player = new Player(lanes.map((lane) => lane.trace));
+    player = new Player(lanes.map((lane) => lane.trace), playerOptions);
     player.play();
   }
 
@@ -346,7 +348,12 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   }
 
   resize();
-  addEventListener("resize", resize);
+  // The canvas, not the window: on the publication page the stage is a grid
+  // row that gives its height to the sections appearing under it, so the box
+  // changes size while the window never does. Watching the window alone left
+  // the drawing buffer 36% taller than the box it was painted into.
+  const watcher = new ResizeObserver(resize);
+  watcher.observe(canvas);
   raf = requestAnimationFrame(tick);
 
   setBrightness(brightness);
@@ -367,7 +374,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     },
     dispose() {
       if (raf) cancelAnimationFrame(raf);
-      removeEventListener("resize", resize);
+      watcher.disconnect();
       controls.dispose();
       clearScene();
       environment.dispose();

@@ -257,6 +257,7 @@ table.board th {
 table.board td { padding: 11px 10px; border-top: 2px solid var(--ink); }
 table.board tbody tr:first-child td { border-top: 0; }
 table.board tbody tr:hover { background: var(--cream); }
+table.board tr.linked { cursor: pointer; }
 
 /* the lane tab: a filled bar for a duck on the stage, hollow otherwise */
 table.board .tab { width: 34px; padding-left: 0; padding-right: 4px; }
@@ -721,39 +722,191 @@ table.board .withdraw:focus-visible,
 }
 .vote-ceremony__envelope--sealed .vote-ceremony__flap { rotate: x 0deg; }
 
-/* The two "+1"s. Appended only once the vote is confirmed, resting at the
-   envelope until the next class sends them to the player chip -- see
-   vote.js, which sets --tx/--ty from .profile-chip's own position, falling
-   back to the chip's usual corner when it cannot find one. */
-.vote-ceremony__token {
-  position: fixed;
-  left: 50%;
-  bottom: 12%;
-  translate: -50% 0;
-  padding: 2px 8px;
-  font: 700 0.85rem/1 var(--display);
-  color: var(--ink);
-  background: var(--yellow);
-  border: 2px solid var(--ink);
-  opacity: 0;
-  transition: left 0.25s var(--ease-hard), top 0.25s var(--ease-hard), opacity 0.2s ease;
-}
-.vote-ceremony__token:nth-of-type(2) { transition-delay: 0.03s; }
-/* vote.js adds this modifier to the overlay itself, once both tokens have
-   had one frame at rest to paint -- see runCeremony's own comment on why. */
-.vote-ceremony.vote-ceremony__token--go > .vote-ceremony__token {
-  left: var(--tx, 92%);
-  top: var(--ty, 8%);
-  bottom: auto;
-  opacity: 1;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .vote-pick,
   .vote-ceremony__postit,
   .vote-ceremony__envelope,
-  .vote-ceremony__flap,
-  .vote-ceremony__token {
+  .vote-ceremony__flap {
     transition: none;
   }
+}
+
+/* ── a publication: the run page ─────────────────────────────────────── */
+
+/* The one page in the club that does not scroll.
+ *
+ * Everything the reveal animates has to be on screen together, or the stars
+ * fly to a chip nobody is looking at — which is exactly what happened when
+ * the page was three windows long. So the page is the window tall, and of its
+ * four rows only the stage is elastic: the head, the board and the seeds are
+ * each as tall as their content, and the picture takes whatever is left. */
+#app:has(> main.run) { height: 100vh; }
+
+.hall.run {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: var(--space-gutter-min);
+  min-height: 0;
+  padding-block: 20px;
+}
+
+/* The strip stays put, in its own ink: a sticky bar needs an opaque
+   background, and the paper it used to take turned the strip white halfway
+   through the theatre. Only the scrolling fallback below can still move. */
+.signage--pinned { position: sticky; top: 0; z-index: 2; background: var(--ink); }
+
+/* The title is the way back to the event, so the page carries no back link. */
+.run-head .racetitle a { color: inherit; text-decoration: none; }
+.run-head .racetitle a:hover { color: var(--orange-inked); }
+
+/* Who made it, when, and what you can take away: one dot-separated line.
+   Plain inline flow, not a flex row: the separators are text, and flex would
+   make each of them its own item with its own gaps. */
+.run-byline { margin: 0; color: var(--ink-70); }
+.run-byline a { color: var(--sky-inked); }
+.run-byline .sticker { font-size: 0.7rem; padding: 2px 8px; }
+
+/* Hidden, and still holding its place.
+ *
+ * Every box on this page stands there from the first frame — the scoreboard on
+ * zeros, the board with you at the bottom, the stickers you have not earned
+ * yet — and a beat unveils its content. `hidden` would take the box out of the
+ * flow, the stage would take the height it gave up, and the picture would jump
+ * in the middle of the theatre. Measured before this: the stage stepped from
+ * 516 to 410 to 393 px across three beats. */
+.veiled { visibility: hidden; }
+
+/* The stage and the result, shoulder to shoulder: every moving thing is here,
+   a short flight from the chip. The caption runs under both, the whole width
+   of the column, so it never has to wrap into a second line it cannot afford. */
+.run-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 6px var(--space-gutter-max);
+  min-height: 0;
+}
+/* The stage gives the rest of the page its slack, down to a floor below which
+   there is no picture left worth watching. */
+.run-top .stage { min-height: 220px; }
+.run-top .stage canvas { height: 100%; min-height: 0; }
+.run-caption {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 18px;
+}
+.run-legend { margin: 0; }
+.run-legend li { color: var(--lane); }
+.run-legend li::before { background: var(--lane); border-color: var(--lane); }
+.run-legend strong { color: var(--ink); }
+.run-facts { margin: 0; color: var(--ink-70); }
+
+/* The result: the split-flap time at the top of the column, the stickers at
+   its foot. There is no screen behind the stamp any more — a stamp wants a
+   corner to be slapped on, not a panel of its own to be centred in, and the
+   panel was the biggest thing on the page for the least it had to say. */
+/* Each block as tall as it needs to be, stacked from the top: the column is
+   deliberately shorter than the picture beside it, and the room left under it
+   is where the next thing this page grows will go. */
+.run-score {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: start;
+  gap: 22px;
+  margin: 0;
+  min-height: 0;
+}
+/* Three lines: the label, the time, and the lane the stamp comes down in. */
+.run-score .scoreboard {
+  display: grid;
+  grid-template-rows: auto auto auto;
+  justify-items: center;
+  gap: 6px;
+}
+.run-score .flip { font-size: clamp(2rem, 5vw, 3.6rem); }
+/* The stamp keeps a lane of its own rather than hanging off a corner: the
+   board shrinks with the window, and an absolute stamp landed on the digits
+   at 780px of height and on the stickers when it cleared the edge. Tilting is
+   a transform, so it costs the lane nothing. It is veiled, never hidden — the
+   lane has to hold its height before the stamp arrives. */
+.run-score .stamp {
+  justify-self: end;
+  font-size: clamp(1rem, 2.4vw, 1.7rem);
+  rotate: calc(-1 * var(--rotate-4-0));
+}
+
+/* What the run earned, one sticker per receipt. */
+.run-receipts { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; }
+.run-receipts .mono-label { color: var(--ink-70); }
+
+/* The pegboard: a window of the board, this run's row in lime, each row a link.
+   One line per row here, the repo beside the handle instead of under it —
+   eight two-line rows leave the stage fourteen pixels, which is nothing. */
+.run-board { margin: 0; min-height: 0; }
+.run-board .pegboard-row { padding: 4px var(--space-card-padding-min); gap: 0 12px; }
+.run-board .pegboard-rank,
+.run-board .pegboard-score { font-size: 1.2rem; line-height: 1.15; }
+.run-board .pegboard-repo { display: inline; margin-left: 8px; }
+.pegboard-row { color: inherit; text-decoration: none; }
+.pegboard-row:hover { background: var(--cream); }
+.pegboard-row-you:hover { background: var(--lime); }
+
+/* Too short or too narrow for one screen: the page scrolls, as the others do,
+   and the rows get their second line back. */
+@media (max-height: 700px), (max-width: 860px) {
+  #app:has(> main.run) { height: auto; }
+  .hall.run { display: block; }
+  .hall.run > * + * { margin-top: var(--space-gutter-max); }
+  .run-top { grid-template-columns: minmax(0, 1fr); gap: var(--space-gutter-max); }
+  .run-top .stage { min-height: 260px; }
+  .run-top .stage canvas { height: 44vh; }
+  .run-board .pegboard-row { padding: 14px var(--space-card-padding-min); }
+  .run-board .pegboard-repo { display: block; margin-left: 0; }
+}
+
+/* ── the seeds, folded away under their summary ───────────────────────── */
+
+.run-seedlist { margin: 0; }
+.run-seedlist summary { cursor: pointer; }
+.run-seedlist ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.seed { display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
+.seed strong { font: 400 1.35rem/1 var(--display); }
+.seed.replayed strong { color: var(--orange-inked); }
+
+/* ── points as a shower of stars ──────────────────────────────────────── */
+
+/* The overlay is the viewport; points.js places every star in it. The glyph
+   pops in (star-in) after its --spawn; the star itself waits --wait more,
+   then flies the --dx/--dy the page measured to the chip (star-fly). Two
+   elements because both beats fill both ways, and one element cannot hold
+   two animations that disagree about its scale. */
+.shower { position: fixed; inset: 0; z-index: 61; pointer-events: none; }
+.star {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  font: 700 1.1rem/1 var(--display);
+  color: var(--yellow);
+  text-shadow: 1px 1px 0 var(--ink);
+  animation: star-fly var(--t-roll) var(--ease-hard) calc(var(--spawn) + var(--wait)) both;
+}
+.star > span {
+  display: block;
+  animation: star-in var(--t-flip) var(--ease-drop) var(--spawn) both;
+}
+@keyframes star-in {
+  from { opacity: 0; scale: 0.2; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes star-fly {
+  to { translate: var(--dx) var(--dy); scale: 0.5; opacity: 0.7; }
 }

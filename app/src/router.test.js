@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { menuHref, parseRoute, playerHref, raceHref, themeFor, voteHref } from "./router.js";
+import { menuHref, parseRoute, playerHref, raceHref, runHref, themeFor, voteHref } from "./router.js";
 
 describe("parseRoute", () => {
   it("shows the home page by default", () => {
@@ -24,6 +24,11 @@ describe("parseRoute", () => {
   it("opens one voting booth", () => {
     expect(parseRoute("#/v/swag-contest")).toEqual({ view: "vote", eventId: "swag-contest" });
     expect(parseRoute("#/v/swag-contest/")).toEqual({ view: "vote", eventId: "swag-contest" });
+  });
+
+  it("opens one publication", () => {
+    expect(parseRoute("#/r/01ABC")).toEqual({ view: "run", runId: "01ABC" });
+    expect(parseRoute(runHref("01ABC"))).toEqual({ view: "run", runId: "01ABC" });
   });
 
   it("falls back to the home page for anything it does not recognise", () => {
@@ -56,6 +61,7 @@ describe("parseRoute", () => {
 describe("themeFor", () => {
   it("dresses races in the trackside theme and everything else as the club", () => {
     expect(themeFor("race")).toBe("race");
+    expect(themeFor("run")).toBe("race");
     expect(themeFor("menu")).toBe("club");
     expect(themeFor("player")).toBe("club");
     expect(themeFor("vote")).toBe("race");

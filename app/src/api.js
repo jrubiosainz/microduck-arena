@@ -124,3 +124,6 @@ export const castVote = (eventId, ballot, lane) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ballot, lane }),
   });
+
+/** Tell the server its author has seen this run's page. The server refuses anyone else. */
+export const markSeen = (runId) => json(`/api/runs/${runId}/seen`, { method: "POST" });

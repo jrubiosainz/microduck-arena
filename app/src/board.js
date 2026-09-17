@@ -6,6 +6,7 @@
 
 import { formatScore, formatSeeds, formatSpeed } from "./format.js";
 import { LANE_CSS } from "./course.js";
+import { runHref } from "./router.js";
 
 export const DEFAULT_LANES = 3;
 
@@ -131,6 +132,16 @@ export function renderBoard(
     if (row.dnf) tr.classList.add("dnf");
     if (row.provisional) tr.classList.add("provisional");
     tr.classList.add(`tier-${row.tier}`);
+
+    if (!row.provisional) {
+      // The row is the way to the run's page. Its own controls — the lane box,
+      // the two links, the withdraw button — keep their own behaviour.
+      tr.classList.add("linked");
+      tr.addEventListener("click", (event) => {
+        if (event.target.closest("a, button, input")) return;
+        location.hash = runHref(row.runId);
+      });
+    }
 
     // A trial has no run id to tick: it is on the stage and nowhere else.
     let lane = null;

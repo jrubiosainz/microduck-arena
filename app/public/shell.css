@@ -8,6 +8,10 @@
 
 * { box-sizing: border-box; }
 
+/* The attribute wins over any display the components set, or a hidden
+   scoreboard is a visible one. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--paper);
@@ -79,6 +83,27 @@ body {
   text-transform: uppercase;
 }
 .profile-chip:hover { background: var(--deep-ink); }
+/* The points, as flip tiles small enough for a strip: deep-ink tiles on the
+   ink chip, the seam in ink, the star in the club's yellow. */
+.profile-chip { position: relative; }
+.profile-chip .flip { gap: 2px; font-size: 1rem; }
+.profile-chip .flip-digit { width: 0.75em; height: 1.25em; background: var(--deep-ink); }
+.profile-chip .flip-digit::after { background: var(--ink); }
+.profile-chip .chip-points::before { content: "✦"; color: var(--yellow); padding-right: 4px; }
+/* When it receives points it jolts as the CRT does, not as a cell does. */
+.profile-chip.jolt { --impact-distance: var(--impact-verdict); }
+
+/* A result its author has not opened yet: the club's hot colour, on the corner. */
+.profile-chip.unread::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  background: var(--magenta);
+  border: 2px solid var(--paper);
+}
 .wordmark a:focus-visible, .profile-chip:focus-visible {
   outline: 3px solid var(--cyan);
   outline-offset: 3px;
