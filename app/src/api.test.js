@@ -6,6 +6,7 @@ import {
   getLeaderboard,
   getPlayer,
   getStandings,
+  getSettle,
   getTrace,
 } from "./api.js";
 
@@ -56,6 +57,13 @@ describe("the error contract", () => {
     const trace = await getTrace("01OK");
     expect(trace).toBeInstanceOf(Float32Array);
     expect([...trace]).toEqual([1.5, 2.5, 3.5]);
+  });
+
+  it("fetches a run's settle the way it fetches its trace", async () => {
+    respondWith({ bytes: new Float32Array([0.5]).buffer });
+    const settle = await getSettle("01OK");
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/runs/01OK/settle");
+    expect([...settle]).toEqual([0.5]);
   });
 });
 

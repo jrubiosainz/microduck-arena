@@ -44,12 +44,21 @@ export async function getMe() {
   }
 }
 
-export async function getTrace(runId) {
-  const response = await fetch(`/api/runs/${runId}/trace`);
+async function frames(path) {
+  const response = await fetch(path);
   // Same contract as every other call: the server's own sentence, not a status.
   if (!response.ok) throw new Error(await detailFrom(response));
   // Raw little-endian float32 from the server, 21 values per frame.
   return new Float32Array(await response.arrayBuffer());
+}
+
+export function getTrace(runId) {
+  return frames(`/api/runs/${runId}/trace`);
+}
+
+/** The untimed settle before a run's trace, from the reset pose; empty for a run stored before settles were recorded. */
+export function getSettle(runId) {
+  return frames(`/api/runs/${runId}/settle`);
 }
 
 function policyForm(file, name, livery, commandVx, envUrl) {

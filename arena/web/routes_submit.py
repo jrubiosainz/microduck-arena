@@ -362,7 +362,7 @@ async def submit(
         env_url=link,
         livery=_livery(livery),
     )
-    store.append(record, trace_codec.encode(result.trace), payload if published is None else None)
+    store.append(record, trace_codec.encode(result.trace, result.settle), payload if published is None else None)
 
     clips = request.app.state.clips
     if clips.available:

@@ -19,7 +19,7 @@ from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, standings
 from ..store import CLIP_MEDIA, RunRecord
-from ..trace import decode
+from ..trace import decode, decode_settle
 
 router = APIRouter(prefix="/api")
 
@@ -379,12 +379,24 @@ def run_trace(run_id: str, request: Request) -> Response:
     """
     store = request.app.state.store
     _find_run(store, run_id)  # 404 before touching the trace file
-    trace = decode(store.trace(run_id))
-    payload = np.ascontiguousarray(trace, dtype="<f4").tobytes()
+    return _frames(decode(store.trace(run_id)))
+
+
+@router.get("/runs/{run_id}/settle")
+def run_settle(run_id: str, request: Request) -> Response:
+    """The untimed settle that led into the trace, from the reset pose, in the
+    trace's own format: where a clip starts. Empty for a run stored before
+    settles were recorded."""
+    store = request.app.state.store
+    _find_run(store, run_id)
+    return _frames(decode_settle(store.trace(run_id)))
+
+
+def _frames(frames: np.ndarray) -> Response:
     return Response(
-        content=payload,
+        content=np.ascontiguousarray(frames, dtype="<f4").tobytes(),
         media_type="application/octet-stream",
-        headers={"X-Frame-Count": str(trace.shape[0]), "Cache-Control": "no-store"},
+        headers={"X-Frame-Count": str(frames.shape[0]), "Cache-Control": "no-store"},
     )
 
 

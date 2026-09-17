@@ -113,6 +113,19 @@ def test_an_unreachable_finish_line_times_out(sprint, walker):
     assert outcome.trace.shape[0] == pytest.approx(3.0 / CTRL_DT, abs=1)
 
 
+def test_the_settle_is_recorded_from_the_reset_pose(sprint, walker):
+    """The untimed settle has its own frames, so a replay can start where the
+    simulation did: frame 0 is the keyframe before any step, then one frame per
+    settle step, the last one control step before the first clocked frame."""
+    outcome = run_once(sprint, walker, seed=1)
+    steps = round(sprint.start.settle_s / CTRL_DT)
+    assert outcome.settle.shape == (steps + 1, TRACE_WIDTH)
+    assert outcome.settle.dtype == np.float32
+    key = compile_course(sprint).key(sprint.start.keyframe)
+    np.testing.assert_allclose(outcome.settle[0, 0:3], key.qpos[0:3], atol=1e-6)
+    assert np.linalg.norm(outcome.trace[0, 0:3] - outcome.settle[-1, 0:3]) < 0.02
+
+
 def test_the_clock_starts_on_the_start_line(sprint, walker):
     """The first clocked frame sits on the start line.
 

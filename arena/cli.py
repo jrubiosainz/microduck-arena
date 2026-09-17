@@ -64,7 +64,7 @@ def _cmd_score(args) -> int:
             livery=args.livery,
         )
         LocalStore(Path(args.store)).append(
-            record, trace_codec.encode(result.trace), Path(args.onnx).read_bytes()
+            record, trace_codec.encode(result.trace, result.settle), Path(args.onnx).read_bytes()
         )
         print(f"recorded {record.run_id}")
     return 0
