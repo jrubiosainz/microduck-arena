@@ -24,6 +24,8 @@ DEFAULT_RANK_BY = "policy"
 # HF's own default is 8 hours. Matching it means the cookie and the token expire
 # together, so there is no window where the session outlives its own token.
 DEFAULT_SESSION_TTL_S = 8 * 60 * 60
+# The router model that writes and audits the commentary. What Duck Jam ran.
+DEFAULT_COMMENTARY_MODEL = "Qwen/Qwen3.8-27B:cerebras"
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,12 @@ class ArenaConfig:
     # to a Space with history; the drain at each boot then owes the rest,
     # newest first, behind fresh publishes, and finds nothing to do once caught up.
     clip_backfill: bool = False
+    # Whether publishes get Peter and Ray's lines. ARENA_COMMENTARY=0 is the
+    # off switch for a running Space; no token turns it off with a boot line.
+    commentary_enabled: bool = True
+    # The router model that writes and audits them. ARENA_COMMENTARY_MODEL
+    # overrides; the default is what Duck Jam ran.
+    commentary_model: str = DEFAULT_COMMENTARY_MODEL
 
     @classmethod
     def from_env(
@@ -136,6 +144,10 @@ class ArenaConfig:
             clip_worker=clip_worker,
             clips_enabled=(os.environ.get("ARENA_CLIPS") or "1").strip() not in {"0", "false", "no"},
             clip_backfill=(os.environ.get("ARENA_CLIP_BACKFILL") or "").strip() in {"1", "true", "yes"},
+            commentary_enabled=(os.environ.get("ARENA_COMMENTARY") or "1").strip()
+            not in {"0", "false", "no"},
+            commentary_model=(os.environ.get("ARENA_COMMENTARY_MODEL") or "").strip()
+            or DEFAULT_COMMENTARY_MODEL,
         )
 
     @property

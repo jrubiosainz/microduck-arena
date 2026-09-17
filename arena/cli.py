@@ -174,6 +174,93 @@ def _cmd_clip(args) -> int:
     return 0
 
 
+def _cmd_commentary(args) -> int:
+    """Write (or, with --dry-run, print) Peter and Ray's lines for one run.
+
+    A dry run touches neither a browser nor the store: it is how the tone is
+    judged before the worker is let loose. The real thing starts the app on a
+    loopback port for the clip page, like `arena clip`, and overwrites the
+    run's commentary.json.
+    """
+    import socket
+    import threading
+
+    import httpx
+    import uvicorn
+
+    from . import commentary
+    from .clips import ClipRenderer
+    from .commentary.generator import Rejected
+    from .commentary.lore import load
+    from .web.app import create_app
+    from .web.config import ArenaConfig
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    origin = f"http://127.0.0.1:{port}"
+    config = ArenaConfig.from_env(store_dir=args.store, origin=origin, clip_worker=False)
+    token = commentary.hub_token(config)
+    if not token:
+        print("no Hub token: set HF_TOKEN or run `hf auth login`", file=sys.stderr)
+        return 1
+    lore = load()
+    provider = commentary.router_provider(config.commentary_model, token)
+    store = config.build_store()
+    if args.dry_run:
+        try:
+            record = commentary.find_run(store, args.run_id)
+        except LookupError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        facts, _ = commentary.gather(store, record, lore)
+        for i, fact in enumerate(facts):
+            print(f"[{i}] {fact.text}" + ("  (memory)" if fact.kind == "lore" else ""))
+        try:
+            written = commentary.compose(store, args.run_id, lore=lore, provider=provider,
+                                         model=config.commentary_model)
+        except Rejected as why:
+            print(f"\nnot on air: {why}", file=sys.stderr)
+            return 1
+        print()
+        for turn in written["turns"]:
+            print(f"{lore.characters[turn['speaker']]['name']}: {turn['text']}")
+        print(f"\n{written['model']}, {written['usage']['prompt_tokens']} + "
+              f"{written['usage']['completion_tokens']} tokens")
+        return 0
+
+    app = create_app(config)
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    threading.Thread(target=server.run, daemon=True).start()
+    for _ in range(100):
+        try:
+            if httpx.get(f"{origin}/api/health", timeout=1).status_code == 200:
+                break
+        except httpx.HTTPError:
+            pass
+        time.sleep(0.1)
+    else:
+        print(f"the app did not come up on {origin}", file=sys.stderr)
+        server.should_exit = True
+        return 1
+    if app.state.store.clip_state(args.run_id)[0] != "ready":
+        print(f"{args.run_id} has no ready clip; render it first with `arena clip`", file=sys.stderr)
+        server.should_exit = True
+        return 1
+    worker = ClipRenderer(app.state.store, origin, config.frontend_dir, log=print,
+                          commentary=lambda run_id: commentary.compose(
+                              app.state.store, run_id, lore=lore, provider=provider,
+                              model=config.commentary_model))
+    if not worker.available:
+        print("needs a Chrome ($CHROME or the usual paths), ffmpeg, and a built clip.html",
+              file=sys.stderr)
+        server.should_exit = True
+        return 1
+    worker.commentary_one(args.run_id)
+    server.should_exit = True
+    return 0 if app.state.store.commentary(args.run_id) else 1
+
+
 def _cmd_serve(args) -> int:
     import uvicorn
 
@@ -193,6 +280,9 @@ def _cmd_serve(args) -> int:
         print(f"frontend  {config.frontend_dir}")
     clips = "on" if app.state.clips.available else "off (no Chrome, ffmpeg or clip page)"
     print(f"clips  {clips}")
+    booth = "on" if app.state.clips.writes_commentary else (
+        "off (ARENA_COMMENTARY=0)" if not config.commentary_enabled else "off (no Hub token)")
+    print(f"booth  {booth}")
     print(f"\n  http://{args.host}:{args.port}\n")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     return 0
@@ -248,6 +338,13 @@ def main(argv=None) -> int:
     clip.add_argument("--parallel", type=int, default=None,
                       help="layouts rendered at once; default half the cores")
     clip.set_defaults(func=_cmd_clip)
+
+    booth = subs.add_parser("commentary", help="write Peter and Ray's lines for one run")
+    booth.add_argument("run_id")
+    booth.add_argument("--store", required=True)
+    booth.add_argument("--dry-run", action="store_true", dest="dry_run",
+                       help="print the facts and the dialogue; write nothing")
+    booth.set_defaults(func=_cmd_commentary)
 
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)

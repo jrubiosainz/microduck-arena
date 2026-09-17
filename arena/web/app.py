@@ -36,11 +36,24 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.state.ballot_book = BallotBook()
     app.state.sessions = Sessions()
 
+    from .. import commentary
     from ..clips import ClipRenderer
+    from ..commentary.lore import load
+
+    token = commentary.hub_token(config) if config.commentary_enabled else None
+    writer = None
+    if token:
+        lore = load()
+        provider = commentary.router_provider(config.commentary_model, token)
+
+        def writer(run_id: str) -> dict:
+            return commentary.compose(
+                app.state.store, run_id, lore=lore, provider=provider, model=config.commentary_model
+            )
 
     app.state.clips = ClipRenderer(
         app.state.store, config.origin, config.frontend_dir, config.clip_parallel,
-        enabled=config.clips_enabled, backfill=config.clip_backfill,
+        enabled=config.clips_enabled, backfill=config.clip_backfill, commentary=writer,
     )
     if config.clip_worker and app.state.clips.available:
         @app.on_event("startup")

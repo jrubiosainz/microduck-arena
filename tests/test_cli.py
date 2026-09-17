@@ -105,3 +105,42 @@ def test_board_can_use_the_public_one_row_per_person_rule(tmp_path, capsys):
     out = capsys.readouterr().out
     rows = [line for line in out.splitlines() if "coralie" in line]
     assert len(rows) == 1
+
+
+def test_commentary_dry_run_prints_facts_memories_and_the_dialogue(tmp_path, capsys, monkeypatch):
+    import json
+
+    from arena.store import LocalStore
+    from tests.test_store import make_record
+
+    store = LocalStore(tmp_path)
+    record = make_record(user="alice", score=12.4, submitted_at="2026-09-11T10:00:00Z")
+    store.append(record, b"trace")
+
+    def provider(messages, max_tokens):
+        if max_tokens == 96:
+            content = {"grounded": True, "english": True, "personalities": True, "fresh": True}
+        else:
+            content = [
+                {"speaker": "peter", "text": "12.40 s for alice, Ray!", "fact_refs": [1, 2]},
+                {"speaker": "ray", "text": "12.40 s, every seed finished, Peter.", "fact_refs": [2]},
+                {"speaker": "peter", "text": "A throne, my friend.", "fact_refs": [3]},
+            ]
+        return {"content": json.dumps(content), "finish_reason": "stop", "model": "fake/model",
+                "prompt_tokens": 10, "completion_tokens": 10}
+
+    monkeypatch.setattr("arena.commentary.router_provider", lambda model, token: provider)
+    monkeypatch.setattr("arena.commentary.hub_token", lambda config: "token")
+    assert main(["commentary", record.run_id, "--store", str(tmp_path), "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "[0] The event is the 2 m Sprint" in out
+    assert "Peter Duckry: 12.40 s for alice, Ray!" in out
+    assert "Ray Quackson: 12.40 s, every seed finished, Peter." in out
+    assert "fake/model" in out
+    assert store.commentary(record.run_id) is None
+
+
+def test_commentary_without_a_token_says_so(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr("arena.commentary.hub_token", lambda config: None)
+    assert main(["commentary", "R1", "--store", str(tmp_path), "--dry-run"]) == 1
+    assert "token" in capsys.readouterr().err

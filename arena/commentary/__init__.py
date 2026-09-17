@@ -8,17 +8,29 @@ shapes the file the store keeps beside the clip.
 
 import json
 
+from huggingface_hub import get_token
+
 from ..manifest import Manifest, all_events
 from ..points import counting, receipts
 from ..store import RunRecord
 from .context import Fact, result_facts
-from .generator import write
+from .generator import complete, write
 from .lore import Lore, select_memories
 from .notable import notable_facts, pick, situation
 
 COMMENTARY_VERSION = 1
 RECENT = 5
 COOLDOWN = 10
+
+
+def router_provider(model: str, token: str):
+    """The Hugging Face router as the writer's provider."""
+    return lambda messages, max_tokens: complete(messages, max_tokens, model=model, token=token)
+
+
+def hub_token(config) -> str | None:
+    """The Space's HF_TOKEN, or the developer's own Hub session locally."""
+    return config.hf_token or get_token()
 
 
 def open_events() -> dict[str, Manifest]:

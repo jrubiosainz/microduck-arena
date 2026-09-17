@@ -408,7 +408,7 @@ Result facts: the event's title and nature (a sprint, a hill climb, a roller
 race, a jump, a hold), `@user` and the policy's name, the mean finish time or
 DNF, seeds finished out of five, falls, the rank on the board, the gap to the
 leader, the points earned and the receipts behind them (`first_event`,
-`own_best`, `podium`, `run`), the previous personal best when `own_best` fired.
+`own_best`, `podium`, `run`).
 
 No player statement: the publish form has none. Adding one is project 2.
 
@@ -508,7 +508,8 @@ session (`huggingface_hub.get_token()`), model from `ARENA_COMMENTARY_MODEL` (de
 `Qwen/Qwen3.8-27B:cerebras`, the one Duck Jam ran), `temperature` 0.3, no
 provider failover, 15 s per call and one retry on a network error: the worker
 is not real-time. `ARENA_COMMENTARY=0`, or no token, disables writing with one
-line at boot, like `clips off`. The input budget stays 8 KiB; the writer's
+line at boot, like `clips off`. The input budget is 24 KiB, the recent
+broadcasts being the bulk of it; the writer's
 `max_tokens` rises to 900 for six turns; the audit's stays 96.
 
 ### Failure, regeneration, backfill
