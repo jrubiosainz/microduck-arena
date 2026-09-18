@@ -8,7 +8,7 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     // Two pages: the app, and the clip the recorder photographs.
-    rollupOptions: { input: { main: page("index.html"), clip: page("clip.html") } },
+    rollupOptions: { input: { main: page("index.html"), clip: page("clip.html"), plan: page("plan.html") } },
   },
   // `npm run dev` serves the UI on 5173 with hot reload and forwards the API to
   // `arena serve` on 8000, so the frontend can be iterated on without a rebuild.
