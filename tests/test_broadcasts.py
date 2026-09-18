@@ -68,20 +68,33 @@ def test_recent_aired_is_newest_last_and_leaves_the_unaired_out(tmp_path):
     assert [b.id for b in heard] == [ids[1], ids[2]]
 
 
-def test_sweep_keeps_the_last_twenty_aired_and_never_an_unaired_one(tmp_path):
+def test_sweep_keeps_the_last_twenty_aired_and_never_a_waiting_one(tmp_path):
     book = BroadcastBook(tmp_path, keep=3)
     aired = []
     for i in range(6):
-        made = book.put(f"run-{i}", dialogue(f"run-{i}"), plan(), f"2026-09-18T09:{i:02d}:00Z")
-        book.mark_aired(made.id, f"2026-09-18T10:{i:02d}:00Z")
+        made = book.put(f"run-{i}", dialogue(f"run-{i}"), plan(), f"2026-09-18T11:{i:02d}:00Z")
+        book.mark_aired(made.id, f"2026-09-18T12:{i:02d}:00Z")
         aired.append(made.id)
-    waiting = book.put("run-live", dialogue("run-live"), plan(), "2026-09-18T11:00:00Z")
+    waiting = book.put("run-live", dialogue("run-live"), plan(), "2026-09-18T12:10:00Z")
 
-    assert book.sweep() == 3
+    assert book.sweep("2026-09-18T12:20:00Z") == 3
     assert [book.get(one) is None for one in aired[:3]] == [True, True, True]
     assert [book.get(one) is not None for one in aired[3:]] == [True, True, True]
     assert book.get(waiting.id) is not None
-    assert book.sweep() == 0
+    assert book.sweep("2026-09-18T12:20:00Z") == 0
+
+
+def test_sweep_drops_a_waiting_broadcast_that_is_too_old_to_be_worth_hearing(tmp_path):
+    """Nothing else ever deletes one: a run withdrawn, or one whose event has
+    closed, leaves a dialogue that is never laid and never airs. An hour on,
+    what it says about the standings is no longer true anyway."""
+    book = BroadcastBook(tmp_path)
+    stale = book.put("run-gone", dialogue("run-gone"), plan(), "2026-09-18T08:00:00Z")
+    fresh = book.put("run-soon", dialogue("run-soon"), plan(), "2026-09-18T09:25:00Z")
+
+    assert book.sweep("2026-09-18T09:30:00Z") == 1
+    assert book.get(stale.id) is None
+    assert book.get(fresh.id) is not None
 
 
 def test_a_book_reads_a_directory_another_process_wrote(tmp_path):

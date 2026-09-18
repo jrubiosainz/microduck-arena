@@ -9,15 +9,32 @@ and live far too briefly to belong there.
 
 import json
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .store import new_id
 
+# How old an unaired broadcast may be before the book throws it away instead of
+# ever playing it. A dialogue is written minutes ahead of its slot and a whole
+# cycle — twenty clips — is about a quarter of an hour, so an hour is already
+# several cycles late: what such a dialogue says about the standings and the
+# records was true of a board that has since moved. `keep` bounds the aired
+# ones; this bounds the rest, which nothing else ever would — a run that leaves
+# the pool, withdrawn or with its event closed, is never laid and never airs.
+# It is also what makes a restart cost one refill rather than putting
+# yesterday's dialogues on air out of the same directory.
+STALE_S = 3600
+
+
+def stamp(at: datetime) -> str:
+    """How a broadcast's moments are written: UTC, to the second, and ordered
+    by plain text comparison, which is how the book compares them."""
+    return at.isoformat(timespec="seconds").replace("+00:00", "Z")
+
 
 def utcnow() -> str:
     """The stamp a broadcast is written and aired with."""
-    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return stamp(datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -104,11 +121,17 @@ class BroadcastBook:
         aired.sort(key=lambda one: one.aired_at)
         return aired[-limit:]
 
-    def sweep(self) -> int:
-        aired = [one for one in self._all() if one.aired_at is not None]
+    def sweep(self, now: str) -> int:
+        """What the book owes nobody any more: the aired ones behind `keep`, and
+        the unaired ones too old to be worth hearing. `now` is the caller's, the
+        way a broadcast's other moments are."""
+        found = self._all()
+        aired = [one for one in found if one.aired_at is not None]
         aired.sort(key=lambda one: one.aired_at)
-        gone = 0
-        for one in aired[:-self.keep] if self.keep else aired:
+        stale = stamp(datetime.fromisoformat(now) - timedelta(seconds=STALE_S))
+        forgotten = aired[:-self.keep] if self.keep else aired
+        forgotten += [one for one in found
+                      if one.aired_at is None and one.written_at < stale]
+        for one in forgotten:
             self._path(one.id).unlink(missing_ok=True)
-            gone += 1
-        return gone
+        return len(forgotten)

@@ -59,7 +59,7 @@ class CommentaryStock:
     def turn(self) -> str | None:
         """One unit of work: at most one dialogue written. The run it wrote for,
         or None when nothing was wanted, the cap is reached, or it was refused."""
-        self.book.sweep()
+        self.book.sweep(self.clock())
         if not self.attempts_left():
             return None
         wanted = self.wanted()
