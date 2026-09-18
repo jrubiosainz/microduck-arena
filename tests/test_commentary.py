@@ -4,12 +4,13 @@ import json
 
 import pytest
 
+from arena.broadcasts import BroadcastBook
 from arena.commentary import (
     commentary_json,
     compose,
     find_run,
     gather,
-    recent_commentaries,
+    recent_broadcasts,
     used_memories,
 )
 from arena.commentary.generator import Rejected
@@ -18,6 +19,7 @@ from arena.store import LocalStore
 from tests.test_commentary_context import run
 
 LORE = load()
+PLAN = {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []}
 
 
 def stored(tmp_path, *records):
@@ -27,45 +29,53 @@ def stored(tmp_path, *records):
     return store
 
 
-def commentary(run_id, written_at, turns, lore_refs=(), facts=()):
-    return json.dumps({
-        "version": 1, "run_id": run_id, "written_at": written_at, "model": "m",
-        "usage": {"prompt_tokens": 1, "completion_tokens": 1},
-        "facts": [{"ref": f"run#/{i}", "kind": "result", "text": text} for i, text in enumerate(facts)],
-        "dialogue": {"turns": [{"speaker": "peter", "text": t, "fact_refs": []} for t in turns],
-                     "lore_refs": list(lore_refs)},
-        "plan": {"duration_ms": 20000},
-    }).encode()
+def test_recent_broadcasts_are_the_last_aired_newest_last(tmp_path):
+    book = BroadcastBook(tmp_path)
+    ids = []
+    for minute in range(3):
+        made = book.put(f"run-{minute}",
+                        {"run_id": f"run-{minute}", "turns": [], "lore_refs": []},
+                        PLAN, f"2026-09-18T09:0{minute}:00Z")
+        ids.append(made.id)
+    book.mark_aired(ids[0], "2026-09-18T10:00:00Z")
+    book.mark_aired(ids[1], "2026-09-18T10:01:00Z")
+
+    heard = recent_broadcasts(book, limit=5)
+    assert [one.id for one in heard] == [ids[0], ids[1]]
 
 
-def test_recent_commentaries_are_the_newest_first_excluding_the_run_itself(tmp_path):
-    store = LocalStore(tmp_path)
-    for run_id, at in (("A", "2026-09-10T10:00:00Z"), ("B", "2026-09-12T10:00:00Z"),
-                       ("C", "2026-09-11T10:00:00Z")):
-        store.put_clip(run_id, {"clip.json": b"{}", "commentary.json": commentary(run_id, at, ["hi"], ["x"])})
-    store.put_clip("D", {"clip.json": b"{}"})
-    assert [c["run_id"] for c in recent_commentaries(store, exclude="C")] == ["B", "A"]
-    assert [c["run_id"] for c in recent_commentaries(store, exclude=None, limit=2)] == ["B", "C"]
-    assert used_memories(store, exclude="B") == {"x"}
-    assert used_memories(store, exclude="B", cooldown=0) == set()
+def test_used_memories_are_counted_in_airings(tmp_path):
+    book = BroadcastBook(tmp_path)
+    aired = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": ["lore:pit"]},
+                     PLAN, "2026-09-18T09:00:00Z")
+    book.put("run-b", {"run_id": "run-b", "turns": [], "lore_refs": ["lore:rain"]},
+             PLAN, "2026-09-18T09:01:00Z")
+    book.mark_aired(aired.id, "2026-09-18T10:00:00Z")
+
+    # Only what went out counts: a dialogue still waiting has spent no memory.
+    assert used_memories(book) == {"lore:pit"}
 
 
 def test_gather_puts_results_notables_memories_and_recent_runs_in_one_citable_list(tmp_path):
     leader = run("carol", 11.2, "2026-09-10T10:00:00Z", run_id="R0")
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R1")
     store = stored(tmp_path, leader, mine)
-    store.put_clip("R0", {"clip.json": b"{}", "commentary.json": commentary(
-        "R0", "2026-09-10T11:00:00Z", ["Eleven two, Ray!", "11.20 s, Peter."],
-        facts=["The event is the 2 m Sprint, a 2 m sprint on foot.", "The participant is @carol."])})
-    facts, recent = gather(store, mine, LORE)
+    book = BroadcastBook(tmp_path)
+    dialogue = {"turns": [{"speaker": "peter", "text": "Eleven two, @carol!"},
+                          {"speaker": "ray", "text": "11.20 s, Peter."}],
+                "lore_refs": []}
+    aired = book.put("R0", dialogue, PLAN, "2026-09-10T11:00:00Z")
+    book.mark_aired(aired.id, "2026-09-10T11:05:00Z")
+
+    facts, recent = gather(store, mine, LORE, book)
     kinds = [f.kind for f in facts]
     assert kinds[:5] == ["result"] * 5
     assert "notable" in kinds and "lore" in kinds and kinds[-1] == "recent"
-    assert facts[-1].ref == "recent:R0"
-    assert facts[-1].text == ("Earlier this season: The event is the 2 m Sprint, a 2 m sprint on foot. "
-                              "The participant is @carol.")
+    assert facts[-1].ref == f"recent:{aired.id}"
+    assert facts[-1].text == "Earlier on the channel: Eleven two, @carol! 11.20 s, Peter."
     assert facts[-1].identities == ("carol",)
-    assert recent == [{"ref": "recent:R0", "turns": ["Eleven two, Ray!", "11.20 s, Peter."]}]
+    assert recent == [{"ref": f"recent:{aired.id}",
+                        "turns": ["Eleven two, @carol!", "11.20 s, Peter."]}]
     assert sum(1 for f in facts if f.kind == "lore") <= 2
     assert all(f.ref.startswith("lore:") for f in facts if f.kind == "lore")
 
@@ -73,6 +83,7 @@ def test_gather_puts_results_notables_memories_and_recent_runs_in_one_citable_li
 def test_compose_writes_with_a_provider_and_carries_the_facts(tmp_path):
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R1")
     store = stored(tmp_path, mine)
+    book = BroadcastBook(tmp_path)
 
     def provider(messages, max_tokens):
         if max_tokens == 96:
@@ -86,7 +97,7 @@ def test_compose_writes_with_a_provider_and_carries_the_facts(tmp_path):
         return {"content": json.dumps(content), "finish_reason": "stop", "model": "m",
                 "prompt_tokens": 10, "completion_tokens": 10}
 
-    written = compose(store, "R1", lore=LORE, provider=provider, model="m")
+    written = compose(store, "R1", lore=LORE, provider=provider, model="m", book=book)
     assert written["run_id"] == "R1"
     assert [t["speaker"] for t in written["turns"]] == ["peter", "ray", "peter"]
     assert written["turns"][0]["fact_refs"] == ["run#/participant", "run#/result"]
@@ -97,10 +108,11 @@ def test_compose_writes_with_a_provider_and_carries_the_facts(tmp_path):
 def test_compose_raises_rejected_and_find_run_raises_lookup(tmp_path):
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R1")
     store = stored(tmp_path, mine)
+    book = BroadcastBook(tmp_path)
     with pytest.raises(Rejected):
         compose(store, "R1", lore=LORE, provider=lambda m, n: {
             "content": "no", "finish_reason": "stop", "model": "m",
-            "prompt_tokens": 1, "completion_tokens": 1}, model="m")
+            "prompt_tokens": 1, "completion_tokens": 1}, model="m", book=book)
     with pytest.raises(LookupError):
         find_run(store, "NOPE")
 

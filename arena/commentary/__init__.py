@@ -1,9 +1,9 @@
-"""Peter and Ray's lines, written at publish time.
+"""Peter and Ray's lines, written for one airing.
 
-context projects a run's own facts, notable digs the log for more, lore
-offers a memory or two, the five most recent broadcasts give continuity, and
-generator writes and checks. This module puts them together for one run and
-shapes the file the store keeps beside the clip.
+context projects a run's own facts, notable digs the log for more, lore offers a
+memory or two, the last five dialogues that went out give continuity, and
+generator writes and checks. This module puts them together for one run, at the
+moment the reserve needs it.
 """
 
 import json
@@ -45,35 +45,32 @@ def find_run(store, run_id: str) -> RunRecord:
     raise LookupError(f"no such run: {run_id!r}")
 
 
-def recent_commentaries(store, exclude: str | None, limit: int = RECENT) -> list[dict]:
-    """The newest commentaries first, the run being written left out."""
-    found = []
-    for run_id in store.clips_ready():
-        if run_id == exclude:
-            continue
-        body = store.commentary(run_id)
-        if body:
-            found.append(body)
-    found.sort(key=lambda body: body["written_at"], reverse=True)
-    return found[:limit]
+def recent_broadcasts(book, limit: int = RECENT) -> list:
+    """The last dialogues that went out, newest last — the order they were heard."""
+    return book.recent_aired(limit)
 
 
-def used_memories(store, exclude: str | None, cooldown: int = COOLDOWN) -> set[str]:
-    return {ref for body in recent_commentaries(store, exclude, cooldown)
-            for ref in body["dialogue"]["lore_refs"]}
+def used_memories(book, cooldown: int = COOLDOWN) -> set[str]:
+    """Memories spent on the air lately, so the bible does not repeat itself."""
+    return {ref for one in book.recent_aired(cooldown)
+            for ref in one.dialogue["lore_refs"]}
 
 
-def _recent_fact(body: dict) -> Fact:
-    about = " ".join(f["text"] for f in body["facts"] if f["kind"] == "result")
-    # The names that commentary established are the ones a callback may speak,
+def _recent_fact(one) -> Fact:
+    spoken = " ".join(turn["text"] for turn in one.dialogue["turns"])
+    # The names the booth has already spoken are the ones a callback may use,
     # read with the writer's own pattern so "@alice's" yields the same identity.
-    names = AT_NAME.findall(about)
-    return Fact(f"recent:{body['run_id']}", f"Earlier this season: {about}", "recent",
+    names = AT_NAME.findall(spoken)
+    return Fact(f"recent:{one.id}", f"Earlier on the channel: {spoken}", "recent",
                 identities=tuple(dict.fromkeys(names)))
 
 
-def gather(store, record: RunRecord, lore: Lore) -> tuple[list[Fact], list[dict]]:
-    """Everything the writer may cite for this run, and the recent wording."""
+def gather(store, record: RunRecord, lore: Lore, book) -> tuple[list[Fact], list[dict]]:
+    """Everything the writer may cite for this run, and the recent wording.
+
+    Read at the moment of writing, not at publish: the standings, the records
+    and the memories are the ones true when Peter and Ray open their mouths.
+    """
     events = open_events()
     withdrawn = frozenset(w.run_id for w in store.withdrawals())
     all_runs = [r for m in all_events() for r in store.runs(m.id)]
@@ -82,20 +79,20 @@ def gather(store, record: RunRecord, lore: Lore) -> tuple[list[Fact], list[dict]
     earned = receipts(counting(list(s.runs), frozenset()), frozenset(), voted=voted)
     facts = list(result_facts(record, s.manifest, s.on_event(), earned))
     facts += pick(notable_facts(s)) + profiles(s, earned)
-    used = used_memories(store, record.run_id)
+    used = used_memories(book)
     facts += [Fact(f"lore:{m.id}", m.memory, "lore", m.tags)
               for m in select_memories(lore, facts, used)]
-    recent = recent_commentaries(store, record.run_id)
-    facts += [_recent_fact(body) for body in recent]
-    wording = [{"ref": f"recent:{body['run_id']}",
-                "turns": [t["text"] for t in body["dialogue"]["turns"]]} for body in recent]
+    recent = recent_broadcasts(book)
+    facts += [_recent_fact(one) for one in recent]
+    wording = [{"ref": f"recent:{one.id}",
+                "turns": [t["text"] for t in one.dialogue["turns"]]} for one in recent]
     return facts, wording
 
 
-def compose(store, run_id: str, *, lore: Lore, provider, model: str) -> dict:
+def compose(store, run_id: str, *, lore: Lore, provider, model: str, book) -> dict:
     """A checked dialogue for one run, or Rejected from the writer."""
     record = find_run(store, run_id)
-    facts, recent = gather(store, record, lore)
+    facts, recent = gather(store, record, lore, book)
     written = write(run_id, facts, recent, lore=lore, provider=provider, model=model)
     cited = {ref for turn in written["turns"] for ref in turn["fact_refs"]}
     return {
