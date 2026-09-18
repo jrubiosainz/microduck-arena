@@ -9,7 +9,7 @@ import numpy as np
 from fastapi.testclient import TestClient
 
 from arena.broadcasts import BroadcastBook
-from arena.live import HEAD, SHUTTER_MS, Entry, Programme, cycle, pool, slots_for
+from arena.live import HEAD, KEEP_MS, SHUTTER_MS, Entry, Programme, cycle, pool, slots_for
 from arena.store import LocalStore, Withdrawal
 from arena.trace import encode
 from arena.web.app import create_app
@@ -141,6 +141,27 @@ def test_a_playing_booth_is_never_handed_to_a_second_slot(tmp_path):
     assert [slot["kind"] for slot in again] == ["shutter", "replay"]
 
 
+def test_invalidate_does_not_let_the_playing_booth_be_relaid_in_the_future(tmp_path):
+    """The test above proves `slots_for` honours a claimed set; this proves
+    `_extend` actually passes one through. Without `self._claimed()` in that
+    call, `invalidate()` would re-offer to a future slot the booth a screen
+    is playing right now — a broadcast stays unaired until its slot ends."""
+    book = BroadcastBook(tmp_path)
+    made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
+                    {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
+                    "2026-09-18T09:00:00Z")
+    at = [1_000_000]
+    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)],
+                          lambda: at[0], book)
+    first = programme.slots()
+    booth = next(s for s in first if s["kind"] == "booth")
+    at[0] = booth["at_ms"] + booth["duration_ms"] // 2  # now sits inside the playing booth
+    programme.invalidate()
+    after = programme.slots()
+    booths = [s for s in after if s["kind"] == "booth" and s.get("broadcast") == made.id]
+    assert len(booths) == 1
+
+
 class Clock:
     def __init__(self, ms):
         self.ms = ms
@@ -236,6 +257,28 @@ def test_a_booth_whose_slot_has_passed_is_marked_aired(tmp_path):
     assert book.get(made.id).aired_at is None
 
     at[0] += 60_000
+    programme.slots()
+    assert book.get(made.id).aired_at is not None
+
+
+def test_a_booth_is_marked_aired_even_though_its_slot_would_have_been_pruned(tmp_path):
+    """KEEP_MS is 120 000. A jump past the booth's end by more than that would
+    let `slots()` prune the slot before it is marked, if `_mark_aired` ran
+    after the prune instead of before it."""
+    from arena.broadcasts import BroadcastBook
+    from arena.live import Entry, Programme
+
+    book = BroadcastBook(tmp_path)
+    made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
+                    {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
+                    "2026-09-18T09:00:00Z")
+    at = [1_000_000]
+    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)],
+                          lambda: at[0], book)
+    programme.slots()
+    assert book.get(made.id).aired_at is None
+
+    at[0] += KEEP_MS + 60_000  # past the booth's end, and past KEEP_MS beyond that
     programme.slots()
     assert book.get(made.id).aired_at is not None
 
