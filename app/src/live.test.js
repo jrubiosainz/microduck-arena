@@ -169,6 +169,31 @@ describe("renderLive", () => {
     expect(video.play).toHaveBeenCalledTimes(2);
   });
 
+  it("asks again after an open that failed, rather than falling silent for the page's life", async () => {
+    const root = document.createElement("div");
+    const audio = { context: { currentTime: 0 }, voice: { start() {}, stop() {}, muted() {}, gust() {} }, ambience: {} };
+    let attempts = 0;
+    const sound = {
+      running: true,
+      ask: vi.fn(),
+      open: vi.fn(async () => {
+        if (attempts++ === 0) throw new Error("no voice");
+        return audio;
+      }),
+      close: vi.fn(),
+    };
+    await renderLive(root, {}, options(vi.fn(async () => grid), sound));
+    stubMedia(root);
+    const join = root.querySelector(".live-join");
+    // The context runs, so nothing else would raise the button: the failure does.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(join.hidden).toBe(false);
+    join.click();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(sound.open).toHaveBeenCalledTimes(2);
+    expect(join.hidden).toBe(true);
+  });
+
   it("forgives a lost poll for half a minute once the clock is set", async () => {
     const root = document.createElement("div");
     let up = true;
@@ -358,5 +383,28 @@ describe("openSound", () => {
     const opening = sound.open();
     FakeContext.last.become("closed");
     expect(await opening).toBeNull();
+  });
+
+  it("forgets an open that failed, so the next one can still find sound", async () => {
+    let attempts = 0;
+    const sound = openSound(async () => {
+      if (attempts++ === 0) throw new Error("no voice");
+      return {};
+    });
+    const failing = sound.open();
+    FakeContext.last.become("running");
+    await expect(failing).rejects.toThrow("no voice");
+    expect(await sound.open()).not.toBeNull();
+    expect(attempts).toBe(2);
+  });
+
+  it("forgets a context that never ran, so a later ask finds the sound it then has", async () => {
+    const sound = openSound(async () => ({}));
+    const context = FakeContext.last;
+    const interrupted = sound.open();
+    context.become("interrupted"); // Safari, on a call taking the audio away
+    expect(await interrupted).toBeNull();
+    context.become("running");
+    expect(await sound.open()).not.toBeNull();
   });
 });

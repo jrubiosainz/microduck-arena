@@ -105,12 +105,16 @@ export function openSound(tones) {
   const context = new AudioContext();
   let opened = null;
   const ask = () => context.resume().catch(() => {});
+  // Neither a tone that would not load nor a context that was not running is a
+  // verdict for the page's life: the attempt is forgotten, so the next ask
+  // starts a fresh one.
+  const forget = () => { opened = null; };
   return {
     ask,
     get running() {
       return context.state === "running";
     },
-    /** The voice and the room tone once the context runs, or null once it is closed. */
+    /** The voice and the room tone once the context runs, or null while it does not. */
     open() {
       return (opened ??= (async () => {
         ask();
@@ -119,7 +123,13 @@ export function openSound(tones) {
         }
         if (context.state !== "running") return null;
         return { context, voice: createVoice(context, await tones()), ambience: await createAmbience(context) };
-      })());
+      })().then((audio) => {
+        if (!audio) forget();
+        return audio;
+      }, (error) => {
+        forget();
+        throw error;
+      }));
     },
     close() {
       context.close();
@@ -186,6 +196,12 @@ export async function renderLive(root, state, { api = { getLive }, tones = loadT
       // still refuses raises it again on the rejoin.
       join.hidden = true;
       channel.rejoin();
+    }, () => {
+      // Sound the page could not reach: the picture plays on, and the button
+      // is the way to ask for it again.
+      if (signal.aborted) return;
+      admitted = false;
+      join.hidden = false;
     });
   }
 
