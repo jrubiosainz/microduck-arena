@@ -436,6 +436,18 @@ The top four by score, no two with the same tag, enter the prompt beside the
 result facts. Every detector is a function of public data and a fixed clock and
 is unit-tested with fixtures.
 
+Two profile facts come with every run, outside that pick (`profiles`): the
+author's season (points, rank on the points ladder, publications, events) and
+the same for whoever the board measures them against, the leader ahead of them
+or the runner-up behind. The booth speaks a player's numbers only from these,
+and only when the run's direction asks for them, so the stats stay occasional.
+Players are named by their handle as the facts print it, `@nicolas`. Several
+facts may carry the same handle (the participant, the board, a recent run about
+the same player): the writer's prompt lists every index that does, and the name
+check is satisfied by a turn that cites any one of them. Asking for all of them
+refused thirteen dialogues in twenty on the Space's runs, where one player
+wrote most of the log.
+
 ### The bible
 
 `arena/commentary/lore.json`, edited by hand:

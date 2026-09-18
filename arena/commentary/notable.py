@@ -13,7 +13,7 @@ from itertools import pairwise
 
 from ..index import Row, by_user, leaderboard, sort_key
 from ..manifest import Manifest
-from ..points import counting
+from ..points import Receipt, counting, standings
 from ..store import RunRecord
 from .context import Fact
 
@@ -254,6 +254,32 @@ DETECTORS = (first_runs, busy_day, milestone, personal_best, climb, dnf_streaks,
 def notable_facts(s: Situation) -> list[Fact]:
     found = [fact for detect in DETECTORS for fact in detect(s)]
     return sorted(found, key=lambda f: -f.score)
+
+
+def _season(user: str, s: Situation, ladder: dict) -> str:
+    runs = [r for r in s.runs if r.user == user]
+    events = len({r.event_id for r in runs})
+    card = ladder[user]
+    return (f"{card.points} points this season, rank {card.rank} of {len(ladder)} on the points "
+            f"ladder, from {len(runs)} publication{'s' if len(runs) > 1 else ''} on {events} "
+            f"event{'s' if events > 1 else ''}")
+
+
+def profiles(s: Situation, earned: list[Receipt]) -> list[Fact]:
+    """The season of the author, and of whoever this board measures them against: the leader
+    ahead of them, or the runner-up behind. Offered with every run, beside the picked angles,
+    so the booth can give a player's numbers when it chooses to."""
+    ladder = {card.user: card for card in standings(earned)}
+    facts = [Fact("notable#/profile", f"@{s.user} has {_season(s.user, s, ladder)}.", "notable",
+                  ("profile",))]
+    board = s.board() if s.timed else []
+    others = [row.record.user for row in board if row.record.user != s.user]
+    if others and others[0] in ladder:
+        rival = others[0]
+        place = "who leads" if board[0].record.user == rival else "next on"
+        facts.append(Fact(f"notable#/profile/{rival}", f"@{rival}, {place} this board, has "
+                          f"{_season(rival, s, ladder)}.", "notable", ("profile",)))
+    return facts
 
 
 def pick(facts: list[Fact], limit: int = 4) -> list[Fact]:

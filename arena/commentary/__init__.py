@@ -16,7 +16,7 @@ from ..store import RunRecord
 from .context import Fact, result_facts
 from .generator import AT_NAME, complete, write
 from .lore import Lore, select_memories
-from .notable import notable_facts, pick, situation
+from .notable import notable_facts, pick, profiles, situation
 
 COMMENTARY_VERSION = 1
 RECENT = 5
@@ -81,7 +81,7 @@ def gather(store, record: RunRecord, lore: Lore) -> tuple[list[Fact], list[dict]
     voted = {m.id: m.vote for m in events.values() if m.vote is not None}
     earned = receipts(counting(list(s.runs), frozenset()), frozenset(), voted=voted)
     facts = list(result_facts(record, s.manifest, s.on_event(), earned))
-    facts += pick(notable_facts(s))
+    facts += pick(notable_facts(s)) + profiles(s, earned)
     used = used_memories(store, record.run_id)
     facts += [Fact(f"lore:{m.id}", m.memory, "lore", m.tags)
               for m in select_memories(lore, facts, used)]

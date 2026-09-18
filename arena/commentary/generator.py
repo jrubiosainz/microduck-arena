@@ -43,15 +43,16 @@ BOOTH_CONTEXT = (
     "10 points and not Ten points, nobody and not no one, the debut and not the first time; no "
     "number the facts do not print, not 0, not a rounder threshold; the event's name and a "
     "policy's name carry digits too and need their own fact cited; fall words only in a turn "
-    "citing this run's fall, never to say there was none, never about an earlier run; no "
-    "participant name. "
+    "citing this run's fall, never to say there was none, never about an earlier run; a "
+    "handle only with an identity index listed for it. "
 )
 GROUNDING = (
     "Each claim about the replay or a player needs supporting fact_refs in THAT turn, even a "
-    "repeated one. Participant names are not spoken: say the duck, they, the leader, the "
-    "newcomer, or the name the policy gives the duck. If a name is spoken anyway, that turn "
-    "cites its identity index and every earlier-this-season fact that carries the same name. "
-    "Use they/their, never he/she/his/her, titles or kinship. No inferred biography, age, "
+    "repeated one. A participant is named by the handle the facts print, at sign included, "
+    "never by a bare or invented name, and EVERY handle mention, including repeated or "
+    "possessive, cites an identity index listed for that handle. Elsewhere say the duck, "
+    "they, the leader, the newcomer, or the name the policy gives the duck. Use they/their, "
+    "never he/she/his/her, titles or kinship. No inferred biography, age, "
     "nationality, occupation, movement, cause, effort, ranking or record beyond the facts. "
     "Finished is not perfect or fast; a fall is only a fall when a fact says so, and the words "
     "fall, fell and falling appear only in a turn citing such a fact. Any spoken number must "
@@ -80,7 +81,8 @@ STYLE = (
     "zero, one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve, twenty, "
     "hundred, first, second, third. Speak few numbers: the time or the points, and at most a "
     "single other one. The words fall, fell, fallen and falling exist only in a turn citing a "
-    "fact that says this run's duck fell. Speak no participant name; the duck "
+    "fact that says this run's duck fell. A player's numbers, their points, their rank on "
+    "the ladder, their publications, come only from a fact that prints them. The duck "
     "has the name its policy gives it when that is a plain word or two, never one with an "
     "underscore, and otherwise it is just the duck. Write a real exchange between colleagues, "
     "not a ceremony: understatement over drama. Nobody cries, shakes, holds their breath, makes "
@@ -134,6 +136,13 @@ CALLBACKS = (
     "No callback to an earlier run.",
     "No callback to an earlier run.",
     "A callback to an earlier-this-season fact is welcome if one is supplied.",
+)
+PLAYERS = (
+    "Name the participant by handle, once.",
+    "Name the participant by handle, once.",
+    "Name the participant by handle once, and give the viewer a number from their profile fact.",
+    "Give the viewer a number about the rival on this board, by handle, if a profile has one.",
+    "No handle in this one: the duck carries it.",
 )
 LENGTHS = (3, 4, 4, 5, 5, 6)
 AUDIT = (
@@ -209,8 +218,9 @@ def direction(run_id: str) -> str:
     """The shape of one run's dialogue: the same run always draws the same one."""
     draw = hashlib.sha256(run_id.encode()).digest()
     parts = [options[draw[i] % len(options)]
-             for i, options in enumerate((OPENINGS, ANGLES, JOKES, ENDINGS, CALLBACKS))]
-    return f"This dialogue: {LENGTHS[draw[5] % len(LENGTHS)]} turns. " + " ".join(parts) + " "
+             for i, options in enumerate((OPENINGS, ANGLES, JOKES, ENDINGS, CALLBACKS,
+                                          PLAYERS))]
+    return f"This dialogue: {LENGTHS[draw[6] % len(LENGTHS)]} turns. " + " ".join(parts) + " "
 
 
 def words(text: str) -> set[str]:

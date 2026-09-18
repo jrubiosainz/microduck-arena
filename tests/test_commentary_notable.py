@@ -1,7 +1,8 @@
 """Every detector is a function of the log as it stood at the publish."""
 
-from arena.commentary.notable import notable_facts, pick, situation
+from arena.commentary.notable import notable_facts, pick, profiles, situation
 from arena.manifest import all_events
+from arena.points import counting, receipts
 from tests.test_commentary_context import run
 
 EVENTS = {m.id: m for m in all_events() if m.status == "open"}
@@ -110,3 +111,24 @@ def test_a_withdrawn_run_is_not_in_the_world():
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
     s = situation(mine, [mine, gone], frozenset({"GONE"}), EVENTS)
     assert [r.run_id for r in s.on_event()] == [mine.run_id]
+
+
+def test_profiles_give_the_season_of_the_author_and_of_who_the_board_measures_them_against():
+    carol = run("carol", 11.2, "2026-09-10T10:00:00Z", run_id="R0")
+    hill = run("alice", 30.0, "2026-09-10T12:00:00Z", event="hill-climb-1m5", run_id="R1")
+    mine = run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R2")
+
+    def profiles_for(record, *others):
+        s = situation(record, [record, *others], frozenset(), EVENTS)
+        return profiles(s, receipts(counting(list(s.runs), frozenset()), frozenset()))
+
+    author, rival = profiles_for(mine, carol, hill)
+    assert author.text == ("@alice has 620 points this season, rank 1 of 2 on the points ladder, "
+                           "from 2 publications on 2 events.")
+    assert rival.ref == "notable#/profile/carol" and rival.identities == ("carol",)
+    assert rival.text == ("@carol, who leads this board, has 360 points this season, rank 2 of 2 "
+                          "on the points ladder, from 1 publication on 1 event.")
+    back = run("carol", 11.0, "2026-09-12T10:00:00Z", run_id="R3")
+    _, behind = profiles_for(back, carol, hill, mine)
+    assert behind.text.startswith("@alice, next on this board, has 620 points")
+    assert [f.ref for f in profiles_for(carol)] == ["notable#/profile"]
