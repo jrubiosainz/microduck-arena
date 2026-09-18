@@ -82,8 +82,15 @@ still race and watch replays; only Publish is disabled for them.
 Every published run gets two clips — landscape and vertical — rendered in the
 background, inside the Space itself, the moment the publish completes: a
 headless Chromium photographs the arena's own stage frame by frame and ffmpeg
-encodes the video, both under `nice`. That costs minutes of CPU per publish on
-cpu-basic, and it is why the image carries Chromium and ffmpeg.
+encodes the video, both under `nice`. That costs minutes of CPU per publish,
+and it is why the image carries Chromium and ffmpeg.
+
+It needs the hardware to match. A clip is ~820 screenshots of a 1920×1080
+WebGL stage, and on **cpu-basic** — two vCPUs, software GL — not one has ever
+finished: the render is past `RENDER_BUDGET_S` before its first layout is
+done, and the clip fails. Run clips on **cpu-upgrade** or better. The
+publication page follows the render frame by frame, so a Space that is too
+slow says so on the page instead of going quiet.
 
 | name | kind | value |
 | --- | --- | --- |

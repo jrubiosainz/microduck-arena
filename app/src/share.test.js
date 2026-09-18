@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { intentUrl, postText, shareStrip, wireShare } from "./share.js";
+import { clipStatus, intentUrl, postText, shareStrip, wireShare } from "./share.js";
 
 /** X's count: every link is 23 characters, whatever its length. Test-only —
  * nothing in share.js needs its own count of what X will display. */
@@ -53,27 +53,44 @@ describe("intentUrl", () => {
 });
 
 describe("shareStrip", () => {
-  it("is a row of two links and two buttons, then a row of two clip stickers that follow the clip's state", () => {
+  it("is a row of two links and three buttons, then a row of two clip stickers that follow the clip's state", () => {
     const strip = shareStrip(run, { origin });
     expect([...strip.root.children].map((el) => el.tagName)).toEqual(["NAV", "DIV", "P", "DIV"]);
     const marks = [...strip.root.querySelector("nav").children];
-    expect(marks.map((el) => el.tagName)).toEqual(["A", "A", "BUTTON", "BUTTON"]);
+    expect(marks.map((el) => el.tagName)).toEqual(["A", "A", "BUTTON", "BUTTON", "BUTTON"]);
     expect(marks[0].href).toMatch(/^https:\/\/x\.com\/intent\/post\?text=/);
     expect(marks[2].dataset.upload).toBe("instagram");
+    expect(marks[4].dataset.copy).toBe("link");
 
-    strip.setClip({ state: "pending" });
+    strip.setClip({ state: "queued", ahead: 2 });
     const clips = strip.root.querySelectorAll("[data-clip]");
     expect(clips.length).toBe(2);
-    expect(clips[0].textContent).toBe("Clip · rendering…");
+    expect(clips[0].textContent).toBe("Clip · queued");
     expect(clips[0].getAttribute("aria-disabled")).toBe("true");
     expect(clips[0].hasAttribute("href")).toBe(false);
+    // The reel turns on the sticker itself: the row says the work is alive
+    // without the reader having to look anywhere else.
+    expect(clips[0].querySelector(".clip-reel")).not.toBe(null);
+    expect(clips[0].classList.contains("sticker-working")).toBe(true);
+
+    strip.setClip({ state: "rendering", stage: "frames", done: 310, total: 880 });
+    expect(clips[0].textContent).toBe("Clip · 35%");
+    expect(clips[0].classList.contains("sticker-working")).toBe(true);
 
     strip.setClip({ state: "ready", layouts: { landscape: { url: "/l.mp4" }, vertical: { url: "/v.mp4" } } });
     expect(clips[1].getAttribute("href")).toBe("/v.mp4?download=1");
     expect(clips[1].hasAttribute("download")).toBe(true);
     expect(clips[1].textContent).toBe("Clip · vertical");
+    expect(clips[1].classList.contains("sticker-working")).toBe(false);
 
-    strip.setClip({ state: "failed" });
+    // A clip that failed says so and stays on the row. Hiding it is what made
+    // a jammed render look like a feature that was never there.
+    strip.setClip({ state: "failed", reason: "TimeoutError: timed out in 60.0s" });
+    expect(clips[0].hidden || clips[1].hidden).toBe(false);
+    expect(clips[0].textContent).toBe("Clip · failed");
+    expect(clips[0].getAttribute("aria-disabled")).toBe("true");
+
+    strip.setClip({ state: "none" });
     expect(clips[0].hidden && clips[1].hidden).toBe(true);
   });
 
@@ -81,7 +98,7 @@ describe("shareStrip", () => {
     const strip = shareStrip(run, { origin });
     const player = strip.root.querySelector("video");
     const screen = player.parentElement;
-    strip.setClip({ state: "pending" });
+    strip.setClip({ state: "none" });
     expect(screen.hidden).toBe(true);
     expect(player.hasAttribute("src")).toBe(false);
 
@@ -95,9 +112,73 @@ describe("shareStrip", () => {
     expect(player.getAttribute("poster")).toBe("/p.png");
     expect(player.controls).toBe(true);
     expect(player.getAttribute("preload")).toBe("none");
+  });
 
-    strip.setClip({ state: "failed" });
-    expect(screen.hidden).toBe(true);
+  it("shows the render on the screen the clip will play on, and says why one jammed", () => {
+    const strip = shareStrip(run, { origin });
+    const player = strip.root.querySelector("video");
+    const screen = player.parentElement;
+    const panel = screen.querySelector(".clip-render");
+    const bar = panel.querySelector(".clip-render-bar");
+    const say = () => panel.querySelector(".clip-render-say").textContent;
+    const step = () => panel.querySelector(".clip-render-step").textContent;
+
+    // Queued: the screen is already there, so the clip does not appear out of
+    // nowhere a quarter of an hour later.
+    strip.setClip({ state: "queued", ahead: 2 });
+    expect(screen.hidden).toBe(false);
+    expect(player.hidden).toBe(true);
+    expect(panel.hidden).toBe(false);
+    expect(say()).toBe("2 clips ahead");
+    expect(bar.classList.contains("clip-render-bar-unknown")).toBe(true);
+
+    strip.setClip({ state: "queued", ahead: 0 });
+    expect(say()).toBe("Next on the recorder");
+    strip.setClip({ state: "queued", ahead: null });
+    expect(say()).toBe("Waiting for the recorder");
+
+    // A stage with no frame count of its own still moves: an indeterminate bar
+    // beats a determinate one stuck at nothing for two minutes.
+    strip.setClip({ state: "rendering", stage: "soundtrack", done: 0, total: 0 });
+    expect(say()).toBe("Mixing the soundtrack");
+    expect(bar.classList.contains("clip-render-bar-unknown")).toBe(true);
+
+    strip.setClip({ state: "rendering", stage: "frames", done: 310, total: 880 });
+    expect(say()).toBe("Photographing the arena");
+    expect(step()).toBe("310 / 880 frames");
+    expect(bar.firstElementChild.style.width).toBe("35.2%");
+    expect(bar.getAttribute("aria-valuenow")).toBe("35");
+    expect(bar.classList.contains("clip-render-bar-unknown")).toBe(false);
+
+    strip.setClip({ state: "failed", reason: "TimeoutError: timed out in 60.0s" });
+    expect(screen.hidden).toBe(false);
+    expect(panel.hidden).toBe(false);
+    expect(say()).toBe("The tape jammed");
+    expect(step()).toBe("TimeoutError: timed out in 60.0s");
+    expect(bar.hidden).toBe(true);
+
+    strip.setClip({
+      state: "ready",
+      poster: "/p.png",
+      layouts: { landscape: { url: "/l.mp4" }, vertical: { url: "/v.mp4" } },
+    });
+    expect(player.hidden).toBe(false);
+    expect(panel.hidden).toBe(true);
+  });
+});
+
+describe("clipStatus", () => {
+  it("reads a state as a line, a detail and a fraction", () => {
+    expect(clipStatus({ state: "queued", ahead: 1 })).toEqual({
+      say: "1 clip ahead", step: "", fraction: null,
+    });
+    expect(clipStatus({ state: "rendering", stage: "opening", done: 0, total: 0 }).say)
+      .toBe("Opening the stage");
+    // A stage this build has never heard of is still progress, not a blank.
+    expect(clipStatus({ state: "rendering", stage: "mystery", done: 1, total: 4 })).toEqual({
+      say: "Rendering", step: "1 / 4 frames", fraction: 0.25,
+    });
+    expect(clipStatus({ state: "failed" }).step).toBe("no reason recorded");
   });
 });
 
@@ -116,6 +197,26 @@ describe("wireShare", () => {
     expect(copied[0]).toBe(postText(run, { origin, network: "instagram" }));
     expect(opened).toEqual(["/v.mp4?download=1"]);
     expect(strip.said.textContent).toMatch(/^Text copied\. Use the clip download/);
+  });
+
+  it("copies the run's own address, which is a page the server renders", async () => {
+    const strip = shareStrip(run, { origin });
+    const copied = [];
+    wireShare(strip, run, { origin, clipboard: { writeText: async (t) => copied.push(t) } });
+    strip.root.querySelector("[data-copy]").click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(copied).toEqual(["https://arena.hf.space/r/01M2X"]);
+    expect(strip.said.textContent).toBe("Link copied: https://arena.hf.space/r/01M2X");
+  });
+
+  it("hands over the address itself when the clipboard refuses", async () => {
+    const strip = shareStrip(run, { origin });
+    wireShare(strip, run, {
+      origin, clipboard: { writeText: async () => { throw new Error("denied"); } },
+    });
+    strip.root.querySelector("[data-copy]").click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(strip.said.textContent).toBe("Could not copy. The link is https://arena.hf.space/r/01M2X");
   });
 
   it("on a phone, hands the text to the share sheet", async () => {

@@ -470,8 +470,10 @@ class LocalStore:
         folder = self._clip_dir(run_id)
         if (folder / "clip.json").is_file():
             return "ready", json.loads((folder / "clip.json").read_text())
+        # The reason travels with the state: a page showing a failed clip has
+        # to say why, and this is the only place that file is read.
         if (folder / "failed.json").is_file():
-            return "failed", None
+            return "failed", json.loads((folder / "failed.json").read_text())
         if (folder / "pending.json").is_file():
             return "pending", None
         return "none", None

@@ -174,17 +174,21 @@ export async function renderRun(root, runId, state) {
   strip.root.classList.toggle("veiled", revealing);
   $("points").after(strip.root);
   wireShare(strip, run, { origin: location.origin });
-  // Pending is the honest first state: nobody has answered for the clip yet,
-  // so the row wears the same face it would for a render still in progress —
-  // present and disabled, not a live-looking link that goes stale a beat later.
-  strip.setClip({ state: "pending" });
+  // Queued is the honest first state: nobody has answered for the clip yet, so
+  // the row wears the face of a render nobody has started — present, disabled
+  // and turning — not a live-looking link that goes stale a beat later.
+  strip.setClip({ state: "queued", ahead: null });
   const leaving = new AbortController();
   let timer = null;
   async function followClip() {
     const clip = await getClip(run.run_id).catch(() => null);
     if (leaving.signal.aborted) return;
     if (clip) strip.setClip(clip);
-    if (!clip || clip.state === "pending") timer = setTimeout(followClip, 5000);
+    // A render moves frame by frame and is worth watching closely; a queue only
+    // moves when something ahead of it finishes, which is minutes away. Ready,
+    // failed and none are final — nothing to come back for.
+    const again = clip ? { rendering: 2000, queued: 5000 }[clip.state] : 5000;
+    if (again) timer = setTimeout(followClip, again);
   }
   followClip();
 

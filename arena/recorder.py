@@ -242,7 +242,8 @@ def _soundtrack(tab: Tab) -> bytes:
 
 
 def _record_layout(
-    tab: Tab, pcm_path: Path, out: Path, nice: int, deadline: float
+    tab: Tab, pcm_path: Path, out: Path, nice: int, deadline: float,
+    on_frame=lambda _i: None,
 ) -> tuple[RenderedLayout, bytes]:
     plan = tab.evaluate("window.clip.plan")
     crowd = tab.evaluate("window.clip.score.crowd")
@@ -251,6 +252,15 @@ def _record_layout(
     poster = b""
     draw_s = shot_s = 0.0
     completed = False
+
+    # Every call waits on what is left of the budget, never on a constant under
+    # it. A software-GL screenshot of a 1920×1080 stage on a loaded machine can
+    # take minutes, and a fixed minute here killed renders that were slow but
+    # advancing — the budget is the one deadline, and the per-frame check below
+    # is what enforces it.
+    def left() -> float:
+        return max(1.0, deadline - time.monotonic())
+
     try:
         for i in range(plan["frames"]):
             # Checked once per frame, not once per run: a stuck tab or a slow
@@ -258,14 +268,18 @@ def _record_layout(
             if time.monotonic() > deadline:
                 raise TimeoutError(f"render past its budget at frame {i} of {plan['frames']}")
             asked = time.monotonic()
-            tab.evaluate(f"window.clip.draw({i})")
+            tab.evaluate(f"window.clip.draw({i})", timeout=left())
             drawn = time.monotonic()
-            shot = tab.send("Page.captureScreenshot", {"format": "jpeg", "quality": JPEG_QUALITY})
+            shot = tab.send("Page.captureScreenshot",
+                            {"format": "jpeg", "quality": JPEG_QUALITY}, timeout=left())
             if i == plan["poster"]:
-                poster = base64.b64decode(tab.send("Page.captureScreenshot", {"format": "png"})["data"])
+                poster = base64.b64decode(
+                    tab.send("Page.captureScreenshot", {"format": "png"}, timeout=left())["data"]
+                )
             draw_s += drawn - asked
             shot_s += time.monotonic() - drawn
             ffmpeg.stdin.write(base64.b64decode(shot["data"]))
+            on_frame(i)
         completed = True
     finally:
         # Closing stdin can itself raise once ffmpeg has already died; that
@@ -291,33 +305,53 @@ def _record_layout(
 
 
 def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None = None,
-               nice: int = 10, budget_s: float = 900.0) -> RenderedRun:
+               nice: int = 10, budget_s: float = 900.0,
+               on_progress=lambda stage, done, total: None) -> RenderedRun:
     """Every layout of one run. One browser; the first tab renders the
     soundtrack every layout shares; tabs are recorded `parallel` at a time.
     The poster is the landscape clip's.
 
     `budget_s` bounds the whole render, from here — a stuck tab or an
     overloaded machine fails the clip rather than occupying the worker
-    forever and leaving every publish behind it stuck `pending`."""
+    forever and leaving every publish behind it stuck `pending`.
+
+    `on_progress(stage, done, total)` is called as the render moves, for the
+    page waiting on it: the two stages before the frames take minutes of their
+    own and a bar that sat at nothing through them would look stuck."""
     binary = binary or find_chrome()
     if binary is None:
         raise RuntimeError("no Chrome found: set $CHROME")
     if not ffmpeg_available():
         raise RuntimeError("no ffmpeg on the PATH")
     deadline = time.monotonic() + budget_s
+    on_progress("opening", 0, 0)
     with Chrome(binary, nice) as chrome, tempfile.TemporaryDirectory(prefix="arena-clip-") as work:
         work = Path(work)
         tabs = {"landscape": _open(chrome, origin, run_id, "landscape")}
+        on_progress("soundtrack", 0, 0)
         pcm_path = work / "soundtrack.f32"
         pcm_path.write_bytes(_soundtrack(tabs["landscape"]))
         for layout in SIZES:
             if layout not in tabs:
                 tabs[layout] = _open(chrome, origin, run_id, layout)
 
+        # Every layout plays the same plan, so the whole render's frame count is
+        # known before its first frame: the bar only ever goes forward, whether
+        # the layouts are recorded one at a time or together.
+        total = tabs["landscape"].evaluate("window.clip.plan")["frames"] * len(SIZES)
+        done = dict.fromkeys(SIZES, 0)
+        counted = threading.Lock()
+
+        def drew(layout: str, i: int) -> None:
+            with counted:
+                done[layout] = i + 1
+                on_progress("frames", sum(done.values()), total)
+
         def one(layout: str) -> tuple[str, RenderedLayout, bytes]:
             try:
                 rendered, poster = _record_layout(
-                    tabs[layout], pcm_path, work / f"{layout}.mp4", nice, deadline
+                    tabs[layout], pcm_path, work / f"{layout}.mp4", nice, deadline,
+                    on_frame=lambda i: drew(layout, i),
                 )
             finally:
                 tabs[layout].close()

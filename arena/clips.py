@@ -75,9 +75,40 @@ class ClipRenderer:
         # whole log being caught up.
         self.queue: queue.PriorityQueue[tuple[int, int, str]] = queue.PriorityQueue()
         self._arrivals = itertools.count()
+        # Where the render in flight has got to, for the page waiting on it.
+        # Memory, not the store: it changes hundreds of times per clip and is
+        # worth nothing once the process that was rendering is gone.
+        self._flight: dict | None = None
+        self._flight_lock = threading.Lock()
 
     def enqueue(self, run_id: str, priority: int = 0) -> None:
         self.queue.put((priority, next(self._arrivals), run_id))
+
+    def step(self, run_id: str | None, stage: str, done: int = 0, total: int = 0) -> None:
+        """What the render in flight is doing; `None` for nothing in flight."""
+        with self._flight_lock:
+            self._flight = (
+                None if run_id is None
+                else {"run_id": run_id, "stage": stage, "done": done, "total": total}
+            )
+
+    def progress(self, run_id: str) -> dict | None:
+        """Where this run stands with the worker — rendering now, or how many
+        are ahead of it — or None when the worker is not holding it. The store
+        knows a clip is owed; only this knows how far off it is."""
+        with self._flight_lock:
+            flight = self._flight
+        if flight and flight["run_id"] == run_id:
+            return {key: flight[key] for key in ("stage", "done", "total")}
+        # Sorted, not as stored: the heap's order is not the pop order, and a
+        # backfill put in first still comes out behind a fresh publish.
+        with self.queue.mutex:
+            waiting = sorted(self.queue.queue)
+        # The run_id is the last of the tuple, whatever else the queue carries.
+        for ahead, item in enumerate(waiting):
+            if item[-1] == run_id:
+                return {"ahead": ahead}
+        return None
 
     def drain(self) -> None:
         """Everything owed and not yet rendered or failed — after a restart —
@@ -122,8 +153,10 @@ class ClipRenderer:
     def render_one(self, run_id: str) -> None:
         self.log(f"clip: rendering {run_id}")
         try:
-            rendered = self.render(self.origin, run_id, parallel=self.parallel,
-                                    budget_s=RENDER_BUDGET_S)
+            rendered = self.render(
+                self.origin, run_id, parallel=self.parallel, budget_s=RENDER_BUDGET_S,
+                on_progress=lambda stage, done, total: self.step(run_id, stage, done, total),
+            )
             files = {"clip.json": json.dumps(clip_manifest(run_id, rendered, _now()), indent=2).encode(),
                      "poster.png": rendered.poster,
                      **{f"{name}.mp4": layout.mp4 for name, layout in rendered.layouts.items()}}
@@ -138,3 +171,7 @@ class ClipRenderer:
                          f"({type(store_exc).__name__}: {store_exc})")
             self.log(f"clip: {run_id} failed ({type(exc).__name__}: {exc})")
             self.log(traceback.format_exc())
+        finally:
+            # Ready or failed, the store answers for it now: a stale fraction
+            # would keep a finished page showing a bar that never moves again.
+            self.step(None, "")

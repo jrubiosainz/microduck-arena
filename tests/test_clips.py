@@ -1,12 +1,16 @@
 """Clips: three write-once files per run, and a worker that owes one per publish."""
 
+import base64
+import io
 import json
+import time
 from pathlib import Path
 
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from arena import recorder
 from arena.clips import CLIP_VERSION, ClipRenderer, clip_manifest
 from arena.recorder import RenderedLayout, RenderedRun, ffmpeg_args
 from arena.store import LocalStore, Withdrawal
@@ -46,10 +50,13 @@ def test_a_failed_clip_is_its_own_file_and_leaves_the_queue(tmp_path):
     store.fail_clip("R2", "2026-09-16T10:05:00Z", "ffmpeg exited 1")
     # Written once: a second failure must not erase the first reason.
     store.fail_clip("R2", "2026-09-16T10:06:00Z", "second")
-    assert store.clip_state("R2") == ("failed", None)
     assert store.pending_clips() == []
-    failed = json.loads((tmp_path / "clips" / "R2" / "failed.json").read_text())
+    # The reason comes back with the state: a page that shows a failed clip
+    # has to be able to say why, and re-reading the file is the store's job.
+    state, failed = store.clip_state("R2")
+    assert state == "failed"
     assert failed["reason"] == "ffmpeg exited 1"
+    assert failed["failed_at"] == "2026-09-16T10:05:00Z"
 
 
 def test_a_clip_is_never_written_twice(tmp_path):
@@ -102,7 +109,7 @@ def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
     store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
     store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:01:00Z")
 
-    def render(origin, run_id, parallel, budget_s):
+    def render(origin, run_id, parallel, budget_s, on_progress=None):
         if run_id == "R2":
             raise RuntimeError("ffmpeg exited 1")
         return rendered()
@@ -116,7 +123,7 @@ def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
     state, manifest = store.clip_state("R1")
     assert state == "ready" and manifest["run_id"] == "R1"
     assert store.clip_file("R1", "vertical.mp4").read_bytes() == b"mp4"
-    assert store.clip_state("R2") == ("failed", None)
+    assert store.clip_state("R2")[1]["reason"] == "RuntimeError: ffmpeg exited 1"
     assert any("RuntimeError: ffmpeg exited 1" in line for line in said)
 
 
@@ -170,7 +177,7 @@ def app_with_run(tmp_path):
     return TestClient(app), app, record
 
 
-def test_the_clip_route_says_none_pending_then_ready_with_its_files(tmp_path):
+def test_the_clip_route_says_none_queued_then_ready_with_its_files(tmp_path):
     api, app, record = app_with_run(tmp_path)
     store = app.state.store
     url = f"/api/runs/{record.run_id}/clip"
@@ -179,7 +186,11 @@ def test_the_clip_route_says_none_pending_then_ready_with_its_files(tmp_path):
     assert api.get(f"{url}/landscape.mp4").status_code == 404
 
     store.mark_clip_pending(record.run_id, "alice", "sprint-2m", "2026-09-16T10:00:00Z")
-    assert api.get(url).json() == {"state": "pending"}
+    # Owed but unknown to this process's worker — a marker left by the run
+    # before a restart. Waiting is all the page can honestly be told.
+    assert api.get(url).json() == {"state": "queued", "ahead": None}
+    app.state.clips.enqueue(record.run_id)
+    assert api.get(url).json() == {"state": "queued", "ahead": 0}
 
     manifest = clip_manifest(record.run_id, rendered(), "2026-09-16T10:05:00Z")
     store.put_clip(record.run_id, {"clip.json": json.dumps(manifest).encode(),
@@ -237,3 +248,162 @@ def test_the_unfurl_escapes_what_a_submitter_typed_and_falls_back_to_the_request
     assert "<script>alert" not in page
     assert "&lt;script&gt;" in page
     assert f'content="http://testserver/r/{record.run_id}"' in page
+
+def test_the_worker_says_where_a_clip_stands(tmp_path):
+    """The queue is a place in a line and a render is a fraction: both are read
+    off the worker, never off the store, which knows only that one is owed."""
+    store = LocalStore(tmp_path)
+    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path)
+    assert worker.progress("R1") is None
+
+    worker.enqueue("R1")
+    worker.enqueue("R2")
+    # A backfill joins behind whatever a player just published, so the position
+    # a page shows is the pop order, not the order things were put in.
+    worker.enqueue("R0", priority=1)
+    worker.enqueue("R3")
+    assert worker.progress("R1") == {"ahead": 0}
+    assert worker.progress("R3") == {"ahead": 2}
+    assert worker.progress("R0") == {"ahead": 3}
+
+    # In flight: the worker took it off the queue first, so the line behind it
+    # counts from the front again.
+    assert worker.queue.get()[-1] == "R1"
+    worker.step("R1", "soundtrack", 0, 0)
+    assert worker.progress("R1") == {"stage": "soundtrack", "done": 0, "total": 0}
+    worker.step("R1", "frames", 310, 880)
+    assert worker.progress("R1") == {"stage": "frames", "done": 310, "total": 880}
+    assert worker.progress("R2") == {"ahead": 0}
+    assert worker.progress("R3") == {"ahead": 1}
+    # Nothing in flight, and R1 is neither queued nor rendering any more.
+    worker.step(None, "")
+    assert worker.progress("R1") is None
+
+
+def test_a_render_reports_its_steps_and_a_failure_clears_them(tmp_path):
+    store = LocalStore(tmp_path)
+    store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:01:00Z")
+    seen = []
+
+    def render(origin, run_id, parallel, budget_s, on_progress=None):
+        on_progress("soundtrack", 0, 0)
+        on_progress("frames", 188, 376)
+        seen.append(dict(worker.progress(run_id)))
+        if run_id == "R2":
+            raise RuntimeError("ffmpeg exited 1")
+        return rendered()
+
+    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=render, log=lambda _: None)
+    worker.render_one("R1")
+    assert seen[-1] == {"stage": "frames", "done": 188, "total": 376}
+    # A ready clip is not a render in flight: the store answers for it now.
+    assert worker.progress("R1") is None
+    worker.render_one("R2")
+    assert worker.progress("R2") is None
+
+
+def test_the_clip_route_follows_a_render_and_says_why_one_failed(tmp_path):
+    api, app, record = app_with_run(tmp_path)
+    store = app.state.store
+    url = f"/api/runs/{record.run_id}/clip"
+    store.mark_clip_pending(record.run_id, "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+
+    app.state.clips.step(record.run_id, "frames", 310, 880)
+    assert api.get(url).json() == {
+        "state": "rendering", "stage": "frames", "done": 310, "total": 880
+    }
+
+    store.fail_clip(record.run_id, "2026-09-16T10:05:00Z", "TimeoutError: timed out in 60.0s")
+    assert api.get(url).json() == {
+        "state": "failed", "reason": "TimeoutError: timed out in 60.0s",
+        "failed_at": "2026-09-16T10:05:00Z",
+    }
+
+
+class FakeTab:
+    """A page that answers instantly and remembers the deadline it was given."""
+
+    def __init__(self, frames=4):
+        self.plan = {"fps": 25, "frames": frames, "seconds": frames / 25, "poster": 1}
+        self.waited: list[tuple[str, float]] = []
+
+    def evaluate(self, expression, await_promise=False, timeout=60.0):
+        if expression == "window.clip.plan":
+            return self.plan
+        if expression == "window.clip.score.crowd":
+            return None
+        self.waited.append(("draw", timeout))
+
+    def send(self, method, params=None, timeout=60.0):
+        self.waited.append((method, timeout))
+        return {"data": base64.b64encode(b"jpeg").decode()}
+
+
+class FakeFfmpeg:
+    returncode = 0
+
+    def __init__(self, *_, **__):
+        self.stdin = io.BytesIO()
+
+    def wait(self, timeout=None):
+        return 0
+
+    def kill(self):
+        pass
+
+
+def test_a_slow_frame_waits_on_the_budget_not_on_a_minute(tmp_path, monkeypatch):
+    """The render budget is the only deadline. A fixed per-call timeout under it
+    kills a render that is slow but advancing — which is how a clip died on the
+    Space at 854 s of its 900 — so every call waits on what is left instead."""
+    monkeypatch.setattr(recorder.subprocess, "Popen", FakeFfmpeg)
+    tab = FakeTab()
+    out = tmp_path / "landscape.mp4"
+    out.write_bytes(b"mp4")
+    drew = []
+    rendered_layout, poster = recorder._record_layout(
+        tab, tmp_path / "s.f32", out, nice=10, deadline=time.monotonic() + 300.0,
+        on_frame=drew.append,
+    )
+    assert drew == [0, 1, 2, 3]
+    assert poster == b"jpeg" and rendered_layout.mp4 == b"mp4"
+    # Four frames: a draw and a screenshot each, plus the poster's own PNG shot.
+    assert [what for what, _ in tab.waited] == [
+        "draw", "Page.captureScreenshot",
+        "draw", "Page.captureScreenshot", "Page.captureScreenshot",
+        "draw", "Page.captureScreenshot",
+        "draw", "Page.captureScreenshot",
+    ]
+    assert all(290.0 < left <= 300.0 for _, left in tab.waited)
+
+
+def test_a_render_past_its_budget_stops_at_the_next_frame(tmp_path, monkeypatch):
+    monkeypatch.setattr(recorder.subprocess, "Popen", FakeFfmpeg)
+    out = tmp_path / "landscape.mp4"
+    out.write_bytes(b"mp4")
+    with pytest.raises(TimeoutError, match="past its budget at frame 0 of 4"):
+        recorder._record_layout(
+            FakeTab(), tmp_path / "s.f32", out, nice=10, deadline=time.monotonic() - 1.0,
+        )
+
+
+def test_a_run_being_backfilled_is_not_told_it_has_no_clip(tmp_path):
+    """The backfill enqueues straight off the log and marks nothing pending, so
+    the store still says `none` for a run being photographed right now. Only the
+    worker knows; a page that trusted the store alone showed no clip row at all
+    while the clip was being made — the same silence as a render that failed."""
+    api, app, record = app_with_run(tmp_path)
+    url = f"/api/runs/{record.run_id}/clip"
+    assert app.state.store.clip_state(record.run_id) == ("none", None)
+
+    app.state.clips.enqueue(record.run_id, priority=1)
+    assert api.get(url).json() == {"state": "queued", "ahead": 0}
+    app.state.clips.step(record.run_id, "opening", 0, 0)
+    assert api.get(url).json() == {
+        "state": "rendering", "stage": "opening", "done": 0, "total": 0
+    }
+    # Off the queue and out of flight with nothing written: owed by nobody.
+    assert app.state.clips.queue.get()[-1] == record.run_id
+    app.state.clips.step(None, "")
+    assert api.get(url).json() == {"state": "none"}

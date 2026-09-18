@@ -855,13 +855,56 @@ table.board .withdraw:focus-visible,
 .run-share .sticker-logo { width: 18px; height: 18px; fill: currentColor; }
 .run-share [aria-disabled="true"] { opacity: 0.55; cursor: default; box-shadow: none; }
 .run-share-said { margin: 0; color: var(--ink-70); }
+
+/* A clip is made by a machine that takes minutes, so the row says so while it
+   works: the reel is on the sticker only while there is a render to show, and
+   it turns — the one thing on this page that says the process is alive. */
+.run-share [data-clip] { display: inline-flex; align-items: center; gap: 7px; }
+.run-share [data-clip] .clip-reel { display: none; }
+.run-share .sticker-working .clip-reel { display: block; }
+.clip-reel { width: 15px; height: 15px; flex: none; fill: currentColor; animation: reel-turn 2.4s linear infinite; }
+
 /* The landscape clip, small, in the room this column keeps under its stickers:
    the screen takes what is left of the column, the video fills its height at
    16:9 up to 22rem wide, and where the room is too short to watch anything
-   the video steps aside rather than spill onto the board. */
+   the video steps aside rather than spill onto the board. The render panel is
+   the same box at the same size, so the clip lands where it was being made. */
 .run-share-screen { flex: 1 1 0; min-height: 0; container-type: size; }
-.run-share-screen video { display: block; height: 100%; max-height: 12.375rem; max-width: 100%; aspect-ratio: 16 / 9; background: var(--deep-ink); }
-@container (max-height: 72px) { .run-share-screen video { display: none; } }
+.run-share-screen video,
+.clip-render { display: block; height: 100%; max-height: 12.375rem; max-width: 100%; aspect-ratio: 16 / 9; background: var(--deep-ink); }
+.run-share-screen video[hidden], .clip-render[hidden] { display: none; }
+@container (max-height: 72px) { .run-share-screen video, .clip-render { display: none; } }
+
+.clip-render {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 clamp(12px, 5%, 22px);
+  color: var(--paper);
+}
+.clip-render .clip-reel { width: 26px; height: 26px; }
+.clip-render-say { margin: 0; font: 700 1rem/1.2 var(--display); }
+.clip-render-step { margin: 0; color: var(--paper-60); }
+.clip-render-bar { position: relative; height: 6px; overflow: hidden; background: rgba(250, 248, 242, 0.18); }
+.clip-render-bar[hidden] { display: none; }
+.clip-render-bar > span { display: block; width: 0; height: 100%; background: var(--cyan); transition: width 300ms linear; }
+/* No frame count to report yet — the opening and the soundtrack take minutes
+   of their own. A bar sweeping says working; a bar at zero says broken. */
+.clip-render-bar-unknown > span { width: 34%; animation: reel-sweep 1.6s ease-in-out infinite; }
+.clip-render-jammed .clip-reel { animation: none; opacity: 0.45; }
+.clip-render-jammed .clip-render-step { color: var(--cyan); overflow-wrap: anywhere; }
+
+@keyframes reel-turn { to { rotate: 360deg; } }
+@keyframes reel-sweep { from { translate: -100% 0; } to { translate: 300% 0; } }
+
+/* The reel and the sweep are the only things here that never end, so zeroing
+   their duration would freeze them mid-turn. They stop instead; the bar's own
+   width still moves, which is where the progress actually is. */
+@media (prefers-reduced-motion: reduce) {
+  .clip-reel, .clip-render-bar-unknown > span { animation: none; }
+}
 
 /* The pegboard: a window of the board, this run's row in lime, each row a link.
    One line per row here, the repo beside the handle instead of under it —
