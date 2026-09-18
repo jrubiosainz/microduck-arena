@@ -199,8 +199,8 @@ class ClipRenderer:
             dialogue = self._dialogue(run_id)
             rendered = self.render(
                 self.origin, run_id, parallel=self.parallel, budget_s=RENDER_BUDGET_S,
-                on_progress=lambda stage, done, total: self.step(run_id, stage, done, total),
                 dialogue=dialogue,
+                on_progress=lambda stage, done, total: self.step(run_id, stage, done, total),
             )
             now = _now()
             files = {

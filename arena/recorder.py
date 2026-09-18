@@ -343,9 +343,8 @@ def _record_layout(
 
 
 def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None = None,
-               nice: int = 10, budget_s: float = 900.0,
-               on_progress=lambda stage, done, total: None,
-               dialogue: dict | None = None) -> RenderedRun:
+               nice: int = 10, budget_s: float = 900.0, dialogue: dict | None = None,
+               on_progress=lambda stage, done, total: None) -> RenderedRun:
     """Every layout of one run, each in a browser of its own; the first one
     renders the soundtrack they all share, and they are recorded `parallel` at
     a time. The poster is the landscape clip's.
@@ -377,8 +376,6 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
             layout: _open(stack.enter_context(Chrome(binary, nice)), origin, run_id, layout)
             for layout in SIZES
         }
-        # While a browser is open anyway: the dialogue's plan is computed by the
-        # page, so what the store keeps is exactly what the live page plays.
         plan = None
         if dialogue:
             # A dialogue too broken for the page to time (a caption word over

@@ -96,7 +96,7 @@ def compose(store, run_id: str, *, lore: Lore, provider, model: str) -> dict:
     """A checked dialogue for one run, or Rejected from the writer."""
     record = find_run(store, run_id)
     facts, recent = gather(store, record, lore)
-    written = write(facts, recent, lore=lore, provider=provider, model=model)
+    written = write(run_id, facts, recent, lore=lore, provider=provider, model=model)
     cited = {ref for turn in written["turns"] for ref in turn["fact_refs"]}
     return {
         "run_id": run_id, **written,

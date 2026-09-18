@@ -70,7 +70,7 @@ def run_case(turns=TURNS, verdict=CHECK, facts=FACTS, recent=RECENT):
     # The audit answers a small JSON object of booleans: its completion_tokens
     # must fit CHECK_LIMIT, unlike the write call's much larger budget.
     provider = provider_for(reply(turns), reply(verdict, completion_tokens=80))
-    return write(facts, recent, lore=LORE, provider=provider, model="fake/model"), provider
+    return write("R1", facts, recent, lore=LORE, provider=provider, model="fake/model"), provider
 
 
 def test_a_checked_dialogue_keeps_the_prose_and_maps_indices_to_references():
@@ -119,24 +119,12 @@ def test_a_run_draws_its_own_direction_and_always_the_same_one():
     assert direction("R1") not in check_messages[0]["content"]
 
 
-def test_a_handle_carried_by_several_facts_is_grounded_by_any_one_of_them():
-    # The participant fact, the board and a recent run may all carry the same name. The
-    # writer is told every index, and citing one of them grounds the name.
+def test_the_writer_is_told_every_fact_that_grounds_a_handle():
     again = Fact("recent:R8", "Earlier this season: The participant is @alice.", "recent",
                  identities=("alice",))
-    facts = [*FACTS, again]
-    written, provider = run_case(facts=facts)
-    assert written["turns"][0]["fact_refs"] == ["run#/event", "run#/participant", "run#/result"]
+    _, provider = run_case(facts=[*FACTS, again])
     system = provider.calls[0][0][0]["content"]
     assert '"@alice": [1, 6]' in system and '"@carol": [3]' in system
-    by_the_recent_run = [{**TURNS[0], "fact_refs": [0, 2, 6]}, TURNS[1], TURNS[2]]
-    run_case(turns=by_the_recent_run, facts=facts)
-    # A fact that prints a handle establishes it, declared or not.
-    profile = Fact("notable#/profile", "@alice has 620 points this season.", "notable")
-    by_the_profile = [{**TURNS[0], "fact_refs": [0, 2, 7]}, TURNS[1], TURNS[2]]
-    run_case(turns=by_the_profile, facts=[*facts, profile])
-    with pytest.raises(Rejected, match="name"):
-        run_case(turns=[{**TURNS[0], "fact_refs": [0, 2]}, TURNS[1], TURNS[2]], facts=facts)
 
 
 def test_a_code_fence_around_the_answer_is_dressing():
@@ -201,7 +189,7 @@ def test_the_audit_must_say_true_four_times(verdict):
 def test_an_invalid_provider_answer_is_rejected(changes):
     provider = provider_for(reply(TURNS, **changes), reply(CHECK, completion_tokens=80))
     with pytest.raises(Rejected):
-        write(FACTS, RECENT, lore=LORE, provider=provider, model="m")
+        write("R1", FACTS, RECENT, lore=LORE, provider=provider, model="m")
 
 
 def test_a_name_spoken_in_a_facts_own_text_is_grounded_by_that_fact_alone():

@@ -278,7 +278,8 @@ def profiles(s: Situation, earned: list[Receipt]) -> list[Fact]:
         rival = others[0]
         place = "who leads" if board[0].record.user == rival else "next on"
         facts.append(Fact(f"notable#/profile/{rival}", f"@{rival}, {place} this board, has "
-                          f"{_season(rival, s, ladder)}.", "notable", ("profile",)))
+                          f"{_season(rival, s, ladder)}.", "notable", ("profile",),
+                          identities=(rival,)))
     return facts
 
 

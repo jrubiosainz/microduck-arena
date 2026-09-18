@@ -184,7 +184,6 @@ UNSUPPORTED_PERSONAL_WORDS = frozenset((
     "boyfriends", "girlfriend", "girlfriends",
 ))
 FALLS = frozenset({"fall", "fell", "fallen", "falls", "falling"})
-HANDLE = re.compile(r"@([\w-]+(?:\.[\w-]+)*)")
 SPEAKER = r"(?:Peter(?: Duckry)?|Ray(?: Quackson)?)"
 AT_NAME = re.compile(r"@([\w-]+)")
 
@@ -272,7 +271,8 @@ def _ask(provider, system: str, user: dict, max_tokens: int) -> tuple:
         raise Rejected("model answer is not JSON") from exc
 
 
-def write(facts: list[Fact], recent: list[dict], *, lore: Lore, provider, model: str) -> dict:
+def write(run_id: str, facts: list[Fact], recent: list[dict], *, lore: Lore, provider,
+          model: str) -> dict:
     """Facts in, a checked dialogue out, or Rejected with the reason."""
     by_ref = {fact.ref: i for i, fact in enumerate(facts)}
     names = {name for fact in facts for name in fact.identities}
@@ -283,8 +283,9 @@ def write(facts: list[Fact], recent: list[dict], *, lore: Lore, provider, model:
     characters_json = json.dumps(characters, separators=(",", ":"), ensure_ascii=False)
     system = (STYLE + GROUNDING + BOOTH_CONTEXT + direction(run_id) + "Characters: "
               + characters_json
-              + " Identity indices for EVERY name mention: "
-              + json.dumps({name: sorted(indices) for name, indices in establishes.items()}))
+              + " Identity indices, one of them cited by every turn that speaks the handle: "
+              + json.dumps({"@" + name: sorted(indices)
+                            for name, indices in establishes.items()}))
     fact_texts = [
         {"index": i, "text": fact.text, **({"memory": True} if fact.kind == "lore" else {})}
         for i, fact in enumerate(facts)
