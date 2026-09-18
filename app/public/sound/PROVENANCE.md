@@ -59,8 +59,8 @@ tones with `design/sound/commentators.rs` and `commentator-voice.rs` at Duck Jam
 raw 48 kHz mono float32, no header) from
 [pollen-robotics/microduck, sounds](https://github.com/pollen-robotics/microduck/tree/e597877c5a9460f4c3837dc3cdab088705212c5d/sounds),
 revision `e597877c5a9460f4c3837dc3cdab088705212c5d`, then modifies the recipe (victory) or the
-audio (fall); the two tones are that synthesiser's own output, unmodified. It is Apache-2.0 —
-`MICRODUCK-LICENSE.txt` beside them is its licence — so these four files travel with it, not
-with the CC0 dedication above.
+audio (fall); the two tones are that synthesiser's own output, unmodified. That synthesiser is
+Apache-2.0 — `MICRODUCK-LICENSE.txt` beside them is its licence — so these four files travel
+with it, not with the CC0 dedication above.
 `microduck-victory-echo.mp3` is Nicolas Rabault's echo of `microduck-victory.wav`, made for the
 clip on 2026-09-17, and travels with it.

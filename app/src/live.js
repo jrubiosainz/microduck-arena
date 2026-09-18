@@ -184,12 +184,23 @@ export async function renderLive(root, state, { api = { getLive }, tones = loadT
   onTeardown(() => poller.stop());
 
   let admitted = false;
+  // Sound the page could not reach — a tone that would not load, a context the
+  // phone is holding for a call — is never the page's last word: the picture
+  // plays on, and the button is the way to ask for it again.
+  function withheld() {
+    admitted = false;
+    join.hidden = false;
+  }
   /** Ask for the sound once; it joins the picture whenever the browser lets it. */
   function admit() {
     if (admitted) return;
     admitted = true;
     sound.open().then((opened) => {
       if (signal.aborted) return;
+      if (!opened) {
+        withheld();
+        return;
+      }
       audio = opened;
       interlude.muted(isMuted());
       // The button came up for a context that now runs; a clip the browser
@@ -197,11 +208,8 @@ export async function renderLive(root, state, { api = { getLive }, tones = loadT
       join.hidden = true;
       channel.rejoin();
     }, () => {
-      // Sound the page could not reach: the picture plays on, and the button
-      // is the way to ask for it again.
       if (signal.aborted) return;
-      admitted = false;
-      join.hidden = false;
+      withheld();
     });
   }
 

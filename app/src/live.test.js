@@ -194,6 +194,30 @@ describe("renderLive", () => {
     expect(join.hidden).toBe(true);
   });
 
+  it("keeps the button up when the browser hands back no sound at all, and asks again on the click", async () => {
+    const root = document.createElement("div");
+    const audio = { context: { currentTime: 0 }, voice: { start() {}, stop() {}, muted() {}, gust() {} }, ambience: {} };
+    let attempts = 0;
+    const sound = {
+      // A context that says it runs and still gives nothing back: a phone that
+      // took a call while the page was joining.
+      running: true,
+      ask: vi.fn(),
+      open: vi.fn(async () => (attempts++ === 0 ? null : audio)),
+      close: vi.fn(),
+    };
+    await renderLive(root, {}, options(vi.fn(async () => grid), sound));
+    stubMedia(root);
+    const join = root.querySelector(".live-join");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(join.hidden).toBe(false);
+    join.click();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(sound.open).toHaveBeenCalledTimes(2);
+    expect(sound.ask).toHaveBeenCalledTimes(1);
+    expect(join.hidden).toBe(true);
+  });
+
   it("forgives a lost poll for half a minute once the clock is set", async () => {
     const root = document.createElement("div");
     let up = true;
