@@ -283,6 +283,29 @@ def test_a_booth_is_marked_aired_even_though_its_slot_would_have_been_pruned(tmp
     assert book.get(made.id).aired_at is not None
 
 
+def test_a_mark_that_cannot_be_written_does_not_take_the_grid_down(tmp_path, monkeypatch):
+    """The mark happens inside the read every screen is waiting on, so a full
+    or read-only disk there would answer /api/live with a 500 for all of them.
+    It costs the mark instead: the broadcast stays unaired and may be laid
+    once more, which is a repeat, not an outage."""
+    book = BroadcastBook(tmp_path)
+    made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
+                    {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
+                    "2026-09-18T09:00:00Z")
+    at = [1_000_000]
+    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)],
+                          lambda: at[0], book)
+    programme.slots()
+
+    def full_disk(_broadcast):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(book, "_write", full_disk)
+    at[0] += 60_000  # past the booth's end: this read is the one that marks it
+    assert programme.slots()
+    assert book.get(made.id).aired_at is None
+
+
 def ready(app, run_id, user="alice", seconds=8.0):
     app.state.store.append(make_record(run_id=run_id, user=user), encode(np.zeros((5, 21), "f4")))
     app.state.store.put_clip(run_id, {"clip.json": json.dumps({"layouts": {"landscape": {"seconds": seconds}}}).encode()})

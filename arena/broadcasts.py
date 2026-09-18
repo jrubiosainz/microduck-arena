@@ -67,16 +67,26 @@ class BroadcastBook:
     def _path(self, broadcast_id: str) -> Path:
         return self.directory / f"{broadcast_id}.json"
 
+    def _read(self, path: Path) -> Broadcast | None:
+        """The broadcast at `path`, when it is one the grid could actually lay.
+
+        A booth's slot is as long as its plan says, so a plan that is not a
+        whole number of 40 ms frames — or not a number, or not there at all —
+        is no more usable than a half-written file from a killed process or
+        something a hand dropped in the directory. All of them are read around
+        rather than handed out, because the alternative is the channel
+        stopping for every screen over one bad file.
+        """
+        try:
+            one = Broadcast(**json.loads(path.read_text()))
+            if one.plan["duration_ms"] % 40:
+                return None
+        except (OSError, ValueError, TypeError, KeyError):
+            return None
+        return one
+
     def _all(self) -> list[Broadcast]:
-        found = []
-        for path in self.directory.glob("*.json"):
-            try:
-                body = json.loads(path.read_text())
-                found.append(Broadcast(**body))
-            except (OSError, ValueError, TypeError):
-                # A half-written file from a killed process, or something a hand
-                # dropped in: the channel reads around it rather than stopping.
-                continue
+        found = [one for one in map(self._read, self.directory.glob("*.json")) if one is not None]
         found.sort(key=lambda one: one.id)
         return found
 
@@ -92,13 +102,10 @@ class BroadcastBook:
         return made
 
     def get(self, broadcast_id: str) -> Broadcast | None:
-        try:
-            return Broadcast(**json.loads(self._path(broadcast_id).read_text()))
-        except (OSError, ValueError, TypeError):
-            # No such file, an id too long for the filesystem to even look up,
-            # or a half-written body: to whoever asked, all of these are just
-            # "no such broadcast".
-            return None
+        # No such file, an id too long for the filesystem to even look up, a
+        # half-written body, a plan no slot can be cut to: to whoever asked,
+        # all of these are just "no such broadcast".
+        return self._read(self._path(broadcast_id))
 
     def unaired(self, run_id: str) -> Broadcast | None:
         for one in self._all():
@@ -113,7 +120,15 @@ class BroadcastBook:
         one = self.get(broadcast_id)
         if one is None or one.aired_at is not None:
             return
-        self._write(replace(one, aired_at=aired_at))
+        try:
+            self._write(replace(one, aired_at=aired_at))
+        except OSError:
+            # A full or read-only disk costs the mark, not the channel: this is
+            # called while the grid is being read, and every screen asking for
+            # the programme would otherwise be answered with a 500. The
+            # broadcast stays unaired, so the worst of it is that it may be
+            # laid again — and the sweep still throws it away in the end.
+            return
 
     def recent_aired(self, limit: int = 5) -> list[Broadcast]:
         """Newest last: the writer reads them in the order they went out."""

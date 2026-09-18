@@ -1,3 +1,5 @@
+import json
+
 from arena.broadcasts import BroadcastBook
 
 
@@ -117,5 +119,23 @@ def test_junk_in_the_directory_is_ignored(tmp_path):
     kept = book.put("run-a", dialogue("run-a"), plan(), "2026-09-18T09:00:00Z")
     (tmp_path / "notes.txt").write_text("not a broadcast")
     (tmp_path / "half.json").write_text("{")
+    assert book.runs_stocked() == {"run-a"}
+    assert book.get(kept.id) is not None
+
+
+def test_a_plan_no_slot_could_be_cut_to_is_read_around(tmp_path):
+    """Every field is there, so the body itself is fine — but the grid cuts a
+    booth's slot to the plan's length, and it does that inside the build every
+    screen is waiting on. What the book cannot hand over safely, it does not
+    hand over at all."""
+    book = BroadcastBook(tmp_path)
+    kept = book.put("run-a", dialogue("run-a"), plan(), "2026-09-18T09:00:00Z")
+    for broadcast_id, unusable in (("01CRUMB", plan(duration_ms=4010)), ("01EMPTY", {})):
+        (tmp_path / f"{broadcast_id}.json").write_text(json.dumps({
+            "id": broadcast_id, "run_id": f"run-{broadcast_id}",
+            "dialogue": dialogue(f"run-{broadcast_id}"), "plan": unusable,
+            "written_at": "2026-09-18T09:00:00Z", "aired_at": None}))
+        assert book.get(broadcast_id) is None
+        assert book.unaired(f"run-{broadcast_id}") is None
     assert book.runs_stocked() == {"run-a"}
     assert book.get(kept.id) is not None
