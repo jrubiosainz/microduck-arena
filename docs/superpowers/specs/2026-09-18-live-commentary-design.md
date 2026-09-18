@@ -67,15 +67,32 @@ conversation, written for one airing.
 what `prepare` returned and what the booth plays. `aired_at` is null until the
 grid's slot for it has passed, and is what makes the history readable.
 
-Broadcasts live under the store at `live/broadcasts/<id>.json`, beside the runs
-rather than inside a run's clip folder: a broadcast belongs to the channel, not
-to the clip. `commentary.json` stops being written and stops being read; it is
-removed from `CLIP_MEDIA`, and a run's clip folder goes back to three files.
+Broadcasts do not go in the store. They live on the process's own disk, in a
+`BroadcastBook` that owns one directory and answers for it.
+
+That is not a shortcut, it is what they are. A broadcast is consumed once and
+forgotten twenty airings later; on the Space the store is a dataset repository
+and every write is a commit, so keeping them there would mean about two thousand
+commits a day for objects nobody reads tomorrow. The programme is already
+per-process — `origin_ms` is the millisecond that process built the grid, and
+two processes would already disagree about the channel — so a broadcast being
+per-process takes away nothing that was there. A restart costs one refill of a
+few minutes, during which the channel plays replays without booths, which is a
+state it already supports.
+
+It also keeps the change small: the `Store` protocol is untouched by the new
+object. `commentary.json` still goes, in the other direction — it stops being
+written and read, `put_commentary` and `commentary` come out of both stores, and
+it is removed from `CLIP_MEDIA` so a run's clip folder goes back to three files.
 
 Retention: a broadcast is kept until it has aired and twenty newer broadcasts
 have aired after it. That is four times the history the writer reads, enough to
 debug a repetition after the fact, and bounded — the store does not grow with
 uptime.
+
+A restart empties the reserve and the history with it. The writer then has no
+recent wording for its first few dialogues, which is the same state a brand-new
+store is in, and it recovers after five airings.
 
 The `commentary.json` files already in a store are not imported. They were
 written against facts that have since moved, and the reserve fills within
