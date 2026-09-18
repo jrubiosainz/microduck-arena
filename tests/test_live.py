@@ -3,6 +3,7 @@ only says which part of it to serve."""
 
 import hashlib
 import json
+from collections import Counter
 from itertools import pairwise
 
 import numpy as np
@@ -160,6 +161,20 @@ def test_invalidate_does_not_let_the_playing_booth_be_relaid_in_the_future(tmp_p
     assert len(booths) == 1
 
 
+def test_a_broadcast_is_laid_once_however_often_its_run_comes_round(tmp_path):
+    """A small pool comes round several times inside the horizon, and the grid
+    is laid one entry at a time: what a booth claims for one entry has to be
+    claimed against the next, or one dialogue would be laid all afternoon."""
+    book = BroadcastBook(tmp_path)
+    made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
+                    {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
+                    "2026-09-18T09:00:00Z")
+    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)],
+                          lambda: 1_000_000, book)
+    booths = [slot for slot in programme.slots() if slot["kind"] == "booth"]
+    assert [slot["broadcast"] for slot in booths] == [made.id]
+
+
 class Clock:
     def __init__(self, ms):
         self.ms = ms
@@ -205,6 +220,39 @@ def test_invalidate_keeps_the_slot_playing_now_and_rebuilds_the_future(tmp_path)
     assert following[0]["at_ms"] == current["at_ms"] + current["duration_ms"]
     # The rebuilt future opens on the newest run, C.
     assert following[0]["kind"] == "shutter" and following[0]["next"]["run_id"] == "C"
+
+
+def test_a_landing_every_minute_still_walks_the_cycle_to_its_end(tmp_path):
+    """Every broadcast that lands invalidates the grid, some eighty times an
+    hour. A rebuild that opened a fresh cycle would put the newest runs back on
+    the screen each time and the rest of the pool would wait for ever; the grid
+    keeps its place, so a cycle is walked to its end and every run comes round.
+    """
+    book = BroadcastBook(tmp_path)
+    clock = Clock(10_000_000)
+    entries = [entry(f"R{i}", at=f"2026-09-{i + 1:02d}T10:00:00Z") for i in range(8)]
+    programme = Programme(lambda: entries, clock, book)
+    walk = []  # the runs the screen shows, one entry per turn on it
+    for _ in range(250):  # twelve minutes of channel, read every three seconds
+        # The reserve keeps every run stocked, and each dialogue it lands tells
+        # the programme to rebuild its future.
+        for run_id in sorted({one.run_id for one in entries} - book.runs_stocked()):
+            book.put(run_id, {"run_id": run_id, "turns": [], "lore_refs": []},
+                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
+                     "2026-09-18T09:00:00Z")
+            programme.invalidate()
+        now = clock.ms
+        playing = next(s for s in programme.slots()
+                       if s["at_ms"] <= now < s["at_ms"] + s["duration_ms"])
+        showing = playing.get("run_id")
+        if showing is not None and (not walk or walk[-1] != showing):
+            walk.append(showing)
+        clock.ms += 3_000
+    shown = Counter(walk)
+    assert set(shown) == {one.run_id for one in entries}
+    # Seven passes over the pool and a little more: every run has had seven or
+    # eight turns on the screen, and none of them has taken it from the others.
+    assert max(shown.values()) <= 2 * min(shown.values())
 
 
 def test_an_idle_gap_is_not_built_cycle_by_cycle(tmp_path):

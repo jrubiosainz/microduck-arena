@@ -1,10 +1,10 @@
 """The channel's programme: an infinite grid every screen reads its place in.
 
 Nothing is broadcast. The grid is a list of slots at absolute wall-clock
-milliseconds, built cycle after cycle from the ready clips; a screen reads the
-server's clock once, finds the slot that contains now, and plays it from the
-right offset. Two screens agree because they read the same grid and the same
-clock, not because a stream was pushed at them.
+milliseconds, laid entry by entry, a cycle at a time, from the ready clips; a
+screen reads the server's clock once, finds the slot that contains now, and
+plays it from the right offset. Two screens agree because they read the same
+grid and the same clock, not because a stream was pushed at them.
 """
 
 import random
@@ -95,7 +95,9 @@ def slots_for(entries: list[Entry], start_ms: int, book: BroadcastBook,
 
 class Programme:
     """The grid, built lazily as far as the horizon, rebuilt from the slot
-    playing now whenever the pool changes."""
+    playing now whenever the pool or the book changes — and keeping its place
+    in the cycle it is walking, so the rebuild carries on from there instead of
+    opening a new cycle on the newest runs."""
 
     def __init__(self, source, now_ms, book):
         self._source = source
@@ -104,24 +106,55 @@ class Programme:
         self._lock = threading.Lock()
         self.origin_ms = now_ms()
         self._slots: list[dict] = []
-        self._cursor = self.origin_ms  # where the next cycle starts
-        self._cycle = 0
+        self._cursor = self.origin_ms  # where the next entry starts
+        self._cycle = 0  # the cycle being walked
+        self._pending: list[Entry] = []  # what is left of it to lay
+        # (start, cycle, run) of every entry laid since the cycle playing now
+        # opened: the grid's place in it, which a rebuild picks up from.
+        self._laid: list[tuple[int, int, str]] = []
 
     def _claimed(self) -> set[str]:
         return {slot["broadcast"] for slot in self._slots if slot["kind"] == "booth"}
 
+    def _walking(self, now: int) -> int:
+        """The cycle the screen is in: the one the last entry it has reached
+        was laid for."""
+        return next((k for at, k, _ in reversed(self._laid) if at <= now), self._cycle)
+
+    def _take_up_the_cycle(self) -> bool:
+        """Read the pool into the cycle being walked, minus the runs it has
+        already laid: a run withdrawn since has gone from it, one that landed
+        since is in it. False when nothing is on the channel at all."""
+        entries = cycle(self._source(), self._cycle)
+        walked = {run for _, k, run in self._laid if k == self._cycle}
+        self._pending = [one for one in entries if one.run_id not in walked]
+        if entries and not self._pending:
+            # The entry playing is the cycle's last one, or a withdrawal took
+            # the only run it had left: the next cycle is laid whole.
+            self._cycle += 1
+            self._pending = cycle(self._source(), self._cycle)
+        return bool(self._pending)
+
     def _extend(self, until_ms: int) -> None:
         # A process nobody read from for days leaves the cursor far behind, and
-        # every cycle built from there is pruned the moment it is built: start
-        # at the edge of the window that is actually served.
+        # everything built from there is pruned the moment it is built: start at
+        # the edge of the window that is actually served.
         self._cursor = max(self._cursor, until_ms - HORIZON_MS - BEHIND_MS)
+        # What the kept slots are playing is claimed before anything is laid,
+        # and the claims grow with the grid: a booth laid for one entry is
+        # claimed against the next. No booth is ever handed to two slots.
+        claimed = self._claimed()
         while self._cursor < until_ms:
-            entries = cycle(self._source(), self._cycle)
-            if not entries:
+            if not self._pending and not self._take_up_the_cycle():
                 return
-            self._slots.extend(slots_for(entries, self._cursor, self._book, self._claimed()))
-            self._cursor = self._slots[-1]["at_ms"] + self._slots[-1]["duration_ms"]
-            self._cycle += 1
+            entry = self._pending.pop(0)
+            made = slots_for([entry], self._cursor, self._book, claimed)
+            claimed |= {slot["broadcast"] for slot in made if slot["kind"] == "booth"}
+            self._laid.append((self._cursor, self._cycle, entry.run_id))
+            self._slots.extend(made)
+            self._cursor = made[-1]["at_ms"] + made[-1]["duration_ms"]
+            if not self._pending:
+                self._cycle += 1  # walked to its end; the next one is whole
 
     def _mark_aired(self, now: int) -> None:
         """A booth whose slot has ended has been heard, wherever a screen was.
@@ -141,14 +174,31 @@ class Programme:
             # again.
             self._mark_aired(now)
             self._slots = [s for s in self._slots if s["at_ms"] + s["duration_ms"] > now - KEEP_MS]
+            # The place a rebuild picks up from is in the cycle playing now;
+            # what the cycles before it laid is nobody's business any more.
+            walking = self._walking(now)
+            self._laid = [(at, k, run) for at, k, run in self._laid if k >= walking]
             return [s for s in self._slots
                     if s["at_ms"] + s["duration_ms"] > now - BEHIND_MS and s["at_ms"] <= now + HORIZON_MS]
 
     def invalidate(self) -> None:
-        """Keep what is playing, forget the future; the next read rebuilds it
-        from a fresh pool. A restart is the same thing with nothing kept."""
+        """Keep what is playing, forget the future; the next read lays it again
+        from a fresh pool. A restart is the same thing with nothing kept.
+
+        What the grid does not forget is its place. An entry no shutter has
+        announced yet goes back to the cycle to be laid again; an entry already
+        announced stays where it is, because laying it again would repeat a
+        replay the screen has just seen — it loses its booth for this pass and
+        is offered one when its run next comes round. Every broadcast that
+        lands calls this, some eighty times an hour: a rebuild that opened a
+        new cycle each time would replay the newest runs for ever and never
+        reach the rest of the pool.
+        """
         now = self._now()
         with self._lock:
             kept = [s for s in self._slots if s["at_ms"] <= now]
+            self._cycle = self._walking(now)
+            self._laid = [(at, k, run) for at, k, run in self._laid if at <= now]
+            self._pending = []  # read the pool again: a withdrawal lands here
             self._slots = kept
             self._cursor = (kept[-1]["at_ms"] + kept[-1]["duration_ms"]) if kept else now
