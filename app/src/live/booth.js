@@ -37,7 +37,8 @@ export const STAND = [
 ];
 // The trunk's height in the keyframe: course.py's SPAWN_HEIGHT_M.
 const TRUNK_HEIGHT = 0.12;
-// Which joint holds which index of a trace frame's fourteen angles.
+// Which joint holds which index of a trace frame's fourteen angles. A glance's
+// yaw is signed so Peter looks toward Ray and Ray toward Peter.
 const HEAD = { neck: ["neck_pitch", 5], pitch: ["head_pitch", 6], yaw: ["head_yaw", 7], roll: ["head_roll", 8] };
 // Where each duck stands along the desk, and which livery it wears.
 const SEATS = { peter: { x: -0.16, livery: "classic" }, ray: { x: 0.16, livery: "blue" } };
@@ -47,10 +48,6 @@ const FACING = -Math.PI / 3;
 const JAW_MESHES = new Set(["jaw.stl", "jaw_soft.stl"]);
 const JAW_PIVOT = [-0.008, 0, -0.025];
 const JAW_OPEN = 0.32;
-// A glance's yaw is signed so Peter looks toward Ray and Ray toward Peter. The
-// plan's sign was Duck Jam's; if the two glance away from each other here, this
-// is the one line to flip.
-const LOOK = 1;
 const PIXEL_RATIO_CAP = 1.5;
 
 /** A trace frame that stands at booth-local x, turned to face the camera. */
@@ -162,10 +159,7 @@ export async function createBooth(canvas) {
       screen.color.copy(token("deep-ink"));
       screen.needsUpdate = true;
       loader.loadAsync(posterUrl).then((texture) => {
-        if (plan !== commentary.plan) {
-          texture.dispose();
-          return;
-        }
+        if (plan !== commentary.plan) return;
         texture.colorSpace = SRGBColorSpace;
         poster = texture;
         screen.map = texture;
@@ -182,8 +176,7 @@ export async function createBooth(canvas) {
         const pose = poseAt(plan, speaker, ms);
         applyFrame(actor.rig, actor.frame);
         for (const [key, [joint, index]] of Object.entries(HEAD)) {
-          const turn = key === "yaw" ? pose.yaw * LOOK : pose[key];
-          setJoint(actor.rig, joint, actor.frame[7 + index] + turn);
+          setJoint(actor.rig, joint, actor.frame[7 + index] + pose[key]);
         }
         actor.jaw.rotation.y = pose.mouth * JAW_OPEN;
       }
