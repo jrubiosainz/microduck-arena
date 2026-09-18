@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flyer, ladder, shellOf } from "./home.js";
+import { flyer, ladder, liveTile, shellOf } from "./home.js";
 
 const open = {
   id: "sprint-2m", title: "2 m Sprint", status: "open", rig: "legs", length_m: 2, slope_deg: 0,
@@ -119,5 +119,35 @@ describe("a votable flyer", () => {
   it("leaves a timed flyer alone", () => {
     const note = flyer(open, held);
     expect(note.querySelector(".vote-button")).toBeNull();
+  });
+});
+
+describe("the ON AIR tile", () => {
+  const grid = {
+    now_ms: 5000,
+    slots: [
+      { kind: "shutter", at_ms: 0, duration_ms: 1600, next: { run_id: "A", event: "2 m Sprint", user: "carol" } },
+      { kind: "replay", at_ms: 1600, duration_ms: 8000, run_id: "A" },
+      { kind: "shutter", at_ms: 9600, duration_ms: 1600, next: null },
+      { kind: "booth", at_ms: 11200, duration_ms: 20000, run_id: "A" },
+      { kind: "shutter", at_ms: 31200, duration_ms: 1600, next: { run_id: "B", event: "1.5 m Hill Climb", user: "dan" } },
+    ],
+  };
+
+  it("names what is on air now and links to the channel", () => {
+    const tile = liveTile(grid);
+    expect(tile.matches("a.live-tile")).toBe(true);
+    expect(tile.getAttribute("href")).toBe("#/live");
+    expect(tile.querySelector(".live-tile-bug").textContent).toBe("ON AIR");
+    expect(tile.querySelector(".live-tile-what").textContent).toBe("2 m Sprint · @carol");
+  });
+
+  it("names the run the booth is talking about, and the next one when between runs", () => {
+    expect(liveTile({ ...grid, now_ms: 20000 }).querySelector(".live-tile-what").textContent).toBe("2 m Sprint · @carol");
+    expect(liveTile({ ...grid, now_ms: 31500 }).querySelector(".live-tile-what").textContent).toBe("1.5 m Hill Climb · @dan");
+  });
+
+  it("is nothing when the channel is off air", () => {
+    expect(liveTile({ now_ms: 1, slots: [] })).toBeNull();
   });
 });

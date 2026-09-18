@@ -206,3 +206,16 @@
   border: 3px solid var(--ink);
 }
 .profile-date { color: var(--ink-70); font-size: 0.85rem; }
+
+/* The door to the channel: the club's hot colour on ink, the way a set-top
+   box says a channel is on. */
+.live-tile {
+  display: inline-flex; align-items: center; gap: 12px; margin-top: 18px; padding: 8px 16px;
+  background: var(--ink); color: var(--paper); text-decoration: none;
+  border: 2px solid var(--ink); box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) 0 var(--magenta);
+}
+.live-tile-bug { font: 400 0.9rem/1 var(--display); letter-spacing: 0.06em; color: var(--magenta); }
+.live-tile-bug::before { content: "● "; }
+.live-tile-what { font: 600 0.95rem/1 var(--body); }
+.live-tile:hover { background: var(--deep-ink); }
+.live-tile:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }

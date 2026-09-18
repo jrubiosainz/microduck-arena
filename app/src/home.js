@@ -4,9 +4,9 @@
 // are the events, each carrying the course, its facts and who holds it. The
 // race pages behind the flyers are unchanged — this page is the way in.
 
-import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
+import { getEvents, getLeaderboard, getLive, getMe, getStandings } from "./api.js";
 import { formatEventFacts, formatScore } from "./format.js";
-import { playerHref, raceHref } from "./router.js";
+import { liveHref, playerHref, raceHref } from "./router.js";
 import { footer, signage } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { voteButton } from "./votebutton.js";
@@ -104,6 +104,21 @@ export function flyer(event, rows) {
   return note;
 }
 
+/** What the channel is showing now: the latest shutter card at or before now,
+ * which names the run every following slot is about. */
+export function liveTile(grid) {
+  const cards = grid.slots.filter((slot) => slot.kind === "shutter" && slot.next && slot.at_ms <= grid.now_ms);
+  const card = cards.at(-1) ?? grid.slots.find((slot) => slot.kind === "shutter" && slot.next);
+  if (!card) return null;
+  const tile = el("a", "live-tile");
+  tile.href = liveHref;
+  tile.append(
+    el("span", "live-tile-bug", "ON AIR"),
+    el("span", "live-tile-what", `${card.next.event} · @${card.next.user}`),
+  );
+  return tile;
+}
+
 export async function renderHome(root) {
   const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
   root.replaceChildren(signage(me));
@@ -121,6 +136,11 @@ export async function renderHome(root) {
     ),
   );
   hall.append(door);
+
+  // A door to the channel, read once: it is a way in, not a monitor.
+  const grid = await getLive().catch(() => null);
+  const onAir = grid && liveTile(grid);
+  if (onAir) door.append(onAir);
 
   const season = el("section", "chapter");
   season.append(el("h3", "eyebrow", "Season standings"), ladder(standings.slice(0, LADDER_ROWS)));
