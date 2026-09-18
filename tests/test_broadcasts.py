@@ -22,6 +22,12 @@ def test_an_unknown_id_is_none(tmp_path):
     assert BroadcastBook(tmp_path).get("nope") is None
 
 
+def test_an_id_too_long_for_the_filesystem_is_none(tmp_path):
+    """An id no filesystem will accept a filename for is still just an id with
+    nothing behind it — `get` must not let the lookup itself raise."""
+    assert BroadcastBook(tmp_path).get("a" * 300) is None
+
+
 def test_unaired_gives_the_oldest_for_that_run(tmp_path):
     book = BroadcastBook(tmp_path)
     first = book.put("run-a", dialogue("run-a"), plan(), "2026-09-18T09:00:00Z")

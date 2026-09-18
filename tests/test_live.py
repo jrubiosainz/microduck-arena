@@ -329,6 +329,15 @@ def test_an_unknown_broadcast_is_a_404(tmp_path):
     assert api.get("/api/live/broadcast/nope").status_code == 404
 
 
+def test_an_id_the_filesystem_cannot_even_look_up_is_a_404_not_a_500(tmp_path):
+    """The book's own lookup can raise for an id no filesystem will accept as
+    a filename; the route must still answer the page's contract — gone is
+    404, never 500."""
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
+    api = TestClient(create_app(config))
+    assert api.get(f"/api/live/broadcast/{'a' * 300}").status_code == 404
+
+
 def test_an_app_holds_a_broadcast_book(tmp_path):
     config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
     app = create_app(config)

@@ -75,12 +75,12 @@ class BroadcastBook:
         return made
 
     def get(self, broadcast_id: str) -> Broadcast | None:
-        path = self._path(broadcast_id)
-        if not path.is_file():
-            return None
         try:
-            return Broadcast(**json.loads(path.read_text()))
+            return Broadcast(**json.loads(self._path(broadcast_id).read_text()))
         except (OSError, ValueError, TypeError):
+            # No such file, an id too long for the filesystem to even look up,
+            # or a half-written body: to whoever asked, all of these are just
+            # "no such broadcast".
             return None
 
     def unaired(self, run_id: str) -> Broadcast | None:
