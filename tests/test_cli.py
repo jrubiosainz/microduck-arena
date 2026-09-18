@@ -137,7 +137,8 @@ def test_commentary_dry_run_prints_facts_memories_and_the_dialogue(tmp_path, cap
     assert "Peter Duckry: 12.40 s for alice, Ray!" in out
     assert "Ray Quackson: 12.40 s, every seed finished, Peter." in out
     assert "fake/model" in out
-    assert store.commentary(record.run_id) is None
+    # A dry run writes nothing: no broadcast reaches the book.
+    assert not list((tmp_path / "broadcasts").glob("*.json"))
 
 
 def test_commentary_without_a_token_says_so(tmp_path, capsys, monkeypatch):

@@ -6,7 +6,6 @@ import { getRun, getSettle, getTrace } from "../api.js";
 import { LANE_COLORS, LANE_CSS } from "../course.js";
 import { formatScore } from "../format.js";
 import { lanesFor } from "../lanes.js";
-import { prepare } from "../live/score.js";
 import { CTRL_DT, frameCount, leadIn } from "../replay.js";
 import { createViewer } from "../viewer.js";
 import { actAt, clipPlan, stepAt, travelAt } from "./plan.js";
@@ -130,9 +129,6 @@ async function main() {
     chunk(offset, size) {
       return base64(pcm.subarray(offset, Math.min(offset + size, pcm.byteLength)));
     },
-    /** A dialogue's timed plan, computed here so the file the worker stores
-     * is exactly what the live page will play. */
-    commentary: (dialogue) => prepare(dialogue),
   };
   draw(Number(params.get("frame") ?? plan.poster));
 }

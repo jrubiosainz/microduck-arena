@@ -6,8 +6,6 @@ generator writes and checks. This module puts them together for one run, at the
 moment the reserve needs it.
 """
 
-import json
-
 from huggingface_hub import get_token
 
 from ..manifest import Manifest, all_events
@@ -18,7 +16,6 @@ from .generator import AT_NAME, complete, write
 from .lore import Lore, select_memories
 from .notable import notable_facts, pick, profiles, situation
 
-COMMENTARY_VERSION = 1
 RECENT = 5
 COOLDOWN = 10
 
@@ -100,17 +97,3 @@ def compose(store, run_id: str, *, lore: Lore, provider, model: str, book) -> di
         "facts": [{"ref": f.ref, "kind": f.kind, "text": f.text} for f in facts
                   if f.kind == "result" or f.ref in cited],
     }
-
-
-def commentary_json(written: dict, plan: dict, written_at: str) -> bytes:
-    """The file beside the clip: the dialogue, the plan that plays it, the
-    facts it was written from, and who wrote it."""
-    if plan["duration_ms"] % 40:
-        raise ValueError("a plan's duration must be a whole number of 40 ms frames")
-    body = {
-        "version": COMMENTARY_VERSION, "run_id": written["run_id"], "written_at": written_at,
-        "model": written["model"], "usage": written["usage"], "facts": written["facts"],
-        "dialogue": {"turns": written["turns"], "lore_refs": written["lore_refs"]},
-        "plan": plan,
-    }
-    return json.dumps(body, indent=2, ensure_ascii=False).encode()

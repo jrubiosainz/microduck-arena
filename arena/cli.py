@@ -187,14 +187,16 @@ def _cmd_commentary(args) -> int:
     """Write (or, with --dry-run, print) Peter and Ray's lines for one run.
 
     A dry run touches neither a browser nor the store: it is how the tone is
-    judged before the worker is let loose. The real thing starts the app on a
-    loopback port for the clip page, like `arena clip`, and overwrites the
-    run's commentary.json.
+    judged before the reserve is let loose. The real thing starts the app on a
+    loopback port for the plan page, like `arena clip`, and puts a broadcast in
+    the book the running server reads, where the channel will find it.
     """
     from . import commentary
-    from .clips import ClipRenderer
+    from .broadcasts import BroadcastBook, utcnow
     from .commentary.generator import Rejected
     from .commentary.lore import load
+    from .commentary.tab import PlanTab
+    from .recorder import find_chrome
     from .web.config import ArenaConfig
 
     config = ArenaConfig.from_env(store_dir=args.store)
@@ -205,6 +207,7 @@ def _cmd_commentary(args) -> int:
     lore = load()
     model = config.commentary_model
     provider = commentary.router_provider(model, token)
+    book = BroadcastBook(config.broadcast_dir)
     if args.dry_run:
         store = config.build_store()
         try:
@@ -212,12 +215,12 @@ def _cmd_commentary(args) -> int:
         except LookupError as exc:
             print(exc, file=sys.stderr)
             return 1
-        facts, _ = commentary.gather(store, record, lore)
+        facts, _ = commentary.gather(store, record, lore, book)
         for i, fact in enumerate(facts):
             print(f"[{i}] {fact.text}" + ("  (memory)" if fact.kind == "lore" else ""))
         try:
             written = commentary.compose(store, args.run_id, lore=lore, provider=provider,
-                                         model=model)
+                                         model=model, book=book)
         except Rejected as why:
             print(f"\nnot on air: {why}", file=sys.stderr)
             return 1
@@ -236,17 +239,26 @@ def _cmd_commentary(args) -> int:
         print(f"{args.run_id} has no ready clip; render it first with `arena clip`", file=sys.stderr)
         server.should_exit = True
         return 1
-    worker = ClipRenderer(app.state.store, origin, config.frontend_dir, log=print,
-                          commentary=lambda run_id: commentary.compose(
-                              app.state.store, run_id, lore=lore, provider=provider, model=model))
-    if not worker.available:
-        print("needs a Chrome ($CHROME or the usual paths), ffmpeg, and a built clip.html",
-              file=sys.stderr)
+    if not (config.frontend_dir and (config.frontend_dir / "plan.html").is_file()
+            and find_chrome()):
+        print("needs a Chrome ($CHROME or the usual paths) and a built plan.html", file=sys.stderr)
         server.should_exit = True
         return 1
-    worker.commentary_one(args.run_id)
+    try:
+        written = commentary.compose(app.state.store, args.run_id, lore=lore, provider=provider,
+                                     model=model, book=book)
+    except Rejected as why:
+        print(f"not on air: {why}", file=sys.stderr)
+        server.should_exit = True
+        return 1
+    with PlanTab(origin) as tab:
+        plan = tab.prepare({"run_id": args.run_id, "turns": written["turns"]})
+    made = book.put(args.run_id, {"turns": written["turns"], "lore_refs": written["lore_refs"]},
+                    plan, utcnow())
     server.should_exit = True
-    return 0 if app.state.store.commentary(args.run_id) else 1
+    print(f"broadcast {made.id} for {args.run_id}, {plan['duration_ms'] / 1000:.1f} s "
+          f"under {book.directory}")
+    return 0
 
 
 def _cmd_serve(args) -> int:

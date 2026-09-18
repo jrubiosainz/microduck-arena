@@ -1,4 +1,4 @@
-"""From the store to a checked dialogue, and the file the store keeps."""
+"""From the store to a checked dialogue."""
 
 import json
 
@@ -6,7 +6,6 @@ import pytest
 
 from arena.broadcasts import BroadcastBook
 from arena.commentary import (
-    commentary_json,
     compose,
     find_run,
     gather,
@@ -115,20 +114,3 @@ def test_compose_raises_rejected_and_find_run_raises_lookup(tmp_path):
             "prompt_tokens": 1, "completion_tokens": 1}, model="m", book=book)
     with pytest.raises(LookupError):
         find_run(store, "NOPE")
-
-
-def test_the_file_carries_dialogue_plan_facts_and_provenance():
-    written = {"run_id": "R1", "turns": [{"speaker": "peter", "text": "Hi.", "fact_refs": ["run#/event"]}],
-               "lore_refs": ["megaphone"], "model": "m", "usage": {"prompt_tokens": 1, "completion_tokens": 2},
-               "facts": [{"ref": "run#/event", "kind": "result", "text": "The event."}]}
-    plan = {"version": 1, "run_id": "R1", "duration_ms": 4000, "captions": [], "notes": [], "gestures": []}
-    body = json.loads(commentary_json(written, plan, "2026-09-17T14:02:11Z"))
-    assert body == {
-        "version": 1, "run_id": "R1", "written_at": "2026-09-17T14:02:11Z", "model": "m",
-        "usage": {"prompt_tokens": 1, "completion_tokens": 2},
-        "facts": [{"ref": "run#/event", "kind": "result", "text": "The event."}],
-        "dialogue": {"turns": written["turns"], "lore_refs": ["megaphone"]},
-        "plan": plan,
-    }
-    with pytest.raises(ValueError):
-        commentary_json(written, {**plan, "duration_ms": 4010}, "2026-09-17T14:02:11Z")

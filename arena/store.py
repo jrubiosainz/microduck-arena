@@ -23,9 +23,8 @@ _BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford, ULID-style
 _TAIL_BITS = 60  # 12 base32 chars
 
 # The files a ready clip holds beside its clip.json (arena/clips.py writes them,
-# routes_read.py serves them by these exact names). commentary.json is the one
-# of them that may be written again, by arena/commentary.
-CLIP_MEDIA = ("landscape.mp4", "vertical.mp4", "poster.png", "commentary.json")
+# routes_read.py serves them by these exact names).
+CLIP_MEDIA = ("landscape.mp4", "vertical.mp4", "poster.png")
 
 _id_lock = threading.Lock()
 _id_state = {"stamp": -1, "rand": 0}
@@ -317,8 +316,6 @@ class Store(Protocol):
     def clip_file(self, run_id: str, name: str) -> Path: ...
     def pending_clips(self) -> list[str]: ...
     def failed_clips(self) -> list[str]: ...
-    def put_commentary(self, run_id: str, blob: bytes) -> None: ...
-    def commentary(self, run_id: str) -> dict | None: ...
     def clips_ready(self) -> list[str]: ...
 
 
@@ -503,22 +500,6 @@ class LocalStore:
             folder.name for folder in directory.iterdir()
             if folder.is_dir() and self.clip_state(folder.name)[0] == "failed"
         )
-
-    # ── commentary.json: written with the clip or after it, and again if the
-    # text was bad. The file is read only under a ready clip, so a stray one
-    # can never put a booth on air without its replay.
-
-    def put_commentary(self, run_id: str, blob: bytes) -> None:
-        folder = self._clip_dir(run_id)
-        if not (folder / "clip.json").is_file():
-            raise FileNotFoundError(f"clip {run_id} is not ready; a commentary needs its clip")
-        (folder / "commentary.json").write_bytes(blob)
-
-    def commentary(self, run_id: str) -> dict | None:
-        path = self._clip_dir(run_id) / "commentary.json"
-        if not path.is_file() or self.clip_state(run_id)[0] != "ready":
-            return None
-        return json.loads(path.read_text())
 
     def clips_ready(self) -> list[str]:
         directory = self.root / "clips"
@@ -729,14 +710,6 @@ class HubStore:
 
     def failed_clips(self) -> list[str]:
         return self.snapshot().failed_clips()
-
-    def put_commentary(self, run_id: str, blob: bytes) -> None:
-        if not self.api.file_exists(self.repo_id, f"clips/{run_id}/clip.json", repo_type="dataset"):
-            raise FileNotFoundError(f"clip {run_id} is not ready in {self.repo_id}")
-        self._commit_clip_files(run_id, {"commentary.json": blob}, f"commentary {run_id}")
-
-    def commentary(self, run_id: str) -> dict | None:
-        return self.snapshot().commentary(run_id)
 
     def clips_ready(self) -> list[str]:
         return self.snapshot().clips_ready()
