@@ -4,7 +4,10 @@
 // end of that reply, never within five seconds of the end and never while the
 // partner speaks inside it; a speaker change never interrupts a shot.
 
-const BOOTH_TURN = Math.PI / 6;
+// How far the booth stands turned in the world, declared once: the set turns
+// by it, the camera reads it into world axes, and the ducks face a quarter
+// turn out of it.
+export const BOOTH_TURN = Math.PI / 6;
 
 export function shotsFor(plan) {
   const turns = [];

@@ -149,6 +149,22 @@ describe("attachMeshes against the real GLB", () => {
     expect(attached).toBe(wanted.length);
   });
 
+  it("names each attached mesh after its file, which is how the booth finds the beak", async () => {
+    // The booth hangs the lower beak on a pivot by picking `jaw.stl` and
+    // `jaw_soft.stl` out of the jaw body's children; drop the naming and the
+    // beak stops opening with nothing else to show for it.
+    const scene = await loadedScene();
+    const rig = buildRigTree(kinematics);
+    attachMeshes(rig, kinematics, scene);
+
+    const names = [];
+    rig.bodies.get("jaw_soft").children.forEach((child) => {
+      if (child.isMesh) names.push(child.name);
+    });
+    expect(names).toContain("jaw.stl");
+    expect(names).toContain("jaw_soft.stl");
+  });
+
   it("gives every attached geometry the normals a lit material needs", async () => {
     // THE bug this guards. A MeshStandardMaterial with no `normal` attribute
     // has no surface direction to light against, so the key, the fill, the

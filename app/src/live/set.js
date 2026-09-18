@@ -13,8 +13,7 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
 } from "three";
-
-export const BOOTH_TURN = Math.PI / 6;
+import { BOOTH_TURN } from "./direction.js";
 
 /** A design token as a three.js colour. */
 export function token(name) {

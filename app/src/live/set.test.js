@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BOOTH_TURN, booth } from "./set.js";
+import { BOOTH_TURN } from "./direction.js";
+import { booth } from "./set.js";
 
 describe("booth", () => {
   it("is Duck Jam's set, turned by a sixth of a turn, with every piece named", () => {
     const set = booth();
-    expect(set.rotation.z).toBeCloseTo(BOOTH_TURN);
+    expect(set.rotation.z).toBe(BOOTH_TURN);
     const names = set.children.map((mesh) => mesh.name);
     for (const piece of ["riser", "back wall", "pegboard", "desk top", "CRT cabinet", "CRT glass",
                          "equipment case", "fluorescent tube", "peg hole"]) {

@@ -25,9 +25,9 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { applyFrame } from "../replay.js";
 import { attachMeshes, buildRigTree, setJoint } from "../rig.js";
 import { loadAssets } from "../viewer.js";
-import { direct } from "./direction.js";
+import { BOOTH_TURN, direct } from "./direction.js";
 import { poseAt } from "./score.js";
-import { BOOTH_TURN, booth as buildSet, checkerboard, token } from "./set.js";
+import { booth as buildSet, checkerboard, token } from "./set.js";
 
 /** The STAND keyframe: arena/constants.py DEFAULT_POSE, in JOINT_NAMES order. */
 export const STAND = [
@@ -42,8 +42,8 @@ const TRUNK_HEIGHT = 0.12;
 const HEAD = { neck: ["neck_pitch", 5], pitch: ["head_pitch", 6], yaw: ["head_yaw", 7], roll: ["head_roll", 8] };
 // Where each duck stands along the desk, and which livery it wears.
 const SEATS = { peter: { x: -0.16, livery: "classic" }, ray: { x: 0.16, livery: "blue" } };
-// Facing the auditorium: the camera's own bearing from the desk.
-const FACING = -Math.PI / 3;
+// Facing the auditorium: a quarter turn out of the booth's own bearing.
+const FACING = BOOTH_TURN - Math.PI / 2;
 // The lower beak, hung on a pivot in the jaw body's frame, as Duck Jam's articulateMouth.
 const JAW_MESHES = new Set(["jaw.stl", "jaw_soft.stl"]);
 const JAW_PIVOT = [-0.008, 0, -0.025];
