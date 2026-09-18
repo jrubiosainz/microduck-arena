@@ -1,0 +1,107 @@
+"""The reserve: dialogues written before the grid needs them.
+
+A booth can only be laid once its dialogue exists, because the slot's length is
+the dialogue's length. So the writing runs ahead of the playhead: the reserve
+walks the order the next cycle will play and keeps the first few runs stocked.
+A run with nothing waiting simply gets no booth, which is a state the channel
+already knows how to be in.
+"""
+
+import threading
+import time
+
+from ..broadcasts import utcnow
+from ..live import cycle
+from .generator import Rejected
+
+DEPTH = 8  # runs kept stocked: about ten minutes of programme
+PER_HOUR = 120  # generation attempts, refusals included; steady state is about 80
+IDLE_S = 5.0  # how long to wait when every run in reach is stocked
+
+
+class CommentaryStock:
+    def __init__(self, book, tab, compose, pool, *, depth: int = DEPTH,
+                 per_hour: int = PER_HOUR, log=print, landed=lambda: None,
+                 now=time.monotonic, clock=utcnow):
+        self.book = book
+        self.tab = tab
+        self.compose = compose
+        self.pool = pool
+        self.depth = depth
+        self.per_hour = per_hour
+        self.log = log
+        self.landed = landed
+        self.now = now
+        self.clock = clock
+        self._attempts: list[float] = []
+        # Where the walk resumes: a refusal or a broken tab must not pin it on
+        # the same run forever, so the very next turn tries the one after it.
+        # A landed dialogue resets it — the front of the order is what matters.
+        self._cursor = 0
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    @property
+    def available(self) -> bool:
+        return self.tab is not None
+
+    def attempts_left(self) -> int:
+        edge = self.now() - 3600
+        self._attempts = [at for at in self._attempts if at > edge]
+        return max(0, self.per_hour - len(self._attempts))
+
+    def wanted(self) -> list[str]:
+        """The next runs to reach the screen that have no dialogue waiting."""
+        stocked = self.book.runs_stocked()
+        order = cycle(self.pool(), 0)
+        return [entry.run_id for entry in order if entry.run_id not in stocked][:self.depth]
+
+    def turn(self) -> str | None:
+        """One unit of work: at most one dialogue written. The run it wrote for,
+        or None when nothing was wanted, the cap is reached, or it was refused."""
+        self.book.sweep()
+        if not self.attempts_left():
+            return None
+        wanted = self.wanted()
+        if not wanted:
+            return None
+        index = self._cursor % len(wanted)
+        run_id = wanted[index]
+        self._attempts.append(self.now())
+        try:
+            written = self.compose(run_id)
+            plan = self.tab.prepare({"run_id": run_id, "turns": written["turns"]})
+        except Rejected as why:
+            # Half of them are refused on the real router. It is the audit
+            # doing its job, not a fault: the walk moves on to the next run.
+            self.log(f"commentary: {run_id} refused ({why})")
+            self._cursor = index + 1
+            return None
+        except Exception as exc:  # noqa: BLE001 — a dead browser raises whatever
+            # the websocket raised (ConnectionClosed is neither an OSError nor a
+            # RuntimeError), and nothing here may end the reserve's thread for
+            # the life of the process: the run is logged and the walk moves on.
+            self.log(f"commentary: {run_id} not written ({type(exc).__name__}: {exc})")
+            self._cursor = index + 1
+            return None
+        self._cursor = 0
+        self.book.put(run_id, {"turns": written["turns"], "lore_refs": written["lore_refs"]},
+                      plan, self.clock())
+        self.landed()
+        return run_id
+
+    def _work(self) -> None:
+        while not self._stop.is_set():
+            if self.turn() is None:
+                self._stop.wait(IDLE_S)
+
+    def start(self) -> None:
+        if self._thread is None:
+            self._thread = threading.Thread(target=self._work, name="arena-commentary",
+                                            daemon=True)
+            self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self.tab is not None:
+            self.tab.close()
