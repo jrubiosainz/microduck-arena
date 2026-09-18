@@ -79,13 +79,23 @@ describe("createChannel", () => {
     expect(replay.prepare).toHaveBeenCalledWith(slots[5]);
   });
 
-  it("covers a failed segment with the shutter until its slot ends", () => {
+  it("covers a failed segment with the shutter until its slot ends, the card still announcing it", () => {
+    now = 100; // the shutter that announces the replay
+    channel.tick();
     now = 2000;
     channel.tick();
     replay.failed = true;
     channel.tick();
-    expect(shutter.draw).toHaveBeenLastCalledWith(800, null);
+    expect(shutter.draw).toHaveBeenLastCalledWith(800, slots[0].next);
     expect(replay.seek).toHaveBeenCalledTimes(1);
+    // The shutter before the booth announces nothing, and neither does its hold.
+    now = 9700;
+    channel.tick();
+    now = 12000;
+    channel.tick();
+    booth.failed = true;
+    channel.tick();
+    expect(shutter.draw).toHaveBeenLastCalledWith(800, null);
   });
 
   it("is off air with no slot, halts and resumes, and rejoins after a refusal", () => {

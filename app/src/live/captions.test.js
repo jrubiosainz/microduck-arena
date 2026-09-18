@@ -21,8 +21,8 @@ describe("splitCaption", () => {
     expect(splitCaption(text, measure, 5000)).toHaveLength(2);
   });
 
-  it("refuses a caption no split can fit", () => {
-    expect(() => splitCaption("x".repeat(50) + " " + "y".repeat(50), measure, 400)).toThrow("Caption does not fit");
+  it("gives nothing back for a caption no split can fit", () => {
+    expect(splitCaption("x".repeat(50) + " " + "y".repeat(50), measure, 400)).toBeNull();
   });
 });
 
@@ -43,7 +43,7 @@ describe("createCaptions", () => {
     expect(panel.hidden).toBe(true);
   });
 
-  it("leaves the caption on screen untouched when the next one cannot fit", () => {
+  it("leaves the caption on screen untouched, and says nothing, when the next one cannot fit", () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext")
       .mockReturnValue({ measureText: (value) => ({ width: value.length * 10 }) });
     const container = document.createElement("div");
@@ -51,9 +51,16 @@ describe("createCaptions", () => {
     const panel = container.querySelector(".live-caption");
     captions.resize(1280);
     captions.show({ name: "Ray Quackson", text: "It is a number, Peter." });
-    expect(() => captions.show({ name: "Peter Duckry", text: "x".repeat(120) })).toThrow("Caption does not fit");
+    const wide = { name: "Peter Duckry", text: "x".repeat(120) };
+    // Every frame of that cue passes through here: a throw would cost the tick
+    // what comes after it, sixty times a second.
+    captions.show(wide);
+    captions.show(wide);
     expect(panel.hidden).toBe(false);
     expect(panel.querySelector(".live-caption-name").textContent).toBe("Ray Quackson");
     expect(panel.querySelector(".live-caption-text").textContent).toBe("It is a number, Peter.");
+    // And the cue after it is shown as if nothing had happened.
+    captions.show({ name: "Peter Duckry", text: "Twelve point four!" });
+    expect(panel.querySelector(".live-caption-text").textContent).toBe("Twelve point four!");
   });
 });

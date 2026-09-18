@@ -1,10 +1,12 @@
 // The caption panel under the booth: the charter's ink panel with a yellow
 // name tile and up to two lines. The split is Duck Jam's: 42 characters or
 // less stay on one line, longer ones break at the word boundary that
-// balances the two lines' widths.
+// balances the two lines' widths. A line the panel has no room for is not
+// drawn at all, and the panel keeps what it has.
 
 const ONE_LINE_CHARS = 42;
 
+/** The caption's one or two lines, or null when no split of it fits. */
 export function splitCaption(text, measure, maxWidth) {
   if (text.length <= ONE_LINE_CHARS && measure(text) <= maxWidth) return [text];
   const words = text.split(" ");
@@ -14,8 +16,7 @@ export function splitCaption(text, measure, maxWidth) {
     .map((lines) => ({ lines, widths: lines.map(measure) }))
     .filter(({ widths }) => widths.every((w) => w <= maxWidth))
     .sort((a, b) => Math.abs(a.widths[0] - a.widths[1]) - Math.abs(b.widths[0] - b.widths[1]));
-  if (!candidates.length) throw new Error("Caption does not fit");
-  return candidates[0].lines;
+  return candidates[0]?.lines ?? null;
 }
 
 export function createCaptions(container) {
@@ -45,6 +46,7 @@ export function createCaptions(container) {
       if (shown === cue) return;
       // Split before touching the panel: a caption that cannot fit leaves it as it was.
       const lines = ctx ? splitCaption(cue.text, measure, width - (96 * width) / 1280) : [cue.text];
+      if (!lines) return;
       shown = cue;
       name.textContent = cue.name;
       text.replaceChildren();

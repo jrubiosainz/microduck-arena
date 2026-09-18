@@ -14,6 +14,7 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
   let current = null; // the slot playing
   let previous = null; // the segment kept on screen under a shutter's sweep
   let uncovered = false;
+  let announcing = null; // what the last shutter's card named, kept for a segment that fails
   let halted = false;
   let reloading = false;
   let state = null; // what the page was last told, so it hears each state once
@@ -43,6 +44,7 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
       previous = segmentFor(current);
       current = slot;
       uncovered = false;
+      announcing = slot.next;
       if (offset < FRESH_MS) gust();
       return;
     }
@@ -86,7 +88,9 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
       } else {
         const segment = segmentFor(slot);
         if (segment.failed) {
-          shutter.draw(800, null);
+          // A clip withdrawn between two grid reads: the panel holds, still
+          // announcing it, until the next slot's scheduled time.
+          shutter.draw(800, announcing);
         } else {
           shutter.hide();
           segment.seek(offset);
