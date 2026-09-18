@@ -106,6 +106,13 @@ def test_the_writing_prompt_shape_example_shows_three_turns():
     assert [turn["speaker"] for turn in shape] == ["peter", "ray", "peter"]
 
 
+def test_a_code_fence_around_the_answer_is_dressing():
+    fenced = "```json\n" + json.dumps(TURNS) + "\n```"
+    provider = provider_for(reply(TURNS, content=fenced), reply(CHECK, completion_tokens=80))
+    written = write("R1", FACTS, RECENT, lore=LORE, provider=provider, model="m")
+    assert [t["text"] for t in written["turns"]] == [t["text"] for t in TURNS]
+
+
 @pytest.mark.parametrize("turns, why", [
     (TURNS[:2], "3 to 6 turns"),
     (TURNS * 3, "3 to 6 turns"),

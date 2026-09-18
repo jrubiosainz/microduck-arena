@@ -24,8 +24,11 @@ DEFAULT_RANK_BY = "policy"
 # HF's own default is 8 hours. Matching it means the cookie and the token expire
 # together, so there is no window where the session outlives its own token.
 DEFAULT_SESSION_TTL_S = 8 * 60 * 60
-# The router model that writes and audits the commentary. What Duck Jam ran.
-DEFAULT_COMMENTARY_MODEL = "Qwen/Qwen3.8-27B:cerebras"
+# The router model that writes and audits the commentary: the best of those
+# measured on the Space's own runs. No provider suffix, so the router picks
+# one that serves it. A model that thinks before answering spends the writer's
+# token budget on thoughts and is rejected as incomplete; pick an instruct one.
+DEFAULT_COMMENTARY_MODEL = "deepseek-ai/DeepSeek-V3-0324"
 
 
 @dataclass(frozen=True)
@@ -81,7 +84,7 @@ class ArenaConfig:
     # off switch for a running Space; no token turns it off with a boot line.
     commentary_enabled: bool = True
     # The router model that writes and audits them. ARENA_COMMENTARY_MODEL
-    # overrides; the default is what Duck Jam ran.
+    # overrides.
     commentary_model: str = DEFAULT_COMMENTARY_MODEL
 
     @classmethod

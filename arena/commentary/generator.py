@@ -204,6 +204,9 @@ def _ask(provider, system: str, user: dict, max_tokens: int) -> tuple:
     content = answer.get("content")
     if not isinstance(content, str) or len(content) > 4000:
         raise Rejected("invalid model content")
+    content = content.strip()
+    if content.startswith("```"):  # a code fence is dressing, not an answer
+        content = content.partition("\n")[2].rpartition("```")[0]
     try:
         return json.loads(content), answer
     except ValueError as exc:

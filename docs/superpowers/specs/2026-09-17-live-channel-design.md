@@ -367,7 +367,7 @@ over 42 characters, say) is logged and dropped: the clip is still published.
   "version": 1,
   "run_id": "01M2…",
   "written_at": "2026-09-17T14:02:11Z",
-  "model": "Qwen/Qwen3.8-27B:cerebras",
+  "model": "deepseek-ai/DeepSeek-V3-0324",
   "usage": { "prompt_tokens": 2310, "completion_tokens": 388 },
   "facts": [
     { "ref": "run#/score", "kind": "result", "text": "…" },
@@ -505,8 +505,9 @@ broadcasts.
 The Hugging Face router (`https://router.huggingface.co/v1/chat/completions`)
 with the Space's `HF_TOKEN`, or locally the token of the developer's Hub
 session (`huggingface_hub.get_token()`), model from `ARENA_COMMENTARY_MODEL` (default
-`Qwen/Qwen3.8-27B:cerebras`, the one Duck Jam ran), `temperature` 0.3, no
-provider failover, 15 s per call and one retry on a network error: the worker
+`deepseek-ai/DeepSeek-V3-0324`, the best of those measured on the Space's runs,
+with no provider suffix so the router picks one that serves it), `temperature`
+0.3, no provider failover in the code, 15 s per call and one retry on a network error: the worker
 is not real-time. `ARENA_COMMENTARY=0`, or no token, disables writing with one
 line at boot, like `clips off`. The input budget is 24 KiB, the recent
 broadcasts being the bulk of it; the writer's
@@ -588,9 +589,12 @@ points, the race pages, the publication page and its clips.
 - **Render time on cpu-basic** is still unmeasured; every clip on the Space was
   rendered on a Mac. The commentary step adds two LLM calls and one `prepare`,
   seconds, not minutes.
-- **The model id.** `Qwen/Qwen3.8-27B:cerebras` is what Duck Jam's reviews
-  ran on the router in September 2026; if the router drops it, `ARENA_COMMENTARY_MODEL`
-  is the switch and the `--dry-run` is the check.
+- **The model id.** `deepseek-ai/DeepSeek-V3-0324` answered the router in
+  September 2026, a few seconds a call and now and then more than the 15 s
+  allowed; if the router drops it, `ARENA_COMMENTARY_MODEL` is the switch and
+  the `--dry-run` is the check. A model that thinks before it answers spends
+  the writer's 900 tokens on thoughts and is rejected as incomplete.
+  `Qwen/Qwen3.8-27B:cerebras`, which Duck Jam ran, still works and is faster.
 - **Callbacks and shuffled order.** A callback that sounds like "a minute ago"
   would be wrong on air; the rule and the audit guard it, and the recent
   broadcasts are the only source of callbacks.
