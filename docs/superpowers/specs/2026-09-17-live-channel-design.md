@@ -466,19 +466,28 @@ time none fits. Every memory used is recorded in `dialogue.lore_refs`.
 ### Continuity
 
 The five most recent `commentary.json` files by `written_at` (excluding the run
-being written) go into the prompt as "your recent broadcasts": each one's
-result facts in one line and its turns. Two rules come with them: never reuse a
-phrasing or a memory from them, and callbacks may refer to those runs as
-"earlier this season", never as a moment ago or as the previous item, because
-the channel plays its cycles in a shuffled order. Every callback cites the
-recent fact's ref (`recent:<run_id>`) so the audit can check it.
+being written) are "your recent broadcasts": each one's result facts in one
+line, and its turns. The writer receives the facts only, the audit the facts
+and the turns. Measured on the Space's runs, a writer shown the recent turns
+writes the next dialogue in their shape, whatever it is told (a fifth to a half
+of the sentences on air were repeats, against two or three in a hundred without
+them), so the wording goes to the audit alone, which refuses a rehash. Callbacks may
+refer to those runs as "earlier this season", never as a moment ago or as the
+previous item, because the channel plays its cycles in a shuffled order. Every
+callback cites the recent fact's ref (`recent:<run_id>`) so the audit can check
+it.
+
+Variety of shape does not come from asking for it either. Each run draws a
+direction from its id (`direction(run_id)`: how Peter opens, the angle, where
+the joke sits, how it ends, the number of turns), the same one every time that
+run is written, and the writer's prompt carries it.
 
 ### The prompt and the contract
 
 `arena/commentary/generator.py` is Duck Jam's `generator.py` ported. The system
 prompt carries the booth context, both character sheets, the grounding rules,
-the identity indices for every name, the recent broadcasts, the selected
-memories, and the output shape. The user message is the JSON list of facts.
+the run's direction, the identity indices for every name, and the output shape.
+The user message is the JSON list of facts, the selected memories among them.
 
 Output: a JSON array of 3 to 6 turns, alternating `peter` then `ray`, each
 `{speaker, text, fact_refs}`, text in English of 1 to 240 printable characters,

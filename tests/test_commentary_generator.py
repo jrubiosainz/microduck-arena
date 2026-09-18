@@ -12,6 +12,7 @@ from arena.commentary.generator import (
     WRITE_LIMIT,
     Rejected,
     complete,
+    direction,
     write,
 )
 from arena.commentary.lore import load
@@ -89,8 +90,9 @@ def test_a_checked_dialogue_keeps_the_prose_and_maps_indices_to_references():
     user = json.loads(write_messages[1]["content"])
     assert [f["index"] for f in user["facts"]] == list(range(6))
     assert user["facts"][4]["memory"] is True
-    assert user["recent_broadcasts"] == [{"index": 5, "turns": RECENT[0]["turns"]}]
+    assert "recent_broadcasts" not in user
     audit = json.loads(check_messages[1]["content"])
+    assert audit["recent_broadcasts"] == [{"index": 5, "turns": RECENT[0]["turns"]}]
     assert audit["dialogue"] == TURNS
 
 
@@ -104,6 +106,17 @@ def test_the_writing_prompt_shape_example_shows_three_turns():
     end = system.index("]. ", start) + 1
     shape = json.loads(system[start:end])
     assert [turn["speaker"] for turn in shape] == ["peter", "ray", "peter"]
+
+
+def test_a_run_draws_its_own_direction_and_always_the_same_one():
+    # Left to itself the writer gives every dialogue the same shape; the run's
+    # id picks the opening, the angle, the joke, the ending and the length.
+    assert direction("R1") == direction("R1")
+    assert len({direction(f"R{i}") for i in range(50)}) > 25
+    _, provider = run_case()
+    (write_messages, _), (check_messages, _) = provider.calls
+    assert direction("R1") in write_messages[0]["content"]
+    assert direction("R1") not in check_messages[0]["content"]
 
 
 def test_a_code_fence_around_the_answer_is_dressing():
