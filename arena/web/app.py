@@ -113,6 +113,13 @@ def create_app(config: ArenaConfig) -> FastAPI:
             # must never wait on a router call.
             app.state.commentary.start()
 
+        @app.on_event("shutdown")
+        def _close_the_booth() -> None:
+            # The reserve's browser is killed rather than asked to leave, and
+            # its profile directory goes with it: neither outlives the process
+            # that opened them.
+            app.state.commentary.stop()
+
     @app.get("/api/health")
     def health() -> dict:
         return {

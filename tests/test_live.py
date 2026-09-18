@@ -381,6 +381,40 @@ def test_an_app_holds_a_reserve(tmp_path):
     assert app.state.commentary is not None
 
 
+def test_the_reserve_is_closed_when_the_app_stops(tmp_path, monkeypatch):
+    """`arena serve` on a developer machine is stopped with a Ctrl-C, and the
+    reserve's Chrome and its profile directory would outlive it."""
+    import arena.commentary as booth
+    from arena import recorder
+
+    bundle = tmp_path / "dist"
+    bundle.mkdir()
+    (bundle / "index.html").write_text("<!doctype html><title>arena</title>")
+    (bundle / "plan.html").write_text("<!doctype html><title>plan</title>")
+    monkeypatch.setenv("ARENA_COMMENTARY", "1")  # conftest turns the booth off
+    monkeypatch.setattr(booth, "hub_token", lambda config: "a token")
+    monkeypatch.setattr(recorder, "find_chrome", lambda: "/chrome")
+    app = create_app(ArenaConfig.from_env(store_dir=tmp_path / "store", frontend_dir=bundle))
+    assert app.state.commentary.available
+
+    class Reserve:
+        def __init__(self):
+            self.stopped = False
+
+        def start(self):
+            pass
+
+        def stop(self):
+            self.stopped = True
+
+    # Stood in after the wiring, so no thread and no browser is started here;
+    # the hooks read app.state when they run.
+    app.state.commentary = Reserve()
+    with TestClient(app):
+        pass
+    assert app.state.commentary.stopped
+
+
 def test_the_reserve_is_not_available_when_writing_is_off(tmp_path, monkeypatch):
     monkeypatch.setenv("ARENA_COMMENTARY", "0")
     config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
