@@ -8,6 +8,7 @@ and live far too briefly to belong there.
 """
 
 import json
+import os
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -91,8 +92,14 @@ class BroadcastBook:
         return found
 
     def _write(self, broadcast: Broadcast) -> None:
-        self._path(broadcast.id).write_text(
-            json.dumps(broadcast.body(), indent=2, ensure_ascii=False))
+        # Written beside the file it becomes and then renamed over it, which is
+        # one atomic step: a process killed mid-write leaves no truncated
+        # broadcast, which every reader would skip and the sweep would never
+        # delete, and no reader ever sees half a body.
+        path = self._path(broadcast.id)
+        writing = path.with_suffix(".writing")
+        writing.write_text(json.dumps(broadcast.body(), indent=2, ensure_ascii=False))
+        os.replace(writing, path)
 
     def put(self, run_id: str, dialogue: dict, plan: dict, written_at: str) -> Broadcast:
         if plan["duration_ms"] % 40:

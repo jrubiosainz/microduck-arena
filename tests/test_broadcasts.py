@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from arena.broadcasts import BroadcastBook
 
 
@@ -139,3 +141,23 @@ def test_a_plan_no_slot_could_be_cut_to_is_read_around(tmp_path):
         assert book.unaired(f"run-{broadcast_id}") is None
     assert book.runs_stocked() == {"run-a"}
     assert book.get(kept.id) is not None
+
+
+def test_a_write_the_process_does_not_live_through_leaves_the_book_whole(tmp_path, monkeypatch):
+    """Truncating the broadcast in place left a body every reader skipped and
+    the sweep — which only ever saw broadcasts it could read — never deleted:
+    an orphan for as long as the directory lasts. The body goes down beside the
+    file and is renamed onto it, so the only moment a kill can land in leaves
+    the old one standing."""
+    book = BroadcastBook(tmp_path)
+    made = book.put("run-a", dialogue("run-a"), plan(), "2026-09-18T09:00:00Z")
+
+    def killed(_writing, _path):
+        raise KeyboardInterrupt("the Space was redeployed")
+
+    monkeypatch.setattr("arena.broadcasts.os.replace", killed)
+    with pytest.raises(KeyboardInterrupt):
+        book.mark_aired(made.id, "2026-09-18T09:05:00Z")
+
+    assert book.get(made.id).aired_at is None
+    assert [path.name for path in tmp_path.glob("*.json")] == [f"{made.id}.json"]
