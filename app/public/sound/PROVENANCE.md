@@ -39,9 +39,10 @@ closing sections explain.
 | `commentator-peter.f32` | 0.60 s | The booth: Peter Duckry's one note, sung once per syllable of his lines. | Apache-2.0 (see below) |
 | `commentator-ray.f32` | 0.60 s | The booth: Ray Quackson's one note. | Apache-2.0 (see below) |
 
-`app/src/sound.js` is the only code that plays them. `app/src/live/voice.js` plays the two
-tones. The booth plays from a click; the publication page's reveal may start from a deep link
-with no gesture yet, and a play the browser refuses is silence, never an error.
+`app/src/sound.js` plays the cues; `app/src/live/voice.js` plays the two tones. The booth's
+sound starts whenever the browser lets an audio context run: at once on a kiosk or in OBS,
+late on a slow device, or on the viewer's click. The publication page's reveal may start from
+a deep link with no gesture yet, and a play the browser refuses is silence, never an error.
 
 ## The air horn
 
@@ -58,7 +59,8 @@ tones with `design/sound/commentators.rs` and `commentator-voice.rs` at Duck Jam
 raw 48 kHz mono float32, no header) from
 [pollen-robotics/microduck, sounds](https://github.com/pollen-robotics/microduck/tree/e597877c5a9460f4c3837dc3cdab088705212c5d/sounds),
 revision `e597877c5a9460f4c3837dc3cdab088705212c5d`, then modifies the recipe (victory) or the
-audio (fall). That synthesiser is Apache-2.0 — `MICRODUCK-LICENSE.txt` beside them is its
-licence — so these four files travel with it, not with the CC0 dedication above.
+audio (fall); the two tones are that synthesiser's own output, unmodified. It is Apache-2.0 —
+`MICRODUCK-LICENSE.txt` beside them is its licence — so these four files travel with it, not
+with the CC0 dedication above.
 `microduck-victory-echo.mp3` is Nicolas Rabault's echo of `microduck-victory.wav`, made for the
 clip on 2026-09-17, and travels with it.

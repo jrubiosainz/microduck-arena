@@ -7,10 +7,7 @@ const WINDOW = 5;
 
 export function estimateClock(samples) {
   const best = samples.reduce((a, b) => (b.after - b.before < a.after - a.before ? b : a));
-  return {
-    offset: best.server - (best.before + best.after) / 2,
-    uncertainty: (best.after - best.before) / 2,
-  };
+  return { offset: best.server - (best.before + best.after) / 2 };
 }
 
 export function createClock(now = () => Date.now()) {

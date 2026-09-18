@@ -3,13 +3,12 @@ import { createClock, estimateClock } from "./clock.js";
 
 describe("estimateClock", () => {
   it("trusts the sample with the smallest round trip", () => {
-    const { offset, uncertainty } = estimateClock([
+    const { offset } = estimateClock([
       { before: 1000, after: 1400, server: 5200 },
       { before: 2000, after: 2040, server: 6030 },
       { before: 3000, after: 3200, server: 7100 },
     ]);
     expect(offset).toBe(6030 - 2020);
-    expect(uncertainty).toBe(20);
   });
 });
 

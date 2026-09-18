@@ -86,4 +86,3 @@ html, body { margin: 0; height: 100%; background: var(--deep-ink); color: var(--
 .live-upnext-event { font: 400 calc(64 * var(--u)) / 1 var(--display); text-transform: uppercase; }
 .live-upnext-user { font-size: calc(28 * var(--u)); color: var(--sky-inked); }
 
-[hidden] { display: none !important; }

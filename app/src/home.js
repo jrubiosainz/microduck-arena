@@ -120,7 +120,10 @@ export function liveTile(grid) {
 }
 
 export async function renderHome(root) {
-  const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
+  // The channel's grid is read with the rest, once: it is a way in, not a monitor.
+  const [events, standings, me, grid] = await Promise.all([
+    getEvents(), getStandings(), getMe(), getLive().catch(() => null),
+  ]);
   root.replaceChildren(signage(me));
   const hall = el("main", "hall");
   root.append(hall, footer());
@@ -137,8 +140,6 @@ export async function renderHome(root) {
   );
   hall.append(door);
 
-  // A door to the channel, read once: it is a way in, not a monitor.
-  const grid = await getLive().catch(() => null);
   const onAir = grid && liveTile(grid);
   if (onAir) door.append(onAir);
 
