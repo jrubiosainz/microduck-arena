@@ -2,7 +2,7 @@
 
 import time
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/api")
@@ -20,3 +20,12 @@ def live(request: Request) -> JSONResponse:
          "origin_ms": programme.origin_ms, "slots": programme.slots()},
         headers={"Cache-Control": "no-store"},
     )
+
+
+@router.get("/live/broadcast/{broadcast_id}")
+def broadcast(broadcast_id: str, request: Request) -> dict:
+    """The dialogue a booth slot names, and the plan that plays it."""
+    one = request.app.state.broadcasts.get(broadcast_id)
+    if one is None:
+        raise HTTPException(status_code=404, detail="no such broadcast")
+    return {"dialogue": one.dialogue, "plan": one.plan}

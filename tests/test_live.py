@@ -308,6 +308,27 @@ def test_the_route_serves_the_clock_the_build_and_the_window(tmp_path):
     assert body["slots"][0]["at_ms"] <= body["now_ms"]
 
 
+def test_a_broadcast_is_served_by_its_id(tmp_path):
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
+    app = create_app(config)
+    api = TestClient(app)
+    made = app.state.broadcasts.put(
+        "run-a", {"run_id": "run-a", "turns": [{"speaker": "peter", "text": "Well.",
+                                                "fact_refs": []}], "lore_refs": []},
+        {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
+        "2026-09-18T09:00:00Z")
+    answer = api.get(f"/api/live/broadcast/{made.id}")
+    assert answer.status_code == 200
+    assert answer.json()["plan"]["duration_ms"] == 4000
+    assert answer.json()["dialogue"]["turns"][0]["text"] == "Well."
+
+
+def test_an_unknown_broadcast_is_a_404(tmp_path):
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
+    api = TestClient(create_app(config))
+    assert api.get("/api/live/broadcast/nope").status_code == 404
+
+
 def test_an_app_holds_a_broadcast_book(tmp_path):
     config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
     app = create_app(config)
