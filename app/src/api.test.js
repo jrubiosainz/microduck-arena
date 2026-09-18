@@ -4,7 +4,7 @@ import {
   clipUrl,
   getBallot,
   getBallotTrace,
-  getCommentary,
+  getBroadcast,
   getLeaderboard,
   getLive,
   getPlayer,
@@ -147,20 +147,20 @@ describe("the channel", () => {
     expect(fetch.mock.calls[0]).toEqual(["/api/live", { cache: "no-store" }]);
   });
 
-  it("returns a run's commentary", async () => {
-    respondWith({ body: { dialogue: [], plan: [] } });
-    expect(await getCommentary("01ABC")).toEqual({ dialogue: [], plan: [] });
-    expect(fetch.mock.calls[0][0]).toBe("/api/runs/01ABC/clip/commentary.json");
+  it("fetches a broadcast by its id", async () => {
+    const calls = [];
+    globalThis.fetch = async (url, init) => {
+      calls.push([url, init]);
+      return { ok: true, json: async () => ({ dialogue: { turns: [] }, plan: { duration_ms: 4000 } }) };
+    };
+    const body = await getBroadcast("01M2K");
+    expect(calls[0][0]).toBe("/api/live/broadcast/01M2K");
+    expect(body.plan.duration_ms).toBe(4000);
   });
 
-  it("returns null for a run with no booth", async () => {
-    respondWith({ ok: false, status: 404, body: { detail: "no commentary for '01ABC'" } });
-    expect(await getCommentary("01ABC")).toBeNull();
-  });
-
-  it("still surfaces any other failure as the server's sentence", async () => {
-    respondWith({ ok: false, status: 500, body: { detail: "store unreadable" } });
-    await expect(getCommentary("01ABC")).rejects.toThrow("store unreadable");
+  it("gives nothing for a broadcast that is gone", async () => {
+    globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({}) });
+    expect(await getBroadcast("gone")).toBe(null);
   });
 
   it("addresses a clip's files under the run", () => {

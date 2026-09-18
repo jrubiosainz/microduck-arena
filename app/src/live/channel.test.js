@@ -9,7 +9,7 @@ const slots = [
   { kind: "shutter", at_ms: 0, duration_ms: 1600, next: { run_id: "A", event: "2 m Sprint", user: "carol" } },
   { kind: "replay", at_ms: 1600, duration_ms: 8000, run_id: "A" },
   { kind: "shutter", at_ms: 9600, duration_ms: 1600, next: null },
-  { kind: "booth", at_ms: 11200, duration_ms: 20000, run_id: "A" },
+  { kind: "booth", at_ms: 11200, duration_ms: 20000, run_id: "A", broadcast: "b1" },
   { kind: "shutter", at_ms: 31200, duration_ms: 1600, next: { run_id: "B", event: "2 m Sprint", user: "dan" } },
   { kind: "replay", at_ms: 32800, duration_ms: 8000, run_id: "B" },
 ];
