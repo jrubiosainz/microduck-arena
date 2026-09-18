@@ -7,7 +7,8 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    // Two pages: the app, and the clip the recorder photographs.
+    // Three pages: the app, the clip the recorder photographs, and the plan
+    // the booth's dialogue is timed by.
     rollupOptions: { input: { main: page("index.html"), clip: page("clip.html"), plan: page("plan.html") } },
   },
   // `npm run dev` serves the UI on 5173 with hot reload and forwards the API to

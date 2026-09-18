@@ -9,7 +9,17 @@ import numpy as np
 from fastapi.testclient import TestClient
 
 from arena.broadcasts import BroadcastBook
-from arena.live import HEAD, KEEP_MS, SHUTTER_MS, Entry, Programme, cycle, pool, slots_for
+from arena.live import (
+    BEHIND_MS,
+    HEAD,
+    KEEP_MS,
+    SHUTTER_MS,
+    Entry,
+    Programme,
+    cycle,
+    pool,
+    slots_for,
+)
 from arena.store import LocalStore, Withdrawal
 from arena.trace import encode
 from arena.web.app import create_app
@@ -86,9 +96,6 @@ def test_slots_are_shutter_replay_and_a_booth_only_with_a_broadcast_waiting(tmp_
 
 
 def test_a_run_with_no_broadcast_gets_a_replay_and_no_booth(tmp_path):
-    from arena.broadcasts import BroadcastBook
-    from arena.live import Entry, slots_for
-
     book = BroadcastBook(tmp_path)
     entries = [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)]
     laid = slots_for(entries, 0, book)
@@ -96,9 +103,6 @@ def test_a_run_with_no_broadcast_gets_a_replay_and_no_booth(tmp_path):
 
 
 def test_a_run_with_a_broadcast_gets_its_booth_at_the_plan_s_length(tmp_path):
-    from arena.broadcasts import BroadcastBook
-    from arena.live import Entry, slots_for
-
     book = BroadcastBook(tmp_path)
     made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
                     {"duration_ms": 41400, "captions": [], "notes": [], "gestures": []},
@@ -113,15 +117,12 @@ def test_a_run_with_a_broadcast_gets_its_booth_at_the_plan_s_length(tmp_path):
 
 
 def test_one_broadcast_is_laid_once_even_when_the_run_comes_round_twice(tmp_path):
-    from arena.broadcasts import BroadcastBook
-    from arena.live import Entry, slots_for
-
     book = BroadcastBook(tmp_path)
     book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
              {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
              "2026-09-18T09:00:00Z")
-    entry = Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)
-    laid = slots_for([entry, entry], 0, book)
+    twice = Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)
+    laid = slots_for([twice, twice], 0, book)
     assert [slot["kind"] for slot in laid] == [
         "shutter", "replay", "shutter", "booth", "shutter", "replay"]
 
@@ -129,9 +130,6 @@ def test_one_broadcast_is_laid_once_even_when_the_run_comes_round_twice(tmp_path
 def test_a_playing_booth_is_never_handed_to_a_second_slot(tmp_path):
     """The bug this guards: a broadcast stays unaired until its slot ends, so a
     rebuild that re-reads the book would lay the playing booth again."""
-    from arena.broadcasts import BroadcastBook
-    from arena.live import Entry, slots_for
-
     book = BroadcastBook(tmp_path)
     made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
@@ -179,11 +177,14 @@ def test_the_programme_extends_to_the_horizon_and_serves_a_window_around_now(tmp
     slots = programme.slots()
     assert slots[0]["at_ms"] == 10_000_000
     assert slots[-1]["at_ms"] + slots[-1]["duration_ms"] >= 10_000_000 + 300_000
-    # Neither run has a broadcast waiting, so one cycle of these two is just
-    # their shutters and replays: 19.2 s.
+    # The window served reaches BEHIND_MS back, and a slot is served while any
+    # of it is still inside that window — so the first one served can have
+    # started up to its own length before the window opens. Neither run has a
+    # broadcast waiting, so one cycle of these two is just their shutters and
+    # replays, 19.2 s, and the longest slot in it is an 8 s replay.
     clock.ms += 400_000
     later = programme.slots()
-    assert later[0]["at_ms"] >= clock.ms - 60_000 - 21_600
+    assert later[0]["at_ms"] >= clock.ms - BEHIND_MS - 8_000
     assert all(s["at_ms"] <= clock.ms + 300_000 for s in later)
     assert later[-1]["at_ms"] + later[-1]["duration_ms"] >= clock.ms + 300_000
 
@@ -243,9 +244,6 @@ def test_an_empty_pool_is_off_air_until_something_lands(tmp_path):
 
 
 def test_a_booth_whose_slot_has_passed_is_marked_aired(tmp_path):
-    from arena.broadcasts import BroadcastBook
-    from arena.live import Entry, Programme
-
     book = BroadcastBook(tmp_path)
     made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
@@ -265,9 +263,6 @@ def test_a_booth_is_marked_aired_even_though_its_slot_would_have_been_pruned(tmp
     """KEEP_MS is 120 000. A jump past the booth's end by more than that would
     let `slots()` prune the slot before it is marked, if `_mark_aired` ran
     after the prune instead of before it."""
-    from arena.broadcasts import BroadcastBook
-    from arena.live import Entry, Programme
-
     book = BroadcastBook(tmp_path)
     made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},

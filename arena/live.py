@@ -11,7 +11,7 @@ import random
 import threading
 from dataclasses import dataclass
 
-from .broadcasts import utcnow
+from .broadcasts import BroadcastBook, utcnow
 from .manifest import all_events
 
 SHUTTER_MS = 1600
@@ -63,7 +63,8 @@ def cycle(entries: list[Entry], k: int) -> list[Entry]:
     return head + rest
 
 
-def slots_for(entries: list[Entry], start_ms: int, book, claimed: set[str] | None = None) -> list[dict]:
+def slots_for(entries: list[Entry], start_ms: int, book: BroadcastBook,
+              claimed: set[str] | None = None) -> list[dict]:
     slots: list[dict] = []
     at = start_ms
     # One waiting dialogue is one booth. `claimed` carries the broadcasts the
