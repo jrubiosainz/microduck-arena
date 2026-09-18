@@ -352,6 +352,20 @@ def test_the_broadcast_book_lives_where_arena_broadcasts_says(tmp_path, monkeypa
     assert app.state.broadcasts.directory == home
 
 
+def test_an_app_holds_a_reserve(tmp_path):
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
+    app = create_app(config)
+    assert app.state.commentary is not None
+
+
+def test_the_reserve_is_not_available_when_writing_is_off(tmp_path, monkeypatch):
+    monkeypatch.setenv("ARENA_COMMENTARY", "0")
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
+    app = create_app(config)
+    assert app.state.booth_off == "ARENA_COMMENTARY=0"
+    assert not app.state.commentary.available
+
+
 def test_the_build_is_the_hash_of_the_index_it_serves(tmp_path):
     """A page that has run for days reloads when this changes, so it must be
     the bundle's own identity and not merely something truthy."""

@@ -77,12 +77,12 @@ def create_app(config: ArenaConfig) -> FastAPI:
             def writer(run_id: str) -> dict:
                 return commentary.compose(
                     app.state.store, run_id, lore=lore, provider=provider,
-                    model=config.commentary_model,
+                    model=config.commentary_model, book=app.state.broadcasts,
                 )
 
     app.state.clips = ClipRenderer(
         app.state.store, config.origin, config.frontend_dir, config.clip_parallel,
-        enabled=config.clips_enabled, backfill=config.clip_backfill, commentary=writer,
+        enabled=config.clips_enabled, backfill=config.clip_backfill,
         landed=lambda run_id: app.state.programme.invalidate(),
     )
     if config.clip_worker and app.state.clips.available:
@@ -91,6 +91,27 @@ def create_app(config: ArenaConfig) -> FastAPI:
             # A thread, as recovery is: a render is minutes of CPU and the
             # health check cannot wait for it.
             app.state.clips.start()
+
+    from ..commentary.stock import CommentaryStock
+    from ..commentary.tab import PlanTab
+    from ..recorder import find_chrome
+
+    # No Chrome or no built plan page is a supported setup — a developer
+    # machine — not an error, the same as the clip renderer a few lines up:
+    # the channel then plays replays with no booths. Without this, a machine
+    # with no bundle would loop forever on a page with no window.plan.
+    plan_page = config.frontend_dir and (config.frontend_dir / "plan.html").is_file()
+    tab = PlanTab(config.origin) if writer and plan_page and find_chrome() else None
+    app.state.commentary = CommentaryStock(
+        app.state.broadcasts, tab, writer, lambda: pool(app.state.store),
+        landed=lambda: app.state.programme.invalidate(),
+    )
+    if app.state.commentary.available:
+        @app.on_event("startup")
+        def _stock_the_booth() -> None:
+            # A thread, daemon, one generation at a time: the health check
+            # must never wait on a router call.
+            app.state.commentary.start()
 
     @app.get("/api/health")
     def health() -> dict:
