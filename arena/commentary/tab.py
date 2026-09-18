@@ -15,6 +15,8 @@ Being the only tab is what does.
 import json
 import time
 
+from websockets.exceptions import ConnectionClosed
+
 from ..recorder import Chrome, find_chrome
 
 # The plan page draws nothing; the size only has to be a size.
@@ -54,10 +56,14 @@ class PlanTab:
         asking = f"window.plan({json.dumps(dialogue)})"
         try:
             return self._tab.evaluate(asking)
-        except (ConnectionError, OSError, RuntimeError):
-            # A browser that died under us — killed by the host, out of memory —
-            # is replaced once. A second failure is the machine talking, and the
-            # reserve's caller logs it and tries the next run.
+        except (ConnectionClosed, OSError):
+            # A closed socket and a socket error are the two shapes a dead
+            # browser actually takes — killed by the host, out of memory — and
+            # nothing else: a `RuntimeError` here is the page's own JS
+            # throwing over a dialogue it cannot time, and relaunching a live
+            # browser over that would just hand the same error back. A dead
+            # browser is replaced once; a second failure is the machine
+            # talking, and the reserve's caller logs it and tries the next run.
             self.close()
             self._open()
             return self._tab.evaluate(asking)

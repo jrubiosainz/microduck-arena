@@ -1,4 +1,5 @@
 import pytest
+from websockets.exceptions import ConnectionClosedError
 
 from arena.commentary.tab import PlanTab
 
@@ -19,7 +20,7 @@ class FakeTab:
         if expression == READY:
             return True
         if not self.alive:
-            raise ConnectionError("socket is closed")
+            raise ConnectionClosedError(None, None)
         self.asked.append(expression)
         return PLAN
 
@@ -90,8 +91,28 @@ def test_a_second_failure_in_a_row_is_raised(monkeypatch):
             return made
 
     monkeypatch.setattr("arena.commentary.tab.Chrome", AlwaysDead)
-    with PlanTab("http://127.0.0.1:8000", binary="/chrome") as tab, pytest.raises(ConnectionError):
+    with PlanTab("http://127.0.0.1:8000", binary="/chrome") as tab, pytest.raises(ConnectionClosedError):
         tab.prepare({"run_id": "a", "turns": []})
+
+
+def test_a_dialogue_the_page_cannot_time_is_not_mistaken_for_a_dead_browser(monkeypatch):
+    class Untypeable(FakeTab):
+        def evaluate(self, expression, await_promise=False, timeout=60.0):
+            if expression == READY:
+                return True
+            raise RuntimeError("TypeError: turns is not iterable")
+
+    class OneBadTab(FakeChrome):
+        def tab(self, width, height):
+            made = Untypeable()
+            self.tabs.append(made)
+            return made
+
+    monkeypatch.setattr("arena.commentary.tab.Chrome", OneBadTab)
+    with PlanTab("http://127.0.0.1:8000", binary="/chrome") as tab, \
+            pytest.raises(RuntimeError, match="turns is not iterable"):
+        tab.prepare({"run_id": "a", "turns": None})
+    assert FakeChrome.made == 1
 
 
 def test_closing_closes_the_browser(monkeypatch):
