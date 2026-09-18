@@ -253,6 +253,11 @@ def test_a_landing_every_minute_still_walks_the_cycle_to_its_end(tmp_path):
     # Seven passes over the pool and a little more: every run has had seven or
     # eight turns on the screen, and none of them has taken it from the others.
     assert max(shown.values()) <= 2 * min(shown.values())
+    # And the place the grid keeps is not a log of everything that has played:
+    # it holds the cycle playing now and the entries laid ahead of it — some
+    # thirty of them for eight runs and a five-minute horizon — whether the
+    # process has been up twelve minutes or a fortnight.
+    assert len(programme._laid) < 60
 
 
 def test_an_idle_gap_is_not_built_cycle_by_cycle(tmp_path):
@@ -485,6 +490,14 @@ def test_a_landed_clip_and_a_withdrawal_rebuild_the_future(spaced):  # noqa: F81
     ready(app, "B", user="bob")
     app.state.clips.landed("B")
     assert {s.get("run_id") for s in api.get("/api/live").json()["slots"]} >= {"A", "B"}
+    # Three more, so the horizon is reached with the cycle being walked only
+    # part laid: a withdrawal has to reach the entries still to come as well as
+    # the slots already on the grid.
+    for run_id in ("C", "D", "E"):
+        ready(app, run_id)
+        app.state.clips.landed(run_id)
+    served = {s.get("run_id") for s in api.get("/api/live").json()["slots"]}
+    assert served >= {"A", "B", "C", "D", "E"}
     sign_in(api, app, "bob")
     assert api.post("/api/runs/B/withdraw").status_code == 200
     slots = api.get("/api/live").json()["slots"]
