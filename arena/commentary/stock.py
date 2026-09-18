@@ -101,8 +101,18 @@ class CommentaryStock:
         return run_id
 
     def _work(self) -> None:
+        # The reserve outlives every failure, the way the clip worker does, or
+        # the writing ends for the life of the process while the boot line still
+        # says the booth is on. A turn is not only the generation: it sweeps the
+        # book and reads the pool, which on the Space is the Hub — one 429, one
+        # expired token, one network blip, and this thread would be gone.
         while not self._stop.is_set():
-            if self.turn() is None:
+            try:
+                wrote = self.turn()
+            except Exception as exc:  # noqa: BLE001 — see above
+                self.log(f"commentary: the reserve lost a turn ({type(exc).__name__}: {exc})")
+                wrote = None
+            if wrote is None:
                 self._stop.wait(IDLE_S)
 
     def start(self) -> None:

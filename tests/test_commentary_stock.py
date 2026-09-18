@@ -223,3 +223,30 @@ def test_it_sweeps_what_has_aged_out(tmp_path):
     worker.turn()
     assert book.get(first.id) is None
     assert book.get(second.id) is not None
+
+
+def test_a_store_error_costs_a_turn_and_not_the_whole_reserve(tmp_path, monkeypatch):
+    """`wanted()` reads the pool, which on the Space is the Hub, and it runs
+    before a single dialogue is composed. One error there — a 429, an expired
+    token — must cost one turn and be logged, not end the loop for the life of
+    the process while the boot line still says the booth is on."""
+    monkeypatch.setattr("arena.commentary.stock.IDLE_S", 0)
+    said = []
+    reads = []
+
+    def pool():
+        reads.append(len(reads))
+        if not reads[-1]:
+            raise OSError("429 Too Many Requests")
+        if reads[-1] > 1:
+            worker._stop.set()
+        return entries("a")
+
+    book = BroadcastBook(tmp_path)
+    worker = CommentaryStock(
+        book=book, tab=FakeTab(), compose=lambda run_id: written(run_id),
+        pool=pool, log=said.append, now=lambda: 0.0,
+        clock=lambda: "2026-09-18T09:00:00Z")
+    worker._work()
+    assert any("OSError" in line for line in said)
+    assert book.unaired("a") is not None
