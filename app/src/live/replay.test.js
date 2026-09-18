@@ -9,7 +9,7 @@ function stubMedia(stage, { refuse = false } = {}) {
     video.pause = vi.fn();
     video.play = vi.fn(() => (refuse ? Promise.reject(new Error("NotAllowedError")) : Promise.resolve()));
     for (const [name, value] of [["buffered", { length: 1, start: () => 0, end: () => 30 }],
-                                 ["currentTime", 0], ["playbackRate", 1]]) {
+                                 ["currentTime", 0], ["playbackRate", 1], ["error", null]]) {
       if (!Object.getOwnPropertyDescriptor(video, name)) {
         Object.defineProperty(video, name, { value, writable: true, configurable: true });
       }
@@ -82,6 +82,28 @@ describe("createReplay", () => {
     expect(refused).toHaveBeenCalled();
     replay.stop();
     expect([...stage.querySelectorAll("video")].every((v) => v.hidden)).toBe(true);
+  });
+
+  it("reports a clip that failed while loading as failed, not as a refused play", async () => {
+    stubMedia(stage, { refuse: true });
+    replay.prepare(A);
+    const video = [...stage.querySelectorAll("video")].find((v) => v.getAttribute("src")?.includes("/A/"));
+    video.error = { code: 4 }; // MEDIA_ERR_SRC_NOT_SUPPORTED
+    await replay.play(A, 0);
+    expect(replay.failed).toBe(true);
+    expect(refused).not.toHaveBeenCalled();
+  });
+
+  it("keeps forcing the alignment until a seek lands on buffered media", async () => {
+    replay.prepare(A);
+    const video = [...stage.querySelectorAll("video")].find((v) => v.getAttribute("src")?.includes("/A/"));
+    video.buffered = { length: 0 };
+    await replay.play(A, 500);
+    expect(video.currentTime).toBe(0);
+    video.buffered = { length: 1, start: () => 0, end: () => 30 };
+    replay.seek(600);
+    expect(video.currentTime).toBe(0.6);
+    expect(video.playbackRate).toBe(1);
   });
 
   it("mutes and unmutes the video that is playing", async () => {

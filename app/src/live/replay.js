@@ -37,7 +37,9 @@ export function createReplay(stage, { onRefused }) {
     const action = correction(video.currentTime, offsetMs / 1000, ranges(video.buffered), force);
     if (action.time !== undefined) video.currentTime = action.time;
     video.playbackRate = action.rate;
-    aligned = true;
+    // A forced alignment that found nothing buffered is not spent: keep
+    // forcing until a seek lands.
+    aligned = !force || action.time !== undefined;
   }
 
   /** Make `slot` the active video, loading it if nothing prepared it. */
@@ -47,9 +49,10 @@ export function createReplay(stage, { onRefused }) {
     if (active) active.video.hidden = true;
     active = prepared;
     prepared = null;
-    failed = false;
     aligned = false;
     const { video } = active;
+    // Preloading may already have failed, before any handler was listening.
+    failed = video.error !== null;
     video.muted = isMuted();
     video.hidden = false;
     // Buffering loses the clock even under a second of lag; a seek's own
@@ -80,7 +83,8 @@ export function createReplay(stage, { onRefused }) {
       try {
         await video.play();
       } catch {
-        onRefused();
+        // A broken clip also rejects; that is `failed`, not a refusal.
+        if (!failed) onRefused();
       }
     },
     seek(offsetMs) {
