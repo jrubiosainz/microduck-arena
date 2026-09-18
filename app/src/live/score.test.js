@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SAMPLE_RATE, VOICES, prepare } from "./score.js";
+import { SAMPLE_RATE, VOICES, poseAt, prepare, synthesize } from "./score.js";
 
 const dialogue = {
   run_id: "01TESTRUN",
@@ -77,5 +77,56 @@ describe("prepare", () => {
     expect(() => prepare({ run_id: "x", turns: [turn("peter", "One."), turn("peter", "Two.")] })).toThrow("Invalid commentary turn");
     expect(() => prepare({ run_id: "x", turns: [turn("peter", "One."), turn("bob", "Two.")] })).toThrow("Invalid commentary turn");
     expect(() => prepare({ run_id: "x", turns: [turn("peter", "x".repeat(43)), turn("ray", "Two.")] })).toThrow("Caption word is too long");
+  });
+});
+
+describe("poseAt", () => {
+  it("is pure in time: the same instant gives the same pose, silence gives rest", () => {
+    const plan = prepare(dialogue);
+    const a = poseAt(plan, "peter", 5000);
+    expect(poseAt(plan, "peter", 5000)).toEqual(a);
+    // Between the beats' envelopes at t=0 everything is at rest and the mouth is shut.
+    const rest = poseAt(plan, "ray", 0);
+    expect(rest.mouth).toBe(0);
+    expect(rest.energy).toBe(0);
+  });
+
+  it("opens the mouth only while a note of that speaker sings", () => {
+    const plan = prepare(dialogue);
+    const note = plan.notes.find((n) => n.speaker === "ray");
+    const mid = (note.start_ms + note.end_ms) / 2;
+    expect(poseAt(plan, "ray", mid).mouth).toBeGreaterThan(0);
+    expect(poseAt(plan, "peter", mid).mouth).toBe(0);
+  });
+
+  it("turns Peter's head right and Ray's left during a glance", () => {
+    const plan = prepare(dialogue);
+    for (const speaker of ["peter", "ray"]) {
+      const look = plan.gestures.find((g) => g.kind === "look" && g.speaker === speaker);
+      const yaw = poseAt(plan, speaker, (look.start_ms + look.end_ms) / 2).yaw;
+      expect(Math.sign(yaw)).toBe(speaker === "peter" ? 1 : -1);
+    }
+  });
+});
+
+describe("synthesize", () => {
+  const tone = new Float32Array(28800).map((_, i) => Math.sin(i / 20));
+  it("fills exactly the plan's duration in stereo at 48 kHz, silent outside the notes", () => {
+    const plan = prepare(dialogue);
+    const pcm = synthesize(plan, { peter: tone, ray: tone });
+    expect(pcm.length).toBe(plan.duration_ms * 96);
+    expect(pcm[0]).toBe(0);
+    expect(pcm[pcm.length - 1]).toBe(0);
+    const note = plan.notes[0];
+    const at = Math.round(((note.start_ms + note.end_ms) / 2) * 48) * 2;
+    expect(pcm[at]).not.toBe(0);
+    expect(pcm[at]).toBe(pcm[at + 1]);
+    expect(pcm.reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0)).toBeLessThanOrEqual(1);
+  });
+
+  it("refuses a missing or short tone", () => {
+    const plan = prepare(dialogue);
+    expect(() => synthesize(plan, { peter: tone })).toThrow("Missing native voice: ray");
+    expect(() => synthesize(plan, { peter: tone, ray: new Float32Array(10) })).toThrow("too short");
   });
 });

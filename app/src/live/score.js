@@ -135,3 +135,48 @@ export function prepare(dialogue, seed = hash(dialogue?.run_id ?? "")) {
     captions, notes, gestures,
   };
 }
+
+/** A pure pose at item time, so seeking and out-of-order drawing never drift. */
+export function poseAt(plan, speaker, ms) {
+  const note = plan.notes.find((n) => n.speaker === speaker && n.start_ms <= ms && ms < n.end_ms);
+  const phase = note ? (ms - note.start_ms) / (note.end_ms - note.start_ms) : 0;
+  const energy = note ? Math.sin(Math.PI * phase) * note.emphasis : 0;
+  const pose = { energy, mouth: energy, neck: 0, pitch: 0, roll: 0, yaw: 0 };
+  for (const gesture of plan.gestures) {
+    if (gesture.speaker !== speaker || ms < gesture.start_ms || ms >= gesture.end_ms) continue;
+    const t = (ms - gesture.start_ms) / (gesture.end_ms - gesture.start_ms);
+    if (gesture.kind === "look") {
+      const ramp = Math.min(1, (ms - gesture.start_ms) / 240, (gesture.end_ms - ms) / 240);
+      pose.yaw += gesture.yaw * (0.5 - 0.5 * Math.cos(Math.PI * ramp));
+    } else {
+      const envelope = Math.sin(Math.PI * t) ** 2;
+      for (const key of ["neck", "pitch", "roll"]) {
+        const cycles = key === "pitch" ? Math.cos(2 * Math.PI * (gesture.cycles - 1) * t) : 1;
+        pose[key] += gesture[key] * envelope * cycles;
+      }
+    }
+  }
+  return pose;
+}
+
+/** Sample-accurate stereo PCM; identical channels keep the two timbres apart in mono. */
+export function synthesize(plan, tones) {
+  const audio = new Float32Array((plan.duration_ms * SAMPLE_RATE) / 1000 * 2);
+  for (const note of plan.notes) {
+    const source = tones[note.speaker];
+    if (!source?.length) throw new Error(`Missing native voice: ${note.speaker}`);
+    const start = note.start_ms * 48;
+    const length = (note.end_ms - note.start_ms) * 48;
+    for (let i = 0; i < length; i++) {
+      const at = i * note.rate;
+      const low = Math.floor(at);
+      const fraction = at - low;
+      if (low + 1 >= source.length) throw new Error("Native source note is too short");
+      const fade = Math.min(1, i / 96, (length - 1 - i) / 96);
+      const sample = (source[low] * (1 - fraction) + source[low + 1] * fraction) * fade * note.emphasis;
+      audio[(start + i) * 2] = sample;
+      audio[(start + i) * 2 + 1] = sample;
+    }
+  }
+  return audio;
+}

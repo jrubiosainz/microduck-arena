@@ -36,10 +36,12 @@ closing sections explain.
 | `microduck-chirp.wav` | 0.16 s | With the climb: the duck's own note as it lands on its peg. | CC0-1.0 |
 | `air-horn.mp3` | 2.10 s | The clip's start: the horn as the title leaves and the ducks set off, its stadium echo in the file. | CC0-1.0 (see below) |
 | `microduck-fall.wav` | 0.58 s | The clip's outro after a DNF stamp: the duck's own falling note. | Apache-2.0 (see below) |
+| `commentator-peter.f32` | 0.60 s | The booth: Peter Duckry's one note, sung once per syllable of his lines. | Apache-2.0 (see below) |
+| `commentator-ray.f32` | 0.60 s | The booth: Ray Quackson's one note. | Apache-2.0 (see below) |
 
-`app/src/sound.js` is the only code that plays them. The booth plays from a click; the
-publication page's reveal may start from a deep link with no gesture yet, and a play the
-browser refuses is silence, never an error.
+`app/src/sound.js` is the only code that plays them. `app/src/live/voice.js` plays the two
+tones. The booth plays from a click; the publication page's reveal may start from a deep link
+with no gesture yet, and a play the browser refuses is silence, never an error.
 
 ## The air horn
 
@@ -50,11 +52,13 @@ dedicates it to the public domain under the same
 
 ## The microduck voice
 
-`microduck-victory.wav` and `microduck-fall.wav` are not `build-kit.mjs` cues: Duck Jam
-renders them with the robot's own Rust synthesiser from
+`microduck-victory.wav`, `microduck-fall.wav`, `commentator-peter.f32` and `commentator-ray.f32`
+are not `build-kit.mjs` cues: Duck Jam renders them with the robot's own Rust synthesiser (the two
+tones with `design/sound/commentators.rs` and `commentator-voice.rs` at Duck Jam commit `2d35443b`,
+raw 48 kHz mono float32, no header) from
 [pollen-robotics/microduck, sounds](https://github.com/pollen-robotics/microduck/tree/e597877c5a9460f4c3837dc3cdab088705212c5d/sounds),
 revision `e597877c5a9460f4c3837dc3cdab088705212c5d`, then modifies the recipe (victory) or the
 audio (fall). That synthesiser is Apache-2.0 — `MICRODUCK-LICENSE.txt` beside them is its
-licence — so these two files travel with it, not with the CC0 dedication above.
+licence — so these four files travel with it, not with the CC0 dedication above.
 `microduck-victory-echo.mp3` is Nicolas Rabault's echo of `microduck-victory.wav`, made for the
 clip on 2026-09-17, and travels with it.
