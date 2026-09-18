@@ -36,9 +36,10 @@ html, body { margin: 0; height: 100%; background: var(--deep-ink); color: var(--
 
 /* The card: the wordmark and a word, on deep ink, when there is nothing to play. */
 .live-card {
-  position: absolute; inset: 0; z-index: 5; display: grid; place-items: center;
+  position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; align-content: center; gap: calc(40 * var(--u));
   font: 400 calc(120 * var(--u)) / 1 var(--display); letter-spacing: 0.04em; color: var(--paper);
 }
+.live-card .wordmark { font-size: calc(140 * var(--u)); line-height: 0.9; text-align: center; }
 
 /* The one button: the whole stage, until the browser lets the page play sound. */
 .live-join {

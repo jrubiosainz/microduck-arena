@@ -82,9 +82,10 @@ export function createReplay(stage, { onRefused }) {
       servo(offsetMs, true);
       try {
         await video.play();
-      } catch {
-        // A broken clip also rejects; that is `failed`, not a refusal.
-        if (!failed) onRefused();
+      } catch (error) {
+        // A broken clip also rejects; that is `failed`, not a refusal. So does
+        // a play cut short by a stop, which is the conductor's own doing.
+        if (!failed && error.name !== "AbortError") onRefused();
       }
     },
     seek(offsetMs) {

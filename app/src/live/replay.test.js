@@ -84,6 +84,14 @@ describe("createReplay", () => {
     expect([...stage.querySelectorAll("video")].every((v) => v.hidden)).toBe(true);
   });
 
+  it("does not report a play cut short by a stop as a refusal", async () => {
+    for (const video of stage.querySelectorAll("video")) {
+      video.play = vi.fn(() => Promise.reject(new DOMException("interrupted by pause()", "AbortError")));
+    }
+    await replay.play(A, 0);
+    expect(refused).not.toHaveBeenCalled();
+  });
+
   it("reports a clip that failed while loading as failed, not as a refused play", async () => {
     stubMedia(stage, { refuse: true });
     replay.prepare(A);

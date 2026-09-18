@@ -1,14 +1,24 @@
-// The channel's page. Every screen reads the programme grid from the server,
-// samples the shared clock against each answer, and says which state it is
-// in: live when the grid has something to play, off air when it is empty,
-// reconnecting when the grid cannot be read. This file owns the DOM, the
-// polling and those states.
+// The channel. One stage every screen composes itself from the grid and the
+// shared clock: the clips in a <video>, the booth in three.js, the shutter
+// between them. This file owns the DOM, the polling, the sound the browser
+// may keep from starting until a click, and the page's states;
+// live/channel.js drives the segments from the clock.
 
 import { getLive } from "./api.js";
+import { createAmbience } from "./live/ambience.js";
+import { createChannel } from "./live/channel.js";
 import { createClock } from "./live/clock.js";
+import { shouldReload } from "./live/grid.js";
+import { createInterlude } from "./live/interlude.js";
+import { createReplay } from "./live/replay.js";
+import { createShutter } from "./live/shutter.js";
+import { createVoice, loadTones } from "./live/voice.js";
+import { isMuted } from "./sound.js";
+import { wordmark } from "./wordmark.js";
 
 const POLL_MS = 10_000;
 const RECONNECTING_AFTER_MS = 30_000;
+const SOUND_WAIT_MS = 1000; // a context not running by then is waiting for the click
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -23,7 +33,8 @@ export function buildStage(root) {
   page.dataset.liveState = "joining";
   const stage = el("div", "live-stage");
   const bug = el("p", "live-bug", "LIVE");
-  const card = el("div", "live-card", "OFF AIR");
+  const card = el("div", "live-card");
+  card.append(wordmark(), el("span", "live-card-word", "OFF AIR"));
   card.hidden = true;
   const join = el("button", "live-join", "JOIN THE LIVE");
   join.type = "button";
@@ -34,15 +45,20 @@ export function buildStage(root) {
 }
 
 /**
- * Polls the grid and samples the clock on every answer. A miss is forgiven
- * for half a minute once the clock is set, since one lost poll is not an
- * outage; before the clock is set, or past that, the page says reconnecting.
+ * Polls the grid, samples the clock on every answer and hands the grid on.
+ * A miss is forgiven for half a minute once the clock is set, since one lost
+ * poll is not an outage; before the clock is set, or past that, the page
+ * says reconnecting. A poll asked for early takes the place of the one due;
+ * paused, the poller asks nothing more until its next poll.
  */
-function follow({ api, clock, onState }) {
+function follow({ api, clock, onGrid, onState }) {
   let timer = null;
   let lastGood = Date.now();
   let stopped = false;
+  let paused = false;
   async function poll() {
+    clearTimeout(timer);
+    paused = false;
     const before = Date.now();
     let grid = null;
     try {
@@ -56,15 +72,21 @@ function follow({ api, clock, onState }) {
       const after = Date.now();
       clock.sample(before, grid.now_ms, after);
       lastGood = after;
+      onGrid(grid);
       onState(grid.slots.length ? "live" : "off-air");
     } else if (!clock.ready || Date.now() - lastGood >= RECONNECTING_AFTER_MS) {
       onState("reconnecting");
     }
-    timer = setTimeout(poll, POLL_MS);
+    if (!paused) timer = setTimeout(poll, POLL_MS);
   }
   const started = poll();
   return {
     started,
+    poll,
+    pause() {
+      paused = true;
+      clearTimeout(timer);
+    },
     stop() {
       stopped = true;
       clearTimeout(timer);
@@ -72,17 +94,149 @@ function follow({ api, clock, onState }) {
   };
 }
 
-export async function renderLive(root, state, { api = { getLive } } = {}) {
-  const { page, card } = buildStage(root);
+/**
+ * The booth's sound, on one context kept for the page's life. The browser
+ * lets the context run at once (a kiosk, OBS), late (a slow device) or only
+ * after a click; a refused resume() leaves its promise pending rather than
+ * rejecting it, so the promise is not what is waited on: the state is
+ * followed, and `ask` is the click's way of resuming with a gesture in hand.
+ */
+export function openSound(tones) {
+  const context = new AudioContext();
+  let opened = null;
+  const ask = () => context.resume().catch(() => {});
+  return {
+    ask,
+    get running() {
+      return context.state === "running";
+    },
+    /** The voice and the room tone once the context runs, or null once it is closed. */
+    open() {
+      return (opened ??= (async () => {
+        ask();
+        while (context.state === "suspended") {
+          await new Promise((resolve) => context.addEventListener("statechange", resolve, { once: true }));
+        }
+        if (context.state !== "running") return null;
+        return { context, voice: createVoice(context, await tones()), ambience: await createAmbience(context) };
+      })());
+    },
+    close() {
+      context.close();
+    },
+  };
+}
+
+export async function renderLive(root, state, { api = { getLive }, tones = loadTones, sound: createSound = openSound } = {}) {
+  const { page, stage, card, join } = buildStage(root);
+  const controller = new AbortController();
+  const { signal } = controller;
+  // Torn down from the first moment, since the router may leave the page
+  // while the booth still loads; each resource joins as it is made.
+  const disposers = [];
+  const onTeardown = (dispose) => disposers.push(dispose);
+  state.teardown = () => {
+    controller.abort();
+    while (disposers.length) disposers.pop()();
+  };
+  const setState = (value) => {
+    page.dataset.liveState = value;
+    card.hidden = value !== "off-air";
+  };
+
   const clock = createClock();
+  const shutter = createShutter(stage);
+  const replay = createReplay(stage, { onRefused: () => { join.hidden = false; } });
+  const sound = createSound(tones);
+  onTeardown(() => sound.close());
+  let audio = null;
+  const interlude = await createInterlude(stage, { audio: () => audio });
+  if (signal.aborted) {
+    interlude.dispose();
+    return;
+  }
+  onTeardown(() => interlude.dispose());
+  const channel = createChannel({
+    clock, segments: { replay, booth: interlude }, shutter, onState: setState,
+    onReload: () => location.reload(),
+    gust: () => audio?.voice.gust(audio.context.currentTime),
+  });
+  onTeardown(() => channel.stop());
+  let build = null;
   const poller = follow({
-    api,
-    clock,
-    onState(value) {
-      page.dataset.liveState = value;
-      card.hidden = value !== "off-air";
+    api, clock, onState: setState,
+    onGrid: (grid) => {
+      channel.update(grid);
+      if (build === null) build = grid.build;
+      else if (shouldReload(build, grid.build)) channel.reloadAtNextShutter();
     },
   });
-  state.teardown = poller.stop;
+  onTeardown(() => poller.stop());
+
+  let admitted = false;
+  /** Ask for the sound once; it joins the picture whenever the browser lets it. */
+  function admit() {
+    if (admitted) return;
+    admitted = true;
+    sound.open().then((opened) => {
+      if (signal.aborted) return;
+      audio = opened;
+      interlude.muted(isMuted());
+      // The button came up for a context that now runs; a clip the browser
+      // still refuses raises it again on the rejoin.
+      join.hidden = true;
+      channel.rejoin();
+    });
+  }
+
+  // The button stands in front of the picture, and the picture never waits
+  // on the sound: a browser that withholds sound shows the button over a
+  // channel that plays on, and the click asks again with a gesture in hand.
+  // Only a reader who asked for less motion has the channel wait for the click.
+  let held = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (held) {
+    join.hidden = false;
+    channel.halt();
+  } else {
+    admit();
+    const verdict = setTimeout(() => { if (!sound.running) join.hidden = false; }, SOUND_WAIT_MS);
+    onTeardown(() => clearTimeout(verdict));
+  }
+  join.addEventListener("click", () => {
+    join.hidden = true;
+    held = false;
+    channel.resume();
+    channel.rejoin();
+    if (!audio) {
+      admit();
+      sound.ask();
+    }
+  }, { signal });
+
+  const watcher = new ResizeObserver(() => {
+    const width = page.clientWidth;
+    page.style.setProperty("--stage-px", String(width));
+    interlude.resize(width, page.clientHeight);
+  });
+  watcher.observe(page);
+  onTeardown(() => watcher.disconnect());
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      poller.pause();
+      channel.halt();
+    } else {
+      poller.poll();
+      if (!held) channel.resume();
+    }
+  }, { signal });
+
+  // The next frame is asked for before this one ticks, so a tick that throws
+  // (a caption that fits no line) cannot stop the channel.
+  let frame = requestAnimationFrame(function loop() {
+    frame = requestAnimationFrame(loop);
+    channel.tick();
+  });
+  onTeardown(() => cancelAnimationFrame(frame));
   await poller.started;
 }
