@@ -193,12 +193,12 @@ SIZES = {"landscape": (1920, 1080), "vertical": (1080, 1920)}
 # The soundtrack comes out of the page in pieces this big, base64 over the protocol.
 CHUNK = 4 << 20
 JPEG_QUALITY = 92
-# A healthy capture is a fifth of a second, on the Space as on a laptop. One
-# that has not come back in this long is not slow, it is stuck — and a stuck
-# compositor comes back when asked again, so the frame is re-asked rather than
-# waited on. Measured: a capture once held the socket for the twelve minutes
-# left of a render's budget, and the run after it rendered in under three.
-CAPTURE_ATTEMPT_S = 60.0
+# A capture that has not come back in this long is not slow, it is stuck — and
+# a stuck compositor comes back when asked again, so the frame is re-asked
+# rather than waited on. Thirty seconds against a capture that takes 0.3 s on a
+# quiet Space and 1.1 s on a loaded one: thirty times the worst reading anyone
+# has measured, and half the waiting the first sixty-second bound cost.
+CAPTURE_ATTEMPT_S = 30.0
 CAPTURE_TRIES = 3
 
 
@@ -336,9 +336,9 @@ def _record_layout(
 def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None = None,
                nice: int = 10, budget_s: float = 900.0,
                on_progress=lambda stage, done, total: None) -> RenderedRun:
-    """Every layout of one run. One browser; the first tab renders the
-    soundtrack every layout shares; tabs are recorded `parallel` at a time.
-    The poster is the landscape clip's.
+    """Every layout of one run, each in a browser of its own; the first one
+    renders the soundtrack they all share, and they are recorded `parallel` at
+    a time. The poster is the landscape clip's.
 
     `budget_s` bounds the whole render, from here — a stuck tab or an
     overloaded machine fails the clip rather than occupying the worker
@@ -354,15 +354,22 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
         raise RuntimeError("no ffmpeg on the PATH")
     deadline = time.monotonic() + budget_s
     on_progress("opening", 0, 0)
-    with Chrome(binary, nice) as chrome, tempfile.TemporaryDirectory(prefix="arena-clip-") as work:
-        work = Path(work)
-        tabs = {"landscape": _open(chrome, origin, run_id, "landscape")}
+    with contextlib.ExitStack() as stack:
+        work = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="arena-clip-")))
+        # A browser per layout, not a tab per layout in one browser. Two tabs
+        # means one of them is always the background tab, and a backgrounded
+        # renderer stops committing frames — so its screenshot waits on a frame
+        # that never comes. Measured on the Space over seven clips: every
+        # landscape layout, the one opened first, stalled once or twice, and no
+        # vertical one ever did. The anti-backgrounding flags above did not
+        # change that; being the only tab in a browser takes the question away.
+        tabs = {
+            layout: _open(stack.enter_context(Chrome(binary, nice)), origin, run_id, layout)
+            for layout in SIZES
+        }
         on_progress("soundtrack", 0, 0)
         pcm_path = work / "soundtrack.f32"
         pcm_path.write_bytes(_soundtrack(tabs["landscape"]))
-        for layout in SIZES:
-            if layout not in tabs:
-                tabs[layout] = _open(chrome, origin, run_id, layout)
 
         # Every layout plays the same plan, so the whole render's frame count is
         # known before its first frame: the bar only ever goes forward, whether
@@ -377,13 +384,12 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
                 on_progress("frames", sum(done.values()), total)
 
         def one(layout: str) -> tuple[str, RenderedLayout, bytes]:
-            try:
-                rendered, poster = _record_layout(
-                    tabs[layout], pcm_path, work / f"{layout}.mp4", nice, deadline,
-                    on_frame=lambda i: drew(layout, i),
-                )
-            finally:
-                tabs[layout].close()
+            # Nothing to close here any more: the browser this tab belongs to is
+            # killed with the stack, and it takes the socket with it.
+            rendered, poster = _record_layout(
+                tabs[layout], pcm_path, work / f"{layout}.mp4", nice, deadline,
+                on_frame=lambda i: drew(layout, i),
+            )
             return layout, rendered, poster
 
         with ThreadPoolExecutor(max_workers=max(1, parallel)) as pool:
