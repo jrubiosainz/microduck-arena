@@ -139,3 +139,16 @@ export const markSeen = (runId) => json(`/api/runs/${runId}/seen`, { method: "PO
 
 /** Where a run's clip stands: none, pending, failed, or ready with its files. */
 export const getClip = (runId) => json(`/api/runs/${runId}/clip`);
+
+/** The channel's grid and the server's clock. Never cached: the clock is in it. */
+export const getLive = () => json("/api/live", { cache: "no-store" });
+
+/** A run's commentary (dialogue and plan), or null when it has no booth. */
+export async function getCommentary(runId) {
+  const response = await fetch(`/api/runs/${runId}/clip/commentary.json`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(await detailFrom(response));
+  return response.json();
+}
+
+export const clipUrl = (runId, name) => `/api/runs/${runId}/clip/${name}`;

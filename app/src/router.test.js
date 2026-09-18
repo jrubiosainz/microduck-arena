@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { menuHref, parseRoute, playerHref, raceHref, runHref, themeFor, voteHref } from "./router.js";
+import {
+  liveHref,
+  menuHref,
+  parseRoute,
+  playerHref,
+  raceHref,
+  runHref,
+  themeFor,
+  voteHref,
+} from "./router.js";
 
 describe("parseRoute", () => {
   it("shows the home page by default", () => {
@@ -29,6 +38,12 @@ describe("parseRoute", () => {
   it("opens one publication", () => {
     expect(parseRoute("#/r/01ABC")).toEqual({ view: "run", runId: "01ABC" });
     expect(parseRoute(runHref("01ABC"))).toEqual({ view: "run", runId: "01ABC" });
+  });
+
+  it("opens the channel", () => {
+    expect(parseRoute("#/live")).toEqual({ view: "live" });
+    expect(parseRoute("#/live/")).toEqual({ view: "live" });
+    expect(parseRoute(liveHref)).toEqual({ view: "live" });
   });
 
   it("falls back to the home page for anything it does not recognise", () => {
@@ -65,5 +80,11 @@ describe("themeFor", () => {
     expect(themeFor("menu")).toBe("club");
     expect(themeFor("player")).toBe("club");
     expect(themeFor("vote")).toBe("race");
+  });
+
+  it("dresses the channel in its own sheet", () => {
+    expect(themeFor("live")).toBe("live");
+    expect(themeFor("run")).toBe("race");
+    expect(themeFor("menu")).toBe("club");
   });
 });

@@ -16,13 +16,15 @@
          under it, above whichever placement sheet the view wears. -->
     <link rel="stylesheet" href="/shell.css" />
     <!-- What each view puts inside that column, enabled one at a time by
-         main.js: the club for the home and player pages, the race for a race.
-         Both dress the same tokens; they are separate because a race page is a
-         timing board and sets its own text density. Static files on purpose —
-         Vite would fold a src/ stylesheet into the bundle and drop the
-         data-theme attribute the switch relies on. -->
+         main.js: the club for the home and player pages, the race for a race,
+         the channel's own for the live page. All dress the same tokens; they
+         are separate because a race page is a timing board that sets its own
+         text density, and the channel is nothing but a stage. Static files on
+         purpose — Vite would fold a src/ stylesheet into the bundle and drop
+         the data-theme attribute the switch relies on. -->
     <link rel="stylesheet" href="/club.css" data-theme="club" />
     <link rel="stylesheet" href="/race.css" data-theme="race" disabled />
+    <link rel="stylesheet" href="/live.css" data-theme="live" disabled />
   </head>
   <body>
     <div id="app"></div>

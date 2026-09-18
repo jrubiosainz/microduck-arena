@@ -1,7 +1,8 @@
-// Four views, chosen by the hash. Everything else lives in its view.
+// Five views, chosen by the hash. Everything else lives in its view.
 
 import { getEvents } from "./api.js";
 import { renderHome } from "./home.js";
+import { renderLive } from "./live.js";
 import { renderPlayer } from "./player.js";
 import { renderRace } from "./race.js";
 import { renderRun } from "./run.js";
@@ -17,9 +18,9 @@ async function events() {
 }
 
 /**
- * Enable one view's placement sheet and disable the other's. Both dress the
+ * Enable one view's placement sheet and disable the others'. All dress the
  * same tokens, but each owns the page's own body and column, so they never
- * load together; flipping `disabled` is instant and keeps both cached.
+ * load together; flipping `disabled` is instant and keeps them all cached.
  */
 function dress(theme) {
   for (const link of document.querySelectorAll("link[data-theme]")) {
@@ -56,6 +57,8 @@ async function show() {
       await renderVote(root, { event, state });
     } else if (route.view === "run") {
       await renderRun(root, route.runId, state);
+    } else if (route.view === "live") {
+      await renderLive(root, state);
     } else if (route.view === "player") {
       await renderPlayer(root, route.user);
     } else {

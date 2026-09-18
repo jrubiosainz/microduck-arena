@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ballotTraceUrl,
+  clipUrl,
   getBallot,
   getBallotTrace,
+  getCommentary,
   getLeaderboard,
+  getLive,
   getPlayer,
   getStandings,
   getSettle,
@@ -134,5 +137,33 @@ describe("the ballot", () => {
     expect(trace).toBeInstanceOf(Float32Array);
     expect([...trace]).toEqual([1.5, 2.5, 3.5]);
     expect(fetch.mock.calls[0][0]).toBe("/api/ballots/tok.mac/lanes/2/trace");
+  });
+});
+
+describe("the channel", () => {
+  it("reads the grid uncached, since the clock is in it", async () => {
+    respondWith({ body: { version: 1, now_ms: 5000, build: "b", slots: [] } });
+    expect(await getLive()).toEqual({ version: 1, now_ms: 5000, build: "b", slots: [] });
+    expect(fetch.mock.calls[0]).toEqual(["/api/live", { cache: "no-store" }]);
+  });
+
+  it("returns a run's commentary", async () => {
+    respondWith({ body: { dialogue: [], plan: [] } });
+    expect(await getCommentary("01ABC")).toEqual({ dialogue: [], plan: [] });
+    expect(fetch.mock.calls[0][0]).toBe("/api/runs/01ABC/clip/commentary.json");
+  });
+
+  it("returns null for a run with no booth", async () => {
+    respondWith({ ok: false, status: 404, body: { detail: "no commentary for '01ABC'" } });
+    expect(await getCommentary("01ABC")).toBeNull();
+  });
+
+  it("still surfaces any other failure as the server's sentence", async () => {
+    respondWith({ ok: false, status: 500, body: { detail: "store unreadable" } });
+    await expect(getCommentary("01ABC")).rejects.toThrow("store unreadable");
+  });
+
+  it("addresses a clip's files under the run", () => {
+    expect(clipUrl("01ABC", "clip.mp4")).toBe("/api/runs/01ABC/clip/clip.mp4");
   });
 });
