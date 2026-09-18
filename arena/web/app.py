@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
+from ..broadcasts import BroadcastBook
 from ..live import Programme, pool
 from ..manifest import all_events
 from .config import ArenaConfig
@@ -40,9 +41,15 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.state.ballot_book = BallotBook()
     app.state.sessions = Sessions()
 
+    # Broadcasts live in their own directory, not the store: each is consumed
+    # once and forgotten twenty airings later, and on the Space every store
+    # write is a dataset commit — this many, this briefly needed, would be
+    # wasteful there.
+    app.state.broadcasts = BroadcastBook(config.broadcast_dir)
+
     # The programme reads the pool on every rebuild, never per request; the
     # build hash lets a page that has run for days reload after a deploy.
-    app.state.programme = Programme(lambda: pool(app.state.store), now_ms)
+    app.state.programme = Programme(lambda: pool(app.state.store), now_ms, app.state.broadcasts)
     index = config.frontend_dir / "index.html" if config.frontend_dir else None
     app.state.build = hashlib.sha256(index.read_bytes()).hexdigest()[:12] if index else "dev"
 

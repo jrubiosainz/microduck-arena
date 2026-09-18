@@ -13,7 +13,7 @@ PLAN = {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []}
 def entries(*run_ids):
     # Descending submitted_at: cycle() plays newest first, so this keeps the
     # cycle order the same as the order the runs are listed in here.
-    return [Entry(run_id, "nicolas", "Sprint", f"2026-09-{20 - i:02d}", 8000, None)
+    return [Entry(run_id, "nicolas", "Sprint", f"2026-09-{20 - i:02d}", 8000)
             for i, run_id in enumerate(run_ids)]
 
 

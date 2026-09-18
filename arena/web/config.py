@@ -15,6 +15,7 @@ from ..store import HubBallots, HubStore, LocalBallots, LocalStore
 from .oauth import OAuthSettings
 
 DEFAULT_STORE = Path("arena-board")
+DEFAULT_BROADCAST_DIR = Path("/tmp/arena-broadcasts")
 DEFAULT_USER = "local"
 # Local default: rank one row per policy. With a single signed-in user, ranking
 # per person collapses the board to one line however many policies you try,
@@ -86,6 +87,11 @@ class ArenaConfig:
     # The router model that writes and audits them. ARENA_COMMENTARY_MODEL
     # overrides.
     commentary_model: str = DEFAULT_COMMENTARY_MODEL
+    # Where broadcasts (BroadcastBook) are written and read. ARENA_BROADCASTS
+    # overrides. Not the store: a broadcast is consumed once and forgotten
+    # twenty airings later, and on a Space every store write is a dataset
+    # commit — far too many of those, far too briefly needed.
+    broadcast_dir: Path = DEFAULT_BROADCAST_DIR
 
     @classmethod
     def from_env(
@@ -151,6 +157,7 @@ class ArenaConfig:
             not in {"0", "false", "no"},
             commentary_model=(os.environ.get("ARENA_COMMENTARY_MODEL") or "").strip()
             or DEFAULT_COMMENTARY_MODEL,
+            broadcast_dir=Path(os.environ.get("ARENA_BROADCASTS") or DEFAULT_BROADCAST_DIR),
         )
 
     @property

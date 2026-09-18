@@ -11,6 +11,7 @@ import random
 import threading
 from dataclasses import dataclass
 
+from .broadcasts import utcnow
 from .manifest import all_events
 
 SHUTTER_MS = 1600
@@ -27,7 +28,6 @@ class Entry:
     event_title: str
     submitted_at: str
     replay_ms: int
-    booth_ms: int | None
 
 
 def pool(store) -> list[Entry]:
@@ -44,15 +44,13 @@ def pool(store) -> list[Entry]:
             if state != "ready":
                 continue
             replay_ms = round(clip["layouts"]["landscape"]["seconds"] * 1000)
-            commentary = store.commentary(record.run_id)
-            booth_ms = commentary["plan"]["duration_ms"] if commentary else None
             # A length that is not a whole number of frames cannot be laid on
-            # the grid; such a run stays off the programme, like a run with no
-            # clip, rather than breaking the channel for everyone.
-            if replay_ms % 40 or (booth_ms or 0) % 40:
+            # the grid; such a run stays off the programme rather than
+            # breaking the channel for everyone.
+            if replay_ms % 40:
                 continue
-            entries.append(Entry(record.run_id, record.user, manifest.title, record.submitted_at,
-                                 replay_ms, booth_ms))
+            entries.append(Entry(record.run_id, record.user, manifest.title,
+                                 record.submitted_at, replay_ms))
     return entries
 
 
@@ -65,9 +63,14 @@ def cycle(entries: list[Entry], k: int) -> list[Entry]:
     return head + rest
 
 
-def slots_for(entries: list[Entry], start_ms: int) -> list[dict]:
+def slots_for(entries: list[Entry], start_ms: int, book, claimed: set[str] | None = None) -> list[dict]:
     slots: list[dict] = []
     at = start_ms
+    # One waiting dialogue is one booth. `claimed` carries the broadcasts the
+    # slots already laid are using, so a rebuild cannot hand a screen's playing
+    # booth to a second slot in the future: a broadcast is unaired right up to
+    # the moment its slot ends.
+    claimed = set() if claimed is None else set(claimed)
 
     def add(slot: dict) -> None:
         nonlocal at
@@ -80,9 +83,12 @@ def slots_for(entries: list[Entry], start_ms: int) -> list[dict]:
         add({"kind": "shutter", "duration_ms": SHUTTER_MS,
              "next": {"run_id": entry.run_id, "event": entry.event_title, "user": entry.user}})
         add({"kind": "replay", "duration_ms": entry.replay_ms, "run_id": entry.run_id})
-        if entry.booth_ms:
+        waiting = book.unaired(entry.run_id)
+        if waiting is not None and waiting.id not in claimed:
+            claimed.add(waiting.id)
             add({"kind": "shutter", "duration_ms": SHUTTER_MS, "next": None})
-            add({"kind": "booth", "duration_ms": entry.booth_ms, "run_id": entry.run_id})
+            add({"kind": "booth", "duration_ms": waiting.plan["duration_ms"],
+                 "run_id": entry.run_id, "broadcast": waiting.id})
     return slots
 
 
@@ -90,14 +96,18 @@ class Programme:
     """The grid, built lazily as far as the horizon, rebuilt from the slot
     playing now whenever the pool changes."""
 
-    def __init__(self, source, now_ms):
+    def __init__(self, source, now_ms, book):
         self._source = source
         self._now = now_ms
+        self._book = book
         self._lock = threading.Lock()
         self.origin_ms = now_ms()
         self._slots: list[dict] = []
         self._cursor = self.origin_ms  # where the next cycle starts
         self._cycle = 0
+
+    def _claimed(self) -> set[str]:
+        return {slot["broadcast"] for slot in self._slots if slot["kind"] == "booth"}
 
     def _extend(self, until_ms: int) -> None:
         # A process nobody read from for days leaves the cursor far behind, and
@@ -108,14 +118,27 @@ class Programme:
             entries = cycle(self._source(), self._cycle)
             if not entries:
                 return
-            self._slots.extend(slots_for(entries, self._cursor))
+            self._slots.extend(slots_for(entries, self._cursor, self._book, self._claimed()))
             self._cursor = self._slots[-1]["at_ms"] + self._slots[-1]["duration_ms"]
             self._cycle += 1
+
+    def _mark_aired(self, now: int) -> None:
+        """A booth whose slot has ended has been heard, wherever a screen was.
+        The server knows the grid and the clock; no screen reports anything."""
+        for slot in self._slots:
+            if slot["kind"] != "booth" or slot["at_ms"] + slot["duration_ms"] > now:
+                continue
+            self._book.mark_aired(slot["broadcast"], utcnow())
 
     def slots(self) -> list[dict]:
         now = self._now()
         with self._lock:
             self._extend(now + HORIZON_MS)
+            # Before the prune below: a booth whose slot has ended is dropped
+            # from `self._slots` after KEEP_MS, and marking after that would
+            # lose it — the broadcast would stay unaired for ever and be laid
+            # again.
+            self._mark_aired(now)
             self._slots = [s for s in self._slots if s["at_ms"] + s["duration_ms"] > now - KEEP_MS]
             return [s for s in self._slots
                     if s["at_ms"] + s["duration_ms"] > now - BEHIND_MS and s["at_ms"] <= now + HORIZON_MS]
