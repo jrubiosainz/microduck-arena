@@ -157,6 +157,63 @@ def test_a_dead_socket_costs_one_turn_and_the_reserve_moves_on(tmp_path):
     assert worker.turn() == "b"
 
 
+def test_a_plan_the_book_refuses_costs_one_turn_and_is_logged(tmp_path):
+    """duration_ms not a whole number of 40 ms frames is the real, checked
+    way a plan can be unusable: BroadcastBook.put raises ValueError over it,
+    after compose and prepare have both already run. That must still cost
+    one turn, log truthfully that nothing was written, and leave the
+    reserve able to take its next turn."""
+    said = []
+
+    class BadTab:
+        def prepare(self, dialogue):
+            if dialogue["run_id"] == "a":
+                return {**PLAN, "duration_ms": 4010}
+            return PLAN
+
+    book = BroadcastBook(tmp_path)
+    worker = CommentaryStock(
+        book=book, tab=BadTab(), compose=lambda run_id: written(run_id),
+        pool=lambda: entries("a", "b"), log=lambda line: said.append(line),
+        now=lambda: 0.0, clock=lambda: "2026-09-18T09:00:00Z")
+    assert worker.turn() is None
+    assert any("not written" in line for line in said)
+    assert book.unaired("a") is None
+    assert worker.turn() == "b"
+
+
+def test_a_run_that_keeps_refusing_is_not_skipped_forever(tmp_path):
+    """The walk must come back round to a run that keeps failing rather than
+    stalling on whichever one it last reached, or oscillating between just
+    the first two: three refusals in a row, and the fourth turn is "a" again."""
+    seen = []
+
+    def refuse(run_id):
+        seen.append(run_id)
+        raise Rejected("no")
+
+    worker, _book = stock(tmp_path, entries("a", "b", "c"), refuse)
+    for _ in range(4):
+        worker.turn()
+    assert seen == ["a", "b", "c", "a"]
+
+
+def test_the_cursor_rebases_when_wanted_shrinks(tmp_path):
+    """The walk is sitting past "a" (just refused) when "a" is stocked from
+    elsewhere and wanted() drops from three entries to two. The cursor must
+    rebase against the new length rather than read past the end of it."""
+    def compose(run_id):
+        if run_id == "a":
+            raise Rejected("no")
+        return written(run_id)
+
+    worker, book = stock(tmp_path, entries("a", "b", "c"), compose)
+    assert worker.turn() is None
+    book.put("a", {"run_id": "a", "turns": [], "lore_refs": []}, PLAN, "2026-09-18T09:00:00Z")
+    assert worker.wanted() == ["b", "c"]
+    assert worker.turn() == "c"
+
+
 def test_it_sweeps_what_has_aged_out(tmp_path):
     worker, book = stock(tmp_path, entries("a"), lambda run_id: written(run_id), keep=1)
     first = book.put("x", {"run_id": "x", "turns": [], "lore_refs": []}, PLAN, "t")

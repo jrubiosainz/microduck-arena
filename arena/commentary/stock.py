@@ -68,26 +68,36 @@ class CommentaryStock:
         index = self._cursor % len(wanted)
         run_id = wanted[index]
         self._attempts.append(self.now())
+        put = False
         try:
             written = self.compose(run_id)
             plan = self.tab.prepare({"run_id": run_id, "turns": written["turns"]})
+            self.book.put(run_id, {"turns": written["turns"], "lore_refs": written["lore_refs"]},
+                          plan, self.clock())
+            put = True
+            self.landed()
         except Rejected as why:
             # Half of them are refused on the real router. It is the audit
             # doing its job, not a fault: the walk moves on to the next run.
             self.log(f"commentary: {run_id} refused ({why})")
             self._cursor = index + 1
             return None
-        except Exception as exc:  # noqa: BLE001 — a dead browser raises whatever
-            # the websocket raised (ConnectionClosed is neither an OSError nor a
-            # RuntimeError), and nothing here may end the reserve's thread for
-            # the life of the process: the run is logged and the walk moves on.
-            self.log(f"commentary: {run_id} not written ({type(exc).__name__}: {exc})")
+        except Exception as exc:  # noqa: BLE001 — a dead browser, a plan the
+            # book refuses (not a whole number of 40 ms frames) or the
+            # caller's own landed() can all raise here, none of them only an
+            # OSError, a RuntimeError or a ValueError (ConnectionClosed is
+            # none of the three). Nothing in this whole unit of work may end
+            # the reserve's thread for the life of the process, so it is
+            # logged — truthfully, since the dialogue may already be written
+            # by the time landed() is what failed — and the walk moves on.
+            if put:
+                self.log(f"commentary: {run_id} written, but the programme was not "
+                         f"told ({type(exc).__name__}: {exc})")
+            else:
+                self.log(f"commentary: {run_id} not written ({type(exc).__name__}: {exc})")
             self._cursor = index + 1
             return None
         self._cursor = 0
-        self.book.put(run_id, {"turns": written["turns"], "lore_refs": written["lore_refs"]},
-                      plan, self.clock())
-        self.landed()
         return run_id
 
     def _work(self) -> None:
