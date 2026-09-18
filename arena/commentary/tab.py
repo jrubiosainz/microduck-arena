@@ -35,16 +35,27 @@ class PlanTab:
         binary = self.binary or find_chrome()
         if binary is None:
             raise RuntimeError("no Chrome found: set $CHROME")
-        self._chrome = Chrome(binary, self.nice)
-        self._tab = self._chrome.tab(*SIZE)
-        self._tab.navigate(f"{self.origin}/plan.html")
-        self._wait_ready()
+        chrome = Chrome(binary, self.nice)
+        try:
+            tab = chrome.tab(*SIZE)
+            tab.navigate(f"{self.origin}/plan.html")
+            self._wait_ready(tab)
+        except BaseException:
+            # A browser that never reached a working page must not outlive the
+            # exception that reports it: nothing else would ever close it or its
+            # profile directory, and the reserve tries again in five seconds —
+            # one Chrome per turn, for ever. Kept only once it works, so a page
+            # that never became ready is opened again rather than asked for a
+            # plan for the rest of the process's life.
+            chrome.close()
+            raise
+        self._chrome, self._tab = chrome, tab
 
-    def _wait_ready(self, timeout_s: float = 60.0) -> None:
+    def _wait_ready(self, tab, timeout_s: float = 60.0) -> None:
         """Until the page has installed its `window.plan`."""
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
-            if self._tab.evaluate("Boolean(window.plan)"):
+            if tab.evaluate("Boolean(window.plan)"):
                 return
             time.sleep(0.1)
         raise TimeoutError("the plan page never became ready")

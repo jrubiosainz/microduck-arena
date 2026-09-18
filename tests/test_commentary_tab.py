@@ -12,13 +12,14 @@ class FakeTab:
         self.asked = []
         self.closed = False
         self.alive = True
+        self.ready = True
 
     def navigate(self, url):
         self.url = url
 
     def evaluate(self, expression, await_promise=False, timeout=60.0):
         if expression == READY:
-            return True
+            return self.ready
         if not self.alive:
             raise ConnectionClosedError(None, None)
         self.asked.append(expression)
@@ -129,3 +130,67 @@ def test_no_chrome_on_the_machine_is_told_plainly(monkeypatch):
     monkeypatch.setattr("arena.commentary.tab.find_chrome", lambda: None)
     with pytest.raises(RuntimeError, match="no Chrome"):
         PlanTab("http://127.0.0.1:8000").prepare({"run_id": "a", "turns": []})
+
+
+def test_a_browser_that_never_hands_over_a_tab_is_closed(monkeypatch):
+    """The reserve retries every five seconds and `Chrome` has no `__del__`:
+    a browser half-opened and dropped is a process and a profile directory
+    leaked per turn."""
+    opened = []
+
+    class NoTab(FakeChrome):
+        def __init__(self, binary, nice=10):
+            super().__init__(binary, nice)
+            opened.append(self)
+
+        def tab(self, width, height):
+            raise RuntimeError("the browser went away before it opened a tab")
+
+    monkeypatch.setattr("arena.commentary.tab.Chrome", NoTab)
+    plan = PlanTab("http://127.0.0.1:8000", binary="/chrome")
+    for _ in range(3):
+        with pytest.raises(RuntimeError, match="went away"):
+            plan.prepare({"run_id": "a", "turns": []})
+    assert len(opened) == 3
+    assert all(one.closed for one in opened)
+
+
+class Hurried:
+    """A minute per look at the clock, so a readiness deadline is reached
+    without the test waiting a real minute for it."""
+
+    def __init__(self):
+        self.at = 0.0
+
+    def monotonic(self):
+        self.at += 30.0
+        return self.at
+
+    def sleep(self, _seconds):
+        pass
+
+
+def test_a_page_that_never_becomes_ready_is_recovered_from_on_a_later_turn(monkeypatch):
+    """A readiness timeout used to leave the dead tab kept, so every later
+    prepare asked a page that would never answer, for ever."""
+    opened = []
+
+    class Slow(FakeChrome):
+        def __init__(self, binary, nice=10):
+            super().__init__(binary, nice)
+            opened.append(self)
+
+        def tab(self, width, height):
+            made = FakeTab()
+            made.ready = len(opened) > 1  # the first browser's page never is
+            self.tabs.append(made)
+            return made
+
+    monkeypatch.setattr("arena.commentary.tab.Chrome", Slow)
+    monkeypatch.setattr("arena.commentary.tab.time", Hurried())
+    plan = PlanTab("http://127.0.0.1:8000", binary="/chrome")
+    with pytest.raises(TimeoutError):
+        plan.prepare({"run_id": "a", "turns": []})
+    assert opened[0].closed
+    assert plan.prepare({"run_id": "a", "turns": []}) == PLAN
+    assert len(opened) == 2
