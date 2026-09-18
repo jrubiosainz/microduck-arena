@@ -252,15 +252,6 @@ def test_the_unfurl_escapes_what_a_submitter_typed_and_falls_back_to_the_request
     assert f'content="http://testserver/r/{record.run_id}"' in page
 
 
-def test_ready_clips_are_listed_by_run_id(tmp_path):
-    store = LocalStore(tmp_path)
-    assert store.clips_ready() == []
-    store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:00:00Z")
-    store.put_clip("R3", {"clip.json": b"{}"})
-    store.put_clip("R1", {"clip.json": b"{}"})
-    assert store.clips_ready() == ["R1", "R3"]
-
-
 def test_the_worker_says_where_a_clip_stands(tmp_path):
     """The queue is a place in a line and a render is a fraction: both are read
     off the worker, never off the store, which knows only that one is owed."""
