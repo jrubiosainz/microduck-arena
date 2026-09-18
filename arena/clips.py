@@ -111,14 +111,22 @@ class ClipRenderer:
         return None
 
     def drain(self) -> None:
-        """Everything owed and not yet rendered or failed — after a restart —
-        and, when backfilling, every run that never owed one, newest first."""
+        """Everything owed and not yet rendered — after a restart — every clip
+        that failed, once more, and when backfilling every run that never owed
+        one, newest first."""
         for run_id in self.store.pending_clips():
             self.enqueue(run_id)
+        # A failure here is a stuck browser far more often than a broken run,
+        # and a boot is a new browser. It was forever: the marker is written
+        # once and nothing re-queued it, so one hung screenshot cost a
+        # publication its clip until someone edited the store by hand. Behind
+        # what is owed, so a player waiting on a fresh publish never queues
+        # behind a retry, and once per boot, so a run that is really broken
+        # costs one render and not a loop.
+        for run_id in self.store.failed_clips():
+            self.enqueue(run_id, priority=1)
         if not self.backfill:
             return
-        # Withdrawn runs keep their page but nobody shares them; a failed one
-        # stays failed until `arena clip` is run by hand.
         withdrawn = {w.run_id for w in self.store.withdrawals()}
         records = [
             record

@@ -125,9 +125,14 @@ class Chrome:
     """One headless browser with a profile of its own, killed rather than asked
     to leave: Chrome outlives a SIGTERM."""
 
+    # A layout is recorded in a tab of its own and only one of them can be the
+    # foreground one; a backgrounded renderer stops committing frames, and a
+    # screenshot then waits on a frame that never comes. The three
+    # backgrounding switches are off for that reason, not for speed.
     FLAGS = ("--headless=new", "--hide-scrollbars", "--no-first-run", "--no-default-browser-check",
              "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox",
-             "--remote-debugging-port=0")
+             "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows",
+             "--disable-background-timer-throttling", "--remote-debugging-port=0")
 
     def __init__(self, binary: str, nice: int = 10):
         self.profile = tempfile.mkdtemp(prefix="arena-chrome-")
@@ -188,6 +193,13 @@ SIZES = {"landscape": (1920, 1080), "vertical": (1080, 1920)}
 # The soundtrack comes out of the page in pieces this big, base64 over the protocol.
 CHUNK = 4 << 20
 JPEG_QUALITY = 92
+# A healthy capture is a fifth of a second, on the Space as on a laptop. One
+# that has not come back in this long is not slow, it is stuck — and a stuck
+# compositor comes back when asked again, so the frame is re-asked rather than
+# waited on. Measured: a capture once held the socket for the twelve minutes
+# left of a render's budget, and the run after it rendered in under three.
+CAPTURE_ATTEMPT_S = 60.0
+CAPTURE_TRIES = 3
 
 
 def ffmpeg_args(fps: int, pcm: Path, out: Path) -> list[str]:
@@ -261,6 +273,23 @@ def _record_layout(
     def left() -> float:
         return max(1.0, deadline - time.monotonic())
 
+    stuck = 0
+
+    def shoot(params: dict) -> dict:
+        """One screenshot, asked again while it does not come back. The budget
+        still bounds the whole thing: a capture never waits past the deadline,
+        and a browser stuck for good fails the clip as it always did."""
+        nonlocal stuck
+        for attempt in range(CAPTURE_TRIES):
+            try:
+                return tab.send("Page.captureScreenshot", params,
+                                timeout=min(CAPTURE_ATTEMPT_S, left()))
+            except TimeoutError:
+                stuck += 1
+                if attempt == CAPTURE_TRIES - 1 or left() <= 1.0:
+                    raise
+        raise AssertionError("unreachable: the last attempt either returns or raises")
+
     try:
         for i in range(plan["frames"]):
             # Checked once per frame, not once per run: a stuck tab or a slow
@@ -270,12 +299,9 @@ def _record_layout(
             asked = time.monotonic()
             tab.evaluate(f"window.clip.draw({i})", timeout=left())
             drawn = time.monotonic()
-            shot = tab.send("Page.captureScreenshot",
-                            {"format": "jpeg", "quality": JPEG_QUALITY}, timeout=left())
+            shot = shoot({"format": "jpeg", "quality": JPEG_QUALITY})
             if i == plan["poster"]:
-                poster = base64.b64decode(
-                    tab.send("Page.captureScreenshot", {"format": "png"}, timeout=left())["data"]
-                )
+                poster = base64.b64decode(shoot({"format": "png"})["data"])
             draw_s += drawn - asked
             shot_s += time.monotonic() - drawn
             ffmpeg.stdin.write(base64.b64decode(shot["data"]))
@@ -296,6 +322,9 @@ def _record_layout(
     timing = {
         "draw_ms_per_frame": round(1000 * draw_s / frames, 1),
         "capture_ms_per_frame": round(1000 * shot_s / frames, 1),
+        # How often the browser had to be asked twice. Zero is the normal
+        # reading; a clip that needed several says where to look next.
+        "stuck_captures": stuck,
         "total_wall_ms": round(1000 * (time.monotonic() - opened)),
         "cores": os.cpu_count(),
         "load": [round(x, 1) for x in os.getloadavg()],

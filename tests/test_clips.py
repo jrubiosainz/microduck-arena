@@ -322,11 +322,13 @@ def test_the_clip_route_follows_a_render_and_says_why_one_failed(tmp_path):
 
 
 class FakeTab:
-    """A page that answers instantly and remembers the deadline it was given."""
+    """A page that answers instantly and remembers the deadline it was given.
+    `stuck` screenshots never come back, as one did on the Space."""
 
-    def __init__(self, frames=4):
+    def __init__(self, frames=4, stuck=0):
         self.plan = {"fps": 25, "frames": frames, "seconds": frames / 25, "poster": 1}
         self.waited: list[tuple[str, float]] = []
+        self.stuck = stuck
 
     def evaluate(self, expression, await_promise=False, timeout=60.0):
         if expression == "window.clip.plan":
@@ -337,6 +339,9 @@ class FakeTab:
 
     def send(self, method, params=None, timeout=60.0):
         self.waited.append((method, timeout))
+        if self.stuck:
+            self.stuck -= 1
+            raise TimeoutError(f"timed out in {timeout:.1f}s")
         return {"data": base64.b64encode(b"jpeg").decode()}
 
 
@@ -375,7 +380,13 @@ def test_a_slow_frame_waits_on_the_budget_not_on_a_minute(tmp_path, monkeypatch)
         "draw", "Page.captureScreenshot",
         "draw", "Page.captureScreenshot",
     ]
-    assert all(290.0 < left <= 300.0 for _, left in tab.waited)
+    # A draw waits on the budget. A capture waits on one attempt of it, because
+    # a capture is the call that hangs and asking again is what recovers it.
+    draws = [left for what, left in tab.waited if what == "draw"]
+    shots = [left for what, left in tab.waited if what != "draw"]
+    assert all(290.0 < left <= 300.0 for left in draws)
+    assert all(left == recorder.CAPTURE_ATTEMPT_S for left in shots)
+    assert rendered_layout.timing["stuck_captures"] == 0
 
 
 def test_a_render_past_its_budget_stops_at_the_next_frame(tmp_path, monkeypatch):
@@ -407,3 +418,49 @@ def test_a_run_being_backfilled_is_not_told_it_has_no_clip(tmp_path):
     assert app.state.clips.queue.get()[-1] == record.run_id
     app.state.clips.step(None, "")
     assert api.get(url).json() == {"state": "none"}
+
+
+def test_a_screenshot_that_never_comes_back_is_asked_again(tmp_path, monkeypatch):
+    """Seen on the Space: a capture hung on a layout's last frame, held the
+    socket for the twelve minutes left of the budget and threw away eight
+    hundred good frames — while the very next run rendered in under three.
+    A stuck compositor is a transient thing, so the frame is asked for again."""
+    monkeypatch.setattr(recorder.subprocess, "Popen", FakeFfmpeg)
+    out = tmp_path / "landscape.mp4"
+    out.write_bytes(b"mp4")
+    tab = FakeTab(stuck=2)
+    layout, _ = recorder._record_layout(
+        tab, tmp_path / "s.f32", out, nice=10, deadline=time.monotonic() + 300.0,
+    )
+    assert layout.timing["stuck_captures"] == 2
+    # Two frames' worth of captures lost and asked again, and every frame drawn.
+    assert [what for what, _ in tab.waited].count("Page.captureScreenshot") == 7
+
+
+def test_a_capture_stuck_for_good_still_fails_the_clip(tmp_path, monkeypatch):
+    monkeypatch.setattr(recorder.subprocess, "Popen", FakeFfmpeg)
+    out = tmp_path / "landscape.mp4"
+    out.write_bytes(b"mp4")
+    tab = FakeTab(stuck=99)
+    with pytest.raises(TimeoutError, match="timed out in"):
+        recorder._record_layout(
+            tab, tmp_path / "s.f32", out, nice=10, deadline=time.monotonic() + 300.0,
+        )
+    assert [what for what, _ in tab.waited].count("Page.captureScreenshot") == recorder.CAPTURE_TRIES
+
+
+def test_a_failed_clip_is_owed_one_more_go_at_the_next_boot(tmp_path):
+    """A failure here is a stuck browser far more often than a broken run, and
+    it used to be forever: the marker is written once and the drain skipped it,
+    so a transient hang cost a publication its clip until someone went into the
+    store by hand. A boot is a new browser; it is worth one more render."""
+    store = LocalStore(tmp_path)
+    store.mark_clip_pending("P1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    store.fail_clip("F1", "2026-09-16T10:05:00Z", "TimeoutError: timed out in 736.5s")
+    store.put_clip("R1", {"clip.json": b"{}"})
+
+    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=None, log=lambda _: None)
+    worker.drain()
+    # Behind what is owed, never in front of it: a fresh publish waits for
+    # nobody's retry.
+    assert [(item[0], item[-1]) for item in sorted(worker.queue.queue)] == [(0, "P1"), (1, "F1")]

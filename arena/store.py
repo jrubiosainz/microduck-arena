@@ -315,6 +315,7 @@ class Store(Protocol):
     def clip_state(self, run_id: str) -> tuple[str, dict | None]: ...
     def clip_file(self, run_id: str, name: str) -> Path: ...
     def pending_clips(self) -> list[str]: ...
+    def failed_clips(self) -> list[str]: ...
 
 
 class LocalStore:
@@ -488,6 +489,15 @@ class LocalStore:
         return sorted(
             folder.name for folder in directory.iterdir()
             if folder.is_dir() and self.clip_state(folder.name)[0] == "pending"
+        )
+
+    def failed_clips(self) -> list[str]:
+        directory = self.root / "clips"
+        if not directory.is_dir():
+            return []
+        return sorted(
+            folder.name for folder in directory.iterdir()
+            if folder.is_dir() and self.clip_state(folder.name)[0] == "failed"
         )
 
 
@@ -687,6 +697,9 @@ class HubStore:
 
     def pending_clips(self) -> list[str]:
         return self.snapshot().pending_clips()
+
+    def failed_clips(self) -> list[str]:
+        return self.snapshot().failed_clips()
 
 
 class HubBallots:
