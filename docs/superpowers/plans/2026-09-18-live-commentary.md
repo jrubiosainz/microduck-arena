@@ -18,7 +18,7 @@
 - Broadcasts never reach the `Store`. They live on the process's disk, under a directory the `BroadcastBook` owns. The `Store` protocol gains nothing.
 - The reserve keeps **8** runs stocked, attempts at most **120** generations an hour counted whether they succeed or are refused, and runs **one** generation at a time.
 - History is the last **5** aired broadcasts, all runs together, newest last. Retention keeps an aired broadcast until **20** newer ones have aired after it.
-- The reserve's Chrome is its own `arena.recorder.Chrome` with exactly one tab. Never a second tab in the clip renderer's browser: a backgrounded renderer stops committing frames.
+- The reserve's Chrome is its own `arena.recorder.Chrome` with exactly one tab. Never a second tab in the clip renderer's browser: measured on the Space, a second tab stalls whichever one is backgrounded, and the anti-backgrounding flags do not prevent it — only being alone in a browser does.
 - A refusal from the router is not an error. It is logged and the loop moves to the next run.
 - One commit per task, message in the repository's style (one sentence, capitalised, no `feat:` prefix), ending with the trailer `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
 - Never push, never merge, never switch branch: a push to `main` deploys the Hugging Face Space.
@@ -430,7 +430,13 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Consumes: `arena.recorder.Chrome`, `arena.recorder.find_chrome`, and Task 1's `/plan.html`.
 - Produces: `PlanTab(origin: str, binary: str | None = None, nice: int = 10)` with `prepare(dialogue: dict) -> dict` and `close() -> None`, usable as a context manager. It owns one `Chrome` and one `Tab` for its whole life and re-opens both if the browser has died.
 
-The browser is launched once and kept. `arena.recorder.Chrome` already carries `--disable-renderer-backgrounding`, `--disable-backgrounding-occluded-windows` and `--disable-background-timer-throttling`, and its own comment says why: a backgrounded renderer stops committing frames. One tab, so it is always the foreground one.
+The browser is launched once and kept, and it holds exactly one tab. That is not
+belt and braces: the clip renderer was measured on the Space over seven clips
+with a tab per layout in one browser, and the first tab opened stalled once or
+twice on every single landscape render while no vertical one ever did. The three
+anti-backgrounding switches `Chrome` already carries did **not** change it. Only
+being the sole tab in a browser did, which is why `record_run` now takes a
+browser per layout. The reserve is built the same way from the start.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -564,10 +570,14 @@ Create `arena/commentary/tab.py`:
 
 The plan a booth plays is computed by the page, not by Python, so that the file
 the reserve keeps is exactly what the live page will play. That needs a browser,
-and launching one per dialogue would cost seconds of CPU every forty seconds.
-So the browser stays open — and it is a browser of its own with a single tab,
-never a second tab in the clip renderer's: a backgrounded renderer stops
-committing frames, as `Chrome`'s own switches record.
+and launching one per dialogue would cost seconds of CPU every forty seconds, so
+the browser stays open.
+
+It is a browser of its own holding a single tab, never a second tab in the clip
+renderer's. A backgrounded renderer stops committing frames and its screenshot
+waits on a frame that never comes; the clip renderer measured this over seven
+clips on the Space, and found the anti-backgrounding flags did not prevent it.
+Being the only tab is what does.
 """
 
 import json
