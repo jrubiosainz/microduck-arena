@@ -502,7 +502,7 @@ to the next item is gone from the prompt.
 Local checks before the audit, as Duck Jam: speaker alternation, length and
 printability, no `<>`, no technical text (paths, ids, filenames, hashes), no
 speaker label or self-introduction, no gendered or kinship words, every name
-component cited by its identity ref, fall vocabulary only with a `fell`
+component cited by one of its identity refs, fall vocabulary only with a `fell`
 outcome in the cited facts, every number and number word present in the cited
 facts, at least one result fact covered, no participant placed in the booth.
 Then the audit call returns `{grounded, english, personalities, fresh}`, all of

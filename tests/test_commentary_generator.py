@@ -119,6 +119,26 @@ def test_a_run_draws_its_own_direction_and_always_the_same_one():
     assert direction("R1") not in check_messages[0]["content"]
 
 
+def test_a_handle_carried_by_several_facts_is_grounded_by_any_one_of_them():
+    # The participant fact, the board and a recent run may all carry the same name. The
+    # writer is told every index, and citing one of them grounds the name.
+    again = Fact("recent:R8", "Earlier this season: The participant is @alice.", "recent",
+                 identities=("alice",))
+    facts = [*FACTS, again]
+    written, provider = run_case(facts=facts)
+    assert written["turns"][0]["fact_refs"] == ["run#/event", "run#/participant", "run#/result"]
+    system = provider.calls[0][0][0]["content"]
+    assert '"@alice": [1, 6]' in system and '"@carol": [3]' in system
+    by_the_recent_run = [{**TURNS[0], "fact_refs": [0, 2, 6]}, TURNS[1], TURNS[2]]
+    run_case(turns=by_the_recent_run, facts=facts)
+    # A fact that prints a handle establishes it, declared or not.
+    profile = Fact("notable#/profile", "@alice has 620 points this season.", "notable")
+    by_the_profile = [{**TURNS[0], "fact_refs": [0, 2, 7]}, TURNS[1], TURNS[2]]
+    run_case(turns=by_the_profile, facts=[*facts, profile])
+    with pytest.raises(Rejected, match="name"):
+        run_case(turns=[{**TURNS[0], "fact_refs": [0, 2]}, TURNS[1], TURNS[2]], facts=facts)
+
+
 def test_a_code_fence_around_the_answer_is_dressing():
     fenced = "```json\n" + json.dumps(TURNS) + "\n```"
     provider = provider_for(reply(TURNS, content=fenced), reply(CHECK, completion_tokens=80))

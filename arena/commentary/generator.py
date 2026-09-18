@@ -175,6 +175,7 @@ UNSUPPORTED_PERSONAL_WORDS = frozenset((
     "boyfriends", "girlfriend", "girlfriends",
 ))
 FALLS = frozenset({"fall", "fell", "fallen", "falls", "falling"})
+HANDLE = re.compile(r"@([\w-]+(?:\.[\w-]+)*)")
 SPEAKER = r"(?:Peter(?: Duckry)?|Ray(?: Quackson)?)"
 AT_NAME = re.compile(r"@([\w-]+)")
 
