@@ -204,10 +204,11 @@ function loadGlb() {
 }
 
 // Per-rig assets, memoised per rig: the roller rig has its own kinematic tree
-// and five STLs the GLB does not carry.
+// and five STLs the GLB does not carry. Exported for the booth, which builds
+// its own scene from the same rig.
 const rigAssets = new Map();
 
-function loadAssets(rig) {
+export function loadAssets(rig) {
   if (!rigAssets.has(rig)) {
     rigAssets.set(
       rig,

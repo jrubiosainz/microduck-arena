@@ -311,6 +311,8 @@ export function attachMeshes(
         opacity,
       });
       const mesh = new Mesh(geometry, material);
+      // Named after its file, so the booth can find the jaw and hang it on a pivot.
+      mesh.name = geom.mesh;
       mesh.position.set(geom.pos[0], geom.pos[1], geom.pos[2]);
       if (geom.quat) setMjcfQuat(mesh.quaternion, geom.quat);
       group.add(mesh);
