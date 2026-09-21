@@ -11,7 +11,7 @@ import { formatScore, formatSpeed } from "./format.js";
 import { lanesFor } from "./lanes.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
-import { playerHref, raceHref, runHref } from "./router.js";
+import { dress, playerHref, raceHref, runHref } from "./router.js";
 import { shareStrip, wireShare } from "./share.js";
 import { footer, signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
@@ -63,7 +63,12 @@ function pegRow(row) {
 }
 
 export async function renderRun(root, runId, state) {
+  // Both are needed before anything can be drawn: whether the reveal plays at
+  // all is a fact about this run AND about who is looking at it.
   const [run, me] = await Promise.all([getRun(runId), getMe()]);
+  // The sheet goes on with the first element, not on the way in: until here
+  // the previous page is still on screen and keeps its own.
+  dress("run");
   root.replaceChildren(signage(me));
   const revealing = revealFor(run, me, matchMedia("(prefers-reduced-motion: reduce)").matches);
   const earned = run.receipts.reduce((sum, r) => sum + r.points, 0);

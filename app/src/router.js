@@ -36,3 +36,23 @@ export const liveHref = "#/live";
  */
 export const themeFor = (view) =>
   view === "live" ? "live" : ["race", "vote", "run"].includes(view) ? "race" : "club";
+
+/**
+ * Wear one view's placement sheet and take the others off.
+ *
+ * Called by each view at the moment it first writes to the page, never
+ * before: a view's own fetches sit between the click and its first element,
+ * and flipping the sheet on the way in left the PREVIOUS page on screen
+ * wearing the incoming one for the whole of that wait. Every rule the old
+ * page relied on vanished at once — which is how a 15px Discord mark came to
+ * fill the window for half a second.
+ *
+ * All the sheets dress the same tokens; they differ only in what they place,
+ * which is why they cannot be worn together.
+ */
+export function dress(view) {
+  const wanted = themeFor(view);
+  for (const link of document.querySelectorAll("link[data-theme]")) {
+    link.disabled = link.dataset.theme !== wanted;
+  }
+}

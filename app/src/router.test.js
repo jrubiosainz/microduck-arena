@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  liveHref,
-  menuHref,
-  parseRoute,
-  playerHref,
-  raceHref,
-  runHref,
-  themeFor,
-  voteHref,
-} from "./router.js";
+import { dress, liveHref, menuHref, parseRoute, playerHref, raceHref, runHref, themeFor, voteHref } from "./router.js";
 
 describe("parseRoute", () => {
   it("shows the home page by default", () => {
@@ -86,5 +77,39 @@ describe("themeFor", () => {
     expect(themeFor("live")).toBe("live");
     expect(themeFor("run")).toBe("race");
     expect(themeFor("menu")).toBe("club");
+  });
+});
+
+describe("dress: wearing one placement sheet", () => {
+  const sheets = () => {
+    document.head.querySelectorAll("link[data-theme]").forEach((l) => l.remove());
+    return ["club", "race", "live"].map((theme) => {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.dataset.theme = theme;
+      document.head.append(link);
+      return link;
+    });
+  };
+
+  it("enables exactly the one the view wears", () => {
+    const [club, race, live] = sheets();
+    dress("menu");
+    expect([club.disabled, race.disabled, live.disabled]).toEqual([false, true, true]);
+    dress("race");
+    expect([club.disabled, race.disabled, live.disabled]).toEqual([true, false, true]);
+    dress("live");
+    expect([club.disabled, race.disabled, live.disabled]).toEqual([true, true, false]);
+  });
+
+  it("puts a player on the club's sheet and a booth on the trackside one", () => {
+    const [club, race] = sheets();
+    dress("player");
+    expect([club.disabled, race.disabled]).toEqual([false, true]);
+    // A booth and a run page both have a stage, so both wear the race sheet.
+    dress("vote");
+    expect(race.disabled).toBe(false);
+    dress("run");
+    expect(race.disabled).toBe(false);
   });
 });

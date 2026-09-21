@@ -7,7 +7,7 @@
 
 import { castVote, getBallot, getBallotTrace, getMe } from "./api.js";
 import { LANE_COLORS, LANE_CSS } from "./course.js";
-import { raceHref } from "./router.js";
+import { dress, raceHref } from "./router.js";
 import { signInHref } from "./session.js";
 import { credit, shower } from "./points.js";
 import { footer, settleIdentity, signage } from "./signage.js";
@@ -234,6 +234,9 @@ export async function renderVote(root, { event, state }) {
   // Started, not awaited: the booth does not read it, and /api/me folds the
   // whole run log for two numbers on a chip.
   const identity = getMe();
+  // The sheet goes on with the first element, not on the way in: until
+  // here the previous page is still on screen and keeps its own.
+  dress("vote");
   root.replaceChildren(signage(undefined));
   identity.then((me) => settleIdentity(root, me));
 

@@ -5,6 +5,7 @@
 // live/channel.js drives the segments from the clock.
 
 import { getLive } from "./api.js";
+import { dress } from "./router.js";
 import { createAmbience } from "./live/ambience.js";
 import { createChannel } from "./live/channel.js";
 import { createClock } from "./live/clock.js";
@@ -139,6 +140,9 @@ export function openSound(tones) {
 }
 
 export async function renderLive(root, state, { api = { getLive }, tones = loadTones, sound: createSound = openSound, framed = false } = {}) {
+  // Only the full page wears the channel's sheet. Framed, this is a box on
+  // the front page, which is wearing the club's and must keep it.
+  if (!framed) dress("live");
   const { page, stage, card, join } = buildStage(root, framed);
   const controller = new AbortController();
   const { signal } = controller;

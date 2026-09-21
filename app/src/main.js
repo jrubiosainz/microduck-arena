@@ -6,7 +6,7 @@ import { renderLive } from "./live.js";
 import { renderPlayer } from "./player.js";
 import { renderRace } from "./race.js";
 import { renderRun } from "./run.js";
-import { parseRoute, themeFor } from "./router.js";
+import { parseRoute } from "./router.js";
 import { renderVote } from "./vote.js";
 
 const root = document.querySelector("#app");
@@ -17,16 +17,6 @@ async function events() {
   return state.events;
 }
 
-/**
- * Enable one view's placement sheet and disable the others'. All dress the
- * same tokens, but each owns the page's own body and column, so they never
- * load together; flipping `disabled` is instant and keeps them all cached.
- */
-function dress(theme) {
-  for (const link of document.querySelectorAll("link[data-theme]")) {
-    link.disabled = link.dataset.theme !== theme;
-  }
-}
 
 async function show() {
   // Tear the old view's render loop down before building the next one, or two
@@ -38,7 +28,6 @@ async function show() {
   state.teardown = null;
 
   const route = parseRoute(location.hash);
-  dress(themeFor(route.view));
   try {
     if (route.view === "race") {
       const event = (await events()).find((e) => e.id === route.eventId);

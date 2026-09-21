@@ -25,6 +25,15 @@
          text density, and the channel is nothing but a stage. Static files on
          purpose — Vite would fold a src/ stylesheet into the bundle and drop
          the data-theme attribute the switch relies on. -->
+    <!-- Fetched up front, though they start disabled. Chrome and Safari do not
+         load a disabled stylesheet at all until it is enabled — so the first
+         click into a race went and got 46 KB of race.css right then, and the
+         page sat unstyled for a round trip while it came. Preloading puts
+         them in the cache before anyone asks, and enabling is then instant.
+         The same stamped URLs as the links below, so it is one cache entry
+         each and not two. -->
+    <link rel="preload" as="style" href="/race.css" />
+    <link rel="preload" as="style" href="/live.css" />
     <link rel="stylesheet" href="/club.css" data-theme="club" />
     <link rel="stylesheet" href="/race.css" data-theme="race" disabled />
     <link rel="stylesheet" href="/live.css" data-theme="live" disabled />

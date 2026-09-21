@@ -3,7 +3,7 @@
 
 import { getMe, getPlayer } from "./api.js";
 import { formatScore } from "./format.js";
-import { menuHref, raceHref, runHref } from "./router.js";
+import { dress, menuHref, raceHref, runHref } from "./router.js";
 import { avatar, chequer, footer, settleIdentity, signOutButton, signage } from "./signage.js";
 
 function el(tag, className, text) {
@@ -163,6 +163,9 @@ export async function renderPlayer(root, user) {
   const identity = getMe();
   const player = await getPlayer(user);
   // The chequer straight under the strip, where the page begins.
+  // The sheet goes on with the first element, not on the way in: until
+  // here the previous page is still on screen and keeps its own.
+  dress("player");
   root.replaceChildren(signage(undefined), chequer("page-checker"));
   const hall = el("main", "hall hall--warm");
   root.append(hall, footer());

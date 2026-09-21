@@ -21,6 +21,21 @@ vi.mock("./api.js", () => ({
 // throwing — the documented fallback, confirmed by thumbnail.test.js passing
 // unmocked — so no mock of ./thumbnail.js is needed here either.
 
+/** A stand-in for the sheets index.html carries, which jsdom has none of. */
+const sheet = (theme) => {
+  let link = document.head.querySelector(`link[data-theme="${theme}"]`);
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.dataset.theme = theme;
+    link.disabled = theme !== "race"; // deliberately the wrong way round
+    document.head.append(link);
+  }
+  return link;
+};
+sheet("club");
+sheet("race");
+
 describe("the whole front page", () => {
   it("draws without waiting on /api/me", async () => {
     // That call folds the whole run log for two numbers on one plate. The
@@ -33,6 +48,10 @@ describe("the whole front page", () => {
     expect(root.querySelector(".masthead .wordmark--cover")).not.toBeNull();
     expect(root.querySelector(".flock-band")).not.toBeNull();
     expect(root.querySelector(".ladder-scroll")).not.toBeNull();
+    // And the sheet went on with that first element. Flipping it on the way
+    // in left the PREVIOUS page wearing the incoming one for the whole wait.
+    expect(sheet("club").disabled).toBe(false);
+    expect(sheet("race").disabled).toBe(true);
     // And a duck holds the plate meanwhile.
     expect(root.querySelector(".player-card--waiting img.duckhead")).not.toBeNull();
   });

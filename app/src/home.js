@@ -8,7 +8,7 @@ import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
 import { flyer } from "./flyer.js";
 import { FLOCK, MICRODUCK, MICRODUCK_RL, STORE } from "./links.js";
 import { renderLive } from "./live.js";
-import { liveHref, playerHref } from "./router.js";
+import { dress, liveHref, playerHref } from "./router.js";
 import { signInHref } from "./session.js";
 import { avatar, chequer, pendingIdentity, settleIdentity } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
@@ -227,6 +227,9 @@ export function liveFrame() {
 export async function renderHome(root, state) {
   const identity = getMe();
   const [events, standings] = await Promise.all([getEvents(), getStandings()]);
+  // The sheet goes on with the first element, not on the way in: until
+  // here the previous page is still on screen and keeps its own.
+  dress("menu");
   root.replaceChildren(pageTexture(), masthead(undefined), flockBand());
   const hall = el("main", "hall");
   root.append(hall);

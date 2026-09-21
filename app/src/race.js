@@ -15,7 +15,7 @@ import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
-import { menuHref, runHref } from "./router.js";
+import { dress, menuHref, runHref } from "./router.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { panelState, signInHref } from "./session.js";
 import { footer, settleIdentity, signage } from "./signage.js";
@@ -397,6 +397,9 @@ export async function renderRace(root, { event, state }) {
   // a chip; the stage, the entry column and the board's own fetch do not need
   // it, and waiting here meant the page drew nothing until it answered.
   const identity = getMe();
+  // The sheet goes on with the first element, not on the way in: until
+  // here the previous page is still on screen and keeps its own.
+  dress("race");
   root.replaceChildren(signage(undefined));
 
   const hall = raceHall(event);
