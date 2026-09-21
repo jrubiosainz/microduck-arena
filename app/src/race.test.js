@@ -7,8 +7,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  ROUNDS_IN_VIEW, exclusivePick, lapReseat, otherRounds, raceHall, renderEntryPanel,
-  renderEventFacts, renderVoteButton,
+  ROUNDS_IN_VIEW, exclusivePick, otherRounds, raceHall, renderEntryPanel, renderEventFacts,
+  renderVoteButton,
 } from "./race.js";
 
 const event = {
@@ -439,8 +439,7 @@ describe("otherRounds: the way on, under the board", () => {
   it("leaves out the round you are already on", () => {
     // A card back to this page is a dead end dressed as a way forward.
     const strip = otherRounds(programme, here, new Map());
-    const links = [...strip.querySelectorAll(".challenge-note:not([data-copy]) a.challenge-link")]
-      .map((a) => a.getAttribute("href"));
+    const links = [...strip.querySelectorAll("a.challenge-link")].map((a) => a.getAttribute("href"));
     expect(links).not.toContain("#/e/sprint-2m");
     expect(links[0]).toBe("#/e/roller-sprint-2m");
   });
@@ -449,24 +448,9 @@ describe("otherRounds: the way on, under the board", () => {
     // Four are in view and the rest scroll in, so there is nowhere left for a
     // "see all" to send you that you are not already looking at.
     const strip = otherRounds(programme, here, new Map());
-    const real = strip.querySelectorAll(".challenge-note:not([data-copy])");
-    expect(real).toHaveLength(programme.length - 1);
+    expect(strip.querySelectorAll(".challenge-note")).toHaveLength(programme.length - 1);
     expect(strip.querySelector(".rounds-on__all")).toBeNull();
     expect(ROUNDS_IN_VIEW).toBe(4);
-  });
-
-  it("lays a second copy so the track can go round, and hides it from readers", () => {
-    // The loop needs the wall twice over. A screen reader would otherwise
-    // read the whole programme twice, and tab would walk it twice.
-    const strip = otherRounds(programme, here, new Map());
-    const copies = [...strip.querySelectorAll(".challenge-note[data-copy]")];
-    expect(copies).toHaveLength(programme.length - 1);
-    expect(copies.every((c) => c.getAttribute("aria-hidden") === "true")).toBe(true);
-    expect(copies.every((c) => [...c.querySelectorAll("a, button")]
-      .every((f) => f.tabIndex === -1))).toBe(true);
-    // The originals stay reachable.
-    const first = strip.querySelector(".challenge-note:not([data-copy]) a.challenge-link");
-    expect(first.tabIndex).toBe(0);
   });
 
   it("gives the track its own way to be scrolled, by key as well as by arrow", () => {
@@ -492,38 +476,11 @@ describe("otherRounds: the way on, under the board", () => {
       ["roller-sprint-2m", [{ user: "ann", score: 3.216, seeds_finished: 5 }]],
     ]);
     const strip = otherRounds(programme, here, boards);
-    const cards = [...strip.querySelectorAll(".challenge-note:not([data-copy])")];
+    const cards = [...strip.querySelectorAll(".challenge-note")];
     expect(cards[0].querySelector(".flyer-leader-name").textContent).toBe("ann");
     expect(cards[1].querySelector(".flyer-leader-name").textContent).toBe("be the first");
     // A planned event says so rather than inviting an entry it cannot take.
     expect(cards[3].querySelector(".flyer-leader-name").textContent).toBe("course not built yet");
     expect(cards[4].querySelector(".flyer-leader-name").textContent).toBe("course not built yet");
-  });
-});
-
-describe("lapReseat: keeping a looping track inside its band", () => {
-  const LAP = 1000;
-
-  it("leaves the resting band alone", () => {
-    for (const at of [500, 800, 1000, 1200, 1499]) {
-      expect(lapReseat(at, LAP)).toBe(at);
-    }
-  });
-
-  it("pulls back a lap once it strays past the band", () => {
-    expect(lapReseat(1500, LAP)).toBe(500);
-    expect(lapReseat(1900, LAP)).toBe(900);
-    expect(lapReseat(499, LAP)).toBe(1499);
-    expect(lapReseat(0, LAP)).toBe(1000);
-  });
-
-  it("settles instead of taking turns with itself", () => {
-    // The bug this replaced: wrapping at 0 and at exactly one lap put both
-    // boundaries ON resting positions, so 0 became a lap and a lap became 0,
-    // every 140ms, for ever. Applying the rule twice must be a no-op.
-    for (const at of [0, 499, 500, 1000, 1499, 1500, 1999]) {
-      const once = lapReseat(at, LAP);
-      expect(lapReseat(once, LAP), `${at} did not settle`).toBe(once);
-    }
   });
 });

@@ -330,26 +330,6 @@ export function exclusivePick(boxes, changed) {
   return changed.dataset.pick;
 }
 
-/**
- * Where a looping track should sit, given where it is and how long a lap is.
- *
- * The track holds two copies of the wall and rests one lap in, with a lap of
- * content either side. Straying past half a lap from that seat is corrected by
- * a whole lap, onto identical content, so there is nothing to see.
- *
- * The band is the point, and it is why this is a function rather than two
- * lines inside a handler. Wrapping at 0 and at exactly one lap put both
- * boundaries ON resting positions: 0 became a lap, a lap became 0, and the
- * two corrections took turns every 140ms for ever — which relit the flag that
- * suppresses the sheets' hover swing each time round, and read as the card
- * under the pointer freezing.
- */
-export function lapReseat(scrollLeft, lap) {
-  if (scrollLeft >= lap * 1.5) return scrollLeft - lap;
-  if (scrollLeft < lap * 0.5) return scrollLeft + lap;
-  return scrollLeft;
-}
-
 /** How many cards the carousel shows at once; the rest scroll into view. */
 export const ROUNDS_IN_VIEW = 4;
 
@@ -385,52 +365,17 @@ export function otherRounds(events, event, boards) {
   track.tabIndex = 0;
   track.setAttribute("role", "group");
   track.setAttribute("aria-label", "The other rounds");
-  const sheets = others.map((e) => flyer(e, boards.get(e.id) ?? []));
-  track.append(...sheets);
-  // A second copy, so scrolling off one end arrives at the other with nothing
-  // to see. It is a DUPLICATE, so it is hidden from anyone not looking at it:
-  // a screen reader would otherwise read the whole programme twice, and tab
-  // would walk it twice.
-  for (const sheet of sheets) {
-    const copy = sheet.cloneNode(true);
-    copy.dataset.copy = "";
-    copy.setAttribute("aria-hidden", "true");
-    for (const focusable of copy.querySelectorAll("a, button")) focusable.tabIndex = -1;
-    track.append(copy);
-  }
+  track.append(...others.map((e) => flyer(e, boards.get(e.id) ?? [])));
 
-  // Where the seam is. Read at the moment it is needed rather than kept: the
-  // window resizes, a still lands, and the track's width moves with them.
-  const lap = () => track.scrollWidth / 2;
-  // The track rests one whole lap in, with a lap of content either side of
-  // it, and is pulled back to that band whenever it strays. The band matters:
-  // wrapping at 0 and at exactly one lap put both boundaries ON resting
-  // positions, so the two corrections took turns for ever — 0 becomes a lap,
-  // a lap becomes 0 — and the flag that suppresses the hover swing was
-  // relit every time round. That is what froze under the pointer.
-  const reseat = () => {
-    const half = lap();
-    if (half) track.scrollLeft = lapReseat(track.scrollLeft, half);
-  };
-  // Bring the resting position inside the first copy before an animated
-  // scroll, so a smooth step never has to cross the seam while it is running
-  // — that is what turns a loop into a lurch.
-  const normalise = () => reseat();
-  // A drag or a trackpad has no press to hang the correction on, so the seam
-  // is crossed after the scrolling settles. Instantly, and onto identical
-  // content, so there is nothing to see.
+  // The only thing left on scroll: while the track moves, the sheets pass
+  // UNDER the pointer and each takes its hover swing on the way past — a row
+  // rippling one card after another, which is not a hover, it is the scroll.
+  // The flag turns the swing off for the duration; the stylesheet reads it.
   let settling;
   track.addEventListener("scroll", () => {
-    // While the track moves, the sheets pass UNDER the pointer and each one
-    // takes its hover swing on the way past — a row of cards pivoting one
-    // after another, which is not a hover, it is the scroll. The flag turns
-    // the swing off for the duration; the stylesheet reads it.
     track.dataset.scrolling = "";
     clearTimeout(settling);
-    settling = setTimeout(() => {
-      delete track.dataset.scrolling;
-      reseat();
-    }, 140);
+    settling = setTimeout(() => delete track.dataset.scrolling, 140);
   }, { passive: true });
 
   // One arrow either side of the track rather than a pair above it: they
@@ -444,7 +389,6 @@ export function otherRounds(events, event, boards) {
     button.textContent = glyph;
     // One viewport of cards per press, whatever the window is showing.
     button.addEventListener("click", () => {
-      normalise();
       const dir = way === "on" ? 1 : -1;
       track.scrollBy({ left: dir * track.clientWidth, behavior: "smooth" });
     });
@@ -479,30 +423,16 @@ export async function keepRacing(root, event) {
   const foot = root.querySelector("footer");
   if (foot) foot.before(strip); else root.append(strip);
 
-  // Seat the track a lap in, now that it has a width. Detached it has none,
-  // which is why this cannot happen while the strip is being built.
-  const track = strip.querySelector(".rounds-on__track");
-  const seat = () => { track.scrollLeft = track.scrollWidth / 2; };
-  if (typeof requestAnimationFrame === "function") requestAnimationFrame(seat); else seat();
 
   const stills = await renderThumbnails(others);
-  // BOTH the sheet and its copy. The copies are cloned before the stills are
-  // rendered — they have to be, the track needs its full width to know where
-  // its seam is — so a still applied only to the originals leaves every
-  // second lap of the carousel showing dark frames for ever.
-  const frames = (selector) => [...strip.querySelectorAll(selector)];
-  const originals = frames(".challenge-note:not([data-copy]) .challenge-art");
-  const copies = frames(".challenge-note[data-copy] .challenge-art");
+  const frames = [...strip.querySelectorAll(".challenge-art")];
   others.forEach((e, i) => {
     const url = stills.get(e.id);
-    if (!url) return; // no WebGL, or this rig failed — the frame stays dark
-    for (const frame of [originals[i], copies[i]]) {
-      if (!frame) continue;
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = "";
-      frame.replaceChildren(img);
-    }
+    if (!url || !frames[i]) return; // no WebGL, or this rig failed — frame stays dark
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = "";
+    frames[i].replaceChildren(img);
   });
 }
 

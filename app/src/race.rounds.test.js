@@ -60,7 +60,7 @@ describe("keepRacing", () => {
     await keepRacing(root, PROGRAMME[0]);
     // Every other round is on the track; only the open ones cost a board.
     expect(asked).toEqual(["roller-sprint-2m", "hill-climb-1m5", "swag-contest"]);
-    expect(root.querySelectorAll(".rounds-on .challenge-note:not([data-copy])")).toHaveLength(4);
+    expect(root.querySelectorAll(".rounds-on .challenge-note")).toHaveLength(4);
     expect(root.querySelector(".rounds-on__track")).not.toBeNull();
   });
 
@@ -68,22 +68,5 @@ describe("keepRacing", () => {
     const root = document.createElement("div");
     await keepRacing(root, PROGRAMME[0]);
     expect(root.querySelector(".rounds-on")).not.toBeNull();
-  });
-});
-
-describe("the stills reach the copies too", () => {
-  it("fills a sheet and its clone, so every lap of the carousel is drawn", async () => {
-    // The copies are cloned before the stills render — the track needs its
-    // full width to know where its seam is — so a still applied only to the
-    // originals leaves every second lap showing dark frames for ever.
-    const root = document.createElement("div");
-    await keepRacing(root, PROGRAMME[0]);
-    const src = (sel) => [...root.querySelectorAll(sel)].map((f) => f.querySelector("img")?.src);
-    const originals = src(".challenge-note:not([data-copy]) .challenge-art");
-    const copies = src(".challenge-note[data-copy] .challenge-art");
-    expect(originals).toEqual(copies);
-    // The open ones got one; the planned one has no still and stays dark.
-    expect(originals.filter(Boolean)).toHaveLength(3);
-    expect(originals).toContain("data:,roller-sprint-2m");
   });
 });
