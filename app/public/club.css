@@ -377,6 +377,14 @@
    the way components.css draws the gym floor: gradients as a PATTERN, never
    the colour ramp the charter forbids. */
 .chapter-checker {
+  /* Above the ground the wall chapter paints beneath it. That ground sits at
+     z-index -2, but the chapter is `isolation: isolate`, so -2 only orders it
+     within the chapter — from outside, the whole chapter paints AFTER this
+     band and its ground, which reaches 168px up, covered the chequer
+     completely. Sibling order is what decides here, and this is how the
+     chequer wins it. */
+  position: relative;
+  z-index: 1;
   height: 16px;
   /* Leaning -1°, as the rule it replaced did. Wider than the window and
      pulled back by half the excess: a 1° turn lifts one end and drops the

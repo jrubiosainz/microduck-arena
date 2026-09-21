@@ -178,6 +178,8 @@ describe("the chapter chequer", () => {
     ).replace(/\/\*[\s\S]*?\*\//g, "");
     const door = css.match(/\n\.door \{([^}]*)\}/);
     const under = css.match(/\.chapter--wall::before\s*\{([^}]*)\}/);
+    const band = css.match(/\.chapter-checker\s*\{([^}]*)\}/);
+    expect(band, ".chapter-checker rule not found in club.css").not.toBeNull();
     expect(under, ".chapter--wall::before not found in club.css").not.toBeNull();
     expect(door[1]).toMatch(/background-color\s*:\s*var\(--warm-paper\)/);
     expect(under[1], "the ground under the wall is not the band's own")
@@ -185,6 +187,14 @@ describe("the chapter chequer", () => {
     // Under the scanlines, which sit at -1, and under the flyers.
     expect(under[1], "the ground would paint over the scanlines")
       .toMatch(/z-index\s*:\s*-2/);
+    // And the chequer has to out-rank it. The -2 above orders that layer only
+    // WITHIN its chapter, which is `isolation: isolate`; from outside, the
+    // whole chapter paints after the chequer, and this ground reaches far
+    // enough up to cover it. It did, until the chequer was raised.
+    expect(band[1], "the wall's ground will paint over the chequer")
+      .toMatch(/z-index\s*:\s*1/);
+    expect(band[1], "z-index does nothing on a static box")
+      .toMatch(/position\s*:\s*relative/);
   });
 });
 
