@@ -18,7 +18,7 @@ import { formatEventFacts, speedChoices } from "./format.js";
 import { menuHref, runHref } from "./router.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { panelState, signInHref } from "./session.js";
-import { footer, signage } from "./signage.js";
+import { footer, settleIdentity, signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
 import { modeIsUseful, visibleRows } from "./views.js";
 import { createViewer } from "./viewer.js";
@@ -393,13 +393,18 @@ export async function keepRacing(root, event) {
 }
 
 export async function renderRace(root, { event, state }) {
-  // Asked for first: the strip over the door carries this player's chip, and
-  // the board below needs to know whose rows are their own.
-  const me = await getMe();
-  root.replaceChildren(signage(me));
+  // Started, not awaited. /api/me folds the whole run log for two numbers on
+  // a chip; the stage, the entry column and the board's own fetch do not need
+  // it, and waiting here meant the page drew nothing until it answered.
+  const identity = getMe();
+  root.replaceChildren(signage(undefined));
 
   const hall = raceHall(event);
   root.append(hall, footer());
+
+  // Only now, where the board needs to know whose rows are someone's own.
+  const me = await identity;
+  settleIdentity(root, me);
 
   // The strip of other rounds, after the page is up. It costs a leaderboard
   // per card and a WebGL still each; the race above is what the visitor came

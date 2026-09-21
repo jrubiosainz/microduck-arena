@@ -10,7 +10,7 @@ import { FLOCK, MICRODUCK, MICRODUCK_RL, STORE } from "./links.js";
 import { renderLive } from "./live.js";
 import { liveHref, playerHref } from "./router.js";
 import { signInHref } from "./session.js";
-import { avatar, chequer } from "./signage.js";
+import { avatar, chequer, pendingIdentity, settleIdentity } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
@@ -96,7 +96,8 @@ export function masthead(me, standing) {
   const nav = document.createElement("nav");
   nav.className = "masthead-player";
   nav.setAttribute("aria-label", "Player");
-  nav.append(playerCard(me, standing));
+  // `undefined` means /api/me is still in flight; a duck holds the plate.
+  nav.append(me === undefined ? pendingIdentity("player-card") : playerCard(me, standing));
   // The mark first in the DOM, so the heading is announced before the handle;
   // the row puts them on one line with the locker pushed to the right.
   row.append(lockup, nav);
@@ -224,11 +225,9 @@ export function liveFrame() {
 }
 
 export async function renderHome(root, state) {
-  const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
-  // Your own rung, for the card up top. The REAL standings, never the padded
-  // ones — a demo rank beside your name would be a score you did not earn.
-  const mine = me?.signed_in ? standings.find((row) => row.user === me.user) : undefined;
-  root.replaceChildren(pageTexture(), masthead(me, mine), flockBand());
+  const identity = getMe();
+  const [events, standings] = await Promise.all([getEvents(), getStandings()]);
+  root.replaceChildren(pageTexture(), masthead(undefined), flockBand());
   const hall = el("main", "hall");
   root.append(hall);
 
@@ -287,6 +286,13 @@ export async function renderHome(root, state) {
 
   // After the wall is on screen: the stills replace the dark frames as they
   // arrive, rather than holding the whole page for WebGL and a 1.3 MB GLB.
+  // The plate, once the answer is in. Your own rung comes from the REAL
+  // standings, never the padded ones — a demo rank beside your name would be
+  // a score you did not earn.
+  const me = await identity;
+  const mine = me?.signed_in ? standings.find((row) => row.user === me.user) : undefined;
+  settleIdentity(root, me, mine, playerCard);
+
   const stills = await renderThumbnails(events);
   events.forEach((event, i) => {
     const url = stills.get(event.id);

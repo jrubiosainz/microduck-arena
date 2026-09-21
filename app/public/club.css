@@ -90,6 +90,18 @@
   ));
 }
 
+/* The stand-in, while /api/me is in flight: the same square, a duck on beige,
+   at the size the plate will be so nothing moves when it lands. */
+.player-card--waiting {
+  display: grid;
+  place-items: center;
+  width: 10.5rem;
+  aspect-ratio: 1;
+  border: 3px solid var(--ink);
+  background: var(--warm-paper);
+}
+.player-card--waiting .duckhead { width: 56px; }
+
 /* A square card, paper on the cover's ink: your picture, your handle, and
    where you stand. Square because it reads as a locker plate rather than as
    another line of the header. */

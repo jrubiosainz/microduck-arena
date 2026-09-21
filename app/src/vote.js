@@ -10,7 +10,7 @@ import { LANE_COLORS, LANE_CSS } from "./course.js";
 import { raceHref } from "./router.js";
 import { signInHref } from "./session.js";
 import { credit, shower } from "./points.js";
-import { footer, signage } from "./signage.js";
+import { footer, settleIdentity, signage } from "./signage.js";
 import { isMuted, play, toggleMuted } from "./sound.js";
 import { createViewer } from "./viewer.js";
 
@@ -231,7 +231,11 @@ export function votePanel(ballot, onPick, initialStatus) {
 }
 
 export async function renderVote(root, { event, state }) {
-  root.replaceChildren(signage(await getMe()));
+  // Started, not awaited: the booth does not read it, and /api/me folds the
+  // whole run log for two numbers on a chip.
+  const identity = getMe();
+  root.replaceChildren(signage(undefined));
+  identity.then((me) => settleIdentity(root, me));
 
   const hall = el("main", "hall");
   hall.innerHTML = `

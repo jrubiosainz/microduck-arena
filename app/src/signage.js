@@ -109,6 +109,37 @@ export function signOutButton(me) {
   return button;
 }
 
+/**
+ * What stands where an identity goes while /api/me is in flight.
+ *
+ * That call folds the whole run log to produce two numbers, and every view
+ * used to await it before drawing anything at all — so the page waited on a
+ * total nobody is reading yet. A duck on beige holds the space instead, at
+ * the size the real thing will be, so nothing moves when it arrives.
+ *
+ * aria-hidden: it names nobody. A screen reader is told who you are once the
+ * answer is in, not that a placeholder is present.
+ */
+export function pendingIdentity(className) {
+  const box = document.createElement("span");
+  box.className = `${className} ${className}--waiting`;
+  box.setAttribute("aria-hidden", "true");
+  box.append(duckHead());
+  return box;
+}
+
+/**
+ * Put the real identity where the stand-in was.
+ *
+ * A no-op if the view has already been left — the router replaces the whole
+ * root on the way out, so by then the stand-in is not in this document and
+ * there is nothing to settle.
+ */
+export function settleIdentity(root, me, standing, build = chip) {
+  const waiting = root.querySelector("[class*='--waiting']");
+  if (waiting) waiting.replaceWith(build(me, standing));
+}
+
 export function signage(me) {
   const header = document.createElement("header");
   header.className = "signage";
@@ -128,7 +159,8 @@ export function signage(me) {
   const nav = document.createElement("nav");
   nav.className = "site-nav";
   nav.setAttribute("aria-label", "Player");
-  nav.append(chip(me));
+  // `undefined` means the answer is still coming; `null` means it never will.
+  nav.append(me === undefined ? pendingIdentity("profile-chip") : chip(me));
 
   header.append(brand, nav);
   return header;

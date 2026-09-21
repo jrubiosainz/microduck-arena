@@ -84,6 +84,15 @@ body {
 }
 .profile-chip:hover { background: var(--deep-ink); }
 
+/* The stand-in, while /api/me is in flight: the same plate, a duck on beige,
+   at the size the real one will be so nothing moves when it lands. */
+.profile-chip--waiting {
+  background: var(--warm-paper);
+  border-color: var(--warm-paper);
+  padding: 4px;
+}
+.profile-chip--waiting .duckhead { width: 32px; }
+
 /* The points as plain figures here, in the chip's own face beside the handle,
    rather than as split-flap tiles. The tiles are a device for a stage; on a
    16px strip they read as a second widget bolted to the first.

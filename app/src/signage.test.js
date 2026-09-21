@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { avatar, chequer, chip, footer, signOutButton, signage } from "./signage.js";
+import { avatar, chequer, chip, footer, pendingIdentity, settleIdentity, signOutButton, signage } from "./signage.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
 describe("avatar", () => {
@@ -177,5 +177,39 @@ describe("the way out", () => {
     // It belongs on the page about you, not on the chrome of every page.
     const strip = signage({ signed_in: true, user: "ann", oauth_enabled: true, points: 0 });
     expect(strip.querySelector(".sign-out")).toBeNull();
+  });
+});
+
+describe("the identity while /api/me is in flight", () => {
+  it("holds the space with a duck that names nobody", () => {
+    const waiting = pendingIdentity("profile-chip");
+    expect(waiting.className).toBe("profile-chip profile-chip--waiting");
+    expect(waiting.querySelector("img.duckhead")).not.toBeNull();
+    // It names nobody: a reader is told who you are once the answer is in,
+    // not that a placeholder is present.
+    expect(waiting.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("is what the strip shows for `undefined`, and not for `null`", () => {
+    // undefined is "still coming"; null is "it never will", which is a blank
+    // rather than a duck that would sit there for ever.
+    expect(signage(undefined).querySelector(".profile-chip--waiting")).not.toBeNull();
+    expect(signage(null).querySelector(".profile-chip--waiting")).toBeNull();
+  });
+
+  it("is replaced in place when the answer lands", () => {
+    const root = document.createElement("div");
+    root.append(signage(undefined));
+    settleIdentity(root, { signed_in: true, user: "ann", points: 12 });
+    expect(root.querySelector(".profile-chip--waiting")).toBeNull();
+    expect(root.querySelector("a.profile-chip").getAttribute("href")).toBe("#/p/ann");
+  });
+
+  it("settles nothing when the view has already been left", () => {
+    // The router replaces the whole root on the way out, so by then the
+    // stand-in is in no document and there is nothing to put anything into.
+    const gone = document.createElement("div");
+    expect(() => settleIdentity(gone, { signed_in: false })).not.toThrow();
+    expect(gone.children).toHaveLength(0);
   });
 });

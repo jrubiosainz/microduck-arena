@@ -4,7 +4,7 @@
 import { getMe, getPlayer } from "./api.js";
 import { formatScore } from "./format.js";
 import { menuHref, raceHref, runHref } from "./router.js";
-import { avatar, chequer, footer, signOutButton, signage } from "./signage.js";
+import { avatar, chequer, footer, settleIdentity, signOutButton, signage } from "./signage.js";
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -160,10 +160,17 @@ export function noProfile(user) {
 }
 
 export async function renderPlayer(root, user) {
-  const [player, me] = await Promise.all([getPlayer(user), getMe()]);
+  const identity = getMe();
+  const player = await getPlayer(user);
   // The chequer straight under the strip, where the page begins.
-  root.replaceChildren(signage(me), chequer("page-checker"));
+  root.replaceChildren(signage(undefined), chequer("page-checker"));
   const hall = el("main", "hall hall--warm");
-  hall.append(player ? profile(player, me) : noProfile(user));
   root.append(hall, footer());
+
+  // The profile itself needs `me` — the way out and the unopened marks are
+  // both about whether this page is yours — so it waits, but the strip, the
+  // chequer and the page's own ground are up before it does.
+  const me = await identity;
+  settleIdentity(root, me);
+  hall.append(player ? profile(player, me) : noProfile(user));
 }

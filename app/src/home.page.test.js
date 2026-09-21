@@ -12,7 +12,7 @@ vi.mock("./api.js", () => ({
     sweep_lo: 0.2, sweep_hi: 1.2, sweep_step: 0.05, sweep_count: 21,
   }],
   getStandings: async () => [{ rank: 1, user: "ann", points: 360 }],
-  getMe: async () => ({ signed_in: false }),
+  getMe: () => globalThis.__me,
   getLeaderboard: async () => ({ rows: [] }),
 }));
 
@@ -22,7 +22,23 @@ vi.mock("./api.js", () => ({
 // unmocked — so no mock of ./thumbnail.js is needed here either.
 
 describe("the whole front page", () => {
+  it("draws without waiting on /api/me", async () => {
+    // That call folds the whole run log for two numbers on one plate. The
+    // cover, the band, the ladder and the wall owe it nothing, and used to
+    // wait for it before drawing at all — so here it never answers.
+    globalThis.__me = new Promise(() => {});
+    const root = document.createElement("div");
+    renderHome(root); // deliberately not awaited: it cannot finish
+    await new Promise((r) => setTimeout(r, 0));
+    expect(root.querySelector(".masthead .wordmark--cover")).not.toBeNull();
+    expect(root.querySelector(".flock-band")).not.toBeNull();
+    expect(root.querySelector(".ladder-scroll")).not.toBeNull();
+    // And a duck holds the plate meanwhile.
+    expect(root.querySelector(".player-card--waiting img.duckhead")).not.toBeNull();
+  });
+
   it("is a cover, a band, two chapters and no footer", async () => {
+    globalThis.__me = Promise.resolve({ signed_in: false });
     const root = document.createElement("div");
     await renderHome(root);
 
