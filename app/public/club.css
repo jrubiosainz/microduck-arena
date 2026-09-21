@@ -793,8 +793,11 @@
   list-style: none; /* the default marker; the arrow below replaces it */
 }
 .profile-round > summary::-webkit-details-marker { display: none; }
+/* The arrow keeps its own distance, which is what sets the button off the
+   right edge rather than leaving it pressed against the fold's marker. */
 .profile-round > summary::after {
   content: "\25BE";
+  margin-left: var(--space-gutter-max);
   color: var(--ink-70);
 }
 .profile-round[open] > summary::after { content: "\25B4"; }
@@ -822,11 +825,11 @@
    reader looking at "2 m Sprint #1" is one click from wanting to go and
    improve on it — and the click must open the round, never the fold. */
 .profile-round__go {
-  padding: 5px 12px;
+  padding: 9px 20px;
   border: 2px solid var(--ink);
   background: var(--orange);
   color: var(--ink);
-  font: 400 0.72rem/1 var(--display);
+  font: 400 0.95rem/1 var(--display);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-decoration: none;
