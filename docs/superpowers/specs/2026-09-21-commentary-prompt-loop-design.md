@@ -248,6 +248,26 @@ order, aim at what the owner hears:
 3. **Memories.** Among the memories whose tags meet the facts, the draw is
    random rather than by overlap and then id.
 
+**What the measurements said before the first lot** (2026-09-21, the real channel). The
+baseline, 61 dialogues over two sessions: one scene — one enthuses, the other answers with a
+number — in 74 % of the dialogues; the word "debut" in 84 %; 6.6 % of sentences repeated; 58 % of
+attempts landing; every dialogue judged grounded. The draw per airing, 64 dialogues: 66 %, 81 %,
+5.9 %, 56 % — nothing beyond the noise. It does what it was built for, a run no longer keeps one
+shape from airing to airing, but `direction(run_id)` was not what the owner hears: the sameness
+is in the prompt's own text. And its lookback works in the order dialogues are written, not the
+order they air, because the programme shuffles every cycle; on the air it equals chance. The
+owner chose to leave it as it is.
+
+**Lot 1, as shipped.** Two edits in one push, each read on its own measure. The prompt stops
+handing out the word "debut": it offered it, twice, in place of the banned "first", and an
+explicit permission becomes a tic; the standing rule is enough, "first" is said in a turn that
+cites a fact carrying it. Read on PROPS, and on LANDING's number-word refusals. And the scenes,
+as item 1 above describes: eight of them in the bible, one drawn per dialogue and said first in
+the direction, while the two sentences of `STYLE` and the one of Ray's sheet that scripted a
+single mechanic come out. Read on MECHANIC's scenes. The judge's word on whether a scene was
+followed proved unreliable on a first look and is read by hand until its prompt says better
+what following a scene means; the bench can be run again on a collected session at any time.
+
 What the loop does not do, because each was measured to backfire: give the
 writer example jokes (copied verbatim), grant explicit permissions (they become
 tics), list what to avoid (it primes it), or raise the temperature (0.7 increased
