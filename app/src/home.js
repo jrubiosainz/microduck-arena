@@ -10,7 +10,7 @@ import { FLOCK, MICRODUCK, MICRODUCK_RL, STORE } from "./links.js";
 import { renderLive } from "./live.js";
 import { liveHref, playerHref } from "./router.js";
 import { signInHref } from "./session.js";
-import { avatar, chequer, signOutButton } from "./signage.js";
+import { avatar, chequer } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
@@ -97,8 +97,6 @@ export function masthead(me, standing) {
   nav.className = "masthead-player";
   nav.setAttribute("aria-label", "Player");
   nav.append(playerCard(me, standing));
-  const out = signOutButton(me);
-  if (out) nav.append(out);
   // The mark first in the DOM, so the heading is announced before the handle;
   // the row puts them on one line with the locker pushed to the right.
   row.append(lockup, nav);

@@ -167,17 +167,15 @@ describe("the way out", () => {
     expect(signOutButton({ signed_in: true, oauth_enabled: true })).not.toBeNull();
   });
 
-  it("says what it is to anyone who cannot see the glyph", () => {
+  it("says what it is in words", () => {
     const out = signOutButton({ signed_in: true, oauth_enabled: true });
-    expect(out.getAttribute("aria-label")).toBe("Sign out");
+    expect(out.textContent).toBe("Sign out");
     expect(out.type).toBe("button");
   });
 
-  it("sits beside the chip in the strip, not inside it", () => {
-    // A button nested in the chip's link would be a control inside a link.
+  it("is not in the strip every visitor sees", () => {
+    // It belongs on the page about you, not on the chrome of every page.
     const strip = signage({ signed_in: true, user: "ann", oauth_enabled: true, points: 0 });
-    const nav = strip.querySelector(".site-nav");
-    expect([...nav.children].map((n) => n.tagName.toLowerCase())).toEqual(["a", "button"]);
-    expect(nav.querySelector("a.profile-chip button")).toBeNull();
+    expect(strip.querySelector(".sign-out")).toBeNull();
   });
 });

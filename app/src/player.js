@@ -4,7 +4,7 @@
 import { getMe, getPlayer } from "./api.js";
 import { formatScore } from "./format.js";
 import { menuHref, raceHref, runHref } from "./router.js";
-import { avatar, chequer, footer, signage } from "./signage.js";
+import { avatar, chequer, footer, signOutButton, signage } from "./signage.js";
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -84,6 +84,13 @@ export function profile(player, me = null) {
     el("span", "sticker", `✦ ${player.points} points`),
     el("span", "sticker sticker-orange", player.rank == null ? "#—" : `#${player.rank}`),
   );
+  // On your own page only, and only where OAuth is what signed you in. It is
+  // the page about you; a strip every visitor sees is not the place to offer
+  // to sign someone out.
+  if (me?.user === player.user) {
+    const out = signOutButton(me);
+    if (out) summary.append(out);
+  }
   header.append(summary);
 
   // One fold per event, best standing first. The event's name and where this

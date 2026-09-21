@@ -79,7 +79,7 @@ export function chequer(className) {
 }
 
 /**
- * The way out, beside whoever you are.
+ * The way out, for the page about you.
  *
  * Null unless OAuth is what signed you in. Locally `current_user` answers with
  * ARENA_DEV_USER on every request whatever the cookie says, so a sign-out
@@ -95,9 +95,9 @@ export function signOutButton(me) {
   const button = document.createElement("button");
   button.className = "sign-out";
   button.type = "button";
-  button.title = "Sign out";
-  button.setAttribute("aria-label", "Sign out");
-  button.textContent = "\u23FB";
+  // A word rather than a glyph: it lives on a page with room for one now, and
+  // a power symbol beside a points total reads as switching something off.
+  button.textContent = "Sign out";
   button.addEventListener("click", async () => {
     button.disabled = true;
     try {
@@ -129,8 +129,6 @@ export function signage(me) {
   nav.className = "site-nav";
   nav.setAttribute("aria-label", "Player");
   nav.append(chip(me));
-  const out = signOutButton(me);
-  if (out) nav.append(out);
 
   header.append(brand, nav);
   return header;

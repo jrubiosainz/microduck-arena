@@ -211,3 +211,27 @@ describe("the way to a round from a player's page", () => {
     expect(fold.open, "the fold opened as well as the link firing").toBe(false);
   });
 });
+
+describe("the way out of a player's own page", () => {
+  const signedIn = { user: "ann", oauth_enabled: true, signed_in: true };
+
+  it("is offered on your own page, beside your figures", () => {
+    const summary = profile(ann, signedIn).querySelector(".profile-header .profile-summary");
+    const out = summary.querySelector("button.sign-out");
+    expect(out.textContent).toBe("Sign out");
+  });
+
+  it("is not offered on someone else's page", () => {
+    // It is the page ABOUT you that offers to sign you out; bob's does not.
+    const other = { ...signedIn, user: "bob" };
+    expect(profile(ann, other).querySelector(".sign-out")).toBeNull();
+  });
+
+  it("is not offered where OAuth is not what signed you in", () => {
+    // Locally the dev user is signed in on every request whatever the cookie
+    // says, so signing out would report success and change nothing.
+    expect(profile(ann, { ...signedIn, oauth_enabled: false })
+      .querySelector(".sign-out")).toBeNull();
+    expect(profile(ann).querySelector(".sign-out")).toBeNull();
+  });
+});
