@@ -79,6 +79,17 @@ def test_a_decimal_with_its_unit_does_not_inflate_the_sentence_count():
     assert bench.repeats([aired("12.40 s, Ray!")]) == (0, 0)
 
 
+def test_props_sets_aside_a_function_words_contraction_before_the_possessive_rule():
+    # "Let's" reduces to "let", a real verb: the possessive rule alone cannot
+    # tell that from "robot's" reducing to "robot", and would keep it as a
+    # prop nobody actually said. Both apostrophes are tried, curly and straight.
+    session = [aired("Let’s see the board, Ray. Let's hope.")]
+    found = dict(bench.props(session))
+    assert found["board"] == 1.0
+    for word in ("let", "let's", "let’s"):
+        assert word not in found
+
+
 def test_the_reserves_log_is_tallied_by_reason():
     lines = ["booth  on",
              "commentary: R1 written",

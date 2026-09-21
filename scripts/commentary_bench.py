@@ -31,10 +31,14 @@ GRAM = 4
 _FUNCTION_WORDS_TEXT = (
     "a about after again all also am an and any are as at be because been before being but by "
     "can could did do does doing down for from had has have having here how i if in into is it "
-    "its just like me more most much my no nor not now of off on once only or other our out "
-    "over own same so some such than that the their them then there these they this those "
-    "through to too under until up very was we were what when where which while who whom why "
-    "will with would yet you your")
+    "its just let's let’s like me more most much my no nor not now of off on once only or "
+    "other our out over own same so some such than that the their them then there these they "
+    "this those through to too under until up very was we were what when where which while who "
+    "whom why will with would yet you your")
+# A couple of contractions sit in here whole, apostrophe included: _noun()
+# checks this set before it ever reads a word's own shape, because a
+# contraction's stem is not always a safe guide to what it is ("let's"
+# reduces to "let", a real verb, not a stopword).
 FUNCTION_WORDS = frozenset(_FUNCTION_WORDS_TEXT.split())
 LOG_LINE = re.compile(r"commentary: \S+ (written|refused|not written)(?: \((.*))?")
 JUDGE_LIMIT = 400
@@ -89,10 +93,17 @@ def tokens(text: str) -> list[str]:
 
 
 def _noun(word: str) -> str | None:
-    """The word PROPS counts for a token straight from tokens(): a trailing
-    's or ’s is a possessive, so the noun it modifies is what may be a prop;
-    any other apostrophe is a contraction of function words (don't, we've,
-    that's), so the token is dropped rather than counted as if it were one."""
+    """The word PROPS counts for a token straight from tokens(). A word that
+    is itself a function word, apostrophe included ("let's"), is set aside by
+    name first, before its shape is read at all. Past that gate, a trailing
+    's or ’s is read as a possessive and stripped to the noun it modifies
+    ("robot's" -> "robot") — the same branch "that's" and "it's" pass
+    through, disappearing later only because their stripped stem already
+    sits in FUNCTION_WORDS. Any other apostrophe is a contraction that does
+    not reduce to a real word ("won't", "we've"), so the token is dropped
+    outright."""
+    if word in FUNCTION_WORDS:
+        return None
     if word.endswith(("'s", "’s")):
         return word[:-2]
     return None if "'" in word or "’" in word else word
