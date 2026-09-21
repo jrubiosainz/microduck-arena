@@ -198,7 +198,15 @@ second shutter and a booth whose `duration_ms` is that broadcast's plan's, and
 the slot carries `"broadcast": "<id>"` beside its `run_id`. With none, the run
 contributes a shutter and a replay, and that is all.
 
-`invalidate()` is unchanged and is what a landed broadcast calls. Because it
+`invalidate()` is unchanged and is what a landed broadcast calls. (Amended
+2026-09-21: it no longer is. The day dialogues first landed on the Space, some
+seventy times an hour, a landing that fell on a run's announcing shutter took
+the announced replay off the grid a second later, and a screen that had entered
+it from the grid it held cut into the middle of another slot at its next read.
+A landing now calls `landed()`, which lays the future again only from the first
+entry no screen has been promised: an entry that has begun, or begins within
+thirty seconds — the time a screen trusts the grid it holds — keeps every one of
+its slots. `invalidate()` is the withdrawal's alone.) Because it
 keeps every slot up to and including the one playing now and discards the
 future, a broadcast claimed by a future slot simply becomes unclaimed again and
 is re-offered to the next build. A broadcast claimed by a slot that has already

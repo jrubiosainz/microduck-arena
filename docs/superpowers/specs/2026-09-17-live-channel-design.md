@@ -136,7 +136,8 @@ are dropped. The cycle counter never resets within a process.
 discards the future, re-reads the pool and continues from the end of the current
 slot with the next cycle number. It is called when a clip or a commentary lands
 (the worker), when a run is withdrawn (the route), and it is what a restart is
-too. It is the entry point project 2's breaking-news insertion will use.
+too. (Amended 2026-09-21, see `2026-09-18-live-commentary-design.md`: a landing
+calls `landed()` instead, which leaves alone every entry a screen was promised.) It is the entry point project 2's breaking-news insertion will use.
 
 An empty pool makes an empty grid: the channel is off air.
 
