@@ -691,20 +691,21 @@
 
 /* The dot field at the foot of the page, the same one the front page's band
    wears, gathered along the bottom edge and running the window's full width.
-   Wider than the window and lower than the page, because it is turned 2.5°:
-   at exactly 100vw the turn would bring bare corners into view at both ends.
-   Behind the results. */
+   Not turned, unlike the band's. A 2.5° turn over 112vw swings the layer some
+   47px at each end, so one of them dipped past the foot of the page and the
+   dots showed BELOW the footer. On a strip this wide the turn buys nothing
+   and costs that, so it stops here and the layer sits square on the page's
+   own bottom edge. Behind the results. */
 .hall--warm::after {
   content: "";
   position: absolute;
   top: 40%;
-  bottom: -4vw;
-  left: calc(50% - 56vw);
+  bottom: 0;
+  left: calc(50% - 50vw);
   right: auto;
-  width: 112vw;
+  width: 100vw;
   z-index: -1;
   pointer-events: none;
-  transform: rotate(calc(-1 * var(--rotate-2-5)));
   background-image: var(--dots-wash-up), var(--dots);
   background-size: 100% 100%, var(--dots-grid);
   background-repeat: no-repeat, repeat;
@@ -794,7 +795,6 @@
 .profile-round > summary::-webkit-details-marker { display: none; }
 .profile-round > summary::after {
   content: "\25BE";
-  margin-left: auto;
   color: var(--ink-70);
 }
 .profile-round[open] > summary::after { content: "\25B4"; }
@@ -818,7 +818,25 @@
   font-size: min(var(--type-card-title-size), 1.5rem);
   color: var(--orange-inked);
 }
+/* The way to the round itself. In the summary, where the name is, because a
+   reader looking at "2 m Sprint #1" is one click from wanting to go and
+   improve on it — and the click must open the round, never the fold. */
+.profile-round__go {
+  padding: 5px 12px;
+  border: 2px solid var(--ink);
+  background: var(--orange);
+  color: var(--ink);
+  font: 400 0.72rem/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.profile-round__go:hover { background: var(--yellow); }
+.profile-round__go:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+
 .profile-round__count {
+  margin-right: auto;
   font-family: var(--type-mono-label-family);
   font-weight: var(--type-mono-label-weight);
   font-size: var(--type-mono-label-size);

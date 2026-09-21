@@ -48,6 +48,9 @@ describe("a player's profile", () => {
       .toEqual(["#1", "#2"]);
     expect(folds.map((f) => f.querySelector(".profile-round__count").textContent))
       .toEqual(["2 policies", "1 policy"]);
+    // Each round carries the way to the round itself.
+    expect(folds.map((f) => f.querySelector("a.profile-round__go").getAttribute("href")))
+      .toEqual(["#/e/sprint-2m", "#/e/hill-climb-1m5"]);
     // Every round starts shut: the summary already carries the name and the
     // standing, which is what a reader is scanning for.
     expect(folds.map((f) => f.open)).toEqual([false, false]);
@@ -174,5 +177,18 @@ describe("byEvent: the player's rounds, best first", () => {
       pub({ event_id: "swag-contest", event_title: "Swag Contest", rank: 1, votes: 12 }),
     ]);
     expect(group.votes).toBe(12);
+  });
+});
+
+describe("the way to a round from a player's page", () => {
+  it("leaves the page rather than opening the fold", () => {
+    // A summary IS the toggle: a click anywhere in it opens the fold. This
+    // link has to leave instead, and the two must not both happen.
+    const el = profile(ann, { user: "ann" });
+    const fold = el.querySelector("details.profile-round");
+    expect(fold.open).toBe(false);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+    fold.querySelector("a.profile-round__go").dispatchEvent(click);
+    expect(fold.open, "the fold opened as well as the link firing").toBe(false);
   });
 });

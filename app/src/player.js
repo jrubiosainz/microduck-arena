@@ -3,7 +3,7 @@
 
 import { getMe, getPlayer } from "./api.js";
 import { formatScore } from "./format.js";
-import { menuHref, runHref } from "./router.js";
+import { menuHref, raceHref, runHref } from "./router.js";
 import { avatar, chequer, footer, signage } from "./signage.js";
 
 function el(tag, className, text) {
@@ -94,11 +94,17 @@ export function profile(player, me = null) {
     const fold = document.createElement("details");
     fold.className = "profile-round";
     const head = document.createElement("summary");
+    const go = el("a", "profile-round__go", "Go to the round");
+    go.href = raceHref(group.eventId);
+    // A summary IS the toggle, so a click anywhere in it opens the fold. This
+    // one has to leave instead, and the two must not both happen.
+    go.addEventListener("click", (event) => event.stopPropagation());
     head.append(
       el("span", "profile-round__name", group.title),
       el("span", "profile-round__place", group.best == null ? "unplaced" : `#${group.best}`),
       el("span", "profile-round__count",
         group.publications.length === 1 ? "1 policy" : `${group.publications.length} policies`),
+      go,
     );
     fold.append(head, results(group.publications, player, me));
     rounds.append(fold);
