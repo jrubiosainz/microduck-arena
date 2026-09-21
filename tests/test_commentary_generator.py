@@ -1,17 +1,13 @@
 """Facts in, checked dialogue out; only the router is faked."""
 
 import json
-import random
 
 import httpx
 import pytest
 
 from arena.commentary.context import Fact
 from arena.commentary.generator import (
-    CALLBACK,
     DIMENSIONS,
-    LOOKBACK,
-    OPENINGS,
     ROUTER,
     WRITE_LIMIT,
     Rejected,
@@ -71,9 +67,7 @@ def provider_for(*answers):
 
 def run_case(turns=TURNS, facts=FACTS):
     provider = provider_for(reply(turns))
-    return (write(facts, direction(random.Random(1), []), lore=LORE, provider=provider,
-                  model="fake/model"),
-            provider)
+    return write(facts, direction("R1"), lore=LORE, provider=provider, model="fake/model"), provider
 
 
 def test_a_checked_dialogue_keeps_the_prose_and_maps_indices_to_references():
@@ -108,28 +102,17 @@ def test_the_writing_prompt_shape_example_shows_three_turns():
     assert [turn["speaker"] for turn in shape] == ["peter", "ray", "peter"]
 
 
-def test_a_direction_is_drawn_per_dialogue_and_is_data():
-    drawn = direction(random.Random(7), [])
-    assert drawn == direction(random.Random(7), [])
+def test_a_run_draws_its_own_direction_and_always_the_same_one():
+    # Left to itself the writer gives every dialogue the same shape; the run's
+    # id picks the opening, the angle, the joke, the ending and the length.
+    drawn = direction("R1")
+    assert drawn == direction("R1")
     assert set(drawn) == {"turns", *DIMENSIONS}
     assert all(drawn[name] in options for name, options in DIMENSIONS.items())
-    assert len({directed(direction(random.Random(seed), [])) for seed in range(50)}) > 25
-
-
-def test_a_direction_stays_away_from_what_the_last_dialogues_drew():
-    # Half the distinct openings: fewer and one comes straight back, more and
-    # the draw becomes a rotation.
-    recent = [{**direction(random.Random(0), []), "opening": opening}
-              for opening in OPENINGS[:LOOKBACK]]
-    drawn = {direction(random.Random(seed), recent)["opening"] for seed in range(200)}
-    assert drawn == set(OPENINGS[LOOKBACK:])
-
-
-def test_the_callback_is_a_coin_that_avoids_nothing():
-    recent = [{**direction(random.Random(0), []), "callback": CALLBACK}] * LOOKBACK
-    called = sum(direction(random.Random(seed), recent)["callback"] == CALLBACK
-                 for seed in range(400))
-    assert 60 < called < 140  # one in four, whatever was drawn lately
+    assert len({directed(direction(f"R{i}")) for i in range(50)}) > 25
+    _, provider = run_case()
+    assert directed(drawn) in provider.calls[0][0][0]["content"]
+    assert directed(drawn).startswith(f"This dialogue: {drawn['turns']} turns. ")
 
 
 def test_the_writer_is_told_every_fact_that_grounds_a_handle():
@@ -143,7 +126,7 @@ def test_the_writer_is_told_every_fact_that_grounds_a_handle():
 def test_a_code_fence_around_the_answer_is_dressing():
     fenced = "```json\n" + json.dumps(TURNS) + "\n```"
     provider = provider_for(reply(TURNS, content=fenced))
-    written = write(FACTS, direction(random.Random(1), []), lore=LORE, provider=provider, model="m")
+    written = write(FACTS, direction("R1"), lore=LORE, provider=provider, model="m")
     assert [t["text"] for t in written["turns"]] == [t["text"] for t in TURNS]
 
 
@@ -193,7 +176,7 @@ def test_a_player_at_the_line_or_in_the_lead_is_not_placed_in_the_booth():
 def test_an_invalid_provider_answer_is_rejected(changes):
     provider = provider_for(reply(TURNS, **changes))
     with pytest.raises(Rejected):
-        write(FACTS, direction(random.Random(1), []), lore=LORE, provider=provider, model="m")
+        write(FACTS, direction("R1"), lore=LORE, provider=provider, model="m")
 
 
 def test_a_name_spoken_in_a_facts_own_text_is_grounded_by_that_fact_alone():

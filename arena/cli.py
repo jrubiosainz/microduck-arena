@@ -191,8 +191,6 @@ def _cmd_commentary(args) -> int:
     loopback port for the plan page, like `arena clip`, and puts a broadcast in
     the book the running server reads, where the channel will find it.
     """
-    import random
-
     from . import commentary
     from .broadcasts import BroadcastBook, utcnow
     from .commentary.generator import Rejected, directed, write
@@ -210,11 +208,10 @@ def _cmd_commentary(args) -> int:
     model = config.commentary_model
     provider = commentary.router_provider(model, token)
     book = BroadcastBook(config.broadcast_dir)
-    rng = random.Random()
     if args.dry_run:
         store = config.build_store()
         try:
-            facts, drawn = commentary.briefing(store, args.run_id, lore=lore, book=book, rng=rng)
+            facts, drawn = commentary.briefing(store, args.run_id, lore=lore, book=book)
         except LookupError as exc:
             print(exc, file=sys.stderr)
             return 1
@@ -248,7 +245,7 @@ def _cmd_commentary(args) -> int:
         return 1
     try:
         written = commentary.compose(app.state.store, args.run_id, lore=lore, provider=provider,
-                                     model=model, book=book, rng=rng)
+                                     model=model, book=book)
     except Rejected as why:
         print(f"not on air: {why}", file=sys.stderr)
         server.should_exit = True

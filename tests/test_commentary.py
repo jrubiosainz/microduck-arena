@@ -1,7 +1,6 @@
 """From the store to a checked dialogue."""
 
 import json
-import random
 
 import pytest
 
@@ -15,14 +14,7 @@ from arena.commentary import (
     recent_broadcasts,
     used_memories,
 )
-from arena.commentary.generator import (
-    CALLBACK,
-    LOOKBACK,
-    NO_CALLBACK,
-    OPENINGS,
-    Rejected,
-    direction,
-)
+from arena.commentary.generator import CALLBACK, NO_CALLBACK, Rejected, direction
 from arena.commentary.lore import load
 from arena.store import LocalStore
 from tests.test_commentary_context import run
@@ -80,8 +72,7 @@ CAROL = [
 
 def aired(book, run_id, facts, at):
     made = book.put(run_id, {"turns": [], "lore_refs": [],
-                             "brief": {"facts": facts, "direction": direction(random.Random(0), []),
-                                      "model": "m"}}, PLAN, at)
+                             "brief": {"facts": facts, "direction": {}, "model": "m"}}, PLAN, at)
     book.mark_aired(made.id, at)
     return made
 
@@ -122,29 +113,15 @@ def test_gather_offers_an_earlier_run_only_to_a_callback(tmp_path):
 
 
 def test_a_callback_the_book_cannot_serve_is_no_callback(tmp_path):
-    seed = next(s for s in range(200)
-                if direction(random.Random(s), [])["callback"] == CALLBACK)
-    store = stored(tmp_path, run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R1"))
+    # From R1 up: R0 is the run that airs below, and a run is never its own callback.
+    run_id = next(f"R{i}" for i in range(1, 200) if direction(f"R{i}")["callback"] == CALLBACK)
+    store = stored(tmp_path, run("alice", 12.4, "2026-09-11T10:00:00Z", run_id=run_id))
     book = BroadcastBook(tmp_path)
-    _, drawn = briefing(store, "R1", lore=LORE, book=book, rng=random.Random(seed))
+    _, drawn = briefing(store, run_id, lore=LORE, book=book)
     assert drawn["callback"] == NO_CALLBACK
     aired(book, "R0", CAROL, "2026-09-10T11:00:00Z")
-    facts, drawn = briefing(store, "R1", lore=LORE, book=book, rng=random.Random(seed))
+    facts, drawn = briefing(store, run_id, lore=LORE, book=book)
     assert drawn["callback"] == CALLBACK and facts[-1].kind == "recent"
-
-
-def test_the_draw_reads_what_the_reserve_wrote_lately(tmp_path):
-    store = stored(tmp_path, run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R1"))
-    book = BroadcastBook(tmp_path)
-    for minute, opening in enumerate(OPENINGS[:LOOKBACK]):
-        book.put("R0", {"turns": [], "lore_refs": [], "brief": {
-            "facts": [], "model": "m",
-            "direction": {**direction(random.Random(0), []), "opening": opening}}},
-            PLAN, f"2026-09-10T11:0{minute}:00Z")
-    # Written, not aired: what the reserve is about to say counts.
-    for seed in range(20):
-        _, drawn = briefing(store, "R1", lore=LORE, book=book, rng=random.Random(seed))
-        assert drawn["opening"] in OPENINGS[LOOKBACK:]
 
 
 def test_compose_writes_with_a_provider_and_carries_its_brief(tmp_path):
@@ -161,12 +138,11 @@ def test_compose_writes_with_a_provider_and_carries_its_brief(tmp_path):
         return {"content": json.dumps(content), "finish_reason": "stop", "model": "m",
                 "prompt_tokens": 10, "completion_tokens": 10}
 
-    written = compose(store, "R1", lore=LORE, provider=provider, model="m", book=book,
-                      rng=random.Random(1))
+    written = compose(store, "R1", lore=LORE, provider=provider, model="m", book=book)
     assert written["run_id"] == "R1"
     assert [t["speaker"] for t in written["turns"]] == ["peter", "ray", "peter"]
     assert written["turns"][0]["fact_refs"] == ["run#/participant", "run#/result"]
-    facts, drawn = briefing(store, "R1", lore=LORE, book=book, rng=random.Random(1))
+    facts, drawn = briefing(store, "R1", lore=LORE, book=book)
     assert written["brief"] == {
         "facts": [{"ref": f.ref, "kind": f.kind, "text": f.text} for f in facts],
         "direction": drawn, "model": "m"}
@@ -180,7 +156,6 @@ def test_compose_raises_rejected_and_find_run_raises_lookup(tmp_path):
     with pytest.raises(Rejected):
         compose(store, "R1", lore=LORE, provider=lambda m, n: {
             "content": "no", "finish_reason": "stop", "model": "m",
-            "prompt_tokens": 1, "completion_tokens": 1}, model="m", book=book,
-            rng=random.Random(1))
+            "prompt_tokens": 1, "completion_tokens": 1}, model="m", book=book)
     with pytest.raises(LookupError):
         find_run(store, "NOPE")

@@ -145,10 +145,6 @@ class BroadcastBook:
         aired.sort(key=lambda one: one.aired_at)
         return aired[-limit:]
 
-    def recent_written(self, limit: int) -> list[Broadcast]:
-        """Newest first, aired or not: what the reserve said lately or is about to say."""
-        return self._all()[::-1][:limit]
-
     def sweep(self, now: str) -> int:
         """What the book owes nobody any more: the aired ones behind `keep`, and
         the unaired ones too old to be worth hearing. `now` is the caller's, the

@@ -6,7 +6,6 @@ Space later.
 """
 
 import hashlib
-import random
 import threading
 
 from fastapi import FastAPI
@@ -74,12 +73,11 @@ def create_app(config: ArenaConfig) -> FastAPI:
         else:
             app.state.booth_off = None
             provider = commentary.router_provider(config.commentary_model, token)
-            rng = random.Random()
 
             def writer(run_id: str) -> dict:
                 return commentary.compose(
                     app.state.store, run_id, lore=lore, provider=provider,
-                    model=config.commentary_model, book=app.state.broadcasts, rng=rng,
+                    model=config.commentary_model, book=app.state.broadcasts,
                 )
 
     app.state.clips = ClipRenderer(

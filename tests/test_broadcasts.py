@@ -143,14 +143,6 @@ def test_a_plan_no_slot_could_be_cut_to_is_read_around(tmp_path):
     assert book.get(kept.id) is not None
 
 
-def test_recent_written_is_newest_first_aired_or_not(tmp_path):
-    book = BroadcastBook(tmp_path)
-    ids = [book.put(f"run-{i}", dialogue(f"run-{i}"), plan(), f"2026-09-18T09:0{i}:00Z").id
-           for i in range(3)]
-    book.mark_aired(ids[0], "2026-09-18T10:00:00Z")
-    assert [one.id for one in book.recent_written(2)] == [ids[2], ids[1]]
-
-
 def test_a_write_the_process_does_not_live_through_leaves_the_book_whole(tmp_path, monkeypatch):
     """Truncating the broadcast in place left a body every reader skipped and
     the sweep — which only ever saw broadcasts it could read — never deleted:
