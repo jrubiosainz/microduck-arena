@@ -62,7 +62,7 @@ async function show() {
     } else if (route.view === "player") {
       await renderPlayer(root, route.user);
     } else {
-      await renderHome(root);
+      await renderHome(root, state);
     }
   } catch (error) {
     const failed = document.createElement("p");

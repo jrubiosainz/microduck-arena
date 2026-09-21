@@ -76,6 +76,33 @@
 .ladder-name { font-weight: 600; overflow-wrap: anywhere; }
 .ladder-empty { margin: 0; padding: 12px var(--space-card-padding-min); }
 
+/* ── The channel, beside the standings ─────────────────────────────────────── */
+
+/* The player on the left, the ladder on the right; under the wide grid's
+   measure they stack, the channel first. */
+.season {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-wide)), 1fr));
+  gap: var(--space-gutter-max);
+  align-items: start;
+}
+.season-column { min-width: 0; }
+.season-column > .eyebrow { display: block; margin-bottom: var(--space-gutter-min); }
+.season .ladders { max-width: none; }
+
+/* The set in the corner of the room: the stage behind glass, in the club's
+   own frame. The door over it is the picture itself -- the way to the full
+   screen -- with the player's own button standing above it. */
+.season-live {
+  position: relative;
+  border: 3px solid var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+  background: var(--deep-ink);
+}
+.season-live-stage { display: block; }
+.season-live-door { position: absolute; inset: 0; z-index: 7; }
+.season-live-door:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+
 /* ── Flyers: one per event, taped up crooked ───────────────────────────────── */
 
 .cabinets {
@@ -207,15 +234,3 @@
 }
 .profile-date { color: var(--ink-70); font-size: 0.85rem; }
 
-/* The door to the channel: the club's hot colour on ink, the way a set-top
-   box says a channel is on. */
-.live-tile {
-  display: inline-flex; align-items: center; gap: 12px; margin-top: 18px; padding: 8px 16px;
-  background: var(--ink); color: var(--paper); text-decoration: none;
-  border: 2px solid var(--ink); box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) 0 var(--magenta);
-}
-.live-tile-bug { font: 400 0.9rem/1 var(--display); letter-spacing: 0.06em; color: var(--magenta); }
-.live-tile-bug::before { content: "● "; }
-.live-tile-what { font: 600 0.95rem/1 var(--body); }
-.live-tile:hover { background: var(--deep-ink); }
-.live-tile:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }

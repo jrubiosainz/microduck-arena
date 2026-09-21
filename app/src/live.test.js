@@ -84,6 +84,11 @@ describe("buildStage", () => {
     expect(join.hidden).toBe(true);
     expect(join.textContent).toBe("JOIN THE LIVE");
   });
+
+  it("is a plain box wearing the framed class, never a second main", () => {
+    const { page } = buildStage(document.createElement("div"), true);
+    expect(page.matches("div.live.live--framed")).toBe(true);
+  });
 });
 
 describe("renderLive", () => {
@@ -337,6 +342,26 @@ describe("renderLive", () => {
     expect(sound.open).toHaveBeenCalledTimes(1);
     expect(shown(root)).toBe(video);
     expect(video.play).toHaveBeenCalledTimes(2);
+  });
+
+  it("plays muted behind the button when it is framed on another page, and the click lets the sound in", async () => {
+    const root = document.createElement("div");
+    const sound = fakeSound({ running: true });
+    await renderLive(root, {}, { ...options(vi.fn(async () => grid), sound), framed: true });
+    stubMedia(root);
+    const join = root.querySelector(".live-join");
+    expect(join.hidden).toBe(false);
+    // The picture is never held back -- only the sound waits for the ask.
+    await vi.advanceTimersByTimeAsync(700);
+    const video = shown(root);
+    expect(video.play).toHaveBeenCalledTimes(1);
+    expect(video.muted).toBe(true);
+    expect(sound.open).not.toHaveBeenCalled();
+    join.click();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(join.hidden).toBe(true);
+    expect(sound.open).toHaveBeenCalledTimes(1);
+    expect(shown(root).muted).toBe(false);
   });
 
   it("tears down what a navigation during the booth's load would otherwise leak", async () => {

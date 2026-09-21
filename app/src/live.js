@@ -27,9 +27,10 @@ function el(tag, className, text) {
   return node;
 }
 
-/** The stage and its chrome, and nothing else on the page. */
-export function buildStage(root) {
-  const page = el("main", "live");
+/** The stage and its chrome, and nothing else on the page. Framed, the same
+ * stage is a player on somebody else's page rather than the page itself. */
+export function buildStage(root, framed) {
+  const page = framed ? el("div", "live live--framed") : el("main", "live");
   page.dataset.liveState = "joining";
   const stage = el("div", "live-stage");
   const bug = el("p", "live-bug", "LIVE");
@@ -137,8 +138,8 @@ export function openSound(tones) {
   };
 }
 
-export async function renderLive(root, state, { api = { getLive }, tones = loadTones, sound: createSound = openSound } = {}) {
-  const { page, stage, card, join } = buildStage(root);
+export async function renderLive(root, state, { api = { getLive }, tones = loadTones, sound: createSound = openSound, framed = false } = {}) {
+  const { page, stage, card, join } = buildStage(root, framed);
   const controller = new AbortController();
   const { signal } = controller;
   // Torn down from the first moment, since the router may leave the page
@@ -203,6 +204,7 @@ export async function renderLive(root, state, { api = { getLive }, tones = loadT
       }
       audio = opened;
       interlude.muted(isMuted());
+      replay.muted(isMuted());
       // The button came up for a context that now runs; a clip the browser
       // still refuses raises it again on the rejoin.
       join.hidden = true;
@@ -221,6 +223,11 @@ export async function renderLive(root, state, { api = { getLive }, tones = loadT
   if (held) {
     join.hidden = false;
     channel.halt();
+  } else if (framed) {
+    // A player on somebody else's page opens no sound of its own: the clips
+    // play muted under the button, which is how the channel is asked for.
+    replay.muted(true);
+    join.hidden = false;
   } else {
     admit();
     const verdict = setTimeout(() => { if (!sound.running) join.hidden = false; }, SOUND_WAIT_MS);

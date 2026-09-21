@@ -23,6 +23,7 @@ export function createReplay(stage, { onRefused }) {
   let prepared = null;
   let aligned = false;
   let failed = false;
+  let silent = isMuted(); // held here, so it outlives the clip it was set on
 
   function load(slot) {
     const video = videos.find((v) => v !== active?.video);
@@ -53,7 +54,7 @@ export function createReplay(stage, { onRefused }) {
     const { video } = active;
     // Preloading may already have failed, before any handler was listening.
     failed = video.error !== null;
-    video.muted = isMuted();
+    video.muted = silent;
     video.hidden = false;
     // Buffering loses the clock even under a second of lag; a seek's own
     // waiting event must not start another alignment.
@@ -100,6 +101,7 @@ export function createReplay(stage, { onRefused }) {
       aligned = false;
     },
     muted(flag) {
+      silent = flag;
       for (const video of videos) video.muted = flag;
     },
   };

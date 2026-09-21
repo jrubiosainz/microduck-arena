@@ -4,8 +4,9 @@
 // are the events, each carrying the course, its facts and who holds it. The
 // race pages behind the flyers are unchanged — this page is the way in.
 
-import { getEvents, getLeaderboard, getLive, getMe, getStandings } from "./api.js";
+import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
 import { formatEventFacts, formatScore } from "./format.js";
+import { renderLive } from "./live.js";
 import { liveHref, playerHref, raceHref } from "./router.js";
 import { footer, signage } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
@@ -104,26 +105,20 @@ export function flyer(event, rows) {
   return note;
 }
 
-/** What the channel is showing now: the latest shutter card at or before now,
- * which names the run every following slot is about. */
-export function liveTile(grid) {
-  const cards = grid.slots.filter((slot) => slot.kind === "shutter" && slot.next && slot.at_ms <= grid.now_ms);
-  const card = cards.at(-1) ?? grid.slots.find((slot) => slot.kind === "shutter" && slot.next);
-  if (!card) return null;
-  const tile = el("a", "live-tile");
-  tile.href = liveHref;
-  tile.append(
-    el("span", "live-tile-bug", "ON AIR"),
-    el("span", "live-tile-what", `${card.next.event} · @${card.next.user}`),
-  );
-  return tile;
+/** The channel's frame beside the ladder: the stage the player mounts in, and
+ * the picture over it as the way to the full screen. The button the player
+ * raises stands above this door, so asking for the sound is not leaving. */
+export function liveFrame() {
+  const frame = el("div", "season-live");
+  const door = el("a", "season-live-door");
+  door.href = liveHref;
+  door.setAttribute("aria-label", "Watch the live channel");
+  frame.append(el("div", "season-live-stage"), door);
+  return frame;
 }
 
-export async function renderHome(root) {
-  // The channel's grid is read with the rest, once: it is a way in, not a monitor.
-  const [events, standings, me, grid] = await Promise.all([
-    getEvents(), getStandings(), getMe(), getLive().catch(() => null),
-  ]);
+export async function renderHome(root, state) {
+  const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
   root.replaceChildren(signage(me));
   const hall = el("main", "hall");
   root.append(hall, footer());
@@ -140,12 +135,19 @@ export async function renderHome(root) {
   );
   hall.append(door);
 
-  const onAir = grid && liveTile(grid);
-  if (onAir) door.append(onAir);
-
-  const season = el("section", "chapter");
-  season.append(el("h3", "eyebrow", "Season standings"), ladder(standings.slice(0, LADDER_ROWS)));
+  const season = el("section", "chapter season");
+  const channel = el("div", "season-column");
+  const frame = liveFrame();
+  channel.append(el("h3", "eyebrow", "The channel"), frame);
+  const board = el("div", "season-column");
+  board.append(el("h3", "eyebrow", "Season standings"), ladder(standings.slice(0, LADDER_ROWS)));
+  season.append(channel, board);
   hall.append(season);
+  // The channel plays beside the ladder, muted until the button asks for its
+  // sound. It polls and draws itself; a browser without WebGL, or a channel
+  // that is down, leaves the frame dark rather than taking the front page
+  // with it.
+  renderLive(frame.querySelector(".season-live-stage"), state, { framed: true }).catch(() => {});
 
   // Only an open event has a board worth asking for.
   const boards = await Promise.all(

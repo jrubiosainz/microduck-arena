@@ -122,4 +122,12 @@ describe("createReplay", () => {
     replay.muted(false);
     expect(video.muted).toBe(false);
   });
+
+  it("keeps the silence over the clips that follow, not only the one playing", async () => {
+    replay.muted(true);
+    await replay.play(A, 0);
+    expect([...stage.querySelectorAll("video")].find((v) => !v.hidden).muted).toBe(true);
+    await replay.play(B, 0);
+    expect([...stage.querySelectorAll("video")].find((v) => !v.hidden).muted).toBe(true);
+  });
 });
