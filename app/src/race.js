@@ -367,9 +367,10 @@ export function otherRounds(events, event, boards) {
   track.setAttribute("aria-label", "The other rounds");
   track.append(...others.map((e) => flyer(e, boards.get(e.id) ?? [])));
 
-  const nav = document.createElement("div");
-  nav.className = "rounds-on__nav";
-  for (const [way, label, glyph] of [["back", "Previous rounds", "\u2190"], ["on", "More rounds", "\u2192"]]) {
+  // One arrow either side of the track rather than a pair above it: they
+  // point along the thing they move, and the eye does not have to travel back
+  // up to the heading to find them.
+  const step = (way, label, glyph) => {
     const button = document.createElement("button");
     button.className = "rounds-on__step";
     button.dataset.way = way;
@@ -379,11 +380,15 @@ export function otherRounds(events, event, boards) {
     button.addEventListener("click", () => {
       track.scrollBy({ left: (way === "on" ? 1 : -1) * track.clientWidth, behavior: "smooth" });
     });
-    nav.append(button);
-  }
-  head.append(titles, nav);
+    return button;
+  };
 
-  strip.append(head, track);
+  const body = document.createElement("div");
+  body.className = "rounds-on__body";
+  body.append(step("back", "Previous rounds", "\u2190"), track, step("on", "More rounds", "\u2192"));
+
+  head.append(titles);
+  strip.append(head, body);
   return strip;
 }
 

@@ -459,8 +459,12 @@ describe("otherRounds: the way on, under the board", () => {
     const track = otherRounds(programme, here, new Map()).querySelector(".rounds-on__track");
     expect(track.tabIndex).toBe(0);
     expect(track.getAttribute("aria-label")).toBe("The other rounds");
-    const ways = [...otherRounds(programme, here, new Map())
-      .querySelectorAll(".rounds-on__step")];
+    // One either side of the track, not a pair above it: they point along the
+    // thing they move.
+    const body = otherRounds(programme, here, new Map()).querySelector(".rounds-on__body");
+    expect([...body.children].map((n) => n.className.split(" ")[0]))
+      .toEqual(["rounds-on__step", "rounds-on__track", "rounds-on__step"]);
+    const ways = [...body.querySelectorAll(".rounds-on__step")];
     expect(ways.map((b) => b.dataset.way)).toEqual(["back", "on"]);
     // The glyphs carry no meaning to a reader, so each button says what it is.
     expect(ways.map((b) => b.getAttribute("aria-label")))

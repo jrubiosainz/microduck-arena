@@ -1142,10 +1142,17 @@ table.board .withdraw:focus-visible,
   text-transform: uppercase;
   color: var(--paper);
 }
-/* One viewport of cards per press. A mouse's way in; the track itself is
-   focusable, so a keyboard scrolls it directly. */
-.rounds-on__nav { display: flex; gap: 8px; }
+/* An arrow either side of the track: they point along the thing they move.
+   A mouse's way in; the track itself is focusable, so a keyboard scrolls it
+   directly. */
+.rounds-on__body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-gutter-min);
+}
+.rounds-on__body > .rounds-on__track { flex: 1; min-width: 0; }
 .rounds-on__step {
+  flex: none;
   width: 38px;
   height: 38px;
   border: 2px solid var(--paper);
@@ -1171,10 +1178,18 @@ table.board .withdraw:focus-visible,
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
-  padding-bottom: 14px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--paper-60) transparent;
+  /* A box that scrolls on x clips on y as well — overflow-y: visible is not
+     available beside overflow-x: auto, it computes to auto. So the room the
+     cards need has to be padding: the tape sits 12px above its sheet, and
+     below there is a 9px offset shadow plus the 5px the sheet lifts on hover.
+     Without this the cards came out cropped top and bottom. */
+  padding: 18px 0 22px;
+  /* No scrollbar: the arrows either side are the affordance, and the half
+     card at the edge says there is more. A bar that comes and goes over the
+     cards was the thing being noticed. */
+  scrollbar-width: none;
 }
+.rounds-on__track::-webkit-scrollbar { display: none; }
 .rounds-on__track > * { scroll-snap-align: start; }
 .rounds-on__track:focus-visible { outline: 3px solid var(--cyan); outline-offset: 4px; }
 
