@@ -670,16 +670,17 @@
 
 /* ── Profile: a paper scrapbook ────────────────────────────────────────────── */
 
-/* The chequer under the strip, where a player's page begins. It leans like
-   the front page's, and can: the page's own ground is the beige the chequer
-   is drawn on, so the end that dips exposes nothing but more of the same. */
+/* The chequer under the strip, where a player's page begins. Straight, unlike
+   the front page's: there it parts a leaning band from a lined ground and has
+   to be parallel to both; here it sits under a strip with a straight edge,
+   and a lean would only tilt away from it. Straight means it needs no
+   overhang either — the turn was the only reason for one. */
 .page-checker {
   position: relative;
   z-index: 1;
   height: 16px;
-  width: 108vw;
-  margin-left: calc(50% - 54vw);
-  rotate: calc(-1 * var(--rotate-1-0));
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
   background-color: var(--warm-paper);
   background-image:
     linear-gradient(45deg, var(--orange) 25%, transparent 25% 75%, var(--orange) 75%),
@@ -689,12 +690,18 @@
 }
 
 /* The dot field at the foot of the page, the same one the front page's band
-   wears, gathered along the bottom edge. Inside the column so it turns and
-   overhangs without reaching the window's edges, and behind the results. */
+   wears, gathered along the bottom edge and running the window's full width.
+   Wider than the window and lower than the page, because it is turned 2.5°:
+   at exactly 100vw the turn would bring bare corners into view at both ends.
+   Behind the results. */
 .hall--warm::after {
   content: "";
   position: absolute;
-  inset: 40% -6% -6%;
+  top: 40%;
+  bottom: -4vw;
+  left: calc(50% - 56vw);
+  right: auto;
+  width: 112vw;
   z-index: -1;
   pointer-events: none;
   transform: rotate(calc(-1 * var(--rotate-2-5)));
