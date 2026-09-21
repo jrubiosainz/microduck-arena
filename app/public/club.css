@@ -77,6 +77,12 @@
    the gutter and never on a narrow screen, where the max() falls to zero and
    the plate stays inside the column with everything else. */
 .masthead-player {
+  /* The plate and the way out, side by side at the cover's top right. Aligned
+     to the top, so the small button sits against the plate's upper edge
+     rather than floating at its middle. */
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   flex: none;
   margin-right: calc(-1 * min(
     96px,

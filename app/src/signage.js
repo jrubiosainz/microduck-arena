@@ -5,6 +5,7 @@
 // arena — the community, and the robot itself.
 
 import { flipTiles } from "./animation.js";
+import { signOut } from "./api.js";
 import { FLOCK, POLLEN, STORE } from "./links.js";
 import { menuHref, playerHref } from "./router.js";
 import { signInHref } from "./session.js";
@@ -75,6 +76,37 @@ export function chequer(className) {
   return band;
 }
 
+/**
+ * The way out, beside whoever you are.
+ *
+ * Null unless OAuth is what signed you in. Locally `current_user` answers with
+ * ARENA_DEV_USER on every request whatever the cookie says, so a sign-out
+ * there would clear a cookie nobody reads and leave you signed in — a control
+ * that reports success and changes nothing is worse than none.
+ *
+ * The page is reloaded rather than re-rendered: the session is what every
+ * view's fetch depends on, and reloading is the one way to be sure none of
+ * them is still holding the old one.
+ */
+export function signOutButton(me) {
+  if (!me?.signed_in || !me.oauth_enabled) return null;
+  const button = document.createElement("button");
+  button.className = "sign-out";
+  button.type = "button";
+  button.title = "Sign out";
+  button.setAttribute("aria-label", "Sign out");
+  button.textContent = "\u23FB";
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      await signOut();
+    } finally {
+      location.reload();
+    }
+  });
+  return button;
+}
+
 export function signage(me) {
   const header = document.createElement("header");
   header.className = "signage";
@@ -95,6 +127,8 @@ export function signage(me) {
   nav.className = "site-nav";
   nav.setAttribute("aria-label", "Player");
   nav.append(chip(me));
+  const out = signOutButton(me);
+  if (out) nav.append(out);
 
   header.append(brand, nav);
   return header;

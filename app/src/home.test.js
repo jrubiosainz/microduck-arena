@@ -16,6 +16,17 @@ const planned = { ...open, id: "best-jump", title: "Best Jump", status: "planned
 const held = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
 
 describe("the masthead", () => {
+  it("offers the way out beside the locker, where OAuth signed you in", () => {
+    // Nested in the plate's link it would be a control inside a link; and
+    // locally, where the dev user is signed in on every request whatever the
+    // cookie says, it is not offered at all.
+    const nav = (me) => masthead(me, null).querySelector(".masthead-player");
+    expect(nav({ signed_in: true, user: "ann", oauth_enabled: true })
+      .querySelector("button.sign-out")).not.toBeNull();
+    expect(nav({ signed_in: true, user: "ann", oauth_enabled: false })
+      .querySelector("button.sign-out")).toBeNull();
+  });
+
   it("carries the mark at cover size, the duck, and your locker top right", () => {
     const head = masthead({ signed_in: true, user: "cdeplanne" }, { rank: 2, points: 360 });
     expect(head.querySelector(".wordmark--cover")).not.toBeNull();

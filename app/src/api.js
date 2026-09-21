@@ -35,6 +35,15 @@ export async function getPlayer(user) {
   return response.json();
 }
 
+/**
+ * Drop the session, server side and in the cookie.
+ *
+ * Only ever offered where OAuth is what signed you in: the local path hands
+ * out a session from ARENA_DEV_USER on every request and would sign you
+ * straight back in, so a button there would do nothing and say it had.
+ */
+export const signOut = () => json("/logout", { method: "POST" });
+
 /** Who the server thinks you are. Never throws: a failure means signed out. */
 export async function getMe() {
   try {

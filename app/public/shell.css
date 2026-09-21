@@ -83,6 +83,27 @@ body {
   text-transform: uppercase;
 }
 .profile-chip:hover { background: var(--deep-ink); }
+
+/* The way out, beside whoever you are. A power glyph rather than a word: it
+   shares a 16px strip with a handle and a picture, and "Sign out" spelled out
+   there competes with the name it is offering to drop. The label is on the
+   button for anyone who cannot see the glyph. */
+.sign-out {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--paper-60);
+  background: transparent;
+  color: var(--paper-60);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.sign-out:hover { border-color: var(--paper); background: var(--magenta); color: var(--paper); }
+.sign-out:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+.sign-out[disabled] { cursor: progress; opacity: 0.6; }
 /* The points as plain figures here, in the chip's own face beside the handle,
    rather than as split-flap tiles. The tiles are a device for a stage; on a
    16px strip they read as a second widget bolted to the first.

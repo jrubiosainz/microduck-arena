@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { avatar, chequer, chip, footer, signage } from "./signage.js";
+import { avatar, chequer, chip, footer, signOutButton, signage } from "./signage.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
 describe("avatar", () => {
@@ -152,5 +152,32 @@ describe("the chequer", () => {
       expect(band.getAttribute("aria-hidden")).toBe("true");
       expect(band.textContent).toBe("");
     }
+  });
+});
+
+describe("the way out", () => {
+  it("is offered only where OAuth is what signed you in", () => {
+    // Locally `current_user` answers with ARENA_DEV_USER on every request
+    // whatever the cookie says, so signing out would clear a cookie nobody
+    // reads and leave you signed in. A control that reports success and
+    // changes nothing is worse than no control.
+    expect(signOutButton({ signed_in: true, oauth_enabled: false })).toBeNull();
+    expect(signOutButton({ signed_in: false, oauth_enabled: true })).toBeNull();
+    expect(signOutButton(null)).toBeNull();
+    expect(signOutButton({ signed_in: true, oauth_enabled: true })).not.toBeNull();
+  });
+
+  it("says what it is to anyone who cannot see the glyph", () => {
+    const out = signOutButton({ signed_in: true, oauth_enabled: true });
+    expect(out.getAttribute("aria-label")).toBe("Sign out");
+    expect(out.type).toBe("button");
+  });
+
+  it("sits beside the chip in the strip, not inside it", () => {
+    // A button nested in the chip's link would be a control inside a link.
+    const strip = signage({ signed_in: true, user: "ann", oauth_enabled: true, points: 0 });
+    const nav = strip.querySelector(".site-nav");
+    expect([...nav.children].map((n) => n.tagName.toLowerCase())).toEqual(["a", "button"]);
+    expect(nav.querySelector("a.profile-chip button")).toBeNull();
   });
 });
