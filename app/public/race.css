@@ -272,13 +272,14 @@ button.link {
 /* ── the board ────────────────────────────────────────────────────────── */
 
 /* The pegboard, hung by hand: warm paper inside a 3 px ink frame on its own
-   ink shadow, one rule between rows, taped up and leaning the other way from
-   the entry note beside it — the charter alternates the sign from one sibling
-   to the next. */
+   ink shadow, one rule between rows, taped up. */
+/* Straight, unlike the note beside it. The charter's alternating lean suits a
+   flyer, which is one small thing pinned to a wall; this sheet grows a row per
+   published run, and a long table tilted off true reads as a rendering fault
+   rather than as paper. The tape stays — it is still stuck up. */
 .boardsheet {
   position: relative;
   margin-top: 30px;
-  rotate: calc(-1 * var(--rotate-0-75));
 }
 
 table.board {
