@@ -83,12 +83,17 @@ body {
   text-transform: uppercase;
 }
 .profile-chip:hover { background: var(--deep-ink); }
-/* The points, as flip tiles small enough for a strip: deep-ink tiles on the
-   ink chip, the seam in ink, the star in the club's yellow. */
+/* The points as plain figures here, in the chip's own face beside the handle,
+   rather than as split-flap tiles. The tiles are a device for a stage; on a
+   16px strip they read as a second widget bolted to the first.
+   The STRUCTURE stays — run.js replaces this .flip's children with tiles to
+   roll the total up when a result is revealed, and the class is what it finds
+   — so this is the look coming off, not the machinery. Giving the digits back
+   their tile is the two declarations below, inverted. */
 .profile-chip { position: relative; }
-.profile-chip .flip { gap: 2px; font-size: 1rem; }
-.profile-chip .flip-digit { width: 0.75em; height: 1.25em; background: var(--deep-ink); }
-.profile-chip .flip-digit::after { background: var(--ink); }
+.profile-chip .flip { gap: 0; font-size: 1rem; }
+.profile-chip .flip-digit { width: auto; height: auto; background: transparent; }
+.profile-chip .flip-digit::after { display: none; }
 .profile-chip .chip-points::before { content: "✦"; color: var(--yellow); padding-right: 4px; }
 /* When it receives points it jolts as the CRT does, not as a cell does. */
 .profile-chip.jolt { --impact-distance: var(--impact-verdict); }
