@@ -1142,23 +1142,13 @@ table.board .withdraw:focus-visible,
   text-transform: uppercase;
   color: var(--paper);
 }
-.rounds-on__all {
-  padding: 8px 16px;
-  border: 2px solid var(--paper);
-  color: var(--paper);
-  font: 400 0.8rem/1 var(--display);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.rounds-on__all:hover { background: var(--paper); color: var(--ink); }
-.rounds-on__all:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
-
+/* Four across at the content column's width, the rest wrapping onto the row
+   below — auto-fit does the wrapping, and folds to two and then one on a
+   narrow window without being told to. */
 .rounds-on__wall {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-medium)), 1fr));
-  gap: var(--space-gutter-max);
+  gap: var(--space-chapter-top-min) var(--space-gutter-max);
   align-items: start;
 }
 

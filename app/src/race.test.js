@@ -7,8 +7,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  OTHER_ROUNDS, exclusivePick, otherRounds, raceHall, renderEntryPanel, renderEventFacts,
-  renderVoteButton,
+  exclusivePick, otherRounds, raceHall, renderEntryPanel, renderEventFacts, renderVoteButton,
 } from "./race.js";
 
 const event = {
@@ -444,14 +443,12 @@ describe("otherRounds: the way on, under the board", () => {
     expect(links[0]).toBe("#/e/roller-sprint-2m");
   });
 
-  it("shows four and counts all of them", () => {
+  it("carries EVERY other round, wrapping rather than offering a way to the rest", () => {
+    // With the whole programme already here, a "see all" would only send you
+    // to a page showing the same thing.
     const strip = otherRounds(programme, here, new Map());
-    expect(strip.querySelectorAll(".challenge-note")).toHaveLength(OTHER_ROUNDS);
-    // The heading counts the PROGRAMME, not the four on screen — otherwise
-    // "see all" would send you somewhere you have already been.
-    const all = strip.querySelector(".rounds-on__all");
-    expect(all.textContent).toBe("See all 6");
-    expect(all.getAttribute("href")).toBe("#/");
+    expect(strip.querySelectorAll(".challenge-note")).toHaveLength(programme.length - 1);
+    expect(strip.querySelector(".rounds-on__all")).toBeNull();
   });
 
   it("gives each card the holder its board names, and none to a board it has none for", () => {

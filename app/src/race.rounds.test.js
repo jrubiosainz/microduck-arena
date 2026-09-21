@@ -53,7 +53,7 @@ describe("keepRacing", () => {
     const root = document.createElement("div");
     root.append(document.createElement("footer"));
     await keepRacing(root, PROGRAMME[0]);
-    // Four others, and the planned one is not among the four asked for.
+    // Every other round is on the wall; only the open ones cost a board.
     expect(asked).toEqual(["roller-sprint-2m", "hill-climb-1m5", "swag-contest"]);
     expect(root.querySelectorAll(".rounds-on .challenge-note")).toHaveLength(4);
   });
