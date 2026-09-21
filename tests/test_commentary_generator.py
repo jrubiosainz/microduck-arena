@@ -205,17 +205,17 @@ def test_two_facts_establishing_the_same_name_need_only_one_cited():
     assert written["turns"][0]["fact_refs"] == ["run#/participant"]
 
 
-def test_a_recent_run_may_be_called_back_only_by_its_fact():
-    turns = [
-        {**TURNS[0]},
-        {"speaker": "ray", "text": "Bob ran 13.10 s here earlier this season, Peter.",
-         "fact_refs": [5]},
-        TURNS[2],
-    ]
-    written, _ = run_case(turns=turns)
+def test_a_callback_cites_its_fact_and_quotes_no_number_from_it():
+    called_back = {"speaker": "ray", "text": "Bob ran here earlier this season, Peter.",
+                   "fact_refs": [5]}
+    written, _ = run_case(turns=[TURNS[0], called_back, TURNS[2]])
     assert written["turns"][1]["fact_refs"] == ["recent:R9"]
     with pytest.raises(Rejected, match="name"):
-        run_case(turns=[TURNS[0], {**turns[1], "fact_refs": [2]}, TURNS[2]])
+        run_case(turns=[TURNS[0], {**called_back, "fact_refs": [2]}, TURNS[2]])
+    # Another run's figure must not reach the air under this run's name.
+    with pytest.raises(Rejected, match="number"):
+        run_case(turns=[TURNS[0], {**called_back, "text": "Bob ran 13.10 s here, Peter."},
+                        TURNS[2]])
 
 
 class Answered:

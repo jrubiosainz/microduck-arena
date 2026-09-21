@@ -1,9 +1,9 @@
 """Peter and Ray's lines, written for one airing.
 
 context projects a run's own facts, notable digs the log for more, lore offers a
-memory or two, the last five dialogues that went out give continuity, and
-generator writes and checks. This module puts them together for one run, at the
-moment the reserve needs it.
+memory or two, what went out lately keeps the memories from repeating and lends
+a callback its one fact, and generator writes and checks. This module puts them
+together for one run, at the moment the reserve needs it.
 """
 
 from huggingface_hub import get_token
@@ -12,7 +12,7 @@ from ..manifest import Manifest, all_events
 from ..points import counting, receipts
 from ..store import RunRecord
 from .context import Fact, result_facts
-from .generator import AT_NAME, complete, direction, write
+from .generator import AT_NAME, CALLBACK, NO_CALLBACK, complete, direction, write
 from .lore import Lore, select_memories
 from .notable import notable_facts, pick, profiles, situation
 
@@ -53,16 +53,21 @@ def used_memories(book, cooldown: int = COOLDOWN) -> set[str]:
             for ref in one.dialogue["lore_refs"]}
 
 
-def _recent_fact(one) -> Fact:
-    spoken = " ".join(turn["text"] for turn in one.dialogue["turns"])
-    # The names the booth has already spoken are the ones a callback may use,
-    # read with the writer's own pattern so "@alice's" yields the same identity.
-    names = AT_NAME.findall(spoken)
-    return Fact(f"recent:{one.id}", f"Earlier on the channel: {spoken}", "recent",
-                identities=tuple(dict.fromkeys(names)))
+def callback_fact(book, run_id: str) -> list[Fact]:
+    """The one earlier run a callback may cite: the last to air that was another run's."""
+    for one in reversed(recent_broadcasts(book)):
+        if one.run_id != run_id:
+            about = " ".join(fact["text"] for fact in one.dialogue["brief"]["facts"]
+                             if fact["kind"] == "result")
+            # The handles that text prints are the ones a callback may speak, read
+            # with the writer's own pattern so "@alice's" yields the same identity.
+            names = AT_NAME.findall(about)
+            return [Fact(f"recent:{one.id}", f"Earlier this season: {about}", "recent",
+                         identities=tuple(dict.fromkeys(names)))]
+    return []
 
 
-def gather(store, record: RunRecord, lore: Lore, book) -> list[Fact]:
+def gather(store, record: RunRecord, lore: Lore, book, callback: bool) -> list[Fact]:
     """Everything the writer may cite for this run.
 
     Read at the moment of writing, not at publish: the standings, the records
@@ -79,14 +84,18 @@ def gather(store, record: RunRecord, lore: Lore, book) -> list[Fact]:
     used = used_memories(book)
     facts += [Fact(f"lore:{m.id}", m.memory, "lore", m.tags)
               for m in select_memories(lore, facts, used)]
-    facts += [_recent_fact(one) for one in recent_broadcasts(book)]
-    return facts
+    return facts + (callback_fact(book, record.run_id) if callback else [])
 
 
 def briefing(store, run_id: str, *, lore: Lore, book) -> tuple[list[Fact], dict]:
     """What one dialogue is written from: the facts it may cite, the direction it drew."""
     record = find_run(store, run_id)
-    return gather(store, record, lore, book), direction(run_id)
+    drawn = direction(run_id)
+    facts = gather(store, record, lore, book, callback=drawn["callback"] == CALLBACK)
+    if facts[-1].kind != "recent":
+        # A callback the book cannot serve is no callback, and the brief says so.
+        drawn = {**drawn, "callback": NO_CALLBACK}
+    return facts, drawn
 
 
 def compose(store, run_id: str, *, lore: Lore, provider, model: str, book) -> dict:

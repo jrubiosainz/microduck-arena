@@ -7,13 +7,14 @@ import pytest
 from arena.broadcasts import BroadcastBook
 from arena.commentary import (
     briefing,
+    callback_fact,
     compose,
     find_run,
     gather,
     recent_broadcasts,
     used_memories,
 )
-from arena.commentary.generator import Rejected
+from arena.commentary.generator import CALLBACK, NO_CALLBACK, Rejected, direction
 from arena.commentary.lore import load
 from arena.store import LocalStore
 from tests.test_commentary_context import run
@@ -56,26 +57,62 @@ def test_used_memories_are_counted_in_airings(tmp_path):
     assert used_memories(book) == {"lore:pit"}
 
 
-def test_gather_puts_results_notables_memories_and_recent_runs_in_one_citable_list(tmp_path):
+CAROL = [
+    {"ref": "run#/participant", "kind": "result",
+     "text": "The participant is @carol, racing a policy named carol-v1."},
+    {"ref": "run#/result", "kind": "result",
+     "text": "The mean finish time is 11.20 s, every one of the 5 seeds finished."},
+    {"ref": "lore:pit", "kind": "lore", "text": "The pit, and what fell in it."},
+]
+
+
+def aired(book, run_id, facts, at):
+    made = book.put(run_id, {"turns": [], "lore_refs": [],
+                             "brief": {"facts": facts, "direction": {}, "model": "m"}}, PLAN, at)
+    book.mark_aired(made.id, at)
+    return made
+
+
+def test_a_callback_is_the_last_other_run_to_air_told_by_its_result_facts(tmp_path):
+    book = BroadcastBook(tmp_path)
+    carol = aired(book, "R0", CAROL, "2026-09-10T11:00:00Z")
+    aired(book, "R1", [], "2026-09-10T11:05:00Z")  # this run's own airing is not a callback
+
+    [fact] = callback_fact(book, "R1")
+    assert fact.ref == f"recent:{carol.id}" and fact.kind == "recent"
+    assert fact.text == ("Earlier this season: The participant is @carol, racing a policy named "
+                         "carol-v1. The mean finish time is 11.20 s, every one of the 5 seeds "
+                         "finished.")
+    assert fact.identities == ("carol",)
+    assert callback_fact(BroadcastBook(tmp_path / "empty"), "R1") == []
+
+
+def test_gather_offers_an_earlier_run_only_to_a_callback(tmp_path):
     leader = run("carol", 11.2, "2026-09-10T10:00:00Z", run_id="R0")
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R1")
     store = stored(tmp_path, leader, mine)
     book = BroadcastBook(tmp_path)
-    dialogue = {"turns": [{"speaker": "peter", "text": "Eleven two, @carol!"},
-                          {"speaker": "ray", "text": "11.20 s, Peter."}],
-                "lore_refs": []}
-    aired = book.put("R0", dialogue, PLAN, "2026-09-10T11:00:00Z")
-    book.mark_aired(aired.id, "2026-09-10T11:05:00Z")
+    aired(book, "R0", CAROL, "2026-09-10T11:00:00Z")
 
-    facts = gather(store, mine, LORE, book)
-    kinds = [f.kind for f in facts]
+    plain = gather(store, mine, LORE, book, callback=False)
+    kinds = [f.kind for f in plain]
     assert kinds[:5] == ["result"] * 5
-    assert "notable" in kinds and "lore" in kinds and kinds[-1] == "recent"
-    assert facts[-1].ref == f"recent:{aired.id}"
-    assert facts[-1].text == "Earlier on the channel: Eleven two, @carol! 11.20 s, Peter."
-    assert facts[-1].identities == ("carol",)
-    assert sum(1 for f in facts if f.kind == "lore") <= 2
-    assert all(f.ref.startswith("lore:") for f in facts if f.kind == "lore")
+    assert "notable" in kinds and "lore" in kinds and "recent" not in kinds
+    assert sum(1 for f in plain if f.kind == "lore") <= 2
+    called = gather(store, mine, LORE, book, callback=True)
+    assert [f.kind for f in called] == [*kinds, "recent"]
+
+
+def test_a_callback_the_book_cannot_serve_is_no_callback(tmp_path):
+    # From R1 up: R0 is the run that airs below, and a run is never its own callback.
+    run_id = next(f"R{i}" for i in range(1, 200) if direction(f"R{i}")["callback"] == CALLBACK)
+    store = stored(tmp_path, run("alice", 12.4, "2026-09-11T10:00:00Z", run_id=run_id))
+    book = BroadcastBook(tmp_path)
+    _, drawn = briefing(store, run_id, lore=LORE, book=book)
+    assert drawn["callback"] == NO_CALLBACK
+    aired(book, "R0", CAROL, "2026-09-10T11:00:00Z")
+    facts, drawn = briefing(store, run_id, lore=LORE, book=book)
+    assert drawn["callback"] == CALLBACK and facts[-1].kind == "recent"
 
 
 def test_compose_writes_with_a_provider_and_carries_its_brief(tmp_path):
