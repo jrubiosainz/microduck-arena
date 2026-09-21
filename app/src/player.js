@@ -94,7 +94,7 @@ export function profile(player, me = null) {
     const fold = document.createElement("details");
     fold.className = "profile-round";
     const head = document.createElement("summary");
-    const go = el("a", "profile-round__go", "Go to the round");
+    const go = el("a", "profile-round__go fx-shadow-sticker", "Go to the round");
     go.href = raceHref(group.eventId);
     // A summary IS the toggle, so a click anywhere in it opens the fold. This
     // one has to leave instead, and the two must not both happen.

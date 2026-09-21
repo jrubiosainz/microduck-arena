@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { byEvent, noProfile, profile } from "./player.js";
 
@@ -48,9 +51,12 @@ describe("a player's profile", () => {
       .toEqual(["#1", "#2"]);
     expect(folds.map((f) => f.querySelector(".profile-round__count").textContent))
       .toEqual(["2 policies", "1 policy"]);
-    // Each round carries the way to the round itself.
-    expect(folds.map((f) => f.querySelector("a.profile-round__go").getAttribute("href")))
+    // Each round carries the way to the round itself, shadowed through the
+    // charter's primitive rather than a literal box-shadow.
+    const gos = folds.map((f) => f.querySelector("a.profile-round__go"));
+    expect(gos.map((a) => a.getAttribute("href")))
       .toEqual(["#/e/sprint-2m", "#/e/hill-climb-1m5"]);
+    expect(gos[0].className).toContain("fx-shadow-sticker");
     // Every round starts shut: the summary already carries the name and the
     // standing, which is what a reader is scanning for.
     expect(folds.map((f) => f.open)).toEqual([false, false]);
@@ -181,6 +187,19 @@ describe("byEvent: the player's rounds, best first", () => {
 });
 
 describe("the way to a round from a player's page", () => {
+  it("takes the row's own hover off it while the pointer is on the button", () => {
+    // Two things cannot both be the thing you are about to press, and the
+    // button is the one that will actually happen. CSS-only, so read the
+    // sheet — a tidy-up that drops the :not() would put the row's highlight
+    // back under the button with nothing to show it had.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css, "the row still lights up under the button")
+      .toMatch(/summary:hover:not\(:has\(\.profile-round__go:hover\)\)/);
+  });
+
   it("leaves the page rather than opening the fold", () => {
     // A summary IS the toggle: a click anywhere in it opens the fold. This
     // link has to leave instead, and the two must not both happen.

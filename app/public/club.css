@@ -801,7 +801,12 @@
   color: var(--ink-70);
 }
 .profile-round[open] > summary::after { content: "\25B4"; }
-.profile-round > summary:hover { background: var(--cream); }
+/* The row lights up under the pointer — but not while the pointer is on the
+   button inside it. Two things cannot both be the thing you are about to
+   press, and the button is the one that will actually happen. */
+.profile-round > summary:hover:not(:has(.profile-round__go:hover)) {
+  background: var(--cream);
+}
 .profile-round > summary:focus-visible { outline: 3px solid var(--cyan); outline-offset: -3px; }
 
 .profile-round__name {
@@ -825,6 +830,10 @@
    reader looking at "2 m Sprint #1" is one click from wanting to go and
    improve on it — and the click must open the round, never the fold. */
 .profile-round__go {
+  /* Through the charter's primitive, at its smaller step so there is a larger
+     one to grow into when the pointer arrives. */
+  --fx-shadow-color: var(--ink);
+  --fx-shadow-size: var(--shadow-sticker-min);
   padding: 9px 20px;
   border: 2px solid var(--ink);
   background: var(--orange);
@@ -835,8 +844,22 @@
   text-decoration: none;
   white-space: nowrap;
 }
-.profile-round__go:hover { background: var(--yellow); }
+/* Lifting off its own shadow, the way every pressable thing on this site
+   does: the shadow steps up and the button steps back over it. */
+.profile-round__go:hover {
+  --fx-shadow-size: var(--shadow-sticker-max);
+  background: var(--yellow);
+  translate: -2px -2px;
+}
+.profile-round__go:active {
+  --fx-shadow-size: var(--shadow-sticker-min);
+  translate: 0 0;
+}
 .profile-round__go:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .profile-round__go { transition: translate 120ms ease, background 120ms ease; }
+}
 
 .profile-round__count {
   margin-right: auto;
