@@ -9,11 +9,13 @@ import {
   withdrawRun,
 } from "./api.js";
 import { renderBoard, selectLanes, selectedRunIds, tiersByRunId } from "./board.js";
+import { flyer } from "./flyer.js";
 import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
 import { menuHref, runHref } from "./router.js";
+import { renderThumbnails } from "./thumbnail.js";
 import { panelState, signInHref } from "./session.js";
 import { footer, signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
@@ -327,6 +329,72 @@ export function exclusivePick(boxes, changed) {
   return changed.dataset.pick;
 }
 
+/** How many other rounds the strip under a race shows. */
+export const OTHER_ROUNDS = 4;
+
+/**
+ * The way on, under the board: the next few rounds as the same sheets the
+ * front page pins to its wall.
+ *
+ * The current event is left out — a card back to the page you are already on
+ * is a dead end dressed as a way forward — and the heading counts the whole
+ * programme, so "see all 8" is the real number rather than a guess.
+ */
+export function otherRounds(events, event, boards) {
+  const others = events.filter((e) => e.id !== event.id).slice(0, OTHER_ROUNDS);
+  const strip = document.createElement("section");
+  strip.className = "rounds-on";
+  const head = document.createElement("div");
+  head.className = "rounds-on__head";
+  const titles = document.createElement("div");
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "eyebrow";
+  eyebrow.textContent = "Keep racing";
+  const heading = document.createElement("h2");
+  heading.className = "rounds-on__title";
+  heading.textContent = "Watch the other rounds.";
+  titles.append(eyebrow, heading);
+  const all = document.createElement("a");
+  all.className = "rounds-on__all";
+  all.href = menuHref;
+  all.textContent = `See all ${events.length}`;
+  head.append(titles, all);
+  const wall = document.createElement("div");
+  wall.className = "rounds-on__wall";
+  wall.append(...others.map((e) => flyer(e, boards.get(e.id) ?? [])));
+  strip.append(head, wall);
+  return strip;
+}
+
+/**
+ * Fill and hang the strip of other rounds, once the race above it is up.
+ *
+ * Separate from otherRounds so that the shape is testable without a network:
+ * this is the part that fetches, and it asks for a leaderboard per card and a
+ * still per card. A planned event has no board worth asking for.
+ */
+async function keepRacing(root, event) {
+  const events = await getEvents();
+  const others = events.filter((e) => e.id !== event.id).slice(0, OTHER_ROUNDS);
+  const boards = new Map();
+  await Promise.all(others.map(async (e) => {
+    if (e.status === "planned") return;
+    boards.set(e.id, (await getLeaderboard(e.id).catch(() => ({ rows: [] }))).rows);
+  }));
+  const strip = otherRounds(events, event, boards);
+  root.querySelector("footer")?.before(strip) ?? root.append(strip);
+
+  const stills = await renderThumbnails(others);
+  others.forEach((e, i) => {
+    const url = stills.get(e.id);
+    if (!url) return; // no WebGL, or this rig failed — the frame stays dark
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = "";
+    strip.querySelectorAll(".challenge-art")[i].replaceChildren(img);
+  });
+}
+
 export async function renderRace(root, { event, state }) {
   // Asked for first: the strip over the door carries this player's chip, and
   // the board below needs to know whose rows are their own.
@@ -335,6 +403,12 @@ export async function renderRace(root, { event, state }) {
 
   const hall = raceHall(event);
   root.append(hall, footer());
+
+  // The strip of other rounds, after the page is up. It costs a leaderboard
+  // per card and a WebGL still each; the race above is what the visitor came
+  // for, and none of this may hold it up. Every failure leaves the strip off
+  // rather than taking the page with it.
+  keepRacing(root, event).catch(() => {});
   renderVoteButton(root, event);
 
   renderEventFacts(root, event);

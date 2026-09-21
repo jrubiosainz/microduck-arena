@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { flyer } from "./flyer.js";
 import {
-  chapterRule, demoAsked, demoRows, flockBand, flyer, ladder, liveFrame, masthead, pageTexture,
-  playerCard,
+  chapterRule, demoAsked, demoRows, flockBand, ladder, liveFrame, masthead, pageTexture, playerCard,
 } from "./home.js";
 
 const open = {

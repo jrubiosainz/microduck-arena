@@ -1079,3 +1079,165 @@ table.board .withdraw:focus-visible,
 @keyframes star-fly {
   to { translate: var(--dx) var(--dy); scale: 0.5; opacity: 0.7; }
 }
+
+/* ── the way on: the other rounds ─────────────────────────────────────── */
+
+/* A deep-ink band under the board, full width, with the front page's own
+   flyers pinned to it. The chequer over it is the finish line — the one place
+   on the site where a racing flag belongs, and it separates the paper above
+   from the ink below without needing a rule.
+   The sheets are club.css's `.challenge-note`, which the race theme does not
+   load: the few rules they need on ink are restated below rather than the
+   whole sheet being pulled in. */
+.rounds-on {
+  position: relative;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-top: 64px;
+  padding: 58px max(var(--space-gutter-min), calc(50vw - var(--space-content-column) / 2)) 64px;
+  background: var(--deep-ink);
+  color: var(--paper);
+}
+.rounds-on::before {
+  content: "";
+  position: absolute;
+  top: -14px;
+  left: 0;
+  right: 0;
+  height: 14px;
+  /* Two offset checker rows, drawn the way components.css draws the gym
+     floor: gradients as a pattern, never a colour ramp. */
+  background-color: var(--warm-paper);
+  background-image:
+    linear-gradient(45deg, var(--ink) 25%, transparent 25% 75%, var(--ink) 75%),
+    linear-gradient(45deg, var(--ink) 25%, transparent 25% 75%, var(--ink) 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 7px 7px;
+}
+
+.rounds-on__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-gutter-min);
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-title-to-grid-max);
+}
+.rounds-on .eyebrow {
+  margin: 0;
+  color: var(--orange);
+  font-family: var(--type-eyebrow-family);
+  font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size);
+  letter-spacing: var(--type-eyebrow-tracking);
+  text-transform: uppercase;
+}
+.rounds-on__title {
+  margin: 6px 0 0;
+  font-family: var(--type-section-title-family);
+  font-weight: var(--type-section-title-weight);
+  font-size: min(var(--type-section-title-size), 3.4rem);
+  line-height: var(--type-section-title-line);
+  letter-spacing: var(--type-section-title-tracking);
+  text-transform: uppercase;
+  color: var(--paper);
+}
+.rounds-on__all {
+  padding: 8px 16px;
+  border: 2px solid var(--paper);
+  color: var(--paper);
+  font: 400 0.8rem/1 var(--display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.rounds-on__all:hover { background: var(--paper); color: var(--ink); }
+.rounds-on__all:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+
+.rounds-on__wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-medium)), 1fr));
+  gap: var(--space-gutter-max);
+  align-items: start;
+}
+
+/* The flyer, as club.css draws it. Restated because the race theme disables
+   that sheet — only what a sheet on ink actually needs, not a copy of it. */
+.rounds-on .challenge-note {
+  --fx-shadow-color: var(--ink);
+  --fx-shadow-size: var(--shadow-card-min);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--space-card-padding-min);
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  rotate: calc(-1 * var(--rotate-1-0));
+  transform-origin: 50% -12px;
+}
+.rounds-on .challenge-note:nth-child(2n) { rotate: var(--rotate-1-0); }
+.rounds-on .challenge-note--race { --fx-shadow-color: var(--orange); }
+.rounds-on .challenge-note--challenge { --fx-shadow-color: var(--magenta); }
+.rounds-on .challenge-note--showcase { --fx-shadow-color: var(--yellow); }
+.rounds-on .challenge-note--planned { background: var(--warm-paper); color: var(--ink-70); }
+.rounds-on .challenge-link { display: block; flex: 1; color: inherit; text-decoration: none; }
+.rounds-on .challenge-link:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+.rounds-on .challenge-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 480 / 198;
+  border: 2px solid var(--ink);
+  background: var(--deep-ink);
+  overflow: hidden;
+}
+.rounds-on .challenge-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.rounds-on .challenge-link .eyebrow {
+  display: inline-block;
+  margin-top: var(--space-gutter-min);
+  padding: 2px 8px;
+  border: 2px solid var(--ink);
+  color: var(--ink);
+}
+.rounds-on .challenge-note--race .challenge-link .eyebrow { background: var(--orange); }
+.rounds-on .challenge-note--challenge .challenge-link .eyebrow {
+  background: var(--magenta);
+  color: var(--paper);
+}
+.rounds-on .challenge-note--showcase .challenge-link .eyebrow { background: var(--yellow); }
+.rounds-on .flyer-title {
+  margin: var(--space-gutter-min) 0 0;
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: min(var(--type-card-title-size), 1.6rem);
+  line-height: var(--type-card-title-line);
+  text-transform: uppercase;
+}
+.rounds-on .flyer-leader {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-family: var(--type-mono-label-family);
+  font-size: var(--type-mono-label-size);
+  letter-spacing: var(--type-mono-label-tracking);
+}
+.rounds-on .challenge-star { width: 16px; height: 16px; }
+.rounds-on .challenge-facts { display: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .rounds-on .challenge-note {
+    transition:
+      rotate 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
+      translate 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  .rounds-on .challenge-note:has(.challenge-link):hover,
+  .rounds-on .challenge-note:nth-child(2n):has(.challenge-link):hover {
+    --fx-shadow-size: var(--shadow-card-max);
+    rotate: calc(-1 * var(--rotate-2-5));
+    translate: 0 -5px;
+  }
+}

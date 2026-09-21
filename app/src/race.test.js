@@ -7,7 +7,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  exclusivePick, raceHall, renderEntryPanel, renderEventFacts, renderVoteButton,
+  OTHER_ROUNDS, exclusivePick, otherRounds, raceHall, renderEntryPanel, renderEventFacts,
+  renderVoteButton,
 } from "./race.js";
 
 const event = {
@@ -416,5 +417,52 @@ describe("exclusivePick: at most one stage pick", () => {
     mine.checked = false;
     expect(exclusivePick([all, mine, top], mine)).toBeNull();
     expect([all.checked, mine.checked, top.checked]).toEqual([false, false, false]);
+  });
+});
+
+describe("otherRounds: the way on, under the board", () => {
+  // `event` at the top of this file carries what formatEventFacts reads; the
+  // programme is what GET /api/events hands the page, so it carries it too.
+  const round = (id, title, status, category, rig = "legs", extra = {}) => ({
+    ...event, id, title, status, category, rig, ...extra,
+  });
+  const programme = [
+    round("sprint-2m", "2 m Sprint", "open", "race"),
+    round("roller-sprint-2m", "2 m Roller Sprint", "open", "race", "rollers"),
+    round("hill-climb-1m5", "1.5 m Hill Climb", "open", "race"),
+    round("swag-contest", "Swag Contest", "open", "showcase", "legs", { vote: {} }),
+    round("highest-jump", "Highest Jump", "planned", "challenge"),
+    round("rough-ground", "Rough Ground", "planned", "challenge"),
+  ];
+  const here = programme[0];
+
+  it("leaves out the round you are already on", () => {
+    // A card back to this page is a dead end dressed as a way forward.
+    const strip = otherRounds(programme, here, new Map());
+    const links = [...strip.querySelectorAll("a.challenge-link")].map((a) => a.getAttribute("href"));
+    expect(links).not.toContain("#/e/sprint-2m");
+    expect(links[0]).toBe("#/e/roller-sprint-2m");
+  });
+
+  it("shows four and counts all of them", () => {
+    const strip = otherRounds(programme, here, new Map());
+    expect(strip.querySelectorAll(".challenge-note")).toHaveLength(OTHER_ROUNDS);
+    // The heading counts the PROGRAMME, not the four on screen — otherwise
+    // "see all" would send you somewhere you have already been.
+    const all = strip.querySelector(".rounds-on__all");
+    expect(all.textContent).toBe("See all 6");
+    expect(all.getAttribute("href")).toBe("#/");
+  });
+
+  it("gives each card the holder its board names, and none to a board it has none for", () => {
+    const boards = new Map([
+      ["roller-sprint-2m", [{ user: "ann", score: 3.216, seeds_finished: 5 }]],
+    ]);
+    const strip = otherRounds(programme, here, boards);
+    const cards = [...strip.querySelectorAll(".challenge-note")];
+    expect(cards[0].querySelector(".flyer-leader-name").textContent).toBe("ann");
+    expect(cards[1].querySelector(".flyer-leader-name").textContent).toBe("be the first");
+    // A planned event says so rather than inviting an entry it cannot take.
+    expect(cards[3].querySelector(".flyer-leader-name").textContent).toBe("course not built yet");
   });
 });
