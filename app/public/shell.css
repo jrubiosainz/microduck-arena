@@ -117,7 +117,10 @@ body {
   height: 36px;
   overflow: hidden;
   border: 2px solid var(--ink);
-  background: var(--lavender);
+  /* Paper, not a colour. The picture covers it whenever there is one, so the
+     ground is only ever seen behind the fallback duck — and a coloured plate
+     there read as a badge standing for something. */
+  background: var(--warm-paper);
   font-size: 22px;
   line-height: 1;
 }

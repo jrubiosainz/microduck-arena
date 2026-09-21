@@ -748,7 +748,7 @@
   width: clamp(4rem, 12vw, 8rem);
   aspect-ratio: 1;
   font-size: clamp(2.5rem, 8vw, 5rem);
-  background: var(--lavender);
+  background: var(--warm-paper);
   border: 3px solid var(--ink);
   box-shadow: var(--shadow-card-min) var(--shadow-card-min) 0 var(--ink);
 }
