@@ -148,8 +148,9 @@ One turn of the loop:
    recent wording, and the audit the same as what a rehash would be.)
 4. Call the router, once. A `Rejected` is not an error: log the reason, move to
    the next run, and let this one come round again. (Amended 2026-09-21: only
-   the local checks refuse now, about one dialogue in ten; the reserve is no
-   longer sized on half the turns producing nothing.)
+   the local checks refuse now, about four attempts in ten on the real log, and
+   a refused run waits five minutes before it is tried again, so that one run
+   cannot spend the hour's attempts.)
 5. `prepare` the dialogue in the reserve's own tab, and write the broadcast.
 6. Tell the programme something landed.
 
@@ -177,10 +178,11 @@ replays with no booths, which is a supported way to run.
   never starts.
 - At most **one hundred and twenty** generation attempts an hour, counted
   whether they succeed or are refused. Steady state is about seventy booths an
-  hour, measured, and about eighty attempts with one refusal in ten; the cap is
-  half again as much, so it never binds in normal running and a loop that has
-  gone wrong cannot spend the night on the router. (Amended 2026-09-21: with
-  one refusal in two, as this spec first assumed, the cap did bind.)
+  hour, measured, and some 115 attempts with four refusals in ten; the cap sits
+  at that edge on purpose, and a loop that has gone wrong cannot spend the night
+  on the router. (Amended 2026-09-21: this spec said the cap never binds in
+  normal running. It can, by a booth now and then, until the landing rate
+  improves; it is the owner's bound on what the channel spends.)
 - One generation at a time. There is no parallelism to win here: the reserve is
   ahead of the playhead by minutes.
 

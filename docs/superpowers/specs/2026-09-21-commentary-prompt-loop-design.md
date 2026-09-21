@@ -97,11 +97,27 @@ the served model nearest the one the prompt was tuned on. The loop may change it
 the owner's position is that the prompt, not the model, is the problem.
 
 **The reserve's size.** Measured: the channel consumes a booth about every
-fifty seconds, 71 an hour. With the local checks refusing about one dialogue in
-ten, that is about 80 attempts an hour, and the cap of 120 is half again as much:
-it does not bind in normal running, which is what the 09-18 spec wanted and could
-not have while it also assumed one refusal in two. The cap stays at 120; the
-assumption goes.
+fifty seconds, 71 an hour. On a snapshot of the real log, the local checks alone
+refuse about four attempts in ten — a number not in the cited facts first, then
+a name spoken without the fact that establishes it — which is some 115 attempts
+an hour for those 71 booths, a generation now costing one router call and about
+2 100 prompt tokens. The cap stays at 120: it is the owner's bound on what the
+channel may spend, it sits at the edge rather than half again above, and a booth
+short now and then is a state the channel knows how to be in. Bringing the
+landing rate up is the loop's first job, and the bench's LANDING block names
+what to aim at.
+
+**A refused run waits.** A refusal is the run's own — its facts, its direction —
+so trying the same run again at once mostly buys the same refusal. Measured: one
+run took 23 of a session's first 41 refusals and was never written, retried
+every five seconds for as long as it was the only run with nothing waiting; on
+the Space that is the whole hourly cap spent on one run. A refused run is
+therefore left out of the reserve's walk for five minutes, the grid's horizon,
+and the walk goes on with the others. A run that never lands then costs twelve
+attempts an hour at most, and a run that lands two times in three still gets
+several tries between two of its airings. A failure that is not the run's own —
+a broken tab, a plan the book refuses, the router down — makes nothing wait: it
+moves the walk's cursor, as it does today.
 
 ## The brief
 
@@ -234,9 +250,9 @@ Editorial fiction still lives in the bible and only there.
 
 ## What stays exactly as it is
 
-The grid and its arithmetic, the book's retention, the reserve's walk and its
-browser, the plan page, the booth, every local check but the one on a recent
-fact's numbers, and the rule that a refusal costs a booth and never the channel.
+The grid and its arithmetic, the book's retention, the reserve's browser, the
+plan page, the booth, every local check but the one on a recent fact's numbers,
+and the rule that a refusal costs a booth and never the channel.
 
 ## What the owner must do
 
@@ -244,8 +260,9 @@ Give the Space's `HF_TOKEN` secret a token allowed to call Inference Providers.
 Until then the real channel writes nothing, whatever the code does.
 
 The cost is worth knowing before that token goes in: without the judge the
-reserve still writes about 75 dialogues an hour, day and night, some 1 800 router
-calls a day at about 6 000 prompt tokens each. If a measuring campaign needs the
+reserve still makes up to 120 attempts an hour, day and night, some 2 900 router
+calls a day at about 2 100 prompt tokens each (the recent dialogues were two
+thirds of the old prompt). If a measuring campaign needs the
 quota, the levers are `PER_HOUR` in `arena/commentary/stock.py` and
 `ARENA_COMMENTARY=0` on the Space. The bench's judge costs one call per dialogue
 evaluated, and only when it is run.
@@ -254,8 +271,8 @@ evaluated, and only when it is run.
 
 Commits land on the local `main`; the owner pushes.
 
-1. The live path without the judge, the callback fact, the model, the brief, and
-   the two scripts. The direction becomes data but is still drawn from the run's
+1. The live path without the judge, the callback fact, the model, the brief, the
+   two scripts, and the refused run that waits. The direction becomes data but is still drawn from the run's
    id. Push; two sessions give the baseline.
 2. The draw per airing. Push; measure against the baseline.
 3. The lots above, one push each.

@@ -1195,6 +1195,131 @@ Expected: the four blocks (PHRASES, PROPS, LANDING, MECHANIC). Report the landin
 
 `kill $(lsof -nP -iTCP:8234 -sTCP:LISTEN -t)` and stop the collector. Tell the owner push 1 is ready, that the Space needs an `HF_TOKEN` allowed to call Inference Providers, and that after the push two sessions of thirty dialogues or more, collected from `https://pollen-robotics-microduck-arena.hf.space`, are the baseline. The Space's log for `--log` comes from `uv run --frozen hf spaces logs pollen-robotics/microduck-arena > space.log`.
 
+### Task 9: A refused run waits before it is tried again
+
+Added on 2026-09-21 after Task 7 measured it (it belongs to push 1, whatever its number): one run took 23 of a session's first 41 refusals and was never written, retried every `IDLE_S` = 5 s for as long as it was the only run with nothing waiting. Spec: "A refused run waits".
+
+**Files:**
+- Modify: `arena/commentary/stock.py` (new `RETRY_S`, `__init__`, `wanted`, the `except Rejected` branch)
+- Modify: `scripts/commentary_bench.py` (one sentence in the module docstring)
+- Test: `tests/test_commentary_stock.py`
+
+**Interfaces:**
+- Consumes: `CommentaryStock(book, tab, compose, pool, *, depth, per_hour, log, landed, now, clock)`; `now` is a monotonic clock in seconds, injectable.
+- Produces: `stock.RETRY_S = 300.0`. `wanted()` leaves out a run refused (a `Rejected`) less than `RETRY_S` ago. A `Rejected` no longer moves `_cursor`; every other failure still does.
+
+- [ ] **Step 1: The failing tests**
+
+In `tests/test_commentary_stock.py` import `RETRY_S` beside `CommentaryStock`, and REPLACE `test_a_run_that_keeps_refusing_is_not_skipped_forever` (its walk-comes-back-round guarantee is now carried by the wait) with:
+
+```python
+def test_a_refused_run_waits_before_it_is_tried_again(tmp_path):
+    """A refusal is the run's own, so the same run tried again at once mostly buys
+    the same refusal, out of the hourly cap every other run shares. Measured: one
+    run took more than half of a session's refusals that way."""
+    seen, clock = [], [0.0]
+
+    def refuse(run_id):
+        seen.append(run_id)
+        raise Rejected("no")
+
+    worker = CommentaryStock(
+        book=BroadcastBook(tmp_path), tab=FakeTab(), compose=refuse,
+        pool=lambda: entries("a", "b"), per_hour=10, log=lambda *_: None,
+        now=lambda: clock[0], clock=lambda: "2026-09-18T09:00:00Z")
+    worker.turn()
+    worker.turn()
+    assert seen == ["a", "b"]
+    # Both wait: the next turn calls nobody and spends none of the hour's attempts.
+    assert worker.wanted() == []
+    assert worker.turn() is None
+    assert seen == ["a", "b"] and worker.attempts_left() == 8
+    clock[0] = RETRY_S + 1
+    worker.turn()
+    assert seen == ["a", "b", "a"]
+```
+
+`test_the_cursor_rebases_when_wanted_shrinks` exists for the cursor, which only a failure that is NOT the run's own still moves: make its `compose` raise `RuntimeError("no Chrome")` for "a" instead of `Rejected("no")`, and its docstring say "(the tab just failed on it)" where it says "(just refused)". Its assertions stay.
+
+- [ ] **Step 2: Run them and watch them fail**
+
+Run: `uv run --frozen pytest tests/test_commentary_stock.py -q`
+Expected: FAIL — no `RETRY_S`; with it, the refused runs are retried at once.
+
+- [ ] **Step 3: `arena/commentary/stock.py`**
+
+Beside the other constants:
+
+```python
+RETRY_S = 300.0  # how long a refused run waits: the grid's horizon
+```
+
+In `__init__`, replace the comment above `self._cursor = 0` and add the new state above it:
+
+```python
+        # When each run was last refused. A refusal is the run's own — its facts,
+        # its direction — so trying it again at once mostly buys the same refusal:
+        # one run took more than half of a measured session's refusals that way,
+        # every five seconds, out of the hourly cap every other run shares.
+        self._refused: dict[str, float] = {}
+        # Where the walk resumes after a failure that is not the run's own: a
+        # broken tab must not pin it on the same run forever, so the very next
+        # turn tries the one after it. A landed dialogue resets it — the front of
+        # the order is what matters.
+        self._cursor = 0
+```
+
+`wanted` becomes:
+
+```python
+    def wanted(self) -> list[str]:
+        """The next runs to reach the screen that have no dialogue waiting and
+        were not refused in the last RETRY_S."""
+        edge = self.now() - RETRY_S
+        self._refused = {run_id: at for run_id, at in self._refused.items() if at > edge}
+        stocked = self.book.runs_stocked()
+        order = cycle(self.pool(), 0)
+        return [entry.run_id for entry in order
+                if entry.run_id not in stocked and entry.run_id not in self._refused][:self.depth]
+```
+
+and the `except Rejected` branch:
+
+```python
+        except Rejected as why:
+            # About four in ten are refused on the real log. It is the local
+            # checks doing their job, not a fault: the run waits, and the walk
+            # goes on with the others.
+            self.log(f"commentary: {run_id} refused ({why})")
+            self._refused[run_id] = self.now()
+            return None
+```
+
+The broad `except Exception` branch below it is unchanged and still sets `self._cursor = index + 1`.
+
+- [ ] **Step 4: One sentence for whoever measures a local server**
+
+In `scripts/commentary_bench.py`'s module docstring, after the usage example's paragraph, add:
+
+```
+A local server's log is only complete with PYTHONUNBUFFERED=1 in its environment:
+Python block-buffers a stdout that is redirected to a file.
+```
+
+- [ ] **Step 5: Run the suite**
+
+Run: `uv run --frozen pytest -q && uv run --frozen ruff check arena tests scripts/collect_broadcasts.py scripts/commentary_bench.py`
+Expected: all pass, ruff clean. Every other test of `tests/test_commentary_stock.py` passes unchanged; if one does not, report which and why before touching it.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add arena/commentary/stock.py scripts/commentary_bench.py tests/test_commentary_stock.py
+git commit -m "Commentary: a refused run waits five minutes, so one run cannot spend the hour's attempts
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
 ---
 
 ## Push 2 — only after the baseline is measured
