@@ -167,35 +167,6 @@ describe("the chapter chequer", () => {
     expect(band[1], "the squares are not orange").toMatch(/var\(--orange\)/);
     expect(band[1], "the squares do not repeat on a grid").toMatch(/background-size\s*:/);
   });
-
-  it("divides one ground rather than two", () => {
-    // The band above stands on warm paper and the hall below is lighter. With
-    // nothing carrying the one past the other, the chequer read as a seam
-    // between two colours instead of a stripe laid on one.
-    const css = readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
-      "utf8",
-    ).replace(/\/\*[\s\S]*?\*\//g, "");
-    const door = css.match(/\n\.door \{([^}]*)\}/);
-    const under = css.match(/\.chapter--wall::before\s*\{([^}]*)\}/);
-    const band = css.match(/\.chapter-checker\s*\{([^}]*)\}/);
-    expect(band, ".chapter-checker rule not found in club.css").not.toBeNull();
-    expect(under, ".chapter--wall::before not found in club.css").not.toBeNull();
-    expect(door[1]).toMatch(/background-color\s*:\s*var\(--warm-paper\)/);
-    expect(under[1], "the ground under the wall is not the band's own")
-      .toMatch(/background\s*:\s*var\(--warm-paper\)/);
-    // Under the scanlines, which sit at -1, and under the flyers.
-    expect(under[1], "the ground would paint over the scanlines")
-      .toMatch(/z-index\s*:\s*-2/);
-    // And the chequer has to out-rank it. The -2 above orders that layer only
-    // WITHIN its chapter, which is `isolation: isolate`; from outside, the
-    // whole chapter paints after the chequer, and this ground reaches far
-    // enough up to cover it. It did, until the chequer was raised.
-    expect(band[1], "the wall's ground will paint over the chequer")
-      .toMatch(/z-index\s*:\s*1/);
-    expect(band[1], "z-index does nothing on a static box")
-      .toMatch(/position\s*:\s*relative/);
-  });
 });
 
 describe("the ladder", () => {

@@ -377,14 +377,6 @@
    the way components.css draws the gym floor: gradients as a PATTERN, never
    the colour ramp the charter forbids. */
 .chapter-checker {
-  /* Above the ground the wall chapter paints beneath it. That ground sits at
-     z-index -2, but the chapter is `isolation: isolate`, so -2 only orders it
-     within the chapter — from outside, the whole chapter paints AFTER this
-     band and its ground, which reaches 168px up, covered the chequer
-     completely. Sibling order is what decides here, and this is how the
-     chequer wins it. */
-  position: relative;
-  z-index: 1;
   height: 16px;
   /* Leaning -1°, as the rule it replaced did. Wider than the window and
      pulled back by half the excess: a 1° turn lifts one end and drops the
@@ -499,26 +491,6 @@
    context. Full width like everything else on this page; the chapter's own box
    is what scopes it vertically. */
 .chapter--wall { isolation: isolate; }
-
-/* The same warm paper the band above stands on, carried down past the chequer
-   and on to the foot of the page. Without it the chequer divided two
-   different grounds — warm paper above, the hall's lighter paper below — and
-   read as a seam between two colours rather than as a stripe laid on one.
-   It reaches up by everything between this chapter and the band: the space
-   the chequer leaves above itself, the chequer, and the space it leaves
-   below. Its own layer and not the scanlines', which carry an opacity. */
-.chapter--wall::before {
-  content: "";
-  position: absolute;
-  z-index: -2;
-  pointer-events: none;
-  left: calc(50% - 50vw);
-  right: auto;
-  width: 100vw;
-  top: calc(-1 * (var(--space-chapter-top-min) + 16px + var(--space-title-to-grid-max)));
-  bottom: calc(-1 * (var(--space-chapter-bottom-min) + var(--space-gutter-max)));
-  background: var(--warm-paper);
-}
 .chapter--wall::after {
   z-index: -1;
   left: calc(50% - 50vw);
