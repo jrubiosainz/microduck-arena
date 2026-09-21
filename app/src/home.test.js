@@ -548,6 +548,8 @@ describe("the channel's frame", () => {
   it("is a stage to mount the channel in, with the picture itself the way into it", () => {
     const frame = liveFrame();
     expect(frame.matches("div.season-live")).toBe(true);
+    // Through the charter's shadow primitive, not a literal box-shadow.
+    expect(frame.className).toContain("fx-shadow-card");
     expect(frame.querySelector(".season-live-stage")).not.toBeNull();
     const door = frame.querySelector("a.season-live-door");
     expect(door.getAttribute("href")).toBe("#/live");

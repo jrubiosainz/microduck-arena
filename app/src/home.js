@@ -268,7 +268,7 @@ export function chapterRule(index) {
  * the picture over it as the way to the full screen. The button the player
  * raises stands above this door, so asking for the sound is not leaving. */
 export function liveFrame() {
-  const frame = el("div", "season-live");
+  const frame = el("div", "season-live fx-shadow-card");
   const door = el("a", "season-live-door");
   door.href = liveHref;
   door.setAttribute("aria-label", "Watch the live channel");

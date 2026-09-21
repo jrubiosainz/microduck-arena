@@ -471,9 +471,13 @@
    own frame. The door over it is the picture itself -- the way to the full
    screen -- with the player's own button standing above it. */
 .season-live {
+  /* Orange, the page's carrying accent: the channel is the one thing on the
+     front that moves, and it should cast what the rest of the page spends on
+     what matters. Through the charter's primitive rather than a literal
+     shadow — the 5px it used to write was off the token scale anyway. */
+  --fx-shadow-color: var(--orange);
   position: relative;
   border: 3px solid var(--ink);
-  box-shadow: 5px 5px 0 var(--ink);
   background: var(--deep-ink);
 }
 .season-live-stage { display: block; }
