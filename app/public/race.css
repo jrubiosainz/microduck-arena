@@ -14,6 +14,24 @@ body { font: 15px/1.55 var(--body); }
 
 /* ── race page chrome ─────────────────────────────────────── */
 
+/* The way out, above everything. A link home and not history.back(): a race
+   page is a thing people paste to each other, and on a fresh tab there is no
+   previous page for a back button to return to. */
+.raceback {
+  display: inline-block;
+  margin: 0 0 var(--space-gutter-min);
+  color: var(--orange-inked);
+  font-family: var(--type-eyebrow-family);
+  font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size);
+  letter-spacing: var(--type-eyebrow-tracking);
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.raceback::before { content: "\2190\00a0"; }
+.raceback:hover { text-decoration: underline; }
+.raceback:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+
 /* The display face, as on the flyers: this is the name of the race, and it
    should read like one rather than like a form label. */
 .racetitle {
@@ -186,7 +204,11 @@ button.link {
    shadow. The club's own screen carries one, but at this size it reads as a
    slab under the picture rather than as a lift off the wall. The shadow pair
    keeps the places it earns — the entry note, and its two buttons. */
+/* A frame around the picture, not just a border on it: the charter's offset
+   shadow in cyan, which tokens.css assigns to "replay and cabinet shadows" —
+   this stage is both. */
 .stage {
+  --fx-shadow-color: var(--cyan);
   position: relative;
   overflow: hidden;
   background: var(--deep-ink);
@@ -372,20 +394,6 @@ table.board tr.tier-ghost .votes { color: var(--ink-70); }
   background: var(--swatch);
 }
 .swatch[aria-pressed="true"] { outline: 3px solid var(--orange-inked); outline-offset: 2px; }
-
-/* ── stage brightness ─────────────────────────────────────────────────── */
-
-/* A control, not a constant: the right exposure depends on the screen, and
-   guessing it from outside the browser cost three passes. */
-.bright {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-left: auto;
-  color: var(--ink-70);
-  font-size: 0.8rem;
-}
-.bright input[type="range"] { width: 96px; accent-color: var(--orange); }
 
 /* Trial speed picker. Sits with the entry controls, and says plainly that it
    does not affect a publish — otherwise it reads as a way to game the board. */

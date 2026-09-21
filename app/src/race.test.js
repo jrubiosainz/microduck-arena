@@ -6,7 +6,7 @@
 // what would have caught that.
 
 import { describe, expect, it, vi } from "vitest";
-import { renderEntryPanel, renderEventFacts, renderVoteButton } from "./race.js";
+import { raceHall, renderEntryPanel, renderEventFacts, renderVoteButton } from "./race.js";
 
 const event = {
   seeds: 5,
@@ -316,5 +316,37 @@ describe("renderVoteButton: the way into the booth, above the entry form", () =>
     const div = root();
     renderVoteButton(div, { id: "sprint-2m" });
     expect(div.querySelector(".vote-button")).toBeNull();
+  });
+});
+
+describe("raceHall: the page's frame", () => {
+  const hall = () => raceHall({ ...event, title: "2 m Sprint" });
+
+  it("puts the title INSIDE the stage's column, so the entry panel starts level with it", () => {
+    // The whole point of the arrangement. With the title above the grid the
+    // entry panel began below the facts, a heading and a half down the page.
+    const column = hall().querySelector(".racegrid > div:first-child");
+    const parts = [...column.children].map((n) => n.className);
+    expect(parts[0]).toBe("racetitle");
+    expect(parts.indexOf("facts")).toBeLessThan(parts.findIndex((c) => c.startsWith("stage")));
+  });
+
+  it("offers a way back, to the front page rather than to history", () => {
+    // A race page is pasted between people; on a fresh tab history.back()
+    // has nowhere to go, and a link always does.
+    const back = hall().querySelector("a.raceback");
+    expect(back.getAttribute("href")).toBe("#/");
+    expect(back.textContent).toBe("Back to the rounds");
+  });
+
+  it("frames the stage with the charter's shadow primitive", () => {
+    expect(hall().querySelector(".stage").className).toContain("fx-shadow-card");
+  });
+
+  it("carries no brightness slider", () => {
+    // Pinned at the module's minimum instead. If the stage ever looks wrong,
+    // brightness.js explains in its own comment why a control was there.
+    expect(hall().querySelector("#brightness")).toBeNull();
+    expect(hall().querySelector(".bright")).toBeNull();
   });
 });

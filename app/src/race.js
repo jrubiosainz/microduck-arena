@@ -11,9 +11,9 @@ import {
 import { renderBoard, selectedRunIds, tiersByRunId } from "./board.js";
 import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
-import { MAX, MIN } from "./brightness.js";
+import { MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
-import { runHref } from "./router.js";
+import { menuHref, runHref } from "./router.js";
 import { panelState, signInHref } from "./session.js";
 import { footer, signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
@@ -250,29 +250,30 @@ export function renderVoteButton(root, event) {
   root.querySelector("#entry").before(voteButton(event, { variant: "panel" }));
 }
 
-export async function renderRace(root, { event, state }) {
-  // Asked for first: the strip over the door carries this player's chip, and
-  // the board below needs to know whose rows are their own.
-  const me = await getMe();
-  root.replaceChildren(signage(me));
-
+/**
+ * The page's frame, as a detached element.
+ *
+ * Its own function for the reason `renderVoteButton` is: everything below
+ * needs a WebGL viewer and a leaderboard fetch, so the layout could only be
+ * read as code rather than exercised as DOM. The structure matters — the
+ * entry panel sits level with the title because the title is INSIDE the
+ * stage's column, and nothing but a test keeps it there.
+ */
+export function raceHall(event) {
   const hall = document.createElement("main");
   hall.className = "hall";
   hall.innerHTML = `
-    <h2 class="racetitle">${event.title}</h2>
-    <dl class="facts" id="facts"></dl>
+    <a class="raceback" href="${menuHref}">Back to the rounds</a>
     <div class="racegrid">
       <div>
-        <div class="stage"><canvas id="stage"></canvas></div>
+        <h2 class="racetitle">${event.title}</h2>
+        <dl class="facts" id="facts"></dl>
+        <div class="stage fx-shadow-card"><canvas id="stage"></canvas></div>
         <div class="controls">
           <button id="playpause">Pause</button>
           <button id="follow" hidden>Follow the leader</button>
           <button id="walls" aria-pressed="false" title="The lane walls are in the physics whether or not they are drawn">Show walls</button>
           <span class="hint" id="stage-hint"></span>
-          <label class="bright" title="Stage brightness">
-            Light
-            <input type="range" id="brightness" min="${MIN}" max="${MAX}" step="0.05" />
-          </label>
         </div>
         <ul class="key" id="key">
           <li class="key--trial">your test</li>
@@ -296,6 +297,16 @@ export async function renderRace(root, { event, state }) {
       <div id="board"></div>
     </div>
   `;
+  return hall;
+}
+
+export async function renderRace(root, { event, state }) {
+  // Asked for first: the strip over the door carries this player's chip, and
+  // the board below needs to know whose rows are their own.
+  const me = await getMe();
+  root.replaceChildren(signage(me));
+
+  const hall = raceHall(event);
   root.append(hall, footer());
   renderVoteButton(root, event);
 
@@ -314,9 +325,11 @@ export async function renderRace(root, { event, state }) {
   });
   state.viewer = viewer;
 
-  const brightness = root.querySelector("#brightness");
-  brightness.value = String(viewer.brightness);
-  brightness.addEventListener("input", () => viewer.setBrightness(brightness.value));
+  // No slider any more: the stage is pinned at the dimmest the module allows.
+  // Worth knowing if this ever looks wrong — brightness.js says in its own
+  // comment that the control exists because guessing the exposure from
+  // outside cost three rounds. MIN is 0.5 against a 1.25 default.
+  viewer.setBrightness(MIN);
 
   // Declared above every handler that closes over it. Further down it worked
   // only because a click always happens after that line — a handler moved above
