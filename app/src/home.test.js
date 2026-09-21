@@ -79,10 +79,10 @@ describe("the first chapter's band", () => {
       .toMatch(/margin-left\s*:\s*calc\(50% - 50vw\)/);
     expect(door[1], ".door carries no ground for the grain to sit on")
       .toMatch(/background-color\s*:/);
-    // The dot layer reaches past the band on every side, and the clip-path
-    // that used to trim it went with the slanted bottom edge.
+    // The clip-path that cuts the bottom edge also trims the dot layer, which
+    // is inset -6% and turned 2.5°.
     expect(door[1], "the dot layer's corners are not kept off the page")
-      .toMatch(/overflow\s*:\s*hidden/);
+      .toMatch(/clip-path:\s*polygon/);
 
     // The dot field, as pollen-robotics.com/microduck draws it. Each of these
     // is a thing that was asked for by name and that a later tidy-up would
@@ -168,20 +168,22 @@ describe("the chapter chequer", () => {
     expect(band[1], "the squares do not repeat on a grid").toMatch(/background-size\s*:/);
   });
 
-  it("has both grounds reach its swing, not just its box", () => {
-    // It leans, so its ends sit about 1vw above and below its own box. The
-    // band's warm paper has to come down that far and the wall's stripes up,
-    // or the swing shows bare paper at one end and then at the other.
+  it("is met by a band cut to the same angle", () => {
+    // Its ends sit about 1vw above and below its own box, and the band above
+    // has a horizontal bottom edge — so warm paper showed beneath the end
+    // that lifts. No amount of moving either one fixes that: the two edges
+    // have to be parallel, which is what the band's clip-path is for.
     const css = readFileSync(
       resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
       "utf8",
     ).replace(/\/\*[\s\S]*?\*\//g, "");
-    expect(css, "the rise the chequer swings by is not declared")
-      .toMatch(/--checker-rise\s*:\s*[\d.]+vw/);
-    expect(css, "the chequer does not overlap the band above it")
-      .toMatch(/\.door \+ \.chapter-checker \{[^}]*margin-top:\s*calc\(-1 \* var\(--checker-rise\)\)/);
-    expect(css, "the wall's stripes do not reach up to the chequer's lowest point")
-      .toMatch(/\.chapter--wall::after \{[^}]*var\(--checker-rise\)/);
+    const door = css.match(/\n\.door \{([^}]*)\}/);
+    expect(door[1], "the band's bottom edge is square under a leaning chequer")
+      .toMatch(/clip-path:\s*polygon/);
+    expect(door[1], "the band has no slant to cut its edge by").toMatch(/--slant:/);
+    const band = css.match(/\.chapter-checker\s*\{([^}]*)\}/);
+    expect(band[1], "the chequer does not lean, so the cut would be wrong")
+      .toMatch(/rotate:\s*calc\(-1 \* var\(--rotate-1-0\)\)/);
   });
 });
 
