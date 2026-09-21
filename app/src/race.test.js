@@ -343,6 +343,21 @@ describe("raceHall: the page's frame", () => {
     expect(hall().querySelector(".stage").className).toContain("fx-shadow-card");
   });
 
+  it("names the kind of event over its title, as the flyer did", () => {
+    const hall = raceHall({ ...event, title: "2 m Sprint", category: "challenge" });
+    expect(hall.querySelector(".raceeyebrow").textContent).toBe("CHALLENGE");
+    // An event whose category the server did not send draws no empty line.
+    expect(raceHall({ ...event, title: "x" }).querySelector(".raceeyebrow")).toBeNull();
+  });
+
+  it("offers a toggle for the names over the ducks, off to begin with", () => {
+    const button = hall().querySelector("#names");
+    expect(button.textContent).toBe("Show names");
+    // aria-pressed rather than the label alone, so the state is readable
+    // without reading the text — as the walls button already does.
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("carries no brightness slider", () => {
     // Pinned at the module's minimum instead. If the stage ever looks wrong,
     // brightness.js explains in its own comment why a control was there.

@@ -314,6 +314,7 @@ export async function createViewer(
   let lanes = [];
   let course = null;
   let wallsVisible = false;
+  let namesVisible = false;
   let sideOffset = 1.15;
   let slopeDeg = 0;
   let player = new Player([]);
@@ -375,6 +376,10 @@ export async function createViewer(
       if (entry.name) {
         plate = nameplate(entry.name, entry.nameColour ?? "#faf8f2", "#08080c");
         plate.sprite.scale.set(PLATE_HEIGHT * plate.ratio, PLATE_HEIGHT, 1);
+        // Remembered on the viewer, like the walls: setLanes rebuilds every
+        // lane on each replay, so a plate built after the toggle was pressed
+        // would come back showing whatever the default was.
+        plate.sprite.visible = namesVisible;
         scene.add(plate.sprite);
       }
       return { ...entry, rig, marker, plate, tier };
@@ -391,6 +396,21 @@ export async function createViewer(
    * grazing something invisible, and being unable to see it made that
    * impossible to diagnose from the page.
    */
+  /**
+   * Show or hide the name over each duck.
+   *
+   * Kept on the viewer rather than on the sprites alone, for the same reason
+   * the walls are: setLanes discards and rebuilds every lane, so state held
+   * only on the meshes is lost on the next replay.
+   */
+  function setNamesVisible(visible) {
+    namesVisible = Boolean(visible);
+    for (const lane of lanes) {
+      if (lane.plate) lane.plate.sprite.visible = namesVisible;
+    }
+    return namesVisible;
+  }
+
   function setWallsVisible(visible) {
     // Remembered on the viewer, not only on the mesh: setLanes rebuilds the
     // course on every re-race, and a fresh group starts hidden. Without this
@@ -486,6 +506,7 @@ export async function createViewer(
     setLanes,
     follow,
     setWallsVisible,
+    setNamesVisible,
     setBrightness,
     frame,
     spot,

@@ -266,6 +266,7 @@ export function raceHall(event) {
     <a class="raceback" href="${menuHref}">Back to the rounds</a>
     <div class="racegrid">
       <div>
+        ${event.category ? `<p class="raceeyebrow">${event.category.toUpperCase()}</p>` : ""}
         <h2 class="racetitle">${event.title}</h2>
         <dl class="facts" id="facts"></dl>
         <div class="stage fx-shadow-card"><canvas id="stage"></canvas></div>
@@ -273,6 +274,7 @@ export function raceHall(event) {
           <button id="playpause">Pause</button>
           <button id="follow" hidden>Follow the leader</button>
           <button id="walls" aria-pressed="false" title="The lane walls are in the physics whether or not they are drawn">Show walls</button>
+          <button id="names" aria-pressed="false" title="Who each duck belongs to, hung over its head">Show names</button>
           <span class="hint" id="stage-hint"></span>
         </div>
         <ul class="key" id="key">
@@ -359,6 +361,16 @@ export async function renderRace(root, { event, state }) {
     wallsButton.setAttribute("aria-pressed", String(wallsShown));
     wallsButton.textContent = wallsShown ? "Hide walls" : "Show walls";
   });
+  // Who each duck belongs to. Off by default: with one lane the answer is on
+  // the panel beside it, and four plates over four ducks is a legend nobody
+  // asked for until they did.
+  const namesButton = root.querySelector("#names");
+  let namesShown = false;
+  namesButton.addEventListener("click", () => {
+    namesShown = viewer.setNamesVisible(!namesShown);
+    namesButton.setAttribute("aria-pressed", String(namesShown));
+    namesButton.textContent = namesShown ? "Hide names" : "Show names";
+  });
   root.querySelector("#playpause").addEventListener("click", () => {
     viewer.player.toggle();
     root.querySelector("#playpause").textContent = viewer.player.playing
@@ -371,6 +383,7 @@ export async function renderRace(root, { event, state }) {
   let currentLivery = "classic"; // mirrors the entry panel's swatch pick
   const traces = new Map();
   const liveries = new Map(); // run id -> the colourway it raced in
+  const names = new Map(); // run id -> whose run it is, for the plate over its duck
 
   async function traceFor(runId) {
     if (!traces.has(runId)) traces.set(runId, await getTrace(runId));
@@ -386,11 +399,16 @@ export async function renderRace(root, { event, state }) {
       tier: tiers.get(runId) ?? "ghost",
       // A published run keeps the colourway it raced in.
       livery: liveries.get(runId) ?? "classic",
+      // The viewer builds a plate only for a lane that has a name; the button
+      // below decides whether it is shown.
+      name: names.get(runId),
     }));
     // The trial wears whatever is selected right now, so changing the swatch
     // repaints it immediately.
     if (trial) {
-      lanes.unshift({ runId: null, trace: trial.trace, tier: "trial", livery: currentLivery });
+      lanes.unshift({
+        runId: null, trace: trial.trace, tier: "trial", livery: currentLivery, name: "your test",
+      });
     }
     viewer.setLanes(lanes, event);
     root.querySelector("#playpause").textContent = "Pause";
@@ -402,7 +420,10 @@ export async function renderRace(root, { event, state }) {
 
   async function paint() {
     const { rows } = await getLeaderboard(event.id);
-    for (const row of rows) liveries.set(row.run_id, row.livery ?? "classic");
+    for (const row of rows) {
+      liveries.set(row.run_id, row.livery ?? "classic");
+      names.set(row.run_id, row.user);
+    }
     const merged = insertProvisional(rows, trial);
     const tiers = tiersByRunId(merged);
     renderBoard(

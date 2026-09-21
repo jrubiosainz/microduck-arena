@@ -32,13 +32,30 @@ body { font: 15px/1.55 var(--body); }
 .raceback:hover { text-decoration: underline; }
 .raceback:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 
-/* The display face, as on the flyers: this is the name of the race, and it
-   should read like one rather than like a form label. */
-.racetitle {
-  margin: 0 0 4px;
-  font: 400 clamp(1.9rem, 4.4vw, 2.8rem) / 1.05 var(--display);
+/* The kind of event, over its name — the same word the flyer on the front
+   page carries, so arriving here confirms what was clicked. */
+.raceeyebrow {
+  margin: 0;
+  color: var(--orange-inked);
+  font-family: var(--type-eyebrow-family);
+  font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size);
+  letter-spacing: var(--type-eyebrow-tracking);
   text-transform: uppercase;
-  letter-spacing: 0.01em;
+}
+
+/* The display face, as on the flyers: this is the name of the race, and it
+   should read like one rather than like a form label. A step up from the old
+   2.8rem ceiling, to the charter's own section-title level — beside a stage
+   this wide it was reading as a caption. */
+.racetitle {
+  margin: 2px 0 4px;
+  font-family: var(--type-section-title-family);
+  font-weight: var(--type-section-title-weight);
+  font-size: min(var(--type-section-title-size), 3.4rem);
+  line-height: var(--type-section-title-line);
+  letter-spacing: var(--type-section-title-tracking);
+  text-transform: uppercase;
 }
 
 .facts { display: flex; gap: 26px; flex-wrap: wrap; margin: 14px 0 10px; }
@@ -57,7 +74,14 @@ body { font: 15px/1.55 var(--body); }
    as part of what the board is rather than a caution stapled onto it. */
 .racecaveat { color: var(--ink-70); font-size: 0.82rem; max-width: 60ch; margin: 0 0 18px; }
 
-.racegrid { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 18px; align-items: start; }
+/* The entry column sits further off the stage than it did: at 18px the drop
+   zone read as an edge of the picture rather than as its own panel. */
+.racegrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 17rem;
+  gap: var(--space-title-to-grid-max);
+  align-items: start;
+}
 @media (max-width: 760px) { .racegrid { grid-template-columns: minmax(0, 1fr); } }
 
 /* ── the entry column ─────────────────────────────────────────────────── */
