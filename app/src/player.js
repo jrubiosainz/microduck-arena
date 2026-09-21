@@ -13,6 +13,59 @@ function el(tag, className, text) {
   return node;
 }
 
+/**
+ * A publication's rank counts only if it is still ON the board.
+ *
+ * A withdrawn run keeps the rank it had when it was pulled, and an entry that
+ * never placed carries none. Neither is a standing, and either would make a
+ * player look better on their own page than on the board everyone else reads.
+ */
+function placed(pub) {
+  return !pub.withdrawn && pub.on_board && pub.rank != null;
+}
+
+/**
+ * The publications gathered per event, best first.
+ *
+ * Pure, and exported, because the ordering is the part worth pinning: groups
+ * are sorted by the player's BEST standing in each — what they are good at
+ * reads before what they merely tried — and an event where nothing placed
+ * sorts last rather than first, which is what a null rank does if it is
+ * compared as a number. Ties go to the most recent publication.
+ *
+ * Within a group the API's own order is kept: newest first.
+ */
+export function byEvent(publications) {
+  const groups = new Map();
+  for (const pub of publications) {
+    const group = groups.get(pub.event_id) ?? {
+      eventId: pub.event_id,
+      title: pub.event_title,
+      best: null,
+      votes: null,
+      newest: pub.submitted_at,
+      publications: [],
+    };
+    group.publications.push(pub);
+    if (pub.submitted_at > group.newest) group.newest = pub.submitted_at;
+    if (placed(pub) && (group.best == null || pub.rank < group.best)) {
+      group.best = pub.rank;
+      // Carried so the summary can say what the rank was earned by: a voted
+      // event ranks on votes, and "#1" beside a time would name the wrong one.
+      group.votes = pub.votes;
+    }
+    groups.set(pub.event_id, group);
+  }
+  return [...groups.values()].sort((a, b) => {
+    if (a.best !== b.best) {
+      if (a.best == null) return 1;
+      if (b.best == null) return -1;
+      return a.best - b.best;
+    }
+    return a.newest < b.newest ? 1 : -1;
+  });
+}
+
 export function profile(player, me = null) {
   const box = el("div", "profile");
 
@@ -29,13 +82,40 @@ export function profile(player, me = null) {
     el("span", "sticker sticker-cyan", player.rank == null ? "#—" : `#${player.rank}`),
   );
 
-  // Every run, newest first, each the way to its own page. The dot is the
-  // owner's alone: it says a result of THEIRS waits to be opened.
+  // One fold per event, best standing first. The event's name and where this
+  // player stands on it are on the outside; the policies are behind the fold,
+  // because a page listing thirty runs flat says nothing about any of them.
+  const rounds = el("div", "profile-rounds");
+  byEvent(player.publications).forEach((group, i) => {
+    const fold = document.createElement("details");
+    fold.className = "profile-round";
+    // The first is open: it is the player's best, and a page of shut folds
+    // makes someone click before it says anything at all.
+    fold.open = i === 0;
+    const head = document.createElement("summary");
+    head.append(
+      el("span", "profile-round__name", group.title),
+      el("span", "profile-round__place", group.best == null ? "unplaced" : `#${group.best}`),
+      el("span", "profile-round__count",
+        group.publications.length === 1 ? "1 policy" : `${group.publications.length} policies`),
+    );
+    fold.append(head, results(group.publications, player, me));
+    rounds.append(fold);
+  });
+
+  box.append(header, summary, el("h3", "eyebrow", "Rounds entered"), rounds);
+  return box;
+}
+
+/** One event's publications, newest first, each the way to its own page. */
+function results(publications, player, me) {
   const list = el("ul", "profile-results");
-  for (const pub of player.publications) {
+  for (const pub of publications) {
     const item = el("li");
     const link = el("a", pub.withdrawn ? "withdrawn" : null);
     link.href = runHref(pub.run_id);
+    // The dot is the owner's alone: it says a result of THEIRS waits to be
+    // opened.
     if (me?.user === player.user && !pub.seen) link.classList.add("unread");
     // A voted event's rank is earned by votes, not by time — "#1 · 18.46s"
     // beside a Swag Contest entry would read as a finish time that placed it,
@@ -44,7 +124,6 @@ export function profile(player, me = null) {
       ? (pub.votes ? `${pub.votes} votes` : "no votes yet")
       : formatScore(pub.score, { finished: pub.seeds_finished });
     link.append(
-      el("span", "eyebrow", pub.event_title),
       el("strong", null, `#${pub.rank ?? "—"} · ${earned}`),
       el("span", "mono-label", pub.withdrawn ? `${pub.policy_name} · withdrawn` : pub.policy_name),
       el("span", "profile-date", pub.submitted_at.slice(0, 10)),
@@ -52,9 +131,7 @@ export function profile(player, me = null) {
     item.append(link);
     list.append(item);
   }
-
-  box.append(header, summary, el("h3", "eyebrow", "Publications"), list);
-  return box;
+  return list;
 }
 
 export function noProfile(user) {

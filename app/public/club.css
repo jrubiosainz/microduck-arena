@@ -687,6 +687,69 @@
   box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
 }
 
+/* One fold per event: its name and where this player stands on it outside,
+   the policies within. A sheet of paper with a tab, so a shut fold still reads
+   as something to open. */
+.profile-rounds { display: grid; gap: var(--space-gutter-min); }
+
+.profile-round {
+  --fx-shadow-color: var(--ink);
+  --fx-shadow-size: var(--shadow-card-min);
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  box-shadow: var(--shadow-card-min) var(--shadow-card-min) var(--shadow-blur) var(--ink);
+}
+.profile-round > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-gutter-min);
+  padding: var(--space-card-padding-min);
+  cursor: pointer;
+  list-style: none; /* the default marker; the arrow below replaces it */
+}
+.profile-round > summary::-webkit-details-marker { display: none; }
+.profile-round > summary::after {
+  content: "\25BE";
+  margin-left: auto;
+  color: var(--ink-70);
+}
+.profile-round[open] > summary::after { content: "\25B4"; }
+.profile-round > summary:hover { background: var(--warm-paper); }
+.profile-round > summary:focus-visible { outline: 3px solid var(--cyan); outline-offset: -3px; }
+
+.profile-round__name {
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: min(var(--type-card-title-size), 1.5rem);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+/* The standing, in the action's own colour — it is the one figure on this
+   page a reader is looking for. */
+.profile-round__place {
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: min(var(--type-card-title-size), 1.5rem);
+  color: var(--orange-inked);
+}
+.profile-round__count {
+  font-family: var(--type-mono-label-family);
+  font-weight: var(--type-mono-label-weight);
+  font-size: var(--type-mono-label-size);
+  letter-spacing: var(--type-mono-label-tracking);
+  text-transform: uppercase;
+  color: var(--ink-70);
+}
+
+.profile-round > .profile-results {
+  padding: 0 var(--space-card-padding-min) var(--space-card-padding-min);
+  border-top: 3px solid var(--ink);
+  padding-top: var(--space-card-padding-min);
+}
+
 .profile-results {
   list-style: none;
   margin: 0;
