@@ -19,6 +19,12 @@
   --fx-grain-opacity: var(--grain-opacity-min);
 }
 
+/* How far the leaning chequer swings out of its own box, each way: half of
+   108vw x tan(1°). On the column rather than on the chequer, because the
+   chapter below it has to read the same figure to know where its own ground
+   should start. */
+.hall { --checker-rise: 0.95vw; }
+
 .ladder-row:focus-visible, .challenge-link:focus-visible,
 .profile-results a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 
@@ -398,9 +404,14 @@
    above it — the chequer carries that space itself, and (0,2,0) beats
    (0,1,0). */
 .chapter { margin-top: var(--space-chapter-top-min); }
-.chapter-checker + .chapter { margin-top: var(--space-title-to-grid-max); }
-/* The band already carries the space below it in its own padding. */
-.door + .chapter-checker { margin-top: 0; }
+/* Giving back exactly what the chequer was pulled up by, so nothing moves. */
+.chapter-checker + .chapter {
+  margin-top: calc(var(--space-title-to-grid-max) - var(--checker-rise));
+}
+/* The band already carries the space below it in its own padding, and the
+   chequer is pulled up by its own rise so the end that lifts stays over the
+   band's warm paper rather than over the page. */
+.door + .chapter-checker { margin-top: calc(-1 * var(--checker-rise)); }
 
 /* ── Ladder: one rung per player ───────────────────────────────────────────── */
 
@@ -501,7 +512,7 @@
      leaves above the chapter; down by the chapter's closing space plus the
      hall's own bottom padding, which together are everything between the last
      sheet and the foot of the page. */
-  top: calc(-1 * var(--space-title-to-grid-max));
+  top: calc(-1 * (var(--space-title-to-grid-max) - var(--checker-rise)));
   bottom: calc(-1 * (var(--space-chapter-bottom-min) + var(--space-gutter-max)));
 }
 

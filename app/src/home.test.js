@@ -167,6 +167,22 @@ describe("the chapter chequer", () => {
     expect(band[1], "the squares are not orange").toMatch(/var\(--orange\)/);
     expect(band[1], "the squares do not repeat on a grid").toMatch(/background-size\s*:/);
   });
+
+  it("has both grounds reach its swing, not just its box", () => {
+    // It leans, so its ends sit about 1vw above and below its own box. The
+    // band's warm paper has to come down that far and the wall's stripes up,
+    // or the swing shows bare paper at one end and then at the other.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css, "the rise the chequer swings by is not declared")
+      .toMatch(/--checker-rise\s*:\s*[\d.]+vw/);
+    expect(css, "the chequer does not overlap the band above it")
+      .toMatch(/\.door \+ \.chapter-checker \{[^}]*margin-top:\s*calc\(-1 \* var\(--checker-rise\)\)/);
+    expect(css, "the wall's stripes do not reach up to the chequer's lowest point")
+      .toMatch(/\.chapter--wall::after \{[^}]*var\(--checker-rise\)/);
+  });
 });
 
 describe("the ladder", () => {
