@@ -373,30 +373,51 @@ table.board tr.provisional .votes { color: var(--ink); }
 
 /* ── which duck is which ──────────────────────────────────────────────── */
 
-/* The stage rings each duck in its tier's colour; this is the key to that, and
+/* The stage rings each duck in its tier's colour and this is the key to it;
    the table's rows carry the same colours on their tab. The three are the
    charter's — lavender for the run you just tested, Pollen orange for the one
-   you are chasing, paper for the rest — so the key can be inked on paper and
-   still name the same three rings. */
+   you are chasing, paper for the rest.
+   In the corner of the picture now, rather than under it: a key belongs on
+   the thing it explains, and reading it no longer means looking away from the
+   race. Standing on deep ink it takes the RING colours themselves instead of
+   their inked variants — those exist for a key printed on paper, and this one
+   is not any more, so it names the rings in exactly their own colours. */
 .key {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  z-index: 1; /* over the vignette, which is an ::after on the same box */
   list-style: none;
   display: flex;
-  gap: 18px;
-  margin: 0 0 24px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 14px;
+  margin: 0;
   padding: 0;
-  color: var(--ink-70);
-  font-size: 0.82rem;
+  color: var(--paper-60);
+  font-family: var(--type-mono-label-family);
+  font-weight: var(--type-mono-label-weight);
+  font-size: var(--type-mono-label-size);
+  letter-spacing: var(--type-mono-label-tracking);
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px var(--deep-ink);
+  pointer-events: none; /* the canvas still gets the drag for orbiting */
 }
 .key li { display: flex; align-items: center; gap: 6px; }
+/* Round, which the charter's radius-0 rule otherwise forbids — the swatch
+   below says so in as many words. The departure is deliberate and scoped to
+   these three: a ring around a duck is a circle, and a square legend beside a
+   round marker is a legend for something else. */
 .key li::before {
   content: "";
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
   border: 2px solid currentColor;
 }
-.key--trial { color: var(--lavender-inked); }
-.key--leader { color: var(--orange-inked); }
-.key--ghost { color: var(--ink-70); }
+.key--trial { color: var(--lavender); }
+.key--leader { color: var(--orange); }
+.key--ghost { color: var(--paper-60); }
 
 table.board tr.tier-leader td.tab { border-left-color: var(--orange); }
 table.board tr.tier-ghost { color: var(--ink-70); }

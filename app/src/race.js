@@ -269,7 +269,14 @@ export function raceHall(event) {
         ${event.category ? `<p class="raceeyebrow">${event.category.toUpperCase()}</p>` : ""}
         <h2 class="racetitle">${event.title}</h2>
         <dl class="facts" id="facts"></dl>
-        <div class="stage fx-shadow-card"><canvas id="stage"></canvas></div>
+        <div class="stage fx-shadow-card">
+          <canvas id="stage"></canvas>
+          <ul class="key" id="key">
+            <li class="key--trial">your test</li>
+            <li class="key--leader">best published</li>
+            <li class="key--ghost">the rest</li>
+          </ul>
+        </div>
         <div class="controls">
           <button id="playpause">Pause</button>
           <button id="follow" hidden>Follow the leader</button>
@@ -277,11 +284,6 @@ export function raceHall(event) {
           <button id="names" aria-pressed="false" title="Who each duck belongs to, hung over its head">Show names</button>
           <span class="hint" id="stage-hint"></span>
         </div>
-        <ul class="key" id="key">
-          <li class="key--trial">your test</li>
-          <li class="key--leader">best published</li>
-          <li class="key--ghost">the rest</li>
-        </ul>
       </div>
       <div class="entry-col">
         <aside class="entry" id="entry"></aside>

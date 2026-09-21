@@ -358,6 +358,16 @@ describe("raceHall: the page's frame", () => {
     expect(button.getAttribute("aria-pressed")).toBe("false");
   });
 
+  it("hangs the key in the corner of the picture, not under it", () => {
+    // A key belongs on the thing it explains; reading it should not mean
+    // looking away from the race.
+    const key = hall().querySelector(".stage .key");
+    expect(key).not.toBeNull();
+    expect([...key.children].map((li) => li.textContent)).toEqual([
+      "your test", "best published", "the rest",
+    ]);
+  });
+
   it("carries no brightness slider", () => {
     // Pinned at the module's minimum instead. If the stage ever looks wrong,
     // brightness.js explains in its own comment why a control was there.
