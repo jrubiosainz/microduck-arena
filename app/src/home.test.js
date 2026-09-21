@@ -61,14 +61,19 @@ describe("the player card", () => {
     const head = link.querySelector("img.duckhead.player-card-duck");
     expect(head.getAttribute("src")).toBe("/duck-head-mark.webp");
     expect(head.getAttribute("alt")).toBe("");
-    // The plate's duck must out-rank `.masthead .duckhead`, which is two
-    // classes: a one-class rule lost to it and the duck stayed full size.
+    // Nothing else in the masthead may size this duck. The cover's own is
+    // sized by `.masthead-lockup .duckhead`; while that rule said
+    // `.masthead .duckhead` the two were the same specificity, source order
+    // decided, and the plate's duck stayed the size of the mark's. Asserting
+    // the plate's rule EXISTS was not enough — it existed and lost.
     const css = readFileSync(
       resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
       "utf8",
     ).replace(/\/\*[\s\S]*?\*\//g, "");
-    expect(css, "the plate's duck is sized by a rule the masthead's beats")
+    expect(css, "the plate's duck has no size of its own")
       .toMatch(/\.player-card-in \.duckhead\s*\{[^}]*width/);
+    expect(css, "a masthead-wide rule can still reach the plate's duck")
+      .not.toMatch(/\.masthead \.duckhead\s*\{/);
     // Signed out there is no page of yours to link to.
     expect(card.querySelector(".player-card-you")).toBeNull();
   });

@@ -124,10 +124,7 @@
    louder than the mark it sits next to. */
 .player-card-in { background: var(--warm-paper); }
 /* Smaller than the signed-in plate's picture: that one IS the person, this
-   one only says whose door this is.
-   Scoped to the plate rather than left as one class: `.masthead .duckhead`
-   below is two, so a bare `.player-card-duck` lost to it and the duck on the
-   plate stayed the size of the one beside the mark. */
+   one only says whose door this is. */
 .player-card-in .duckhead { width: 36px; height: auto; }
 /* A square of its own inside the square plate, rather than filling it: at full
    width the picture was the card and the handle read as a caption under it. */
@@ -154,7 +151,11 @@
   letter-spacing: var(--type-mono-label-tracking);
   text-transform: uppercase;
 }
-.masthead .duckhead { width: clamp(72px, 14vw, 148px); }
+/* The LOCKUP's duck, not every duck in the masthead: the sign-in plate holds
+   one too, and while both rules said `.masthead .duckhead` they had the same
+   specificity, so this one won on source order alone and the plate's duck
+   stayed the size of the mark's. */
+.masthead-lockup .duckhead { width: clamp(72px, 14vw, 148px); }
 
 .wordmark--cover {
   font-size: var(--type-hero-title-size);
