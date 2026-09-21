@@ -9,8 +9,8 @@ what judges a dialogue's tone does so after it has aired, from
 scripts/commentary_bench.py, and gates nothing.
 """
 
-import hashlib
 import json
+import random
 import re
 import unicodedata
 
@@ -98,7 +98,7 @@ STYLE = (
     "catchphrase. Short lines beat long ones. "
 )
 # Left alone, the writer opens, jokes and closes every dialogue the same way, and copies the
-# shape of the broadcast before. Each run draws its own direction from its id instead.
+# shape of the broadcast before. Each dialogue draws its own direction instead.
 OPENINGS = (
     "Peter opens with a question to Ray.",
     "Peter opens on the headline number, nothing before it.",
@@ -144,6 +144,8 @@ PLAYERS = (
 LENGTHS = (3, 4, 4, 5, 5, 6)
 DIMENSIONS = {"opening": OPENINGS, "angle": ANGLES, "joke": JOKES, "ending": ENDINGS,
               "callback": CALLBACKS, "player": PLAYERS}
+# How many of the last dialogues a draw looks back on: enough for the widest dimension.
+LOOKBACK = max(len(set(options)) // 2 for options in DIMENSIONS.values())
 NUMBERS = re.compile(r"[-+]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][-+]?[0-9]+)?")
 NUMBER_WORDS = re.compile(
     r"\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|"
@@ -190,12 +192,20 @@ def complete(messages: list[dict], max_tokens: int, *, model: str, token: str,
             "completion_tokens": answer["usage"]["completion_tokens"]}
 
 
-def direction(run_id: str) -> dict:
-    """The shape of one run's dialogue, as data: the same run always draws the same one."""
-    draw = hashlib.sha256(run_id.encode()).digest()
-    drawn = {name: options[draw[i] % len(options)]
-             for i, (name, options) in enumerate(DIMENSIONS.items())}
-    return {"turns": LENGTHS[draw[len(DIMENSIONS)] % len(LENGTHS)], **drawn}
+def direction(rng: random.Random, recent: list[dict]) -> dict:
+    """The shape of one dialogue, as data, drawn away from what the last ones drew.
+
+    `recent` is the directions of the dialogues written lately, newest first. A
+    dimension avoids as many of them as half its distinct options: fewer and the
+    same opening comes straight back, more and the draw becomes a rotation. The
+    callback is a coin whose odds are its meaning, so it avoids nothing.
+    """
+    drawn = {}
+    for name, options in {"turns": LENGTHS, **DIMENSIONS}.items():
+        lately = set() if name == "callback" else {
+            one[name] for one in recent[:len(set(options)) // 2]}
+        drawn[name] = rng.choice([option for option in options if option not in lately])
+    return drawn
 
 
 def directed(drawn: dict) -> str:
