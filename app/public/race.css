@@ -519,7 +519,9 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
   gap: 10px var(--space-gutter-min);
   justify-content: space-between;
   align-items: center;
-  margin: 18px 0 8px;
+  /* Tight to the table: these tick its boxes, and an airy gap read as though
+     they belonged to the stage above instead. */
+  margin: 18px 0 4px;
 }
 
 /* Left of the board: what goes ON THE STAGE. Deliberately not the stickers on
@@ -527,8 +529,9 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
    the words "all", "mine" and "top", and nothing but their look would keep
    them apart.
    Checkboxes, because they act on checkboxes: a control that ticks boxes
-   should look like the boxes it ticks. Their union is what plays, so "mine"
-   and "top 5" compose rather than one replacing the other. */
+   should look like the boxes it ticks. Exclusive, like radios — but radios
+   cannot be returned to nothing, and unticking the live one has to be able to
+   clear the stage. "At most one" is the shape, and only a checkbox has it. */
 .picks {
   display: flex;
   flex-wrap: wrap;
@@ -542,7 +545,7 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
   float: left; /* a legend is not a flex item; this puts it on the line */
   margin-right: 14px;
   padding: 0;
-  color: var(--ink-70);
+  color: var(--orange-inked);
   font-family: var(--type-eyebrow-family);
   font-weight: var(--type-eyebrow-weight);
   font-size: var(--type-eyebrow-size);
@@ -554,6 +557,7 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
   align-items: center;
   gap: 6px;
   cursor: pointer;
+  color: var(--orange-inked);
   font-size: 0.86rem;
 }
 .picks input { accent-color: var(--orange); cursor: pointer; }

@@ -310,6 +310,23 @@ export function raceHall(event) {
   return hall;
 }
 
+/**
+ * Keep at most one stage pick ticked, and name it.
+ *
+ * Exclusive like radios, but checkboxes: a radio group cannot be returned to
+ * nothing, and unticking the live pick has to be able to clear the stage.
+ * Null is that case, and the caller passes it straight to selectLanes.
+ *
+ * Its own function so the rule is testable — everything around it needs a
+ * WebGL viewer, and "ticking one unticks the others" is exactly the kind of
+ * thing that works until a fourth pick is added.
+ */
+export function exclusivePick(boxes, changed) {
+  if (!changed.checked) return null;
+  for (const box of boxes) box.checked = box === changed;
+  return changed.dataset.pick;
+}
+
 export async function renderRace(root, { event, state }) {
   // Asked for first: the strip over the door carries this player's chip, and
   // the board below needs to know whose rows are their own.
@@ -373,9 +390,10 @@ export async function renderRace(root, { event, state }) {
   // that ticks boxes should look like the boxes it ticks. Their union is what
   // plays, so "mine" and "top 5" compose instead of one replacing the other.
   const pickBoxes = [...root.querySelectorAll(".picks input")];
-  const picked = () => pickBoxes.filter((b) => b.checked).map((b) => b.dataset.pick);
   for (const box of pickBoxes) {
-    box.addEventListener("change", () => race(selectLanes(board, picked()), lastTiers));
+    box.addEventListener("change", () => {
+      race(selectLanes(board, exclusivePick(pickBoxes, box)), lastTiers);
+    });
   }
   // A row ticked by hand no longer matches any pick, so the picks stop
   // claiming to describe it. Silent rather than re-running the replay: the

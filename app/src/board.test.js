@@ -465,33 +465,30 @@ describe("selectLanes: ticking a set of lanes at once", () => {
   };
 
   it("ticks every rendered lane for 'all'", () => {
-    expect(selectLanes(board(), ["all"])).toEqual(["r1", "r2", "r3", "r4", "r5", "r6"]);
+    expect(selectLanes(board(), "all")).toEqual(["r1", "r2", "r3", "r4", "r5", "r6"]);
   });
 
   it("ticks only your own for 'mine'", () => {
-    expect(selectLanes(board(), ["mine"])).toEqual(["r2", "r4"]);
+    expect(selectLanes(board(), "mine")).toEqual(["r2", "r4"]);
   });
 
   it("ticks the first five by rank for 'top', not the first five rows", () => {
     expect(TOP_LANES).toBe(5);
-    expect(selectLanes(board(), ["top"])).toEqual(["r1", "r2", "r3", "r4", "r5"]);
-  });
-
-  it("takes the UNION when more than one is picked", () => {
-    // The reason they are checkboxes: mine and top 5 overlap, and someone who
-    // wants both should tick both rather than choose between them.
-    expect(selectLanes(board(), ["mine", "top"])).toEqual(["r1", "r2", "r3", "r4", "r5"]);
+    expect(selectLanes(board(), "top")).toEqual(["r1", "r2", "r3", "r4", "r5"]);
   });
 
   it("clears the stage when nothing is picked", () => {
-    expect(selectLanes(board(), [])).toEqual([]);
+    // The reason these are checkboxes and not radios: a radio group cannot be
+    // returned to nothing, and unticking the live one has to mean an empty
+    // stage rather than whatever was ticked before.
+    expect(selectLanes(board(), null)).toEqual([]);
   });
 
   it("UNticks what falls outside the set, rather than only adding", () => {
     // The default selection already ticks some lanes. If this only added, a
     // press of "Mine" would leave whoever was on the stage there with you.
     const el = board();
-    selectLanes(el, ["all"]);
-    expect(selectLanes(el, ["mine"])).toEqual(["r2", "r4"]);
+    selectLanes(el, "all");
+    expect(selectLanes(el, "mine")).toEqual(["r2", "r4"]);
   });
 });

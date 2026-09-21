@@ -6,7 +6,9 @@
 // what would have caught that.
 
 import { describe, expect, it, vi } from "vitest";
-import { raceHall, renderEntryPanel, renderEventFacts, renderVoteButton } from "./race.js";
+import {
+  exclusivePick, raceHall, renderEntryPanel, renderEventFacts, renderVoteButton,
+} from "./race.js";
 
 const event = {
   seeds: 5,
@@ -387,5 +389,32 @@ describe("raceHall: the page's frame", () => {
     // brightness.js explains in its own comment why a control was there.
     expect(hall().querySelector("#brightness")).toBeNull();
     expect(hall().querySelector(".bright")).toBeNull();
+  });
+});
+
+describe("exclusivePick: at most one stage pick", () => {
+  const boxes = () => {
+    const hall = raceHall({ ...event, title: "x" });
+    return [...hall.querySelectorAll(".picks input")];
+  };
+
+  it("unticks the others when one is ticked", () => {
+    const [all, mine, top] = boxes();
+    all.checked = true;
+    expect(exclusivePick([all, mine, top], all)).toBe("all");
+
+    // The case asked for: All is on, Mine is clicked, All must go.
+    mine.checked = true;
+    expect(exclusivePick([all, mine, top], mine)).toBe("mine");
+    expect([all.checked, mine.checked, top.checked]).toEqual([false, true, false]);
+  });
+
+  it("answers null when the live one is unticked, and leaves the rest alone", () => {
+    // A radio group cannot do this, which is why these are checkboxes: the
+    // stage has to be able to end up empty.
+    const [all, mine, top] = boxes();
+    mine.checked = false;
+    expect(exclusivePick([all, mine, top], mine)).toBeNull();
+    expect([all.checked, mine.checked, top.checked]).toEqual([false, false, false]);
   });
 });

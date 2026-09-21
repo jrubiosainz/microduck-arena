@@ -254,11 +254,11 @@ export function renderBoard(
 export const TOP_LANES = 5;
 
 /**
- * Tick the UNION of a set of picks, and say which run ids ended up ticked.
+ * Tick one pick's lanes, and say which run ids ended up ticked.
  *
- * A union and not three separate buttons: "mine" and "top 5" overlap, and a
- * person who wants both should tick both rather than choose. Passing none
- * clears the stage, which is what unticking the last box has to mean.
+ * At most one, and possibly none: the three are exclusive, and unticking the
+ * live one clears the stage. That last part is why they are checkboxes rather
+ * than radios — a radio group cannot be returned to nothing.
  *
  * Operates on the boxes that are RENDERED, which is the point: a board
  * filtered to "Mine" has no other rows in the DOM, so "all" there means all
@@ -266,12 +266,11 @@ export const TOP_LANES = 5;
  * with no box — a trial, which is on the stage and nowhere else — is
  * untouched, because it has no run id to play from.
  */
-export function selectLanes(container, picks) {
-  const wanted = new Set(picks);
+export function selectLanes(container, pick) {
   const inPick = (box) =>
-    (wanted.has("all")) ||
-    (wanted.has("mine") && box.dataset.mine !== undefined) ||
-    (wanted.has("top") && Number(box.dataset.rank) <= TOP_LANES);
+    pick === "all" ||
+    (pick === "mine" && box.dataset.mine !== undefined) ||
+    (pick === "top" && Number(box.dataset.rank) <= TOP_LANES);
   for (const box of container.querySelectorAll("input[type=checkbox]")) {
     box.checked = inPick(box);
   }
