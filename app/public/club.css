@@ -683,6 +683,14 @@
 }
 .profile-header > div { min-width: 0; flex: 1; }
 .profile-header .marquee-title { margin: 0; overflow-wrap: anywhere; }
+
+/* The section head under the header needs its own room. The picture beside
+   the name carries a 7px offset shadow below it, and an eyebrow with no
+   margin of its own landed in it. */
+.profile-header + .eyebrow {
+  display: block;
+  margin: var(--space-title-to-grid-max) 0 var(--space-gutter-min);
+}
 .profile-duck {
   position: relative;
   display: grid;
