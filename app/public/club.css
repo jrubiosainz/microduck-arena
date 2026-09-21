@@ -371,15 +371,20 @@
 
 /* The chequer between chapters: orange on beige, the finish line — the same
    device the race page lays over its strip of other rounds, so the two read
-   as one site. It breaks out of the content column and runs the window's full
-   width; a band that stopped at 1120px would read as an underline on the text
-   rather than as a division of the page. Two offset rows of a 45° gradient,
+   as one site. It breaks out of the content column and runs past the window's
+   full width; a band that stopped at 1120px would read as an underline on the
+   text rather than as a division of the page. Two offset rows of a 45° gradient,
    the way components.css draws the gym floor: gradients as a PATTERN, never
    the colour ramp the charter forbids. */
 .chapter-checker {
   height: 16px;
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
+  /* Leaning -1°, as the rule it replaced did. Wider than the window and
+     pulled back by half the excess: a 1° turn lifts one end and drops the
+     other, and at exactly 100vw that opens a triangle of bare paper at each
+     edge of the screen. The overhang carries those triangles off-screen. */
+  width: 108vw;
+  margin-left: calc(50% - 54vw);
+  rotate: calc(-1 * var(--rotate-1-0));
   margin-top: var(--space-chapter-top-min);
   background-color: var(--warm-paper);
   background-image:

@@ -154,9 +154,14 @@ describe("the chapter chequer", () => {
     );
     const band = css.match(/\.chapter-checker\s*\{([^}]*)\}/);
     expect(band, ".chapter-checker rule not found in club.css").not.toBeNull();
-    expect(band[1], "the chequer does not span the viewport").toMatch(/width\s*:\s*100vw/);
-    expect(band[1], "the chequer does not break out of the column")
-      .toMatch(/margin-left\s*:\s*calc\(50% - 50vw\)/);
+    // Wider than the window, because it leans: at exactly 100vw a 1° turn
+    // opens a triangle of bare paper at each edge of the screen.
+    expect(band[1], "the chequer does not lean as the rule it replaced did")
+      .toMatch(/rotate\s*:\s*calc\(-1 \* var\(--rotate-1-0\)\)/);
+    expect(band[1], "the chequer is not wide enough to hide the turn's corners")
+      .toMatch(/width\s*:\s*10[1-9]vw/);
+    expect(band[1], "the chequer is not pulled back by half its excess")
+      .toMatch(/margin-left\s*:\s*calc\(50% - 54vw\)/);
     expect(band[1], "the chequer is not beige under its squares")
       .toMatch(/background-color\s*:\s*var\(--warm-paper\)/);
     expect(band[1], "the squares are not orange").toMatch(/var\(--orange\)/);
