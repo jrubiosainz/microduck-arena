@@ -77,6 +77,37 @@ under the signer's own account, public, and the board's `.onnx` link resolves
 straight to the Hub. A signed-in user whose token lacks Hub write access can
 still race and watch replays; only Publish is disabled for them.
 
+## Social clips
+
+Every published run gets two clips — landscape and vertical — rendered in the
+background, inside the Space itself, the moment the publish completes: a
+headless Chromium photographs the arena's own stage frame by frame and ffmpeg
+encodes the video, both under `nice`. That costs minutes of CPU per publish,
+and it is why the image carries Chromium and ffmpeg.
+
+It needs the hardware to match. A clip is ~820 screenshots of a 1920×1080
+WebGL stage. On **cpu-upgrade** — eight vCPUs, software GL — that is 130 to
+330 s, well inside `RENDER_BUDGET_S`; this Space runs there and those are its
+own numbers. Whether **cpu-basic** can do it is untested. The one clip ever
+attempted on it died after 854 s, but to a browser that hung, not to the
+clock, so that run cannot tell the two apart. The publication page follows
+the render frame by frame, so a Space that is too slow says so on the page
+instead of going quiet.
+
+| name | kind | value |
+| --- | --- | --- |
+| `CHROME` | variable | the browser binary, if not at one of the usual paths |
+| `ARENA_CLIPS` | variable | `0` turns rendering off |
+| `ARENA_CLIP_PARALLEL` | variable | layouts rendered at once, default half the cores |
+| `ARENA_CLIP_BACKFILL` | variable | `1` also renders every run that has no clip yet — the log as it stood before clips — newest first, behind fresh publishes; set it on the deploy that brings clips to a Space with history, and leave it: once caught up a boot finds nothing to do |
+| `ARENA_ORIGIN` | variable | where the recorder's Chrome loads `clip.html`, if not this server's own loopback address |
+
+Each event's `[clip]` manifest section tunes its framing, duration and sounds
+— see `arena/manifest.py`.
+
+To render one run's clips by hand — a historical run, or a retry — run
+`arena clip <run_id> --store DIR`.
+
 ## Recovering the board
 
 The run log can be lost — without `ARENA_DATASET` and `HF_TOKEN` it lives on a

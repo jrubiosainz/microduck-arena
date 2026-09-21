@@ -59,7 +59,7 @@ export function setRanks(pegRows, order) {
  */
 export async function reveal(parts, show, signal) {
   const { page, chip, chipFlip, facts, scoreboard, stamp, flip, yourScore } = parts;
-  const { pegboard, pegRows, stickers } = parts;
+  const { pegboard, pegRows, stickers, share } = parts;
   const { run, plan, receipts, raced, startPoints, score, onSeen } = show;
   const act = (name) => {
     page.dataset.act = name;
@@ -78,6 +78,7 @@ export async function reveal(parts, show, signal) {
     unveil(facts);
     unveil(yourScore);
     for (const sticker of stickers) unveil(sticker);
+    unveil(share);
     setRanks(pegRows, plan.end);
     pegboard.replaceChildren(...plan.end.map((row) => pegRows.get(row.run_id)));
     chipFlip.replaceChildren(...flipTiles(startPoints + receipts.reduce((s, r) => s + r.points, 0)));

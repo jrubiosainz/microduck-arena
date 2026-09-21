@@ -7,6 +7,7 @@ rather than a place where behaviour is invented.
 
 import argparse
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -63,7 +64,7 @@ def _cmd_score(args) -> int:
             livery=args.livery,
         )
         LocalStore(Path(args.store)).append(
-            record, trace_codec.encode(result.trace), Path(args.onnx).read_bytes()
+            record, trace_codec.encode(result.trace, result.settle), Path(args.onnx).read_bytes()
         )
         print(f"recorded {record.run_id}")
     return 0
@@ -109,22 +110,180 @@ def _cmd_recover(args) -> int:
     return 0
 
 
+def _app_on_loopback(store_dir) -> tuple | None:
+    """The app on a free loopback port, answering, with its clip worker off.
+
+    The recorder's Chrome needs the clip page and the API; the worker is off
+    because one render by hand must not be raced by a drain of everything else
+    owed. The config, the app, the running server and its origin — or None,
+    the failure already reported.
+    """
+    import socket
+    import threading
+
+    import httpx
+    import uvicorn
+
+    from .web.app import create_app
+    from .web.config import ArenaConfig
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    origin = f"http://127.0.0.1:{port}"
+    config = ArenaConfig.from_env(store_dir=store_dir, origin=origin, clip_worker=False)
+    app = create_app(config)
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    threading.Thread(target=server.run, daemon=True).start()
+    for _ in range(100):
+        try:
+            if httpx.get(f"{origin}/api/health", timeout=1).status_code == 200:
+                return config, app, server, origin
+        except httpx.HTTPError:
+            pass
+        # Outside the except: a non-200 answer is not an error either, and
+        # must not spin the loop any faster than a connection refused does.
+        time.sleep(0.1)
+    print(f"the app did not come up on {origin}", file=sys.stderr)
+    server.should_exit = True
+    return None
+
+
+def _cmd_clip(args) -> int:
+    """Render one run's clips into a local store, by hand."""
+    from .clips import ClipRenderer
+
+    started = _app_on_loopback(args.store)
+    if started is None:
+        return 1
+    config, app, server, origin = started
+
+    renderer = ClipRenderer(
+        app.state.store, origin, config.frontend_dir, args.parallel or config.clip_parallel
+    )
+    if not renderer.available:
+        print("no renderer here: needs a Chrome ($CHROME or the usual paths), ffmpeg, and a built clip.html",
+              file=sys.stderr)
+        server.should_exit = True
+        return 1
+    if app.state.store.clip_state(args.run_id)[0] == "ready":
+        print(f"{args.run_id} already has a clip; delete clips/{args.run_id} to render it again",
+              file=sys.stderr)
+        server.should_exit = True
+        return 1
+    renderer.render_one(args.run_id)
+    server.should_exit = True
+    state, manifest = app.state.store.clip_state(args.run_id)
+    if state != "ready":
+        return 1
+    for name, layout in manifest["layouts"].items():
+        print(f"{name}: {layout['seconds']} s, {layout['timing']['total_wall_ms'] / 1000:.0f} s wall, "
+              f"{layout['timing']['capture_ms_per_frame']} ms/frame capture")
+    print(f"written under {config.store_dir}/clips/{args.run_id}")
+    return 0
+
+
+def _cmd_commentary(args) -> int:
+    """Write (or, with --dry-run, print) Peter and Ray's lines for one run.
+
+    A dry run touches neither a browser nor the store: it is how the tone is
+    judged before the reserve is let loose. The real thing starts the app on a
+    loopback port for the plan page, like `arena clip`, and puts a broadcast in
+    the book the running server reads, where the channel will find it.
+    """
+    from . import commentary
+    from .broadcasts import BroadcastBook, utcnow
+    from .commentary.generator import Rejected
+    from .commentary.lore import load
+    from .commentary.tab import PlanTab
+    from .recorder import find_chrome
+    from .web.config import ArenaConfig
+
+    config = ArenaConfig.from_env(store_dir=args.store)
+    token = commentary.hub_token(config)
+    if not token:
+        print("no Hub token: set HF_TOKEN or run `hf auth login`", file=sys.stderr)
+        return 1
+    lore = load()
+    model = config.commentary_model
+    provider = commentary.router_provider(model, token)
+    book = BroadcastBook(config.broadcast_dir)
+    if args.dry_run:
+        store = config.build_store()
+        try:
+            record = commentary.find_run(store, args.run_id)
+        except LookupError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        facts, _ = commentary.gather(store, record, lore, book)
+        for i, fact in enumerate(facts):
+            print(f"[{i}] {fact.text}" + ("  (memory)" if fact.kind == "lore" else ""))
+        try:
+            written = commentary.compose(store, args.run_id, lore=lore, provider=provider,
+                                         model=model, book=book)
+        except Rejected as why:
+            print(f"\nnot on air: {why}", file=sys.stderr)
+            return 1
+        print()
+        for turn in written["turns"]:
+            print(f"{lore.characters[turn['speaker']]['name']}: {turn['text']}")
+        print(f"\n{written['model']}, {written['usage']['prompt_tokens']} + "
+              f"{written['usage']['completion_tokens']} tokens")
+        return 0
+
+    started = _app_on_loopback(args.store)
+    if started is None:
+        return 1
+    config, app, server, origin = started
+    if app.state.store.clip_state(args.run_id)[0] != "ready":
+        print(f"{args.run_id} has no ready clip; render it first with `arena clip`", file=sys.stderr)
+        server.should_exit = True
+        return 1
+    if not (config.frontend_dir and (config.frontend_dir / "plan.html").is_file()
+            and find_chrome()):
+        print("needs a Chrome ($CHROME or the usual paths) and a built plan.html", file=sys.stderr)
+        server.should_exit = True
+        return 1
+    try:
+        written = commentary.compose(app.state.store, args.run_id, lore=lore, provider=provider,
+                                     model=model, book=book)
+    except Rejected as why:
+        print(f"not on air: {why}", file=sys.stderr)
+        server.should_exit = True
+        return 1
+    with PlanTab(origin) as tab:
+        plan = tab.prepare({"run_id": args.run_id, "turns": written["turns"]})
+    made = book.put(args.run_id, {"turns": written["turns"], "lore_refs": written["lore_refs"]},
+                    plan, utcnow())
+    server.should_exit = True
+    print(f"broadcast {made.id} for {args.run_id}, {plan['duration_ms'] / 1000:.1f} s "
+          f"under {book.directory}")
+    return 0
+
+
 def _cmd_serve(args) -> int:
     import uvicorn
 
     from .web.app import create_app
     from .web.config import ArenaConfig
 
-    config = ArenaConfig.from_env(store_dir=args.store, dev_user=args.user)
+    config = ArenaConfig.from_env(
+        store_dir=args.store, dev_user=args.user, origin=f"http://127.0.0.1:{args.port}"
+    )
     config.ensure_store()
+    app = create_app(config)
     print(f"store  {config.store_description()}")
     print(f"user   {config.dev_user}")
     if config.frontend_dir is None:
         print("frontend  NOT BUILT — run: cd app && npm install && npm run build")
     else:
         print(f"frontend  {config.frontend_dir}")
+    clips = "on" if app.state.clips.available else "off (no Chrome, ffmpeg or clip page)"
+    print(f"clips  {clips}")
+    booth = "on" if app.state.booth_off is None else f"off ({app.state.booth_off})"
+    print(f"booth  {booth}")
     print(f"\n  http://{args.host}:{args.port}\n")
-    uvicorn.run(create_app(config), host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     return 0
 
 
@@ -171,6 +330,20 @@ def main(argv=None) -> int:
         help="every microduck-policy repo on the Hub, not only ones published here",
     )
     recover.set_defaults(func=_cmd_recover)
+
+    clip = subs.add_parser("clip", help="render one run's social clips into a local store")
+    clip.add_argument("run_id")
+    clip.add_argument("--store", required=True)
+    clip.add_argument("--parallel", type=int, default=None,
+                      help="layouts rendered at once; default half the cores")
+    clip.set_defaults(func=_cmd_clip)
+
+    booth = subs.add_parser("commentary", help="write Peter and Ray's lines for one run")
+    booth.add_argument("run_id")
+    booth.add_argument("--store", required=True)
+    booth.add_argument("--dry-run", action="store_true", dest="dry_run",
+                       help="print the facts and the dialogue; write nothing")
+    booth.set_defaults(func=_cmd_commentary)
 
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)

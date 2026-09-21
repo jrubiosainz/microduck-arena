@@ -44,3 +44,19 @@ def test_a_20_second_sprint_trace_stays_small():
 def test_empty_trace_round_trips():
     empty = np.zeros((0, TRACE_WIDTH), dtype=np.float32)
     assert codec.decode(codec.encode(empty)).shape == (0, TRACE_WIDTH)
+
+
+def test_the_settle_round_trips_beside_the_trace():
+    rng = np.random.default_rng(2)
+    trace = rng.uniform(-3, 3, (40, TRACE_WIDTH)).astype(np.float32)
+    settle = rng.uniform(-3, 3, (26, TRACE_WIDTH)).astype(np.float32)
+    blob = codec.encode(trace, settle)
+    np.testing.assert_allclose(codec.decode(blob), trace, atol=3e-3)
+    restored = codec.decode_settle(blob)
+    assert restored.dtype == np.float32
+    np.testing.assert_allclose(restored, settle, atol=3e-3)
+
+
+def test_a_trace_stored_before_settles_were_recorded_has_none():
+    blob = codec.encode(np.zeros((5, TRACE_WIDTH), dtype=np.float32))
+    assert codec.decode_settle(blob).shape == (0, TRACE_WIDTH)

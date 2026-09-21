@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Vector3 } from "three";
-import { LANE_SPACING, TIER_MARKER, buildCourse, buildMarker, laneOffsetZ, buildWalls, laneSpacing } from "./course.js";
+import { LANE_COLORS, LANE_SPACING, TIER_MARKER, buildCourse, buildMarker, laneOffsetZ, buildWalls, laneSpacing } from "./course.js";
 
 describe("laneOffsetZ", () => {
   it("centres a single lane", () => {
@@ -53,6 +53,12 @@ describe("buildCourse", () => {
     const four = buildCourse({ length_m: 2, width_m: 0.8 }, 4);
     const width = (c) => c.getObjectByName("ground").geometry.parameters.height;
     expect(width(four)).toBeGreaterThan(width(one));
+  });
+
+  it("paints a lane's stripe the colour its duck is given, and the charter's order otherwise", () => {
+    const course = buildCourse({ length_m: 2, width_m: 0.8 }, 3, [LANE_COLORS[3], null]);
+    const stripe = (i) => course.getObjectByName(`lane-stripe-${i}`).material.color.getHex();
+    expect([stripe(0), stripe(1), stripe(2)]).toEqual([LANE_COLORS[3], LANE_COLORS[1], LANE_COLORS[2]]);
   });
 });
 

@@ -4,19 +4,18 @@
 // Two modes. Plain shows all of it at once and loops the replay. Reveal — the
 // author's first look — hides the result and plays it in beats (reveal.js).
 
-import { getMe, getRun, getTrace, markSeen } from "./api.js";
+import { getClip, getMe, getRun, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { LANE_COLORS, LANE_CSS } from "./course.js";
 import { formatScore, formatSpeed } from "./format.js";
+import { lanesFor } from "./lanes.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
 import { playerHref, raceHref, runHref } from "./router.js";
+import { shareStrip, wireShare } from "./share.js";
 import { footer, signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
 import { createViewer } from "./viewer.js";
-
-// How many of the ducks ranked just under this run race beside it.
-const RIVALS = 3;
 
 const TONES = {
   first_event: "sticker-lime",
@@ -30,12 +29,6 @@ function el(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
-}
-
-/** The lanes on the stage: this run first, then the rows ranked just under it. */
-function lanesFor(run) {
-  const at = run.board.findIndex((row) => row.you);
-  return [run.board[at], ...run.board.slice(at + 1, at + 1 + RIVALS)];
 }
 
 /** Which seed the stored replay is, and why that one. */
@@ -173,6 +166,32 @@ export async function renderRun(root, runId, state) {
   $("points").append(...stickers);
   if (!stickers.length) $("points").append(el("p", "mono-label", "no points from this run"));
 
+  // Sharing, under the points: the networks on one row, the clips on the
+  // next, standing there from the first frame and veiled through a reveal like
+  // everything else in this column; the clip stickers follow the render while
+  // it is owed.
+  const strip = shareStrip(run, { origin: location.origin });
+  strip.root.classList.toggle("veiled", revealing);
+  $("points").after(strip.root);
+  wireShare(strip, run, { origin: location.origin });
+  // Queued is the honest first state: nobody has answered for the clip yet, so
+  // the row wears the face of a render nobody has started — present, disabled
+  // and turning — not a live-looking link that goes stale a beat later.
+  strip.setClip({ state: "queued", ahead: null });
+  const leaving = new AbortController();
+  let timer = null;
+  async function followClip() {
+    const clip = await getClip(run.run_id).catch(() => null);
+    if (leaving.signal.aborted) return;
+    if (clip) strip.setClip(clip);
+    // A render moves frame by frame and is worth watching closely; a queue only
+    // moves when something ahead of it finishes, which is minutes away. Ready,
+    // failed and none are final — nothing to come back for.
+    const again = clip ? { rendering: 2000, queued: 5000 }[clip.state] : 5000;
+    if (again) timer = setTimeout(followClip, again);
+  }
+  followClip();
+
   // One line per seed: the time, or how it ended. Folded away by default —
   // it is a detail you go and look up, not a step of the show.
   for (const s of run.per_seed) {
@@ -192,11 +211,13 @@ export async function renderRun(root, runId, state) {
   if (revealing) {
     theatre = new AbortController();
     lifetime = new AbortController();
-    state.teardown = () => {
-      lifetime.abort();
-      theatre.abort("leave");
-    };
   }
+  state.teardown = () => {
+    leaving.abort();
+    clearTimeout(timer);
+    lifetime?.abort();
+    theatre?.abort("leave");
+  };
 
   // The stage: this run in lane one, the three under it beside, all solid.
   const viewer = await createViewer($("stage"), { rig: run.event.rig });
@@ -283,6 +304,7 @@ export async function renderRun(root, runId, state) {
       pegboard: $("pegboard"),
       pegRows,
       stickers,
+      share: strip.root,
     },
     {
       run,

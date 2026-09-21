@@ -44,12 +44,21 @@ export async function getMe() {
   }
 }
 
-export async function getTrace(runId) {
-  const response = await fetch(`/api/runs/${runId}/trace`);
+async function frames(path) {
+  const response = await fetch(path);
   // Same contract as every other call: the server's own sentence, not a status.
   if (!response.ok) throw new Error(await detailFrom(response));
   // Raw little-endian float32 from the server, 21 values per frame.
   return new Float32Array(await response.arrayBuffer());
+}
+
+export function getTrace(runId) {
+  return frames(`/api/runs/${runId}/trace`);
+}
+
+/** The untimed settle before a run's trace, from the reset pose; empty for a run stored before settles were recorded. */
+export function getSettle(runId) {
+  return frames(`/api/runs/${runId}/settle`);
 }
 
 function policyForm(file, name, livery, commandVx, envUrl) {
@@ -127,3 +136,19 @@ export const castVote = (eventId, ballot, lane) =>
 
 /** Tell the server its author has seen this run's page. The server refuses anyone else. */
 export const markSeen = (runId) => json(`/api/runs/${runId}/seen`, { method: "POST" });
+
+/** Where a run's clip stands: none, pending, failed, or ready with its files. */
+export const getClip = (runId) => json(`/api/runs/${runId}/clip`);
+
+/** The channel's grid and the server's clock. Never cached: the clock is in it. */
+export const getLive = () => json("/api/live", { cache: "no-store" });
+
+/** A booth's dialogue and the plan that plays it, or null when it is gone. */
+export async function getBroadcast(id) {
+  const response = await fetch(`/api/live/broadcast/${id}`, { cache: "no-store" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(await detailFrom(response));
+  return response.json();
+}
+
+export const clipUrl = (runId, name) => `/api/runs/${runId}/clip/${name}`;

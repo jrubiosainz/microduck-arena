@@ -57,7 +57,7 @@ def test_trace_seed_falls_back_to_the_first_seed_when_nobody_finishes():
     assert pick_trace_seed(_results((7, None), (8, None))) == 7
 
 
-def test_evaluating_the_reference_policy_scores_and_carries_a_trace():
+def test_evaluating_the_reference_policy_scores_and_carries_the_trace_seeds_replay():
     manifest = load_event("sprint-2m")
     policy = load_policy(ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx")
     result = evaluate(manifest, policy)
@@ -71,6 +71,11 @@ def test_evaluating_the_reference_policy_scores_and_carries_a_trace():
     assert result.score == pytest.approx(
         mean_finish_time(result.per_seed, manifest.time_limit_s)
     )
+    replay = run_once(
+        manifest, policy, result.trace_seed, command=manifest.command_at(result.command_vx)
+    )
+    np.testing.assert_array_equal(result.trace, replay.trace)
+    np.testing.assert_array_equal(result.settle, replay.settle)
 
 
 def test_evaluate_is_deterministic():

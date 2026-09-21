@@ -11,15 +11,15 @@ from datetime import UTC, datetime
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
 from .. import votes
 from ..course import wall_boxes
 from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, standings
-from ..store import RunRecord
-from ..trace import decode
+from ..store import CLIP_MEDIA, RunRecord
+from ..trace import decode, decode_settle
 
 router = APIRouter(prefix="/api")
 
@@ -65,6 +65,7 @@ def event_summary(manifest: Manifest) -> dict:
         "sweep_hi": manifest.sweep.hi,
         "sweep_step": manifest.sweep.step,
         "sweep_count": len(manifest.sweep.speeds()),
+        "clip": manifest.clip.to_dict(),
     }
 
 
@@ -318,22 +319,20 @@ def run_detail(run_id: str, request: Request) -> dict:
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_-]+")
 
 
-def policy_filename(policy_name: str, user: str) -> str:
-    """A filename a person can find again in their downloads folder.
+def safe_stem(*parts: str) -> str:
+    """A filename stem a person can find again, from submitter-supplied text.
 
-    Derived from submitter-supplied text, so it is sanitised rather than
-    trusted: a policy called `../../etc/passwd` or one with a quote in it must
-    not be able to shape a Content-Disposition header or a path.
-
-    Dots are dropped from the stem rather than kept, which costs `v1.2` its dot
-    and removes the whole family of `..` and `policy.onnx.exe` confusions in
-    exchange. The extension is appended here, so it is the only one.
+    Sanitised rather than trusted: a policy called `../../etc/passwd` or one
+    with a quote in it must not be able to shape a Content-Disposition header
+    or a path. Dots are dropped, so `..` and `policy.onnx.exe` are gone too.
     """
-    # Collapsed, not just substituted: "../../etc" would otherwise become
-    # "--etc" and read as a mangled filename rather than a clean one.
-    stem = _SAFE_NAME.sub("-", f"{user}-{policy_name}")
+    stem = _SAFE_NAME.sub("-", "-".join(parts))
     stem = re.sub(r"-{2,}", "-", stem).strip("-")[:60].strip("-")
-    return f"{stem or 'policy'}.onnx"
+    return stem or "policy"
+
+
+def policy_filename(policy_name: str, user: str) -> str:
+    return f"{safe_stem(user, policy_name)}.onnx"
 
 
 @router.get("/runs/{run_id}/policy")
@@ -383,10 +382,84 @@ def run_trace(run_id: str, request: Request) -> Response:
     """
     store = request.app.state.store
     _find_run(store, run_id)  # 404 before touching the trace file
-    trace = decode(store.trace(run_id))
-    payload = np.ascontiguousarray(trace, dtype="<f4").tobytes()
+    return _frames(decode(store.trace(run_id)))
+
+
+@router.get("/runs/{run_id}/settle")
+def run_settle(run_id: str, request: Request) -> Response:
+    """The untimed settle that led into the trace, from the reset pose, in the
+    trace's own format: where a clip starts. Empty for a run stored before
+    settles were recorded."""
+    store = request.app.state.store
+    _find_run(store, run_id)
+    return _frames(decode_settle(store.trace(run_id)))
+
+
+def _frames(frames: np.ndarray) -> Response:
     return Response(
-        content=payload,
+        content=np.ascontiguousarray(frames, dtype="<f4").tobytes(),
         media_type="application/octet-stream",
-        headers={"X-Frame-Count": str(trace.shape[0]), "Cache-Control": "no-store"},
+        headers={"X-Frame-Count": str(frames.shape[0]), "Cache-Control": "no-store"},
+    )
+
+
+@router.get("/runs/{run_id}/clip")
+def run_clip(run_id: str, request: Request) -> JSONResponse:
+    """Where this run's clip stands, and its files when it is ready. Polled by
+    the publication page while a render is owed, so never cached.
+
+    The store answers only for what it has written — a clip, or the reason
+    there is none. Everything in between is the worker's to answer: whether the
+    run is waiting in a line or being photographed right now, and how far in.
+    A backfilled run marks nothing pending at all, so the store alone would
+    call its clip `none` all the way through the making of it."""
+    store = request.app.state.store
+    _find_run(store, run_id)
+    state, written = store.clip_state(run_id)
+    if state == "ready":
+        base = f"/api/runs/{run_id}/clip"
+        body = {
+            "state": state,
+            "poster": f"{base}/{written['poster']}",
+            "layouts": {
+                name: {"url": f"{base}/{layout['file']}", "width": layout["width"],
+                       "height": layout["height"], "seconds": layout["seconds"]}
+                for name, layout in written["layouts"].items()
+            },
+        }
+    elif state == "failed":
+        body = {"state": state, "reason": written.get("reason"),
+                "failed_at": written.get("failed_at")}
+    elif (standing := request.app.state.clips.progress(run_id)) is None:
+        # Nothing written and no worker holding it. A pending marker that
+        # outlived the process which owed it is still owed — the next drain
+        # takes it — so waiting is honest there; nothing at all is not.
+        body = {"state": "queued", "ahead": None} if state == "pending" else {"state": "none"}
+    elif "ahead" in standing:
+        body = {"state": "queued", **standing}
+    else:
+        body = {"state": "rendering", **standing}
+    return JSONResponse(body, headers={"Cache-Control": "no-store"})
+
+
+_CLIP_TYPES = {"mp4": "video/mp4", "png": "image/png"}
+
+
+@router.get("/runs/{run_id}/clip/{name}")
+def run_clip_file(run_id: str, name: str, request: Request, download: int = 0) -> FileResponse:
+    """A clip's file. Streamed from here because the dataset is private; the
+    bytes behind a ready clip never change, so cached hard. `download=1` makes
+    the answer an attachment with a name worth keeping."""
+    store = request.app.state.store
+    record = _find_run(store, run_id)
+    if name not in CLIP_MEDIA or store.clip_state(run_id)[0] != "ready":
+        raise HTTPException(status_code=404, detail=f"no clip file {name!r} for run {run_id}")
+    headers = {"Cache-Control": "public, max-age=31536000, immutable"}
+    if download and name.endswith(".mp4"):
+        stem = safe_stem(record.user, record.policy_name, name.removesuffix(".mp4"))
+        headers["Content-Disposition"] = f'attachment; filename="microduck-arena-{stem}.mp4"'
+    return FileResponse(
+        store.clip_file(run_id, name),
+        media_type=_CLIP_TYPES[name.rsplit(".", 1)[-1]],
+        headers=headers,
     )

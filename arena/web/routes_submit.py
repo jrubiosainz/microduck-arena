@@ -362,7 +362,20 @@ async def submit(
         env_url=link,
         livery=_livery(livery),
     )
-    store.append(record, trace_codec.encode(result.trace), payload if published is None else None)
+    store.append(record, trace_codec.encode(result.trace, result.settle), payload if published is None else None)
+
+    clips = request.app.state.clips
+    if clips.available:
+        # Owed now, rendered later: the response does not wait for a video.
+        # The run is already on the board at this point, so a marker that
+        # fails to write must not turn a successful publish into a 500.
+        try:
+            store.mark_clip_pending(
+                record.run_id, record.user, record.event_id, record.submitted_at
+            )
+            clips.enqueue(record.run_id)
+        except Exception as exc:  # noqa: BLE001 — see above
+            print(f"clip: {record.run_id} not queued ({type(exc).__name__}: {exc})")
 
     return {
         "run_id": record.run_id,
@@ -426,6 +439,8 @@ def withdraw(run_id: str, request: Request) -> dict:
             revision=source.get("revision"),
         )
     )
+    # The channel must not play a run its author just took off the board.
+    request.app.state.programme.invalidate()
     return {"withdrawn": record.run_id, "event_id": record.event_id}
 
 

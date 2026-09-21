@@ -234,7 +234,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
                 model_stored=False,
                 livery="classic",
             )
-            store.append(record, trace_codec.encode(result.trace))
+            store.append(record, trace_codec.encode(result.trace, result.settle))
             restored.append(record)
             if on_event:
                 on_event(f"recovered {candidate.repo_id} on {event.id}: {result.score:.3f}s")

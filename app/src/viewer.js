@@ -33,6 +33,7 @@ import {
   rigGeometries,
 } from "./rig.js";
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
+import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
 
@@ -104,8 +105,8 @@ export function cameraSideOffset(lanes, spacing) {
  * re-race, and a fresh wall group starts hidden — so without this the walls
  * would silently vanish while the button still read "Hide walls".
  */
-export function attachCourse(scene, event, lanes, wallsVisible) {
-  const course = buildCourse(event, lanes);
+export function attachCourse(scene, event, lanes, wallsVisible, stripes) {
+  const course = buildCourse(event, lanes, stripes);
   const walls = course.getObjectByName("walls");
   if (walls) walls.visible = Boolean(wallsVisible);
   scene.add(course);
@@ -115,6 +116,77 @@ export function attachCourse(scene, event, lanes, wallsVisible) {
 export function placeLane(rig, laneZ) {
   rig.placer.position.z = laneZ;
   rig.placer.rotation.set(0, 0, 0);
+}
+
+/**
+ * Put a lane's follow-spot under its duck, at the trace's world `x`.
+ *
+ * The ring is the opposite case to the duck: it has no frame of its own, so it
+ * is parented to the course (or the scene, with no course) and lies on the
+ * ramp, tilted with it. A world x is the ramp's run, so along the slope it is
+ * x / cos. Left in the scene at height zero, it sat 21 cm under the hill's top.
+ */
+export function placeMarker(marker, ground, x, slopeDeg) {
+  if (marker.parent !== ground) ground.add(marker);
+  marker.position.x = x / Math.cos((slopeDeg * Math.PI) / 180);
+}
+
+// A nameplate's height in metres and how far above the trunk it floats. Tuned
+// by eye on the clip page; the publication page hangs none.
+const PLATE_HEIGHT = 0.05;
+const PLATE_LIFT = 0.16;
+
+/**
+ * Where the camera stands and what it looks at, for one frame.
+ *
+ * `null` is the chase camera the publication and race pages always had:
+ * behind the leader, trackside, the side offset widening with the arena. An
+ * event's `[clip.camera]` spec overrides its constants or fixes the camera
+ * outright; `distance` scales a chase's offsets, which is how the vertical
+ * clip fits the same picture in a narrower frame. `rise` is the ramp's height
+ * under the leader: a chase climbs a hill with its duck instead of watching it
+ * walk out of the top of the frame. Pure, so it is testable.
+ */
+export function cameraPose(spec, lead, sideOffset, rise) {
+  if (spec?.kind === "fixed") return { position: [...spec.position], target: [...spec.target] };
+  const back = spec?.back ?? 0.35;
+  const height = spec?.height ?? 0.34;
+  const side = spec?.side ?? sideOffset;
+  const distance = spec?.distance ?? 1;
+  return {
+    position: [lead - back * distance, height * distance + rise, side * distance],
+    target: [lead, (spec?.target_height ?? 0.12) + rise, 0],
+  };
+}
+
+// Where a clip's opening travel starts, relative to the chase it ends on: turned
+// this far round towards the front of the line, this much farther out and higher.
+const TRAVEL_TURN = (30 * Math.PI) / 180;
+const TRAVEL_REACH = 1.3;
+const TRAVEL_LIFT = 8;
+
+/**
+ * The camera `u` of the way through a clip's opening travel, 0 to 1: an orbit
+ * round the chase's target, from ahead of the line where the waiting ducks face
+ * it, to the chase itself. An orbit rather than a straight line, so it never
+ * cuts through the lanes. Pure, so it is testable.
+ */
+export function travelPose(chase, u) {
+  if (u >= 1) return chase;
+  const left = 1 - u * u * (3 - 2 * u);
+  const [x, y, z] = chase.target;
+  const dx = chase.position[0] - x;
+  const dz = chase.position[2] - z;
+  const turn = TRAVEL_TURN * left;
+  const out = 1 + (TRAVEL_REACH - 1) * left;
+  return {
+    position: [
+      x + out * (dx * Math.cos(turn) + dz * Math.sin(turn)),
+      y + (chase.position[1] - y) * (1 + (TRAVEL_LIFT - 1) * left),
+      z + out * (dz * Math.cos(turn) - dx * Math.sin(turn)),
+    ],
+    target: chase.target,
+  };
 }
 
 // The GLB is one 1.3 MB download shared by every rig, so it is memoised on its
@@ -132,10 +204,11 @@ function loadGlb() {
 }
 
 // Per-rig assets, memoised per rig: the roller rig has its own kinematic tree
-// and five STLs the GLB does not carry.
+// and five STLs the GLB does not carry. Exported for the booth, which builds
+// its own scene from the same rig.
 const rigAssets = new Map();
 
-function loadAssets(rig) {
+export function loadAssets(rig) {
   if (!rigAssets.has(rig)) {
     rigAssets.set(
       rig,
@@ -148,7 +221,10 @@ function loadAssets(rig) {
   return rigAssets.get(rig);
 }
 
-export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs" } = {}) {
+export async function createViewer(
+  canvas,
+  { onChaseChange, rig: rigName = "legs", manual = false, camera: spec = null } = {},
+) {
   // `rigName` and not `rig`, because setLanes below names each lane's built
   // tree `rig` — the two would shadow, and it would work by accident today
   // only because nothing reads the parameter after this line.
@@ -157,8 +233,12 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   // race page shows one event, and an event declares one rig.
   const { kinematics, geometries } = await loadAssets(rigName);
 
-  const renderer = new WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  // Under SwiftShader MSAA cost 2.7× per frame (401 → 151 ms at 1080p), and a
+  // clip is encoded by x264 anyway, which softens edges; the interactive pages keep it.
+  const renderer = new WebGLRenderer({ canvas, antialias: !manual });
+  // A clip is exactly its layout's pixels: the recorder wants the drawing
+  // buffer to match the frame it is composing, not a device's own ratio.
+  renderer.setPixelRatio(manual ? 1 : Math.min(devicePixelRatio, 2));
   // The liveries' colours are linear and deliberately oversaturated because the
   // simulator tone-maps with ACES; without this every robot reads too hot.
   renderer.toneMapping = ACESFilmicToneMapping;
@@ -208,35 +288,42 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   grid.position.y = -0.001; // just under the course so it reads as backdrop
   scene.add(grid);
 
-  const camera = new PerspectiveCamera(42, 1, 0.02, 100);
+  const camera = new PerspectiveCamera(spec?.fov ?? 42, 1, 0.02, 100);
   camera.position.set(-0.35, 0.34, 1.15);
-
-  const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.minDistance = 0.25;
-  controls.maxDistance = 8;
-  controls.target.set(0, 0.12, 0);
 
   // Chase camera on by default; the first drag hands control to the user, the
   // same bargain the original sandbox makes.
   let chase = true;
-  controls.addEventListener("start", () => {
-    if (!chase) return;
-    chase = false;
-    onChaseChange?.(false);
-  });
+
+  // A clip drives the camera from cameraPose alone: no controls to fight, no
+  // "start" drag to hand chase away.
+  const controls = manual ? null : new OrbitControls(camera, canvas);
+  if (controls) {
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 0.25;
+    controls.maxDistance = 8;
+    controls.target.set(0, 0.12, 0);
+    controls.addEventListener("start", () => {
+      if (!chase) return;
+      chase = false;
+      onChaseChange?.(false);
+    });
+  }
 
   let lanes = [];
   let course = null;
   let wallsVisible = false;
   let sideOffset = 1.15;
+  let slopeDeg = 0;
   let player = new Player([]);
 
   function clearScene() {
     for (const lane of lanes) {
       scene.remove(lane.rig.placer);
-      if (lane.marker) scene.remove(lane.marker);
+      lane.marker?.removeFromParent();
+      lane.plate?.dispose();
+      if (lane.plate) scene.remove(lane.plate.sprite);
     }
     lanes = [];
     if (course) {
@@ -249,8 +336,15 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     clearScene();
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
+    slopeDeg = event?.slope_deg ?? 0;
     if (event) {
-      course = attachCourse(scene, event, Math.max(1, entries.length), wallsVisible);
+      course = attachCourse(
+        scene,
+        event,
+        Math.max(1, entries.length),
+        wallsVisible,
+        entries.map((entry) => entry.colour),
+      );
     }
     lanes = entries.map((entry, i) => {
       const tier = entry.tier ?? "ghost";
@@ -271,12 +365,19 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
       placeLane(rig, z);
       scene.add(rig.placer);
 
-      // The follow-spot, parented to the course so it climbs a slope with it.
+      // The follow-spot, on the course so it climbs a slope with it (placeMarker).
       const marker = buildMarker(tier, entry.colour ?? null);
       marker.position.z = z;
-      scene.add(marker);
 
-      return { ...entry, rig, marker, tier };
+      // The duck's name, hung over its head in its lane's colour: the clip
+      // has four ducks and no legend, so the name rides the duck.
+      let plate = null;
+      if (entry.name) {
+        plate = nameplate(entry.name, entry.nameColour ?? "#faf8f2", "#08080c");
+        plate.sprite.scale.set(PLATE_HEIGHT * plate.ratio, PLATE_HEIGHT, 1);
+        scene.add(plate.sprite);
+      }
+      return { ...entry, rig, marker, plate, tier };
     });
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
     player.play();
@@ -319,32 +420,55 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   }
 
   const _target = new Vector3();
+  const _trunk = new Vector3();
   let raf = null;
-  function tick(now) {
-    player.advance(now);
+
+  function draw(travel = 1) {
     const indices = player.frameIndices();
     lanes.forEach((lane, i) => {
       const frame = frameAt(lane.trace, indices[i]);
       applyFrame(lane.rig, frame);
       // Keep the marker under its duck. frame[0] is MJCF +x, which is three +x.
-      if (lane.marker) lane.marker.position.x = frame[0];
+      if (lane.marker) placeMarker(lane.marker, course ?? scene, frame[0], slopeDeg);
+      if (lane.plate) {
+        lane.rig.bodies.get("trunk_base").getWorldPosition(_trunk);
+        lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);
+      }
     });
 
     if (chase && lanes.length) {
       // Follow the leader along +x, the direction of travel, from behind and
       // slightly to one side so the gait is visible rather than end-on.
       const lead = Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]));
-      _target.set(lead, 0.12, 0);
-      // Trackside: mostly to the side, slightly behind and above, so the gait
-      // reads as a gait rather than a shape coming at you. The side offset
-      // widens with the arena so the outer lanes stay in frame.
-      camera.position.set(lead - 0.35, 0.34, sideOffset);
-      controls.target.copy(_target);
+      const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
+      const pose = travelPose(cameraPose(spec, lead, sideOffset, rise), travel);
+      camera.position.set(...pose.position);
+      _target.set(...pose.target);
+      if (controls) controls.target.copy(_target);
+      else camera.lookAt(_target);
     }
-    controls.update();
-
+    controls?.update();
     renderer.render(scene, camera);
+  }
+
+  function tick(now) {
+    player.advance(now);
+    draw();
     raf = requestAnimationFrame(tick);
+  }
+
+  /** Manual mode: pose every lane at `seconds` and render once, the camera
+   * `travel` of the way through its opening travel (travelPose). */
+  function frame(seconds, travel = 1) {
+    player.seek(seconds);
+    draw(travel);
+  }
+
+  /** Where lane `i`'s duck stood in the last frame drawn, as fractions of the
+   * canvas from its top left: what a clip hangs its stamp on. */
+  function spot(i) {
+    lanes[i].rig.bodies.get("trunk_base").getWorldPosition(_trunk).project(camera);
+    return { x: (_trunk.x + 1) / 2, y: (1 - _trunk.y) / 2 };
   }
 
   resize();
@@ -354,7 +478,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
   // the drawing buffer 36% taller than the box it was painted into.
   const watcher = new ResizeObserver(resize);
   watcher.observe(canvas);
-  raf = requestAnimationFrame(tick);
+  if (!manual) raf = requestAnimationFrame(tick);
 
   setBrightness(brightness);
 
@@ -363,6 +487,8 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     follow,
     setWallsVisible,
     setBrightness,
+    frame,
+    spot,
     get brightness() {
       return brightness;
     },
@@ -375,7 +501,7 @@ export async function createViewer(canvas, { onChaseChange, rig: rigName = "legs
     dispose() {
       if (raf) cancelAnimationFrame(raf);
       watcher.disconnect();
-      controls.dispose();
+      controls?.dispose();
       clearScene();
       environment.dispose();
       renderer.dispose();

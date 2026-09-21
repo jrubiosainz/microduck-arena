@@ -17,6 +17,7 @@ GOOD = {
              '[start.perturbation]\njoint_rad=0.01\nyaw_deg=2.0\n',
     "termination": '[termination]\nfall_gravity_z=-0.5\nfall_hold_s=0.3\n',
     "sweep": '[sweep]\nlo=0.2\nhi=0.4\nstep=0.1\nfinalists=1\n',
+    "clip": "",
 }
 
 
@@ -410,3 +411,47 @@ def test_category_never_reaches_scoring_storage_or_the_run_record():
 
     field_names = {f.name for f in dataclasses.fields(store.RunRecord)}
     assert "category" not in field_names, "RunRecord carries a 'category' field"
+
+
+def test_an_event_without_a_clip_section_gets_the_defaults():
+    clip = load_event("sprint-2m").clip
+    assert clip.tape_max_s == 12.0
+    assert clip.sounds == ("crowd", "horn", "verdict")
+    assert clip.camera.kind == "chase"
+    assert clip.camera.side is None
+    assert clip.to_dict() == {
+        "tape_max_s": 12.0,
+        "sounds": ["crowd", "horn", "verdict"],
+        "camera": {"kind": "chase", "back": 0.35, "height": 0.34, "side": None,
+                   "target_height": 0.12, "fov": 42.0},
+    }
+
+
+def test_a_clip_section_pins_the_tape_a_fixed_camera_and_the_sounds(tmp_path):
+    path = write_manifest(
+        tmp_path,
+        clip='[clip]\ntape_max_s=6.0\nsounds=["crowd"]\n'
+             '[clip.camera]\nkind="fixed"\nposition=[1.0,0.6,2.2]\ntarget=[1.0,0.1,0.0]\nfov=40\n',
+    )
+    clip = load_manifest(path).clip
+    assert clip.tape_max_s == 6.0
+    assert clip.sounds == ("crowd",)
+    assert clip.camera.to_dict() == {
+        "kind": "fixed", "position": [1.0, 0.6, 2.2], "target": [1.0, 0.1, 0.0], "fov": 40.0
+    }
+
+
+@pytest.mark.parametrize(
+    "section, said",
+    [
+        ('[clip]\nsounds=["crowd","organ"]\n', "unknown sound source"),
+        ('[clip]\ntape_max_s=0\n', "tape_max_s must be positive"),
+        ('[clip]\nfoo=1\n', "unknown keys"),
+        ('[clip]\n[clip.camera]\nkind="drone"\n', "unknown camera kind"),
+        ('[clip]\n[clip.camera]\nkind="fixed"\nfov=40\n', "needs position and target"),
+        ('[clip]\n[clip.camera]\nkind="chase"\nposition=[0,0,0]\n', "unknown keys"),
+    ],
+)
+def test_a_malformed_clip_section_is_refused(tmp_path, section, said):
+    with pytest.raises(ManifestError, match=said):
+        load_manifest(write_manifest(tmp_path, clip=section))

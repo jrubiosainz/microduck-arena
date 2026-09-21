@@ -78,6 +78,10 @@ def test_the_replay_of_a_fresh_submission_is_fetchable(api):
     trace = api.get(f"/api/runs/{run_id}/trace")
     assert trace.status_code == 200
     assert int(trace.headers["x-frame-count"]) > 100
+    # And the settle that led into it: the sprint's 0.5 s from the reset pose.
+    settle = api.get(f"/api/runs/{run_id}/settle")
+    assert settle.status_code == 200
+    assert settle.headers["x-frame-count"] == "26"
 
 
 def test_a_garbage_file_is_rejected_with_its_reason(api, tmp_path):

@@ -7,7 +7,8 @@
 import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
 import { formatEventFacts, formatScore } from "./format.js";
 import { FLOCK, MICRODUCK, MICRODUCK_RL, STORE } from "./links.js";
-import { playerHref, raceHref } from "./router.js";
+import { renderLive } from "./live.js";
+import { liveHref, playerHref, raceHref } from "./router.js";
 import { signInHref } from "./session.js";
 import { avatar } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
@@ -263,7 +264,19 @@ export function chapterRule(index) {
   return rule;
 }
 
-export async function renderHome(root) {
+/** The channel's frame beside the ladder: the stage the player mounts in, and
+ * the picture over it as the way to the full screen. The button the player
+ * raises stands above this door, so asking for the sound is not leaving. */
+export function liveFrame() {
+  const frame = el("div", "season-live");
+  const door = el("a", "season-live-door");
+  door.href = liveHref;
+  door.setAttribute("aria-label", "Watch the live channel");
+  frame.append(el("div", "season-live-stage"), door);
+  return frame;
+}
+
+export async function renderHome(root, state) {
   const [events, standings, me] = await Promise.all([getEvents(), getStandings(), getMe()]);
   // Your own rung, for the card up top. The REAL standings, never the padded
   // ones — a demo rank beside your name would be a score you did not earn.
@@ -301,15 +314,26 @@ export async function renderHome(root) {
   meet.append(squad);
   pitch.append(meet);
 
+  // The right-hand column of the band: who is winning, then what is on air.
+  // main put the channel in its own column beside the ladder; the band here
+  // already spends its left column on the pitch, so the two stack in the
+  // right one rather than squeezing the page into three.
   const board = el("div", "door-board");
   const rungs = demoRows(standings);
   board.append(el("h3", "eyebrow", "Season standings"), ladder(rungs));
+  const frame = liveFrame();
+  board.append(el("h3", "eyebrow", "The channel"), frame);
 
   door.append(pitch, board);
   // No rule above it: the band runs flush under the yellow strip, whose own
   // bottom border is the line there. A rule plus the hall's top padding put a
   // stripe of bare paper between the two, which was the thing to remove.
   hall.append(door);
+  // The channel plays beside the ladder, muted until the button asks for its
+  // sound. It polls and draws itself; a browser without WebGL, or a channel
+  // that is down, leaves the frame dark rather than taking the front page
+  // with it.
+  renderLive(frame.querySelector(".season-live-stage"), state, { framed: true }).catch(() => {});
 
   // Only an open event has a board worth asking for.
   const boards = await Promise.all(

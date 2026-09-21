@@ -3,7 +3,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
-  chapterRule, demoAsked, demoRows, flockBand, flyer, ladder, masthead, pageTexture, playerCard,
+  chapterRule, demoAsked, demoRows, flockBand, flyer, ladder, liveFrame, masthead, pageTexture,
+  playerCard,
 } from "./home.js";
 
 const open = {
@@ -540,5 +541,16 @@ describe("the chapter rules", () => {
 
   it("is decorative, so a screen reader does not announce a line", () => {
     expect(chapterRule(0).getAttribute("aria-hidden")).toBe("true");
+  });
+});
+
+describe("the channel's frame", () => {
+  it("is a stage to mount the channel in, with the picture itself the way into it", () => {
+    const frame = liveFrame();
+    expect(frame.matches("div.season-live")).toBe(true);
+    expect(frame.querySelector(".season-live-stage")).not.toBeNull();
+    const door = frame.querySelector("a.season-live-door");
+    expect(door.getAttribute("href")).toBe("#/live");
+    expect(door.getAttribute("aria-label")).toBe("Watch the live channel");
   });
 });

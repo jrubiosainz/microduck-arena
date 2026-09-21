@@ -452,6 +452,33 @@
 .ladder-name { font-weight: 600; overflow-wrap: anywhere; }
 .ladder-empty { margin: 0; padding: 12px var(--space-card-padding-min); }
 
+/* ── The channel, beside the standings ─────────────────────────────────────── */
+
+/* The player on the left, the ladder on the right; under the wide grid's
+   measure they stack, the channel first. */
+.season {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-wide)), 1fr));
+  gap: var(--space-gutter-max);
+  align-items: start;
+}
+.season-column { min-width: 0; }
+.season-column > .eyebrow { display: block; margin-bottom: var(--space-gutter-min); }
+.season .ladders { max-width: none; }
+
+/* The set in the corner of the room: the stage behind glass, in the club's
+   own frame. The door over it is the picture itself -- the way to the full
+   screen -- with the player's own button standing above it. */
+.season-live {
+  position: relative;
+  border: 3px solid var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+  background: var(--deep-ink);
+}
+.season-live-stage { display: block; }
+.season-live-door { position: absolute; inset: 0; z-index: 7; }
+.season-live-door:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+
 /* ── Flyers: one per event, taped up crooked ───────────────────────────────── */
 
 /* Scanlines on the wall alone, and BEHIND the sheets rather than over them:
@@ -675,3 +702,4 @@
   border: 3px solid var(--ink);
 }
 .profile-date { color: var(--ink-70); font-size: 0.85rem; }
+

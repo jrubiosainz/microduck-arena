@@ -41,6 +41,9 @@ class RunOutcome:
     # so a test can assert the clock and the start line agree.
     start_progress_m: float
     trace: np.ndarray  # (frames, TRACE_WIDTH) float32
+    # The untimed settle before the trace: the reset pose, then a frame per
+    # settle step, so a replay can start where the simulation did.
+    settle: np.ndarray  # (settle steps + 1, TRACE_WIDTH) float32
 
 
 @dataclass(frozen=True)
@@ -95,6 +98,12 @@ def _perturb(model, data, adr, manifest, seed) -> None:
     mujoco.mj_forward(model, data)
 
 
+def _record(frame: np.ndarray, data, adr) -> None:
+    frame[0:3] = data.qpos[0:3]
+    frame[3:7] = data.qpos[3:7]
+    frame[7:TRACE_WIDTH] = data.qpos[adr.qpos]
+
+
 def _step(model, data, policy, adr, command, last_action) -> np.ndarray:
     obs = _observe(model, data, adr, last_action, command)
     action = policy.act(obs)
@@ -123,8 +132,12 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
 
     # Settle with the policy running and the clock stopped: nobody is timed on
     # standing up.
-    for _ in range(round(manifest.start.settle_s / CTRL_DT)):
+    settle_steps = round(manifest.start.settle_s / CTRL_DT)
+    settle = np.empty((settle_steps + 1, TRACE_WIDTH), dtype=np.float32)
+    _record(settle[0], data, adr)
+    for step in range(settle_steps):
         last_action = _step(model, data, policy, adr, command, last_action)
+        _record(settle[step + 1], data, adr)
 
     direction = ramp_dir(manifest.course.slope_deg)
     start_progress = float(direction @ data.qpos[0:3])
@@ -141,9 +154,7 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     for step in range(max_steps):
         last_action = _step(model, data, policy, adr, command, last_action)
 
-        frames[written, 0:3] = data.qpos[0:3]
-        frames[written, 3:7] = data.qpos[3:7]
-        frames[written, 7:TRACE_WIDTH] = data.qpos[adr.qpos]
+        _record(frames[written], data, adr)
         written += 1
 
         if not np.all(np.isfinite(data.qpos)):
@@ -177,4 +188,5 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
         progress_m=progress,
         start_progress_m=start_progress,
         trace=frames[:written].copy(),
+        settle=settle,
     )

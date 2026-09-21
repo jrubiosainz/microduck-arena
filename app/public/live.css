@@ -1,0 +1,15 @@
+/* The live page: nothing but the stage, letterboxed on deep ink and filling
+   the window. The stage itself and all its chrome are stage.css's, since the
+   front page frames the same player beside the ladder; this sheet is only
+   what makes the channel a page. */
+* { box-sizing: border-box; border-radius: 0; }
+html, body { margin: 0; height: 100%; background: var(--deep-ink); color: var(--paper); font-family: var(--body); overflow: hidden; }
+#app { min-height: 100vh; display: grid; place-items: center; }
+
+/* The largest 16:9 the window holds, rather than the width of whatever box
+   the player was put in. */
+.live {
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  aspect-ratio: auto;
+}

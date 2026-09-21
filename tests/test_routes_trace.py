@@ -88,6 +88,30 @@ def test_the_trace_round_trips_as_float32(client):
     np.testing.assert_allclose(restored, original, rtol=0, atol=1e-2)
 
 
+def test_the_settle_is_served_like_the_trace(client):
+    api, app = client
+    record = make_record()
+    settle = a_trace(frames=4)
+    app.state.store.append(record, encode(a_trace(frames=9), settle))
+
+    response = api.get(f"/api/runs/{record.run_id}/settle")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/octet-stream"
+    assert response.headers["x-frame-count"] == "4"
+    restored = np.frombuffer(response.content, dtype="<f4").reshape(-1, TRACE_WIDTH)
+    np.testing.assert_allclose(restored, settle, rtol=0, atol=1e-2)
+
+
+def test_a_run_stored_before_settles_were_recorded_serves_an_empty_one(client):
+    api, app = client
+    record = make_record()
+    app.state.store.append(record, encode(a_trace(frames=9)))
+    response = api.get(f"/api/runs/{record.run_id}/settle")
+    assert response.status_code == 200
+    assert response.headers["x-frame-count"] == "0"
+    assert response.content == b""
+
+
 def test_the_trace_byte_length_matches_the_frame_count(client):
     api, app = client
     record = make_record()
@@ -106,7 +130,7 @@ def test_an_unknown_run_is_a_404(client):
     from a deleted one.
     """
     api, _ = client
-    for path in ("/api/runs/01NOPE", "/api/runs/01NOPE/trace"):
+    for path in ("/api/runs/01NOPE", "/api/runs/01NOPE/trace", "/api/runs/01NOPE/settle"):
         response = api.get(path)
         assert response.status_code == 404, path
         assert "no such run" in response.json()["detail"], path

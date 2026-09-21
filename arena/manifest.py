@@ -107,6 +107,53 @@ class Vote:
     per_day: int
 
 
+CAMERA_KINDS = ("chase", "fixed")
+# The sound sources a clip can draw on (app/src/clip/score.js). A name here is
+# a function there; an event lists the ones it wants.
+SOUND_SOURCES = ("crowd", "horn", "verdict")
+
+
+@dataclass(frozen=True)
+class ClipCamera:
+    """Where the clip's camera stands.
+
+    `chase` is the viewer's own camera — behind the leader, trackside, the
+    side offset widening with the lanes — with its constants exposed. `fixed`
+    is an absolute position and target, for events whose picture is a jump or
+    a stand rather than a run down a lane.
+    """
+
+    kind: str = "chase"
+    back: float = 0.35
+    height: float = 0.34
+    side: float | None = None  # None: the viewer's cameraSideOffset
+    target_height: float = 0.12
+    fov: float = 42.0
+    position: tuple[float, float, float] | None = None
+    target: tuple[float, float, float] | None = None
+
+    def to_dict(self) -> dict:
+        if self.kind == "fixed":
+            return {"kind": "fixed", "position": list(self.position),
+                    "target": list(self.target), "fov": self.fov}
+        return {"kind": "chase", "back": self.back, "height": self.height, "side": self.side,
+                "target_height": self.target_height, "fov": self.fov}
+
+
+@dataclass(frozen=True)
+class ClipConfig:
+    """How this event's clip is framed and scored. Every field has a default,
+    so an event with no [clip] section renders as the sprint does."""
+
+    tape_max_s: float = 12.0
+    sounds: tuple[str, ...] = SOUND_SOURCES
+    camera: ClipCamera = ClipCamera()
+
+    def to_dict(self) -> dict:
+        return {"tape_max_s": self.tape_max_s, "sounds": list(self.sounds),
+                "camera": self.camera.to_dict()}
+
+
 @dataclass(frozen=True)
 class Manifest:
     id: str
@@ -140,6 +187,7 @@ class Manifest:
     # None unless the event takes votes. The frontend reads this to decide
     # whether the VOTE badge and the vote button exist at all.
     vote: Vote | None = None
+    clip: ClipConfig = ClipConfig()
 
     def command_at(self, vx: float) -> tuple[float, ...]:
         """This event's command, with the forward speed replaced.
@@ -168,6 +216,56 @@ def _command(raw: dict) -> tuple[float, ...]:
     if len(cmd) != CMD_SIZE:
         raise ManifestError(f"[command]: assembles to {len(cmd)} values, expected {CMD_SIZE}")
     return cmd
+
+
+def _refuse_unknown(raw: dict, allowed: set[str], where: str) -> None:
+    unknown = sorted(set(raw) - allowed)
+    if unknown:
+        raise ManifestError(f"{where}: unknown keys {unknown}")
+
+
+def _triple(raw: dict, key: str, where: str) -> tuple[float, float, float]:
+    values = _require(raw, key, where)
+    if len(values) != 3:
+        raise ManifestError(f"{where}: {key} must have 3 values, got {len(values)}")
+    return tuple(float(v) for v in values)
+
+
+def _camera(raw: dict | None, where: str) -> ClipCamera:
+    if raw is None:
+        return ClipCamera()
+    kind = raw.get("kind", "chase")
+    if kind not in CAMERA_KINDS:
+        raise ManifestError(f"{where}: unknown camera kind {kind!r}, expected one of {CAMERA_KINDS}")
+    if kind == "fixed":
+        _refuse_unknown(raw, {"kind", "position", "target", "fov"}, where)
+        if "position" not in raw or "target" not in raw:
+            raise ManifestError(f"{where}: a fixed camera needs position and target")
+        return ClipCamera(kind="fixed", position=_triple(raw, "position", where),
+                          target=_triple(raw, "target", where), fov=float(raw.get("fov", 42.0)))
+    _refuse_unknown(raw, {"kind", "back", "height", "side", "target_height", "fov"}, where)
+    default = ClipCamera()
+    return ClipCamera(
+        back=float(raw.get("back", default.back)),
+        height=float(raw.get("height", default.height)),
+        side=None if raw.get("side", "auto") == "auto" else float(raw["side"]),
+        target_height=float(raw.get("target_height", default.target_height)),
+        fov=float(raw.get("fov", default.fov)),
+    )
+
+
+def _clip(raw: dict | None, where: str) -> ClipConfig:
+    if raw is None:
+        return ClipConfig()
+    _refuse_unknown(raw, {"tape_max_s", "sounds", "camera"}, where)
+    tape = float(raw.get("tape_max_s", 12.0))
+    if tape <= 0:
+        raise ManifestError(f"{where}: tape_max_s must be positive")
+    sounds = tuple(raw.get("sounds", SOUND_SOURCES))
+    for name in sounds:
+        if name not in SOUND_SOURCES:
+            raise ManifestError(f"{where}: unknown sound source {name!r}, expected among {SOUND_SOURCES}")
+    return ClipConfig(tape_max_s=tape, sounds=sounds, camera=_camera(raw.get("camera"), f"{where}.camera"))
 
 
 def load_manifest(path: Path) -> Manifest:
@@ -277,6 +375,7 @@ def load_manifest(path: Path) -> Manifest:
         sweep=sweep,
         command=_command(_require(raw, "command", str(path))),
         vote=vote,
+        clip=_clip(raw.get("clip"), "[clip]"),
     )
 
 

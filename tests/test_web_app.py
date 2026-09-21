@@ -77,3 +77,30 @@ def test_a_local_app_starts_without_reaching_for_the_hub(tmp_path, monkeypatch):
     with TestClient(create_app(config)) as client:
         assert client.get("/api/health").status_code == 200
     assert attempts == []
+
+
+def test_the_booth_says_why_it_is_off(tmp_path, monkeypatch):
+    """The boot says the booth is off in one line, and must not blame the wrong
+    thing: a bible nobody can load is not a missing token."""
+    import arena.commentary as booth
+    import arena.commentary.lore as bible
+
+    def booted():
+        return create_app(ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie"))
+
+    def unreadable():
+        raise ValueError("lore: characters must be exactly peter and ray")
+
+    monkeypatch.setenv("ARENA_COMMENTARY", "0")
+    assert booted().state.booth_off == "ARENA_COMMENTARY=0"
+
+    monkeypatch.setenv("ARENA_COMMENTARY", "1")
+    monkeypatch.setattr(booth, "hub_token", lambda config: None)
+    assert booted().state.booth_off == "no Hub token"
+
+    monkeypatch.setattr(booth, "hub_token", lambda config: "a token")
+    assert booted().state.booth_off is None
+
+    monkeypatch.setattr(bible, "load", unreadable)
+    assert booted().state.booth_off == ("the commentators' bible does not load: "
+                                        "lore: characters must be exactly peter and ray")

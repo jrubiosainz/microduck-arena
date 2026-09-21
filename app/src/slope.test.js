@@ -8,11 +8,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { Euler, Group, Vector3 } from "three";
-import { buildCourse } from "./course.js";
+import { buildCourse, buildMarker } from "./course.js";
 import { applyFrame } from "./replay.js";
 import { buildRigTree } from "./rig.js";
 import { standOnCourse } from "./thumbnail.js";
-import { attachCourse, cameraSideOffset, placeLane } from "./viewer.js";
+import { attachCourse, cameraSideOffset, placeLane, placeMarker } from "./viewer.js";
 
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
 const HILL = { length_m: 1.5, width_m: 0.8, slope_deg: 8, rig: "legs" };
@@ -73,6 +73,21 @@ describe("a replayed duck on a slope", () => {
     const p = trunkWorld([1.0, 0, 0.12]);
     expect(p.x).toBeCloseTo(1.0, 6);
     expect(p.y).toBeCloseTo(0.12, 6);
+  });
+});
+
+describe("a replayed duck's follow-spot on a slope", () => {
+  it("lies on the drawn ramp under its duck, not at height zero beneath the hill", () => {
+    const course = buildCourse(HILL, 1);
+    const marker = buildMarker("gold");
+    placeMarker(marker, course, 1.2, HILL.slope_deg);
+    course.updateMatrixWorld(true);
+    const p = new Vector3().setFromMatrixPosition(marker.matrixWorld);
+    const tan = Math.tan((HILL.slope_deg * Math.PI) / 180);
+    // Within a millimetre: the ring floats 4 mm off the ramp, tilted with it.
+    expect(Math.abs(p.x - 1.2)).toBeLessThan(1e-3);
+    expect(p.y).toBeCloseTo(1.2 * tan, 2);
+    expect(p.y).toBeGreaterThan(0.15);
   });
 });
 

@@ -203,3 +203,16 @@ def test_a_local_deployment_keeps_its_ballots_beside_its_runs(tmp_path):
     ballots = config.build_ballots()
     assert isinstance(ballots, LocalBallots)
     assert ballots.root == tmp_path
+
+
+def test_commentary_is_on_by_default_and_has_a_switch_and_a_model(tmp_path, monkeypatch):
+    monkeypatch.delenv("ARENA_COMMENTARY", raising=False)
+    monkeypatch.delenv("ARENA_COMMENTARY_MODEL", raising=False)
+    config = ArenaConfig.from_env(store_dir=tmp_path)
+    assert config.commentary_enabled is True
+    assert config.commentary_model == "deepseek-ai/DeepSeek-V3-0324"
+    monkeypatch.setenv("ARENA_COMMENTARY", "0")
+    monkeypatch.setenv("ARENA_COMMENTARY_MODEL", "org/other:provider")
+    config = ArenaConfig.from_env(store_dir=tmp_path)
+    assert config.commentary_enabled is False
+    assert config.commentary_model == "org/other:provider"

@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ballotTraceUrl,
+  clipUrl,
   getBallot,
   getBallotTrace,
+  getBroadcast,
   getLeaderboard,
+  getLive,
   getPlayer,
   getStandings,
+  getSettle,
   getTrace,
 } from "./api.js";
 
@@ -56,6 +60,13 @@ describe("the error contract", () => {
     const trace = await getTrace("01OK");
     expect(trace).toBeInstanceOf(Float32Array);
     expect([...trace]).toEqual([1.5, 2.5, 3.5]);
+  });
+
+  it("fetches a run's settle the way it fetches its trace", async () => {
+    respondWith({ bytes: new Float32Array([0.5]).buffer });
+    const settle = await getSettle("01OK");
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/runs/01OK/settle");
+    expect([...settle]).toEqual([0.5]);
   });
 });
 
@@ -126,5 +137,33 @@ describe("the ballot", () => {
     expect(trace).toBeInstanceOf(Float32Array);
     expect([...trace]).toEqual([1.5, 2.5, 3.5]);
     expect(fetch.mock.calls[0][0]).toBe("/api/ballots/tok.mac/lanes/2/trace");
+  });
+});
+
+describe("the channel", () => {
+  it("reads the grid uncached, since the clock is in it", async () => {
+    respondWith({ body: { version: 1, now_ms: 5000, build: "b", slots: [] } });
+    expect(await getLive()).toEqual({ version: 1, now_ms: 5000, build: "b", slots: [] });
+    expect(fetch.mock.calls[0]).toEqual(["/api/live", { cache: "no-store" }]);
+  });
+
+  it("fetches a broadcast by its id", async () => {
+    const calls = [];
+    globalThis.fetch = async (url, init) => {
+      calls.push([url, init]);
+      return { ok: true, json: async () => ({ dialogue: { turns: [] }, plan: { duration_ms: 4000 } }) };
+    };
+    const body = await getBroadcast("01M2K");
+    expect(calls[0][0]).toBe("/api/live/broadcast/01M2K");
+    expect(body.plan.duration_ms).toBe(4000);
+  });
+
+  it("gives nothing for a broadcast that is gone", async () => {
+    globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({}) });
+    expect(await getBroadcast("gone")).toBe(null);
+  });
+
+  it("addresses a clip's files under the run", () => {
+    expect(clipUrl("01ABC", "clip.mp4")).toBe("/api/runs/01ABC/clip/clip.mp4");
   });
 });

@@ -1,0 +1,98 @@
+/* The channel's stage, wherever it plays: the live page, where it is the whole
+   window, and the front page, where it is a player framed beside the ladder.
+   The clips carry their own bands and the booth its caption panel; the stage
+   adds only the LIVE bug, the shutter, an OFF AIR card and the one button a
+   browser may demand before it plays sound. Every size is taken from the
+   stage's width, set on it in pixels by live.js, so a television, a phone and
+   a card beside the ladder draw the same picture scaled. */
+
+.live {
+  --stage-px: 1280;
+  --u: calc(var(--stage-px) * 1px / 1280);   /* one "design pixel" at 1280 wide */
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--deep-ink);
+  overflow: hidden;
+}
+.live-stage { position: absolute; inset: 0; }
+.live-video, .live-booth {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  background: var(--deep-ink); object-fit: cover;
+}
+
+/* The bug: the club's hot colour on ink, in the corner, as a channel wears its logo. */
+.live-bug {
+  position: absolute; top: calc(24 * var(--u)); right: calc(32 * var(--u)); z-index: 6;
+  margin: 0; padding: calc(4 * var(--u)) calc(14 * var(--u));
+  background: var(--ink); color: var(--paper);
+  font: 400 calc(26 * var(--u)) / 1.2 var(--display); letter-spacing: 0.06em; text-transform: uppercase;
+}
+.live-bug::before { content: "●"; color: var(--magenta); margin-right: calc(10 * var(--u)); }
+.live[data-live-state="reconnecting"] .live-bug::after { content: " · RECONNECTING"; color: var(--sky); }
+.live[data-live-state="off-air"] .live-bug { display: none; }
+
+/* The card: the wordmark and a word, on deep ink, when there is nothing to play. */
+.live-card {
+  position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; align-content: center; gap: calc(40 * var(--u));
+  font: 400 calc(120 * var(--u)) / 1 var(--display); letter-spacing: 0.04em; color: var(--paper);
+}
+.live-card .wordmark { font-size: calc(140 * var(--u)); line-height: 0.9; text-align: center; }
+
+/* The one button: the whole stage, until the browser lets the page play sound. */
+.live-join {
+  position: absolute; inset: 0; z-index: 8; border: 0; cursor: pointer;
+  background: var(--ink-70); color: var(--paper);
+  font: 400 calc(72 * var(--u)) / 1 var(--display); letter-spacing: 0.06em;
+}
+.live-join:focus-visible { outline: calc(4 * var(--u)) solid var(--cyan); outline-offset: calc(-8 * var(--u)); }
+
+/* Framed, it stands in the middle of the picture instead of over all of it:
+   the channel is playing, and what it asks for is the sound. The picture
+   around it stays the way to the full screen. */
+.live--framed .live-join {
+  inset: auto; left: 50%; top: 50%; translate: -50% -50%;
+  padding: calc(20 * var(--u)) calc(48 * var(--u));
+  background: var(--ink); border: calc(4 * var(--u)) solid var(--paper);
+  box-shadow: calc(10 * var(--u)) calc(10 * var(--u)) 0 var(--magenta);
+}
+/* Off air there is nothing to join, and the card underneath is the whole
+   picture: the button waits for the channel to come back. */
+.live--framed[data-live-state="off-air"] .live-join { display: none; }
+
+/* The caption panel under the booth: ink on a magenta offset shadow, a sky
+   keyline, the yellow name tile in the corner, two lines of DM Sans 700. */
+.live-caption {
+  position: absolute; left: calc(32 * var(--u)); right: calc(32 * var(--u)); bottom: calc(24 * var(--u)); z-index: 4;
+  padding: calc(57 * var(--u)) calc(24 * var(--u)) calc(20 * var(--u));
+  background: var(--ink); border: calc(2 * var(--u)) solid var(--sky);
+  box-shadow: calc(6 * var(--u)) calc(6 * var(--u)) 0 var(--magenta);
+}
+.live-caption-name {
+  position: absolute; left: calc(-2 * var(--u)); top: calc(-2 * var(--u));
+  padding: calc(3 * var(--u)) calc(16 * var(--u)); background: var(--yellow); color: var(--ink);
+  font: 700 calc(36 * var(--u)) / 1.2 var(--body);
+}
+.live-caption-text { margin: 0; font: 700 calc(50 * var(--u)) / 1.12 var(--body); color: var(--paper); }
+
+/* The shutter: paper, ink checker stripes top and bottom, the wordmark large,
+   a cyan edge coming in and a magenta one going out. --shutter-x is the
+   panel's offset as a fraction of the stage, set per frame by shutter.js. */
+.live-shutter {
+  position: absolute; inset: 0; z-index: 7; background: var(--paper);
+  transform: translateX(calc(var(--shutter-x, -1) * 100%));
+  display: grid; place-items: center; align-content: center; gap: calc(40 * var(--u));
+  border-left: calc(8 * var(--u)) solid var(--cyan); border-right: calc(8 * var(--u)) solid var(--cyan);
+}
+.live-shutter-out { border-color: var(--magenta); }
+.live-shutter::before, .live-shutter::after {
+  content: ""; position: absolute; left: 0; right: 0; height: calc(48 * var(--u));
+  background: repeating-linear-gradient(90deg, var(--ink) 0 calc(48 * var(--u)), transparent calc(48 * var(--u)) calc(96 * var(--u)));
+}
+.live-shutter::before { top: 0; }
+.live-shutter::after { bottom: 0; background-position: calc(48 * var(--u)) 0; }
+.live-shutter .wordmark { font-size: calc(140 * var(--u)); line-height: 0.9; text-align: center; }
+.live-upnext { display: grid; justify-items: center; gap: calc(8 * var(--u)); color: var(--ink); }
+.live-upnext .eyebrow { font-size: calc(22 * var(--u)); }
+.live-upnext-event { font: 400 calc(64 * var(--u)) / 1 var(--display); text-transform: uppercase; }
+.live-upnext-user { font-size: calc(28 * var(--u)); color: var(--sky-inked); }

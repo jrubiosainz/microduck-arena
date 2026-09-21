@@ -19,6 +19,21 @@ export function frameAt(trace, index) {
   return trace.subarray(start, start + TRACE_WIDTH);
 }
 
+/**
+ * A lane from where its simulation started: its settle, then its trace, with
+ * `frames` frames before the trace. A shorter settle — none, for a run stored
+ * before settles were recorded — is made up by holding the trace's first frame,
+ * so every lane still reaches its trace in step with the others.
+ */
+export function leadIn(settle, trace, frames) {
+  const lane = new Float32Array((frames + frameCount(trace)) * TRACE_WIDTH);
+  const missing = frames - frameCount(settle);
+  for (let f = 0; f < missing; f++) lane.set(frameAt(trace, 0), f * TRACE_WIDTH);
+  lane.set(settle, missing * TRACE_WIDTH);
+  lane.set(trace, frames * TRACE_WIDTH);
+  return lane;
+}
+
 export function applyFrame(rig, frame) {
   const trunk = rig.bodies.get("trunk_base");
   trunk.position.set(frame[0], frame[1], frame[2]);

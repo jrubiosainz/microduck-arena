@@ -59,6 +59,8 @@ class Evaluation:
     per_seed: tuple[SeedResult, ...]
     scan: tuple[ScanPoint, ...]
     trace: np.ndarray
+    # The trace seed's untimed settle, from the reset pose (see RunOutcome).
+    settle: np.ndarray
     trace_seed: int
     runner_version: int
 
@@ -169,6 +171,7 @@ def evaluate_at(manifest: Manifest, policy, command_vx: float) -> Evaluation:
             ),
         ),
         trace=next(o.trace for o in outcomes if o.seed == trace_seed),
+        settle=next(o.settle for o in outcomes if o.seed == trace_seed),
         trace_seed=trace_seed,
         runner_version=RUNNER_VERSION,
     )
@@ -229,6 +232,7 @@ def evaluate(manifest: Manifest, policy) -> Evaluation:
         per_seed=per_seed,
         scan=scan,
         trace=outcomes[(command_vx, trace_seed)].trace,
+        settle=outcomes[(command_vx, trace_seed)].settle,
         trace_seed=trace_seed,
         runner_version=RUNNER_VERSION,
     )
