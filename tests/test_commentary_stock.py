@@ -4,7 +4,7 @@ from websockets.exceptions import ConnectionClosedError
 
 from arena.broadcasts import BroadcastBook
 from arena.commentary.generator import Rejected
-from arena.commentary.stock import CommentaryStock
+from arena.commentary.stock import RETRY_S, CommentaryStock
 from arena.live import Entry
 
 PLAN = {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []}
@@ -193,29 +193,40 @@ def test_a_plan_the_book_refuses_costs_one_turn_and_is_logged(tmp_path):
     assert worker.turn() == "b"
 
 
-def test_a_run_that_keeps_refusing_is_not_skipped_forever(tmp_path):
-    """The walk must come back round to a run that keeps failing rather than
-    stalling on whichever one it last reached, or oscillating between just
-    the first two: three refusals in a row, and the fourth turn is "a" again."""
-    seen = []
+def test_a_refused_run_waits_before_it_is_tried_again(tmp_path):
+    """A refusal is the run's own, so the same run tried again at once mostly buys
+    the same refusal, out of the hourly cap every other run shares. Measured: one
+    run took more than half of a session's refusals that way."""
+    seen, clock = [], [0.0]
 
     def refuse(run_id):
         seen.append(run_id)
         raise Rejected("no")
 
-    worker, _book = stock(tmp_path, entries("a", "b", "c"), refuse)
-    for _ in range(4):
-        worker.turn()
-    assert seen == ["a", "b", "c", "a"]
+    worker = CommentaryStock(
+        book=BroadcastBook(tmp_path), tab=FakeTab(), compose=refuse,
+        pool=lambda: entries("a", "b"), per_hour=10, log=lambda *_: None,
+        now=lambda: clock[0], clock=lambda: "2026-09-18T09:00:00Z")
+    worker.turn()
+    worker.turn()
+    assert seen == ["a", "b"]
+    # Both wait: the next turn calls nobody and spends none of the hour's attempts.
+    assert worker.wanted() == []
+    assert worker.turn() is None
+    assert seen == ["a", "b"] and worker.attempts_left() == 8
+    clock[0] = RETRY_S + 1
+    worker.turn()
+    assert seen == ["a", "b", "a"]
 
 
 def test_the_cursor_rebases_when_wanted_shrinks(tmp_path):
-    """The walk is sitting past "a" (just refused) when "a" is stocked from
-    elsewhere and wanted() drops from three entries to two. The cursor must
-    rebase against the new length rather than read past the end of it."""
+    """The walk is sitting past "a" (the tab just failed on it) when "a" is
+    stocked from elsewhere and wanted() drops from three entries to two. The
+    cursor must rebase against the new length rather than read past the end
+    of it."""
     def compose(run_id):
         if run_id == "a":
-            raise Rejected("no")
+            raise RuntimeError("no Chrome")
         return written(run_id)
 
     worker, book = stock(tmp_path, entries("a", "b", "c"), compose)

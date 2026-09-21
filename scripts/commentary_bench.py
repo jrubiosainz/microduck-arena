@@ -9,6 +9,9 @@ them gates anything: the channel has already said what this reads.
 
 At least thirty dialogues, and two sessions before any conclusion: at twenty
 samples a rate moves by three on its own.
+
+A local server's log is only complete with PYTHONUNBUFFERED=1 in its environment:
+Python block-buffers a stdout that is redirected to a file.
 """
 
 import argparse

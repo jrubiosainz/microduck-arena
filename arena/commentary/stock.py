@@ -17,6 +17,7 @@ from .generator import Rejected
 DEPTH = 8  # runs kept stocked: about ten minutes of programme
 PER_HOUR = 120  # generation attempts, refusals included; steady state is about 80
 IDLE_S = 5.0  # how long to wait when every run in reach is stocked
+RETRY_S = 300.0  # how long a refused run waits: the grid's horizon
 
 
 class CommentaryStock:
@@ -34,9 +35,15 @@ class CommentaryStock:
         self.now = now
         self.clock = clock
         self._attempts: list[float] = []
-        # Where the walk resumes: a refusal or a broken tab must not pin it on
-        # the same run forever, so the very next turn tries the one after it.
-        # A landed dialogue resets it — the front of the order is what matters.
+        # When each run was last refused. A refusal is the run's own — its facts,
+        # its direction — so trying it again at once mostly buys the same refusal:
+        # one run took more than half of a measured session's refusals that way,
+        # every five seconds, out of the hourly cap every other run shares.
+        self._refused: dict[str, float] = {}
+        # Where the walk resumes after a failure that is not the run's own: a
+        # broken tab must not pin it on the same run forever, so the very next
+        # turn tries the one after it. A landed dialogue resets it — the front of
+        # the order is what matters.
         self._cursor = 0
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -51,10 +58,14 @@ class CommentaryStock:
         return max(0, self.per_hour - len(self._attempts))
 
     def wanted(self) -> list[str]:
-        """The next runs to reach the screen that have no dialogue waiting."""
+        """The next runs to reach the screen that have no dialogue waiting and
+        were not refused in the last RETRY_S."""
+        edge = self.now() - RETRY_S
+        self._refused = {run_id: at for run_id, at in self._refused.items() if at > edge}
         stocked = self.book.runs_stocked()
         order = cycle(self.pool(), 0)
-        return [entry.run_id for entry in order if entry.run_id not in stocked][:self.depth]
+        return [entry.run_id for entry in order
+                if entry.run_id not in stocked and entry.run_id not in self._refused][:self.depth]
 
     def turn(self) -> str | None:
         """One unit of work: at most one dialogue written. The run it wrote for,
@@ -78,11 +89,11 @@ class CommentaryStock:
             self.log(f"commentary: {run_id} written")
             self.landed()
         except Rejected as why:
-            # About one in ten is refused on the real router. It is the local
-            # checks doing their job, not a fault: the walk moves on to the
-            # next run.
+            # About four in ten are refused on the real log. It is the local
+            # checks doing their job, not a fault: the run waits, and the walk
+            # goes on with the others.
             self.log(f"commentary: {run_id} refused ({why})")
-            self._cursor = index + 1
+            self._refused[run_id] = self.now()
             return None
         except Exception as exc:  # noqa: BLE001 — a dead browser, a plan the
             # book refuses (not a whole number of 40 ms frames) or the
