@@ -167,6 +167,25 @@ describe("the chapter chequer", () => {
     expect(band[1], "the squares are not orange").toMatch(/var\(--orange\)/);
     expect(band[1], "the squares do not repeat on a grid").toMatch(/background-size\s*:/);
   });
+
+  it("divides one ground rather than two", () => {
+    // The band above stands on warm paper and the hall below is lighter. With
+    // nothing carrying the one past the other, the chequer read as a seam
+    // between two colours instead of a stripe laid on one.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    const door = css.match(/\n\.door \{([^}]*)\}/);
+    const under = css.match(/\.chapter--wall::before\s*\{([^}]*)\}/);
+    expect(under, ".chapter--wall::before not found in club.css").not.toBeNull();
+    expect(door[1]).toMatch(/background-color\s*:\s*var\(--warm-paper\)/);
+    expect(under[1], "the ground under the wall is not the band's own")
+      .toMatch(/background\s*:\s*var\(--warm-paper\)/);
+    // Under the scanlines, which sit at -1, and under the flyers.
+    expect(under[1], "the ground would paint over the scanlines")
+      .toMatch(/z-index\s*:\s*-2/);
+  });
 });
 
 describe("the ladder", () => {

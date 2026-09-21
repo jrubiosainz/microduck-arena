@@ -491,6 +491,26 @@
    context. Full width like everything else on this page; the chapter's own box
    is what scopes it vertically. */
 .chapter--wall { isolation: isolate; }
+
+/* The same warm paper the band above stands on, carried down past the chequer
+   and on to the foot of the page. Without it the chequer divided two
+   different grounds — warm paper above, the hall's lighter paper below — and
+   read as a seam between two colours rather than as a stripe laid on one.
+   It reaches up by everything between this chapter and the band: the space
+   the chequer leaves above itself, the chequer, and the space it leaves
+   below. Its own layer and not the scanlines', which carry an opacity. */
+.chapter--wall::before {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  pointer-events: none;
+  left: calc(50% - 50vw);
+  right: auto;
+  width: 100vw;
+  top: calc(-1 * (var(--space-chapter-top-min) + 16px + var(--space-title-to-grid-max)));
+  bottom: calc(-1 * (var(--space-chapter-bottom-min) + var(--space-gutter-max)));
+  background: var(--warm-paper);
+}
 .chapter--wall::after {
   z-index: -1;
   left: calc(50% - 50vw);
