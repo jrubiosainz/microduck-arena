@@ -229,10 +229,11 @@ button.link {
    slab under the picture rather than as a lift off the wall. The shadow pair
    keeps the places it earns — the entry note, and its two buttons. */
 /* A frame around the picture, not just a border on it: the charter's offset
-   shadow in cyan, which tokens.css assigns to "replay and cabinet shadows" —
-   this stage is both. */
+   shadow, in the page's carrying accent rather than the cyan tokens.css
+   assigns to a cabinet. The stage is the loudest thing here and orange is
+   what the rest of the page spends on what matters. */
 .stage {
-  --fx-shadow-color: var(--cyan);
+  --fx-shadow-color: var(--orange);
   position: relative;
   overflow: hidden;
   background: var(--deep-ink);
@@ -534,10 +535,11 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
 .modes button:nth-child(3) { background: var(--cream); }
 /* aria-pressed carries the state, so the styling reads from it rather than
    from a class that could drift out of step with what a screen reader hears.
-   The one that is on takes the action's orange and the hot shadow with it. */
+   The one that is on takes the action's orange; its shadow stays ink like its
+   neighbours', so the ground is what says which is pressed and the row does
+   not carry two accents shouting at once. */
 .modes button[aria-pressed="true"] {
   background: var(--orange);
-  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--magenta);
 }
 .modes button:active {
   translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
