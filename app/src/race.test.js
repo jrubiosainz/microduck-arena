@@ -368,6 +368,19 @@ describe("raceHall: the page's frame", () => {
     ]);
   });
 
+  it("puts the stage picks left of the board, apart from the row filters", () => {
+    // The two groups share the words all / mine / top and mean different
+    // things: these decide what plays, those decide what the table lists.
+    const top = hall().querySelector(".boardtop");
+    expect([...top.children].map((n) => n.className)).toEqual(["picks", "modes"]);
+    const picks = [...top.querySelectorAll(".picks button")];
+    expect(picks.map((b) => b.dataset.pick)).toEqual(["all", "mine", "top"]);
+    // Actions, not toggles: they hold no state, the ticked boxes do.
+    expect(picks.some((b) => b.hasAttribute("aria-pressed"))).toBe(false);
+    expect(top.querySelector(".picks").getAttribute("aria-label"))
+      .toBe("Which runs to put on the stage");
+  });
+
   it("carries no brightness slider", () => {
     // Pinned at the module's minimum instead. If the stage ever looks wrong,
     // brightness.js explains in its own comment why a control was there.

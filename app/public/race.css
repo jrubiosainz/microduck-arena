@@ -513,7 +513,41 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
 
 /* ── which runs the board shows ───────────────────────────────────────── */
 
-.boardtop { display: flex; justify-content: flex-end; margin: 18px 0 8px; }
+.boardtop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px var(--space-gutter-min);
+  justify-content: space-between;
+  align-items: center;
+  margin: 18px 0 8px;
+}
+
+/* Left of the board: what goes ON THE STAGE. Deliberately not the stickers on
+   the right, which filter which rows the table shows — the two groups share
+   the words "all", "mine" and "top", and nothing but their look would keep
+   them apart. These are plain ink-on-paper actions: press one and it ticks a
+   set of boxes, press nothing and it holds no state of its own. */
+.picks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.picks__label {
+  color: var(--ink-70);
+  font-family: var(--type-eyebrow-family);
+  font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size);
+  letter-spacing: var(--type-eyebrow-tracking);
+  text-transform: uppercase;
+}
+.picks button {
+  padding: 5px 12px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 0.76rem/1 var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.picks button:hover { background: var(--warm-paper); }
+.picks button:active { translate: 1px 1px; }
 .modes { display: flex; gap: 10px; }
 
 /* Three stickers pressed on by hand, each its own colour and its own lean.
@@ -566,6 +600,7 @@ table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 .swatch:focus-visible,
 .controls button:focus-visible,
 .modes button:focus-visible,
+.picks button:focus-visible,
 .entry__actions button:focus-visible,
 .entry__signin:focus-visible,
 .entry__speed select:focus-visible,

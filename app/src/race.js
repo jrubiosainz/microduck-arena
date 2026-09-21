@@ -8,7 +8,7 @@ import {
   tryPolicy,
   withdrawRun,
 } from "./api.js";
-import { renderBoard, selectedRunIds, tiersByRunId } from "./board.js";
+import { renderBoard, selectLanes, selectedRunIds, tiersByRunId } from "./board.js";
 import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { MIN } from "./brightness.js";
@@ -290,6 +290,12 @@ export function raceHall(event) {
       </div>
     </div>
     <div class="boardtop">
+      <div class="picks" role="group" aria-label="Which runs to put on the stage">
+        <span class="picks__label">Watch</span>
+        <button data-pick="all">All</button>
+        <button data-pick="mine">Mine</button>
+        <button data-pick="top">Top 5</button>
+      </div>
       <div class="modes" role="group" aria-label="Which runs to show">
         <button data-mode="top" aria-pressed="true">Top</button>
         <button data-mode="mine" aria-pressed="false">Mine</button>
@@ -363,6 +369,15 @@ export async function renderRace(root, { event, state }) {
     wallsButton.setAttribute("aria-pressed", String(wallsShown));
     wallsButton.textContent = wallsShown ? "Hide walls" : "Show walls";
   });
+  // Tick a set of lanes at once. Actions, not toggles, so no aria-pressed:
+  // pressing one does a thing and leaves no state of its own — the ticked
+  // boxes ARE the state, and they can be changed by hand afterwards.
+  for (const button of root.querySelectorAll(".picks button")) {
+    button.addEventListener("click", () => {
+      race(selectLanes(board, button.dataset.pick), lastTiers);
+    });
+  }
+
   // Who each duck belongs to. Off by default: with one lane the answer is on
   // the panel beside it, and four plates over four ducks is a legend nobody
   // asked for until they did.

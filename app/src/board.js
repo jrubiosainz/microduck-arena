@@ -150,6 +150,11 @@ export function renderBoard(
       lane.type = "checkbox";
       lane.checked = row.selected;
       lane.dataset.runId = row.runId;
+      // What selectLanes below picks by. On the box itself rather than looked
+      // up from the rows again: the table is what is on screen, and a filter
+      // may have left some of those rows out of it entirely.
+      lane.dataset.rank = String(row.rank);
+      if (row.mine) lane.dataset.mine = "";
       lane.addEventListener("change", () => onSelectionChange?.(selectedRunIds(container)));
     }
 
@@ -243,6 +248,29 @@ export function renderBoard(
 
   table.append(body);
   container.append(table);
+}
+
+/** How many lanes `selectLanes(container, "top")` ticks. */
+export const TOP_LANES = 5;
+
+/**
+ * Tick a set of lanes at once, and say which run ids ended up ticked.
+ *
+ * Operates on the boxes that are RENDERED, which is the point: a board
+ * filtered to "Mine" has no other rows in the DOM, so "all" there means all
+ * of what you are looking at and not all of what the server holds. Anything
+ * with no box — a trial, which is on the stage and nowhere else — is
+ * untouched, because it has no run id to play from.
+ */
+export function selectLanes(container, which) {
+  const boxes = [...container.querySelectorAll("input[type=checkbox]")];
+  const wanted = (box) => {
+    if (which === "mine") return box.dataset.mine !== undefined;
+    if (which === "top") return Number(box.dataset.rank) <= TOP_LANES;
+    return true;
+  };
+  for (const box of boxes) box.checked = wanted(box);
+  return selectedRunIds(container);
 }
 
 export function selectedRunIds(container) {

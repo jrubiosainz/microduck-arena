@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRows, DEFAULT_LANES, TIERS, renderBoard, tiersByRunId } from "./board.js";
+import { DEFAULT_LANES, TIERS, TOP_LANES, buildRows, renderBoard, selectLanes, tiersByRunId } from "./board.js";
 
 const row = (over = {}) => ({
   rank: 1,
@@ -446,5 +446,42 @@ describe("the training-environment link", () => {
   it("points exactly where the server said", () => {
     const link = rendered({ env_url: "https://gitlab.com/me/env?tab=x" });
     expect(link.getAttribute("href")).toBe("https://gitlab.com/me/env?tab=x");
+  });
+});
+
+describe("selectLanes: ticking a set of lanes at once", () => {
+  const rows = [
+    { rank: 1, user: "ann", run_id: "r1", score: 9, seeds_finished: 5, per_seed_total: 5 },
+    { rank: 2, user: "coralie", run_id: "r2", score: 10, seeds_finished: 5 },
+    { rank: 3, user: "bob", run_id: "r3", score: 11, seeds_finished: 5 },
+    { rank: 4, user: "coralie", run_id: "r4", score: 12, seeds_finished: 5 },
+    { rank: 5, user: "cid", run_id: "r5", score: 13, seeds_finished: 5 },
+    { rank: 6, user: "dee", run_id: "r6", score: 14, seeds_finished: 5 },
+  ];
+  const board = () => {
+    const el = document.createElement("div");
+    renderBoard(el, { event: { title: "2 m Sprint" }, rows }, { me: "coralie" });
+    return el;
+  };
+
+  it("ticks every rendered lane for 'all'", () => {
+    expect(selectLanes(board(), "all")).toEqual(["r1", "r2", "r3", "r4", "r5", "r6"]);
+  });
+
+  it("ticks only your own for 'mine'", () => {
+    expect(selectLanes(board(), "mine")).toEqual(["r2", "r4"]);
+  });
+
+  it("ticks the first five by rank for 'top', not the first five rows", () => {
+    expect(TOP_LANES).toBe(5);
+    expect(selectLanes(board(), "top")).toEqual(["r1", "r2", "r3", "r4", "r5"]);
+  });
+
+  it("UNticks what falls outside the set, rather than only adding", () => {
+    // The default selection already ticks some lanes. If this only added, a
+    // press of "Mine" would leave whoever was on the stage there with you.
+    const el = board();
+    selectLanes(el, "all");
+    expect(selectLanes(el, "mine")).toEqual(["r2", "r4"]);
   });
 });
