@@ -396,8 +396,14 @@ export function otherRounds(events, event, boards) {
   // content, so there is nothing to see.
   let settling;
   track.addEventListener("scroll", () => {
+    // While the track moves, the sheets pass UNDER the pointer and each one
+    // takes its hover swing on the way past — a row of cards pivoting one
+    // after another, which is not a hover, it is the scroll. The flag turns
+    // the swing off for the duration; the stylesheet reads it.
+    track.dataset.scrolling = "";
     clearTimeout(settling);
     settling = setTimeout(() => {
+      delete track.dataset.scrolling;
       const half = lap();
       if (!half) return;
       if (track.scrollLeft >= half) track.scrollLeft -= half;

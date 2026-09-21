@@ -1279,10 +1279,18 @@ table.board .withdraw:focus-visible,
       rotate 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
       translate 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
   }
-  .rounds-on .challenge-note:has(.challenge-link):hover,
-  .rounds-on .challenge-note:nth-child(2n):has(.challenge-link):hover {
+  /* Only while the track is still. Moving, the sheets pass under a stationary
+     pointer and each takes its swing on the way past, which reads as the row
+     rippling rather than as anything anyone pointed at. The JS sets
+     data-scrolling for as long as that lasts. */
+  .rounds-on__track:not([data-scrolling]) .challenge-note:has(.challenge-link):hover,
+  .rounds-on__track:not([data-scrolling]) .challenge-note:nth-child(2n):has(.challenge-link):hover {
     --fx-shadow-size: var(--shadow-card-max);
     rotate: calc(-1 * var(--rotate-2-5));
     translate: 0 -5px;
   }
+  /* And no animating INTO the rest pose while it moves either: a sheet that
+     was mid-swing when the scroll began would otherwise unwind across the
+     screen. */
+  .rounds-on__track[data-scrolling] .challenge-note { transition: none; }
 }
