@@ -229,11 +229,10 @@ button.link {
    slab under the picture rather than as a lift off the wall. The shadow pair
    keeps the places it earns — the entry note, and its two buttons. */
 /* A frame around the picture, not just a border on it: the charter's offset
-   shadow, in the page's carrying accent rather than the cyan tokens.css
-   assigns to a cabinet. The stage is the loudest thing here and orange is
-   what the rest of the page spends on what matters. */
+   shadow in cyan, which tokens.css assigns to "replay and cabinet shadows" —
+   this stage is both. */
 .stage {
-  --fx-shadow-color: var(--orange);
+  --fx-shadow-color: var(--cyan);
   position: relative;
   overflow: hidden;
   background: var(--deep-ink);
