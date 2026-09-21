@@ -7,8 +7,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  ROUNDS_IN_VIEW, exclusivePick, otherRounds, raceHall, renderEntryPanel, renderEventFacts,
-  renderVoteButton,
+  ROUNDS_IN_VIEW, exclusivePick, lapReseat, otherRounds, raceHall, renderEntryPanel,
+  renderEventFacts, renderVoteButton,
 } from "./race.js";
 
 const event = {
@@ -498,5 +498,32 @@ describe("otherRounds: the way on, under the board", () => {
     // A planned event says so rather than inviting an entry it cannot take.
     expect(cards[3].querySelector(".flyer-leader-name").textContent).toBe("course not built yet");
     expect(cards[4].querySelector(".flyer-leader-name").textContent).toBe("course not built yet");
+  });
+});
+
+describe("lapReseat: keeping a looping track inside its band", () => {
+  const LAP = 1000;
+
+  it("leaves the resting band alone", () => {
+    for (const at of [500, 800, 1000, 1200, 1499]) {
+      expect(lapReseat(at, LAP)).toBe(at);
+    }
+  });
+
+  it("pulls back a lap once it strays past the band", () => {
+    expect(lapReseat(1500, LAP)).toBe(500);
+    expect(lapReseat(1900, LAP)).toBe(900);
+    expect(lapReseat(499, LAP)).toBe(1499);
+    expect(lapReseat(0, LAP)).toBe(1000);
+  });
+
+  it("settles instead of taking turns with itself", () => {
+    // The bug this replaced: wrapping at 0 and at exactly one lap put both
+    // boundaries ON resting positions, so 0 became a lap and a lap became 0,
+    // every 140ms, for ever. Applying the rule twice must be a no-op.
+    for (const at of [0, 499, 500, 1000, 1499, 1500, 1999]) {
+      const once = lapReseat(at, LAP);
+      expect(lapReseat(once, LAP), `${at} did not settle`).toBe(once);
+    }
   });
 });

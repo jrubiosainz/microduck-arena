@@ -330,6 +330,26 @@ export function exclusivePick(boxes, changed) {
   return changed.dataset.pick;
 }
 
+/**
+ * Where a looping track should sit, given where it is and how long a lap is.
+ *
+ * The track holds two copies of the wall and rests one lap in, with a lap of
+ * content either side. Straying past half a lap from that seat is corrected by
+ * a whole lap, onto identical content, so there is nothing to see.
+ *
+ * The band is the point, and it is why this is a function rather than two
+ * lines inside a handler. Wrapping at 0 and at exactly one lap put both
+ * boundaries ON resting positions: 0 became a lap, a lap became 0, and the
+ * two corrections took turns every 140ms for ever — which relit the flag that
+ * suppresses the sheets' hover swing each time round, and read as the card
+ * under the pointer freezing.
+ */
+export function lapReseat(scrollLeft, lap) {
+  if (scrollLeft >= lap * 1.5) return scrollLeft - lap;
+  if (scrollLeft < lap * 0.5) return scrollLeft + lap;
+  return scrollLeft;
+}
+
 /** How many cards the carousel shows at once; the rest scroll into view. */
 export const ROUNDS_IN_VIEW = 4;
 
@@ -382,15 +402,20 @@ export function otherRounds(events, event, boards) {
   // Where the seam is. Read at the moment it is needed rather than kept: the
   // window resizes, a still lands, and the track's width moves with them.
   const lap = () => track.scrollWidth / 2;
+  // The track rests one whole lap in, with a lap of content either side of
+  // it, and is pulled back to that band whenever it strays. The band matters:
+  // wrapping at 0 and at exactly one lap put both boundaries ON resting
+  // positions, so the two corrections took turns for ever — 0 becomes a lap,
+  // a lap becomes 0 — and the flag that suppresses the hover swing was
+  // relit every time round. That is what froze under the pointer.
+  const reseat = () => {
+    const half = lap();
+    if (half) track.scrollLeft = lapReseat(track.scrollLeft, half);
+  };
   // Bring the resting position inside the first copy before an animated
   // scroll, so a smooth step never has to cross the seam while it is running
   // — that is what turns a loop into a lurch.
-  const normalise = (dir) => {
-    const half = lap();
-    if (!half) return;
-    if (dir > 0 && track.scrollLeft >= half) track.scrollLeft -= half;
-    if (dir < 0 && track.scrollLeft < track.clientWidth) track.scrollLeft += half;
-  };
+  const normalise = () => reseat();
   // A drag or a trackpad has no press to hang the correction on, so the seam
   // is crossed after the scrolling settles. Instantly, and onto identical
   // content, so there is nothing to see.
@@ -404,10 +429,7 @@ export function otherRounds(events, event, boards) {
     clearTimeout(settling);
     settling = setTimeout(() => {
       delete track.dataset.scrolling;
-      const half = lap();
-      if (!half) return;
-      if (track.scrollLeft >= half) track.scrollLeft -= half;
-      else if (track.scrollLeft <= 0) track.scrollLeft += half;
+      reseat();
     }, 140);
   }, { passive: true });
 
@@ -422,8 +444,8 @@ export function otherRounds(events, event, boards) {
     button.textContent = glyph;
     // One viewport of cards per press, whatever the window is showing.
     button.addEventListener("click", () => {
+      normalise();
       const dir = way === "on" ? 1 : -1;
-      normalise(dir);
       track.scrollBy({ left: dir * track.clientWidth, behavior: "smooth" });
     });
     return button;
@@ -456,6 +478,12 @@ export async function keepRacing(root, event) {
   const strip = otherRounds(events, event, boards);
   const foot = root.querySelector("footer");
   if (foot) foot.before(strip); else root.append(strip);
+
+  // Seat the track a lap in, now that it has a width. Detached it has none,
+  // which is why this cannot happen while the strip is being built.
+  const track = strip.querySelector(".rounds-on__track");
+  const seat = () => { track.scrollLeft = track.scrollWidth / 2; };
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(seat); else seat();
 
   const stills = await renderThumbnails(others);
   // BOTH the sheet and its copy. The copies are cloned before the stills are

@@ -1183,7 +1183,9 @@ table.board .withdraw:focus-visible,
      cards need has to be padding: the tape sits 12px above its sheet, and
      below there is a 9px offset shadow plus the 5px the sheet lifts on hover.
      Without this the cards came out cropped top and bottom. */
-  padding: 18px 0 22px;
+  /* Sideways too: the last sheet in view casts a 9px shadow to its right and
+     leans, and with no room the track's own edge cut it off. */
+  padding: 18px 14px 22px;
   /* No scrollbar: the arrows either side are the affordance, and the half
      card at the edge says there is more. A bar that comes and goes over the
      cards was the thing being noticed — and on a track that loops it would
