@@ -300,29 +300,17 @@ export async function renderHome(root, state) {
       "Train, submit, compete, repeat.",
     ),
   );
-  // The four colourways, from the product page. The head mark that stood here
-  // said "a duck"; this says "four of them, and one of them could be yours",
-  // which is what the pitch above it is arguing.
+  // The channel under the pitch, where the four colourways used to sit. A
+  // photograph said "here is the robot"; a live feed says "here is one
+  // racing, now", which is the better argument for the paragraph above it.
   const meet = el("div", "door-meet");
-  const squad = document.createElement("img");
-  squad.className = "door-squad";
-  squad.src = "/microduck-squad.webp";
-  squad.alt = "The four Microduck colourways: sky, graphite, cream and lavender.";
-  squad.width = 1839;
-  squad.height = 638;
-  squad.loading = "lazy";
-  meet.append(squad);
+  const frame = liveFrame();
+  meet.append(el("h3", "eyebrow", "The channel"), frame);
   pitch.append(meet);
 
-  // The right-hand column of the band: who is winning, then what is on air.
-  // main put the channel in its own column beside the ladder; the band here
-  // already spends its left column on the pitch, so the two stack in the
-  // right one rather than squeezing the page into three.
   const board = el("div", "door-board");
   const rungs = demoRows(standings);
   board.append(el("h3", "eyebrow", "Season standings"), ladder(rungs));
-  const frame = liveFrame();
-  board.append(el("h3", "eyebrow", "The channel"), frame);
 
   door.append(pitch, board);
   // No rule above it: the band runs flush under the yellow strip, whose own

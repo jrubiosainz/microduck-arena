@@ -318,23 +318,20 @@
   color: var(--ink);
 }
 
-/* The duck and your locker, under the pitch. */
+/* The channel, under the pitch. A column and not a row: the heading names the
+   frame beneath it rather than standing beside it. */
 .door-meet {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-gutter-min);
-  /* Tucked up against the lede: the duck belongs to the pitch, and a chapter
-     gap between them made it read as its own block. */
-  margin-top: 10px;
+  margin-top: var(--space-gutter-max);
 }
-/* Small, under the pitch. The intrinsic width/height on the tag reserves the
-   box before the file lands, so the band does not jump when it does. */
-.door-squad {
-  width: 100%;
-  max-width: 400px;
-  height: auto;
+.door-meet > .eyebrow {
   display: block;
+  margin-bottom: var(--space-gutter-min);
+  font-family: var(--type-card-title-family);
+  font-weight: var(--type-card-title-weight);
+  font-size: min(var(--type-card-title-size), 1.7rem);
+  line-height: var(--type-card-title-line);
+  letter-spacing: var(--type-card-title-tracking);
+  color: var(--ink);
 }
 
 

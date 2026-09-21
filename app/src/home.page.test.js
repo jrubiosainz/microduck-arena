@@ -37,13 +37,11 @@ describe("the whole front page", () => {
     expect(hall[2]).toMatch(/^chapter\b/);
     expect(hall.filter((c) => c.startsWith("chapter-rule"))).toHaveLength(1);
     expect(root.querySelector(".door-board .ladder-scroll")).not.toBeNull();
-    // The squad photo under the pitch, with its box reserved so the band does
-    // not jump when the file lands, and with alt text a screen reader can use.
-    const squad = root.querySelector(".door-meet img.door-squad");
-    expect(squad.getAttribute("src")).toBe("/microduck-squad.webp");
-    expect(squad.getAttribute("width")).toBe("1839");
-    expect(squad.getAttribute("height")).toBe("638");
-    expect(squad.getAttribute("alt")).toMatch(/colourways/);
+    // The channel under the pitch, where the four colourways used to be, and
+    // nowhere else on the page: two stages would poll and draw twice.
+    expect(root.querySelector(".door-meet .season-live-stage")).not.toBeNull();
+    expect(root.querySelectorAll(".season-live")).toHaveLength(1);
+    expect(root.querySelector(".door-squad")).toBeNull();
     expect(root.querySelector(".ladder-scroll")).not.toBeNull();
     expect(root.querySelector(".challenge-note--race")).not.toBeNull();
     // The strip and the footer belong to the pages you can come back FROM.
