@@ -31,8 +31,13 @@ vi.mock("./api.js", () => ({
     return { rows: [{ user: "ann", score: 3.216, seeds_finished: 5 }] };
   },
 }));
-// No WebGL here, which is also what a real browser with it disabled gives.
-vi.mock("./thumbnail.js", () => ({ renderThumbnails: async () => new Map() }));
+// jsdom has no WebGL; the real renderer answers an empty map there too, so
+// the fake answers a still for some events and nothing for others — which is
+// also what a rig that fails to render gives.
+vi.mock("./thumbnail.js", () => ({
+  renderThumbnails: async (events) =>
+    new Map(events.filter((e) => e.status === "open").map((e) => [e.id, `data:,${e.id}`])),
+}));
 
 const { keepRacing } = await import("./race.js");
 
@@ -63,5 +68,22 @@ describe("keepRacing", () => {
     const root = document.createElement("div");
     await keepRacing(root, PROGRAMME[0]);
     expect(root.querySelector(".rounds-on")).not.toBeNull();
+  });
+});
+
+describe("the stills reach the copies too", () => {
+  it("fills a sheet and its clone, so every lap of the carousel is drawn", async () => {
+    // The copies are cloned before the stills render — the track needs its
+    // full width to know where its seam is — so a still applied only to the
+    // originals leaves every second lap showing dark frames for ever.
+    const root = document.createElement("div");
+    await keepRacing(root, PROGRAMME[0]);
+    const src = (sel) => [...root.querySelectorAll(sel)].map((f) => f.querySelector("img")?.src);
+    const originals = src(".challenge-note:not([data-copy]) .challenge-art");
+    const copies = src(".challenge-note[data-copy] .challenge-art");
+    expect(originals).toEqual(copies);
+    // The open ones got one; the planned one has no still and stays dark.
+    expect(originals.filter(Boolean)).toHaveLength(3);
+    expect(originals).toContain("data:,roller-sprint-2m");
   });
 });

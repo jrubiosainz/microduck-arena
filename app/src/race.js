@@ -452,13 +452,23 @@ export async function keepRacing(root, event) {
   if (foot) foot.before(strip); else root.append(strip);
 
   const stills = await renderThumbnails(others);
+  // BOTH the sheet and its copy. The copies are cloned before the stills are
+  // rendered — they have to be, the track needs its full width to know where
+  // its seam is — so a still applied only to the originals leaves every
+  // second lap of the carousel showing dark frames for ever.
+  const frames = (selector) => [...strip.querySelectorAll(selector)];
+  const originals = frames(".challenge-note:not([data-copy]) .challenge-art");
+  const copies = frames(".challenge-note[data-copy] .challenge-art");
   others.forEach((e, i) => {
     const url = stills.get(e.id);
     if (!url) return; // no WebGL, or this rig failed — the frame stays dark
-    const img = document.createElement("img");
-    img.src = url;
-    img.alt = "";
-    strip.querySelectorAll(".challenge-art")[i].replaceChildren(img);
+    for (const frame of [originals[i], copies[i]]) {
+      if (!frame) continue;
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "";
+      frame.replaceChildren(img);
+    }
   });
 }
 
