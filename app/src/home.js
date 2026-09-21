@@ -199,11 +199,17 @@ export function flockBand() {
   return band;
 }
 
-/** A slanted rule between chapters, tilting the other way each time. */
-export function chapterRule(index) {
-  const rule = el("div", `chapter-rule chapter-rule--${index % 2 ? "right" : "left"}`);
-  rule.setAttribute("aria-hidden", "true");
-  return rule;
+/**
+ * The chequer between chapters: orange on beige, the finish line.
+ *
+ * It replaces a plain ink rule. A line divides two things; a chequered band
+ * says which kind of place this is, and it is the same device the race page
+ * lays over its strip of other rounds, so the two read as one site.
+ */
+export function chapterChecker() {
+  const band = el("div", "chapter-checker");
+  band.setAttribute("aria-hidden", "true");
+  return band;
 }
 
 /** The channel's frame beside the ladder: the stage the player mounts in, and
@@ -278,7 +284,7 @@ export async function renderHome(root, state) {
   const flyers = events.map((event, i) => flyer(event, boards[i].rows));
   wall.append(...flyers);
   rounds.append(el("h3", "eyebrow", "Pick your round"), wall);
-  hall.append(chapterRule(0), rounds);
+  hall.append(chapterChecker(), rounds);
 
   // After the wall is on screen: the stills replace the dark frames as they
   // arrive, rather than holding the whole page for WebGL and a 1.3 MB GLB.

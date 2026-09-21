@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { flyer } from "./flyer.js";
 import {
-  chapterRule, demoAsked, demoRows, flockBand, ladder, liveFrame, masthead, pageTexture, playerCard,
+  chapterChecker, demoAsked, demoRows, flockBand, ladder, liveFrame, masthead, pageTexture,
+  playerCard,
 } from "./home.js";
 
 const open = {
@@ -78,11 +79,10 @@ describe("the first chapter's band", () => {
       .toMatch(/margin-left\s*:\s*calc\(50% - 50vw\)/);
     expect(door[1], ".door carries no ground for the grain to sit on")
       .toMatch(/background-color\s*:/);
-    // The band's edges must be cut to the same 1° the rules are rotated by,
-    // or it reads as a rectangle wedged between two tilted sticks.
-    expect(door[1], ".door's edges are square while the rules are tilted")
-      .toMatch(/clip-path\s*:\s*polygon/);
-    expect(door[1], ".door has no slant to cut its edges by").toMatch(/--slant\s*:/);
+    // The dot layer reaches past the band on every side, and the clip-path
+    // that used to trim it went with the slanted bottom edge.
+    expect(door[1], "the dot layer's corners are not kept off the page")
+      .toMatch(/overflow\s*:\s*hidden/);
 
     // The dot field, as pollen-robotics.com/microduck draws it. Each of these
     // is a thing that was asked for by name and that a later tidy-up would
@@ -143,19 +143,24 @@ describe("the page texture", () => {
   });
 });
 
-describe("the chapter rules", () => {
-  it("run the full width of the window, not the content column", () => {
-    // A bar that stops at the column reads as an underline on the text rather
-    // than as a division of the page. CSS-only, so read the sheet.
+describe("the chapter chequer", () => {
+  it("runs the full width of the window, in orange on beige", () => {
+    // A band that stops at the column reads as an underline on the text
+    // rather than as a division of the page. And the gradient must stay a
+    // repeating PATTERN — a colour ramp is what the charter forbids.
     const css = readFileSync(
       resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
       "utf8",
     );
-    const rule = css.match(/\.chapter-rule\s*\{([^}]*)\}/);
-    expect(rule, ".chapter-rule rule not found in club.css").not.toBeNull();
-    expect(rule[1], ".chapter-rule does not span the viewport").toMatch(/width\s*:\s*100vw/);
-    expect(rule[1], ".chapter-rule does not break out of the column")
+    const band = css.match(/\.chapter-checker\s*\{([^}]*)\}/);
+    expect(band, ".chapter-checker rule not found in club.css").not.toBeNull();
+    expect(band[1], "the chequer does not span the viewport").toMatch(/width\s*:\s*100vw/);
+    expect(band[1], "the chequer does not break out of the column")
       .toMatch(/margin-left\s*:\s*calc\(50% - 50vw\)/);
+    expect(band[1], "the chequer is not beige under its squares")
+      .toMatch(/background-color\s*:\s*var\(--warm-paper\)/);
+    expect(band[1], "the squares are not orange").toMatch(/var\(--orange\)/);
+    expect(band[1], "the squares do not repeat on a grid").toMatch(/background-size\s*:/);
   });
 });
 
@@ -531,16 +536,10 @@ describe("the duck's motion", () => {
   });
 });
 
-describe("the chapter rules", () => {
-  it("alternates the sense of the tilt from one rule to the next", () => {
-    // The charter: "réunir le sens des rotations d'un élément au suivant".
-    expect(chapterRule(0).className).toContain("chapter-rule--left");
-    expect(chapterRule(1).className).toContain("chapter-rule--right");
-    expect(chapterRule(2).className).toContain("chapter-rule--left");
-  });
-
-  it("is decorative, so a screen reader does not announce a line", () => {
-    expect(chapterRule(0).getAttribute("aria-hidden")).toBe("true");
+describe("the chapter chequer, as an element", () => {
+  it("is decorative, so a screen reader does not announce a band of squares", () => {
+    expect(chapterChecker().className).toBe("chapter-checker");
+    expect(chapterChecker().getAttribute("aria-hidden")).toBe("true");
   });
 });
 

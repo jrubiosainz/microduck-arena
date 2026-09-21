@@ -28,14 +28,13 @@ describe("the whole front page", () => {
 
     expect(root.querySelector(".masthead .wordmark--cover")).not.toBeNull();
     expect(root.querySelector(".flock-band")).not.toBeNull();
-    // The band, then the rule, then the wall — in that order. A count alone
-    // would not see the rule drift above the band, where it would put a
-    // stripe of bare paper under the yellow strip.
+    // The band, then the chequer, then the wall — in that order. A count
+    // alone would not see the chequer drift above the band, where it would
+    // put a stripe of bare paper under the yellow strip.
     const hall = [...root.querySelector(".hall").children].map((n) => n.className);
     expect(hall[0]).toMatch(/^door\b/);
-    expect(hall[1]).toMatch(/^chapter-rule/);
+    expect(hall[1]).toBe("chapter-checker");
     expect(hall[2]).toMatch(/^chapter\b/);
-    expect(hall.filter((c) => c.startsWith("chapter-rule"))).toHaveLength(1);
     expect(root.querySelector(".door-board .ladder-scroll")).not.toBeNull();
     // The channel under the pitch, where the four colourways used to be, and
     // nowhere else on the page: two stages would poll and draw twice.
