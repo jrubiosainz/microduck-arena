@@ -188,6 +188,12 @@ describe("the chapter chequer", () => {
     const stripes = css.match(/\.chapter--wall::after \{([^}]*)\}/);
     expect(stripes[1], "the stripes stop short of the chequer's raised end")
       .toMatch(/top:\s*calc\(-1 \* \(var\(--space-title-to-grid-max\) \+ 0\.5 \* var\(--slant\)\)\)/);
+    // And their top edge leans too. Raising a horizontal edge to meet the end
+    // that lifts only pushes it over the end that dips, and the stripes spill
+    // onto the warm paper there. Both edges have to be parallel to the
+    // chequer, not merely offset from it.
+    expect(stripes[1], "the stripes' top edge is square under a leaning chequer")
+      .toMatch(/clip-path:\s*polygon\(0 var\(--slant\), 100% 0/);
     const band = css.match(/\.chapter-checker\s*\{([^}]*)\}/);
     expect(band[1], "the chequer does not lean, so the cut would be wrong")
       .toMatch(/rotate:\s*calc\(-1 \* var\(--rotate-1-0\)\)/);

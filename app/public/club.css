@@ -514,6 +514,15 @@
      sheet and the foot of the page. */
   top: calc(-1 * (var(--space-title-to-grid-max) + 0.5 * var(--slant)));
   bottom: calc(-1 * (var(--space-chapter-bottom-min) + var(--space-gutter-max)));
+  /* And the top edge LEANS, parallel to the chequer above it — the same fix
+     the band's bottom needed, for the same reason and in the other direction.
+     Raising a horizontal edge to meet the end that lifts only pushed it over
+     the end that dips, and the stripes spilled onto the warm paper on the
+     left. The box is already half a slant high; the polygon takes a full
+     slant back at its left corner, so the cut runs from half a slant below
+     the box on the left to the box itself on the right — which is exactly
+     where the chequer's lower edge is at each end. */
+  clip-path: polygon(0 var(--slant), 100% 0, 100% 100%, 0 100%);
 }
 
 .cabinets {
