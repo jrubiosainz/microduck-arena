@@ -180,7 +180,14 @@ describe("the chapter chequer", () => {
     const door = css.match(/\n\.door \{([^}]*)\}/);
     expect(door[1], "the band's bottom edge is square under a leaning chequer")
       .toMatch(/clip-path:\s*polygon/);
-    expect(door[1], "the band has no slant to cut its edge by").toMatch(/--slant:/);
+    expect(css, "the slant is not declared where both sides can read it")
+      .toMatch(/\.hall \{[^}]*--slant:/);
+    // And the stripes below have to overshoot the chequer's box by the same
+    // measure: at the end that lifts, its lower edge is half a slant above
+    // that box, and stripes starting at the box left a white gap under it.
+    const stripes = css.match(/\.chapter--wall::after \{([^}]*)\}/);
+    expect(stripes[1], "the stripes stop short of the chequer's raised end")
+      .toMatch(/top:\s*calc\(-1 \* \(var\(--space-title-to-grid-max\) \+ 0\.5 \* var\(--slant\)\)\)/);
     const band = css.match(/\.chapter-checker\s*\{([^}]*)\}/);
     expect(band[1], "the chequer does not lean, so the cut would be wrong")
       .toMatch(/rotate:\s*calc\(-1 \* var\(--rotate-1-0\)\)/);

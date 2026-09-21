@@ -19,6 +19,14 @@
   --fx-grain-opacity: var(--grain-opacity-min);
 }
 
+/* The rise of a 1° line across the window — tan(1°) = 0.01746 — which is what
+   the chequer leans by, and so what everything meeting it is measured against.
+   On the column, because the band above the chequer and the chapter below it
+   both have to read the same figure: a horizontal edge against a leaning band
+   shows bare paper beneath whichever end lifts, and no amount of moving either
+   one fixes that — the edges have to be parallel, or reach past each other. */
+.hall { --slant: calc(100vw * 0.01746); }
+
 .ladder-row:focus-visible, .challenge-link:focus-visible,
 .profile-results a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 
@@ -234,12 +242,6 @@
   gap: var(--space-title-to-grid-max);
   width: 100vw;
   margin-left: calc(50% - 50vw);
-  /* The rise of a 1° line across the window — tan(1°) = 0.01746 — which is
-     what the chequer below leans by, and so what this band's bottom edge is
-     cut to. A horizontal edge under a leaning band shows warm paper beneath
-     the end that lifts, and no amount of moving either one fixes that: the
-     two edges have to be parallel. */
-  --slant: calc(100vw * 0.01746);
   /* Flush under the yellow strip — cancelling the hall's own top padding —
      so no stripe of bare paper sits between the two. Half the rise at the
      bottom, so the cut edge meets the chequer rather than leaving a wedge. */
@@ -510,7 +512,7 @@
      leaves above the chapter; down by the chapter's closing space plus the
      hall's own bottom padding, which together are everything between the last
      sheet and the foot of the page. */
-  top: calc(-1 * var(--space-title-to-grid-max));
+  top: calc(-1 * (var(--space-title-to-grid-max) + 0.5 * var(--slant)));
   bottom: calc(-1 * (var(--space-chapter-bottom-min) + var(--space-gutter-max)));
 }
 
