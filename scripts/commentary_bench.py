@@ -146,7 +146,8 @@ def landing(lines) -> Counter:
 
 
 def judge(provider, one: dict, characters: dict) -> dict:
-    """One dialogue read by a model, after the fact: a verdict with its reasons."""
+    """One dialogue read by a model, after the fact: a verdict with its reasons,
+    or ValueError when the answer is not JSON, or not the shape asked for."""
     brief = one["dialogue"]["brief"]
     shown = {"facts": brief["facts"], "direction": brief["direction"],
              "dialogue": one["dialogue"]["turns"]}
@@ -159,7 +160,25 @@ def judge(provider, one: dict, characters: dict) -> dict:
     content = (answer["content"] or "").strip()
     if content.startswith("```"):  # a code fence is dressing, not an answer
         content = content.partition("\n")[2].rpartition("```")[0]
-    return json.loads(content)
+    verdict = json.loads(content)
+    # A model that slips on a key must cost its own verdict, not the report
+    # after every call is paid: the shape is checked here, in full, once.
+    if not isinstance(verdict, dict) or set(verdict) != {
+            "grounded", "english", "personalities", "scene", "followed"}:
+        raise ValueError("verdict must have exactly grounded, english, personalities, "
+                          "scene, followed")
+    for criterion in ("grounded", "english", "personalities"):
+        entry = verdict[criterion]
+        if not isinstance(entry, dict) or set(entry) != {"ok", "turn", "why"}:
+            raise ValueError(f"{criterion} must have exactly ok, turn, why")
+        if type(entry["ok"]) is not bool:
+            raise ValueError(f"{criterion}['ok'] must be a boolean")
+    if verdict["scene"] not in SCENES:
+        raise ValueError(f"scene must be one of {sorted(SCENES)}")
+    followed = verdict["followed"]
+    if not isinstance(followed, dict) or any(type(v) is not bool for v in followed.values()):
+        raise ValueError("followed must be an object of booleans")
+    return verdict
 
 
 def mechanic(verdicts: list[dict]) -> list[str]:

@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from tests.loading import load_script
 
 bench = load_script("commentary_bench")
@@ -98,6 +100,23 @@ def test_the_judge_is_shown_the_brief_and_the_dialogue_and_answers_in_json():
     assert shown == {"facts": one["dialogue"]["brief"]["facts"],
                      "direction": {"turns": 3, "opening": "Peter opens mid-thought."},
                      "dialogue": one["dialogue"]["turns"]}
+
+
+@pytest.mark.parametrize("broken", [
+    {k: v for k, v in VERDICT.items() if k != "scene"},
+    {**VERDICT, "extra": "unasked"},
+    {**VERDICT, "personalities": {"ok": False, "why": "Ray recites the board."}},
+    {**VERDICT, "grounded": {"ok": "true", "turn": None, "why": ""}},
+    {**VERDICT, "scene": "no-such-scene"},
+    {**VERDICT, "followed": {"opening": "yes"}},
+    ["not", "an", "object"],
+])
+def test_a_verdict_that_is_not_the_shape_asked_for_costs_itself(broken):
+    def provider(messages, max_tokens):
+        return {"content": json.dumps(broken)}
+
+    with pytest.raises(ValueError):
+        bench.judge(provider, aired("Well."), {})
 
 
 def test_the_mechanic_gives_rates_reasons_scenes_and_adherence():
