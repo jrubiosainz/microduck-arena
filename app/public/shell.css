@@ -93,17 +93,6 @@ body {
 /* When it receives points it jolts as the CRT does, not as a cell does. */
 .profile-chip.jolt { --impact-distance: var(--impact-verdict); }
 
-/* A result its author has not opened yet: the club's hot colour, on the corner. */
-.profile-chip.unread::after {
-  content: "";
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 12px;
-  height: 12px;
-  background: var(--magenta);
-  border: 2px solid var(--paper);
-}
 .wordmark a:focus-visible, .profile-chip:focus-visible {
   outline: 3px solid var(--cyan);
   outline-offset: 3px;
