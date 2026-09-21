@@ -428,6 +428,9 @@
   cursor: pointer;
 }
 
+/* Orange, the carrying accent, for the one figure on a page a reader is
+   actually looking for. Ink on it, as every sticker but the magenta. */
+.sticker-orange { background: var(--orange); }
 .sticker-lavender { background: var(--lavender); }
 .sticker-cyan { background: var(--cyan); }
 .sticker-lime { background: var(--lime); }

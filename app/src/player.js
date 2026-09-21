@@ -76,11 +76,15 @@ export function profile(player, me = null) {
   words.append(el("p", "eyebrow", "Player"), el("h2", "marquee-title", player.user));
   header.append(duck, words);
 
+  // Top right of the header, not under it: they are the two figures a reader
+  // comes to this page for, and a line of their own pushed them below the
+  // name that is only their label.
   const summary = el("div", "profile-summary");
   summary.append(
-    el("span", "sticker sticker-lime", `✦ ${player.points} points`),
-    el("span", "sticker sticker-cyan", player.rank == null ? "#—" : `#${player.rank}`),
+    el("span", "sticker", `✦ ${player.points} points`),
+    el("span", "sticker sticker-orange", player.rank == null ? "#—" : `#${player.rank}`),
   );
+  header.append(summary);
 
   // One fold per event, best standing first. The event's name and where this
   // player stands on it are on the outside; the policies are behind the fold,
@@ -103,7 +107,7 @@ export function profile(player, me = null) {
     rounds.append(fold);
   });
 
-  box.append(header, summary, el("h3", "eyebrow", "Rounds entered"), rounds);
+  box.append(header, el("h3", "eyebrow", "Rounds entered"), rounds);
   return box;
 }
 
@@ -148,7 +152,7 @@ export function noProfile(user) {
 export async function renderPlayer(root, user) {
   const [player, me] = await Promise.all([getPlayer(user), getMe()]);
   root.replaceChildren(signage(me));
-  const hall = el("main", "hall");
+  const hall = el("main", "hall hall--warm");
   hall.append(player ? profile(player, me) : noProfile(user));
   root.append(hall, footer());
 }

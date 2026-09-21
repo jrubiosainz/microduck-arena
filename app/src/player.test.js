@@ -25,8 +25,16 @@ describe("a player's profile", () => {
       .toBe("https://huggingface.co/api/avatars/ann");
     expect(el.querySelector("h2").textContent).toBe("ann");
     expect(el.querySelector(".eyebrow").textContent).toBe("Player");
-    const stickers = [...el.querySelectorAll(".profile-summary .sticker")].map((s) => s.textContent);
-    expect(stickers).toEqual(["✦ 655 points", "#1"]);
+    // In the header's own row, top right — the two figures this page is read
+    // for, not a line of their own under the name that only labels them.
+    const summary = el.querySelector(".profile-header > .profile-summary");
+    expect(summary, "the figures are not in the header").not.toBeNull();
+    const stickers = [...summary.querySelectorAll(".sticker")];
+    expect(stickers.map((s) => s.textContent)).toEqual(["✦ 655 points", "#1"]);
+    // The standing takes the page's carrying accent; the points the charter's
+    // default yellow. Neither is lime or cyan, which name a pass and a signal.
+    expect(stickers[1].className).toContain("sticker-orange");
+    expect(stickers[0].className).toBe("sticker");
   });
 
   it("folds the publications under the round they were published on", () => {

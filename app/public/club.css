@@ -662,8 +662,25 @@
 
 /* ── Profile: a paper scrapbook ────────────────────────────────────────────── */
 
+/* The player's page stands on warm paper, not the hall's lighter ground: it
+   is one long sheet of results and the beige is what the rest of the site
+   uses for a surface things are laid ON. Fixed and behind, so it covers the
+   window however far the page scrolls. */
+.hall--warm::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--warm-paper);
+}
+
 .profile { max-width: 1100px; margin-inline: auto; }
-.profile-header { display: flex; align-items: center; gap: clamp(1rem, 4vw, 3rem); }
+.profile-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(1rem, 4vw, 3rem);
+}
 .profile-header > div { min-width: 0; flex: 1; }
 .profile-header .marquee-title { margin: 0; overflow-wrap: anywhere; }
 .profile-duck {
@@ -680,7 +697,15 @@
 }
 .profile-duck .avatar { width: 100%; height: 100%; border: 0; font-size: inherit; }
 
-.profile-summary { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-block: 1.5rem; }
+/* Pushed to the far end of the header's row, and wrapping under the name on a
+   narrow window rather than squeezing it. */
+.profile-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  margin-left: auto;
+}
 .profile-summary .sticker { font-size: clamp(1.1rem, 3vw, 1.8rem); cursor: default; }
 .profile-summary .sticker:active {
   translate: none;
@@ -696,6 +721,8 @@
   --fx-shadow-color: var(--ink);
   --fx-shadow-size: var(--shadow-card-min);
   border: 3px solid var(--ink);
+  /* The lighter paper, against the beige the page now stands on: a sheet laid
+     on a surface, which is the whole figure this page is built from. */
   background: var(--paper);
   box-shadow: var(--shadow-card-min) var(--shadow-card-min) var(--shadow-blur) var(--ink);
 }
@@ -715,7 +742,7 @@
   color: var(--ink-70);
 }
 .profile-round[open] > summary::after { content: "\25B4"; }
-.profile-round > summary:hover { background: var(--warm-paper); }
+.profile-round > summary:hover { background: var(--cream); }
 .profile-round > summary:focus-visible { outline: 3px solid var(--cyan); outline-offset: -3px; }
 
 .profile-round__name {
