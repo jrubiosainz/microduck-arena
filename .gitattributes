@@ -35,6 +35,9 @@ saved_model/**/* filter=lfs diff=lfs merge=lfs -text
 *tfevents* filter=lfs diff=lfs merge=lfs -text
 app/public/robot/meshes/roller_blade.stl filter=lfs diff=lfs merge=lfs -text
 app/public/robot/microduck.glb filter=lfs diff=lfs merge=lfs -text
+app/public/sound/commentator-peter.f32 filter=lfs diff=lfs merge=lfs -text
+app/public/sound/commentator-ray.f32 filter=lfs diff=lfs merge=lfs -text
+app/public/sound/microduck-victory.wav filter=lfs diff=lfs merge=lfs -text
 arena/assets/robot/legs/assets/bottom_head_shell.stl filter=lfs diff=lfs merge=lfs -text
 arena/assets/robot/legs/assets/elec_rpi_robot_hat_pcb.stl filter=lfs diff=lfs merge=lfs -text
 arena/assets/robot/legs/assets/face_part.stl filter=lfs diff=lfs merge=lfs -text

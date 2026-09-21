@@ -14,6 +14,7 @@ target; the history lives in this repo.
 """
 
 import argparse
+import fnmatch
 import subprocess
 import sys
 from pathlib import Path
@@ -56,6 +57,21 @@ def git_revision() -> str:
         return "unknown"
 
 
+def served_as_pointers(kept_in_lfs: list[str], attributes: str) -> list[str]:
+    """The files the Space would serve as 131-byte LFS pointers instead of themselves.
+
+    The Hub decides by itself to keep a large binary in LFS, whatever this
+    repository does with it; the Space's build only turns a pointer back into its
+    file where .gitattributes says LFS. A file on the first list and not under the
+    second is checked out as its pointer, silently: the commentators' voices went
+    out that way, and the booth's sound never opened.
+    """
+    rules = [line.split()[0] for line in attributes.splitlines() if "filter=lfs" in line.split()]
+    return [path for path in kept_in_lfs
+            if not any(fnmatch.fnmatch(path if "/" in rule else Path(path).name, rule)
+                       for rule in rules)]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--space", default=SPACE)
@@ -93,6 +109,20 @@ def main() -> int:
     )
     print(f"\n  https://huggingface.co/spaces/{args.space}")
     print("  the Space rebuilds itself now; watch its Logs tab")
+    kept_in_lfs = [entry.path for entry in api.list_repo_tree(args.space, repo_type="space",
+                                                              recursive=True)
+                   if getattr(entry, "lfs", None)]
+    pointers = served_as_pointers(kept_in_lfs, (ROOT / ".gitattributes").read_text())
+    if pointers:
+        # The upload has happened; what is left is to make it loud, so the deploy
+        # goes red instead of a page failing quietly a week later.
+        print("\nerror: the Hub keeps these in LFS and .gitattributes has no LFS rule for them,"
+              "\nso the Space serves their pointers, not the files:", file=sys.stderr)
+        for path in pointers:
+            print(f"  {path}", file=sys.stderr)
+        print("give each one a rule in .gitattributes, as microduck.glb has, and"
+              " `git add --renormalize` it", file=sys.stderr)
+        return 1
     return 0
 
 
