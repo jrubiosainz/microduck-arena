@@ -131,6 +131,7 @@ def test_commentary_dry_run_prints_facts_memories_and_the_dialogue(tmp_path, cap
     assert main(["commentary", record.run_id, "--store", str(tmp_path), "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "[0] The event is the 2 m Sprint" in out
+    assert "This dialogue: " in out
     assert "Peter Duckry: 12.40 s for alice, Ray!" in out
     assert "Ray Quackson: 12.40 s, every seed finished, Peter." in out
     assert "fake/model" in out

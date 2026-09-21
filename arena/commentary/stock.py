@@ -72,9 +72,10 @@ class CommentaryStock:
         try:
             written = self.compose(run_id)
             plan = self.tab.prepare({"run_id": run_id, "turns": written["turns"]})
-            self.book.put(run_id, {"turns": written["turns"], "lore_refs": written["lore_refs"]},
-                          plan, self.clock())
+            self.book.put(run_id, {"turns": written["turns"], "lore_refs": written["lore_refs"],
+                                   "brief": written["brief"]}, plan, self.clock())
             put = True
+            self.log(f"commentary: {run_id} written")
             self.landed()
         except Rejected as why:
             # About one in ten is refused on the real router. It is the local

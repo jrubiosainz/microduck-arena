@@ -28,7 +28,8 @@ class FakeTab:
 
 def written(run_id):
     return {"run_id": run_id, "turns": [{"speaker": "peter", "text": "Well.", "fact_refs": []}],
-            "lore_refs": [], "model": "m", "usage": {}, "facts": []}
+            "lore_refs": [], "model": "m", "usage": {},
+            "brief": {"facts": [], "direction": {}, "model": "m"}}
 
 
 def stock(tmp_path, pool_entries, compose, *, keep=20, **kw):
@@ -62,6 +63,16 @@ def test_a_turn_writes_a_broadcast_for_the_run_that_needs_one(tmp_path):
     assert waiting is not None
     assert waiting.plan == PLAN
     assert waiting.dialogue["turns"][0]["text"] == "Well."
+    assert waiting.dialogue["brief"] == {"facts": [], "direction": {}, "model": "m"}
+
+
+def test_a_landed_dialogue_is_logged_as_a_refused_one_is(tmp_path):
+    said = []
+    worker = CommentaryStock(
+        book=BroadcastBook(tmp_path), tab=FakeTab(), compose=written,
+        pool=lambda: entries("a"), log=said.append, clock=lambda: "2026-09-18T09:00:00Z")
+    assert worker.turn() == "a"
+    assert said == ["commentary: a written"]
 
 
 def test_a_refusal_costs_a_turn_and_no_broadcast(tmp_path):

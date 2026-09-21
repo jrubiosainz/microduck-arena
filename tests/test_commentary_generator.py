@@ -7,10 +7,12 @@ import pytest
 
 from arena.commentary.context import Fact
 from arena.commentary.generator import (
+    DIMENSIONS,
     ROUTER,
     WRITE_LIMIT,
     Rejected,
     complete,
+    directed,
     direction,
     write,
 )
@@ -65,7 +67,7 @@ def provider_for(*answers):
 
 def run_case(turns=TURNS, facts=FACTS):
     provider = provider_for(reply(turns))
-    return write("R1", facts, lore=LORE, provider=provider, model="fake/model"), provider
+    return write(facts, direction("R1"), lore=LORE, provider=provider, model="fake/model"), provider
 
 
 def test_a_checked_dialogue_keeps_the_prose_and_maps_indices_to_references():
@@ -103,10 +105,14 @@ def test_the_writing_prompt_shape_example_shows_three_turns():
 def test_a_run_draws_its_own_direction_and_always_the_same_one():
     # Left to itself the writer gives every dialogue the same shape; the run's
     # id picks the opening, the angle, the joke, the ending and the length.
-    assert direction("R1") == direction("R1")
-    assert len({direction(f"R{i}") for i in range(50)}) > 25
+    drawn = direction("R1")
+    assert drawn == direction("R1")
+    assert set(drawn) == {"turns", *DIMENSIONS}
+    assert all(drawn[name] in options for name, options in DIMENSIONS.items())
+    assert len({directed(direction(f"R{i}")) for i in range(50)}) > 25
     _, provider = run_case()
-    assert direction("R1") in provider.calls[0][0][0]["content"]
+    assert directed(drawn) in provider.calls[0][0][0]["content"]
+    assert directed(drawn).startswith(f"This dialogue: {drawn['turns']} turns. ")
 
 
 def test_the_writer_is_told_every_fact_that_grounds_a_handle():
@@ -120,7 +126,7 @@ def test_the_writer_is_told_every_fact_that_grounds_a_handle():
 def test_a_code_fence_around_the_answer_is_dressing():
     fenced = "```json\n" + json.dumps(TURNS) + "\n```"
     provider = provider_for(reply(TURNS, content=fenced))
-    written = write("R1", FACTS, lore=LORE, provider=provider, model="m")
+    written = write(FACTS, direction("R1"), lore=LORE, provider=provider, model="m")
     assert [t["text"] for t in written["turns"]] == [t["text"] for t in TURNS]
 
 
@@ -170,7 +176,7 @@ def test_a_player_at_the_line_or_in_the_lead_is_not_placed_in_the_booth():
 def test_an_invalid_provider_answer_is_rejected(changes):
     provider = provider_for(reply(TURNS, **changes))
     with pytest.raises(Rejected):
-        write("R1", FACTS, lore=LORE, provider=provider, model="m")
+        write(FACTS, direction("R1"), lore=LORE, provider=provider, model="m")
 
 
 def test_a_name_spoken_in_a_facts_own_text_is_grounded_by_that_fact_alone():

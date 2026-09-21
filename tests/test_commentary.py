@@ -6,6 +6,7 @@ import pytest
 
 from arena.broadcasts import BroadcastBook
 from arena.commentary import (
+    briefing,
     compose,
     find_run,
     gather,
@@ -77,7 +78,7 @@ def test_gather_puts_results_notables_memories_and_recent_runs_in_one_citable_li
     assert all(f.ref.startswith("lore:") for f in facts if f.kind == "lore")
 
 
-def test_compose_writes_with_a_provider_and_carries_the_facts(tmp_path):
+def test_compose_writes_with_a_provider_and_carries_its_brief(tmp_path):
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R1")
     store = stored(tmp_path, mine)
     book = BroadcastBook(tmp_path)
@@ -95,8 +96,11 @@ def test_compose_writes_with_a_provider_and_carries_the_facts(tmp_path):
     assert written["run_id"] == "R1"
     assert [t["speaker"] for t in written["turns"]] == ["peter", "ray", "peter"]
     assert written["turns"][0]["fact_refs"] == ["run#/participant", "run#/result"]
-    assert {f["ref"] for f in written["facts"]} >= {"run#/event", "run#/participant", "run#/result"}
-    assert all(set(f) == {"ref", "kind", "text"} for f in written["facts"])
+    facts, drawn = briefing(store, "R1", lore=LORE, book=book)
+    assert written["brief"] == {
+        "facts": [{"ref": f.ref, "kind": f.kind, "text": f.text} for f in facts],
+        "direction": drawn, "model": "m"}
+    assert "facts" not in written
 
 
 def test_compose_raises_rejected_and_find_run_raises_lookup(tmp_path):

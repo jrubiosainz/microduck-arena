@@ -145,6 +145,8 @@ PLAYERS = (
     "No handle in this one: the duck carries it.",
 )
 LENGTHS = (3, 4, 4, 5, 5, 6)
+DIMENSIONS = {"opening": OPENINGS, "angle": ANGLES, "joke": JOKES, "ending": ENDINGS,
+              "callback": CALLBACKS, "player": PLAYERS}
 NUMBERS = re.compile(r"[-+]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][-+]?[0-9]+)?")
 NUMBER_WORDS = re.compile(
     r"\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|"
@@ -191,13 +193,18 @@ def complete(messages: list[dict], max_tokens: int, *, model: str, token: str,
             "completion_tokens": answer["usage"]["completion_tokens"]}
 
 
-def direction(run_id: str) -> str:
-    """The shape of one run's dialogue: the same run always draws the same one."""
+def direction(run_id: str) -> dict:
+    """The shape of one run's dialogue, as data: the same run always draws the same one."""
     draw = hashlib.sha256(run_id.encode()).digest()
-    parts = [options[draw[i] % len(options)]
-             for i, options in enumerate((OPENINGS, ANGLES, JOKES, ENDINGS, CALLBACKS,
-                                          PLAYERS))]
-    return f"This dialogue: {LENGTHS[draw[6] % len(LENGTHS)]} turns. " + " ".join(parts) + " "
+    drawn = {name: options[draw[i] % len(options)]
+             for i, (name, options) in enumerate(DIMENSIONS.items())}
+    return {"turns": LENGTHS[draw[len(DIMENSIONS)] % len(LENGTHS)], **drawn}
+
+
+def directed(drawn: dict) -> str:
+    """A direction as the prompt says it."""
+    return (f"This dialogue: {drawn['turns']} turns. "
+            + " ".join(drawn[name] for name in DIMENSIONS) + " ")
 
 
 def words(text: str) -> set[str]:
@@ -249,7 +256,7 @@ def _ask(provider, system: str, user: dict, max_tokens: int) -> tuple:
         raise Rejected("model answer is not JSON") from exc
 
 
-def write(run_id: str, facts: list[Fact], *, lore: Lore, provider, model: str) -> dict:
+def write(facts: list[Fact], drawn: dict, *, lore: Lore, provider, model: str) -> dict:
     """Facts in, a checked dialogue out, or Rejected with the reason."""
     names = {name for fact in facts for name in fact.identities}
     establishes = _establishing_facts(facts, names)
@@ -257,7 +264,7 @@ def write(run_id: str, facts: list[Fact], *, lore: Lore, provider, model: str) -
     characters = {speaker: {"name": sheet["name"], "sheet": sheet["sheet"]}
                   for speaker, sheet in lore.characters.items()}
     characters_json = json.dumps(characters, separators=(",", ":"), ensure_ascii=False)
-    system = (STYLE + GROUNDING + BOOTH_CONTEXT + direction(run_id) + "Characters: "
+    system = (STYLE + GROUNDING + BOOTH_CONTEXT + directed(drawn) + "Characters: "
               + characters_json
               + " Identity indices, one of them cited by every turn that speaks the handle: "
               + json.dumps({"@" + name: sorted(indices)
