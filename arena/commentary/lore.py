@@ -1,4 +1,4 @@
-"""The commentators' bible: who they are, and what they remember.
+"""The commentators' bible: who they are, the scenes they can play, and what they remember.
 
 Editorial fiction lives here and only here. The owner edits the JSON; this
 module checks it at load and picks, for one run, the few memories that could
@@ -27,6 +27,7 @@ class Memory:
 @dataclass(frozen=True)
 class Lore:
     characters: dict[str, dict]
+    scenes: tuple[str, ...]
     memories: tuple[Memory, ...]
 
 
@@ -42,6 +43,15 @@ def load(path: Path = LORE_PATH) -> Lore:
     for speaker, sheet in characters.items():
         if not isinstance(sheet, dict) or not sheet.get("name") or not sheet.get("sheet"):
             raise ValueError(f"lore: {speaker} needs a name and a sheet")
+    scenes = raw.get("scenes")
+    if not isinstance(scenes, list) or not scenes:
+        raise ValueError("lore: the bible needs its scenes")
+    for scene in scenes:
+        if (not isinstance(scene, str) or not 0 < len(scene) <= MEMORY_CHARS
+                or not scene.isprintable() or technical_text(scene)):
+            raise ValueError("lore: a scene must be short, printable prose")
+    if len(set(scenes)) != len(scenes):
+        raise ValueError("lore: scenes must be unique")
     memories = []
     for entry in raw.get("memories", []):
         if not isinstance(entry, dict):
@@ -55,7 +65,7 @@ def load(path: Path = LORE_PATH) -> Lore:
         memories.append(Memory(ident, tuple(tags), memory))
     if len({m.id for m in memories}) != len(memories):
         raise ValueError("lore: memory ids must be unique")
-    return Lore(characters, tuple(memories))
+    return Lore(characters, tuple(scenes), tuple(memories))
 
 
 def select_memories(lore: Lore, facts: list[Fact], used: set[str], limit: int = 2) -> list[Memory]:

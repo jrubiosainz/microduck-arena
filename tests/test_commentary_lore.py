@@ -13,6 +13,8 @@ def test_the_shipped_bible_is_well_formed_and_deep():
     assert set(lore.characters) == {"peter", "ray"}
     assert lore.characters["peter"]["name"] == "Peter Duckry"
     assert len(lore.characters["ray"]["sheet"]) > 300
+    assert len(lore.scenes) == 8
+    assert len(set(lore.scenes)) == len(lore.scenes)
     assert len(lore.memories) >= 24
     assert len({m.id for m in lore.memories}) == len(lore.memories)
     assert all(m.tags for m in lore.memories)
@@ -21,6 +23,7 @@ def test_the_shipped_bible_is_well_formed_and_deep():
 def test_a_malformed_bible_is_refused(tmp_path):
     path = tmp_path / "lore.json"
     good = {"characters": {"peter": {"name": "P", "sheet": "s"}, "ray": {"name": "R", "sheet": "s"}},
+            "scenes": ["A quiet scene."],
             "memories": [{"id": "a", "tags": ["hill"], "memory": "Once."}]}
     for broken in (
         {**good, "memories": good["memories"] * 2},                                   # duplicate id
@@ -29,6 +32,11 @@ def test_a_malformed_bible_is_refused(tmp_path):
         {**good, "memories": [{"id": "a", "tags": ["hill"], "memory": "see /tmp/x"}]},  # technical
         {**good, "memories": ["Once."]},                                          # not an object
         {**good, "characters": {"peter": good["characters"]["peter"]}},               # ray missing
+        {k: v for k, v in good.items() if k != "scenes"},                        # scenes missing
+        {**good, "scenes": []},                                                    # scenes empty
+        {**good, "scenes": ["see clips/R1/x.mp4"]},                           # scene is technical
+        {**good, "scenes": [1]},                                              # scene is not a string
+        {**good, "scenes": ["A quiet scene.", "A quiet scene."]},                # duplicate scene
         ["a bible that is a list"],                                              # not an object
     ):
         path.write_text(json.dumps(broken))
@@ -37,7 +45,7 @@ def test_a_malformed_bible_is_refused(tmp_path):
 
 
 def test_selection_matches_tags_skips_recent_and_ranks_by_overlap():
-    lore = Lore(characters={}, memories=(
+    lore = Lore(characters={}, scenes=("A quiet scene.",), memories=(
         Memory("trophy", ("podium", "first-run"), "The tin trophy."),
         Memory("dance", ("podium",), "The dance."),
         Memory("mud", ("hill", "fall"), "The mud."),

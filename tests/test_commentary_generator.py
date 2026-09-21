@@ -8,11 +8,14 @@ import pytest
 
 from arena.commentary.context import Fact
 from arena.commentary.generator import (
+    BOOTH_CONTEXT,
     CALLBACK,
     DIMENSIONS,
+    GROUNDING,
     LOOKBACK,
     OPENINGS,
     ROUTER,
+    STYLE,
     WRITE_LIMIT,
     Rejected,
     complete,
@@ -71,7 +74,7 @@ def provider_for(*answers):
 
 def run_case(turns=TURNS, facts=FACTS):
     provider = provider_for(reply(turns))
-    return (write(facts, direction(random.Random(1), []), lore=LORE, provider=provider,
+    return (write(facts, direction(random.Random(1), [], LORE.scenes), lore=LORE, provider=provider,
                   model="fake/model"),
             provider)
 
@@ -109,29 +112,49 @@ def test_the_writing_prompt_shape_example_shows_three_turns():
 
 
 def test_a_direction_is_drawn_per_dialogue_and_is_data():
-    drawn = direction(random.Random(7), [])
-    assert drawn == direction(random.Random(7), [])
-    assert set(drawn) == {"turns", *DIMENSIONS}
+    drawn = direction(random.Random(7), [], LORE.scenes)
+    assert drawn == direction(random.Random(7), [], LORE.scenes)
+    assert set(drawn) == {"turns", "scene", *DIMENSIONS}
+    assert drawn["scene"] in LORE.scenes
     assert all(drawn[name] in options for name, options in DIMENSIONS.items())
-    assert len({directed(direction(random.Random(seed), [])) for seed in range(50)}) > 25
+    dialogues = (directed(direction(random.Random(seed), [], LORE.scenes)) for seed in range(50))
+    assert len(set(dialogues)) > 25
     # The writer is told the direction it drew, in the prompt's own sentence.
-    assert directed(drawn).startswith(f"This dialogue: {drawn['turns']} turns. ")
+    assert directed(drawn).startswith(
+        f"This dialogue: {drawn['turns']} turns. The scene: {drawn['scene']} ")
     _, provider = run_case()
-    assert directed(direction(random.Random(1), [])) in provider.calls[0][0][0]["content"]
+    directed_prompt = directed(direction(random.Random(1), [], LORE.scenes))
+    assert directed_prompt in provider.calls[0][0][0]["content"]
 
 
 def test_a_direction_stays_away_from_what_the_last_dialogues_drew():
     # Half the distinct openings: fewer and one comes straight back, more and
     # the draw becomes a rotation.
-    recent = [{**direction(random.Random(0), []), "opening": opening}
+    recent = [{**direction(random.Random(0), [], LORE.scenes), "opening": opening}
               for opening in OPENINGS[:LOOKBACK]]
-    drawn = {direction(random.Random(seed), recent)["opening"] for seed in range(200)}
+    drawn = {direction(random.Random(seed), recent, LORE.scenes)["opening"] for seed in range(200)}
     assert drawn == set(OPENINGS[LOOKBACK:])
 
 
+def test_a_scene_stays_away_from_what_the_last_dialogues_drew():
+    # Half the distinct scenes, exactly like a dimension of DIMENSIONS.
+    lookback = len(LORE.scenes) // 2
+    recent = [{**direction(random.Random(0), [], LORE.scenes), "scene": scene}
+              for scene in LORE.scenes[:lookback]]
+    drawn = {direction(random.Random(seed), recent, LORE.scenes)["scene"] for seed in range(200)}
+    assert drawn == set(LORE.scenes[lookback:])
+
+
+def test_the_prompt_no_longer_hands_out_the_word_debut():
+    assert "debut" not in STYLE + GROUNDING + BOOTH_CONTEXT
+    assert "then adds a fact" not in STYLE
+    assert "a grin and a well-chosen number" not in STYLE
+    assert "then puts a fact on the table" not in LORE.characters["ray"]["sheet"]
+
+
 def test_the_callback_is_a_coin_that_avoids_nothing():
-    recent = [{**direction(random.Random(0), []), "callback": CALLBACK}] * LOOKBACK
-    called = sum(direction(random.Random(seed), recent)["callback"] == CALLBACK
+    recent = [{**direction(random.Random(0), [], LORE.scenes), "callback": CALLBACK}] * LOOKBACK
+    called = sum(direction(random.Random(seed), recent, LORE.scenes)["callback"] == CALLBACK
                  for seed in range(400))
     assert 60 < called < 140  # one in four, whatever was drawn lately
 
@@ -147,7 +170,8 @@ def test_the_writer_is_told_every_fact_that_grounds_a_handle():
 def test_a_code_fence_around_the_answer_is_dressing():
     fenced = "```json\n" + json.dumps(TURNS) + "\n```"
     provider = provider_for(reply(TURNS, content=fenced))
-    written = write(FACTS, direction(random.Random(1), []), lore=LORE, provider=provider, model="m")
+    written = write(FACTS, direction(random.Random(1), [], LORE.scenes), lore=LORE,
+                     provider=provider, model="m")
     assert [t["text"] for t in written["turns"]] == [t["text"] for t in TURNS]
 
 
@@ -197,7 +221,8 @@ def test_a_player_at_the_line_or_in_the_lead_is_not_placed_in_the_booth():
 def test_an_invalid_provider_answer_is_rejected(changes):
     provider = provider_for(reply(TURNS, **changes))
     with pytest.raises(Rejected):
-        write(FACTS, direction(random.Random(1), []), lore=LORE, provider=provider, model="m")
+        write(FACTS, direction(random.Random(1), [], LORE.scenes), lore=LORE, provider=provider,
+              model="m")
 
 
 def test_a_name_spoken_in_a_facts_own_text_is_grounded_by_that_fact_alone():

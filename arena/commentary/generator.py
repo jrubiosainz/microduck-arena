@@ -40,7 +40,7 @@ BOOTH_CONTEXT = (
     "joke citing the fact it plays on and pure banter the event fact, index 0, never an empty "
     "list; every number in digits copied from "
     "a fact that turn cites, even at the start of a sentence, so 2 events and not two events, "
-    "10 points and not Ten points, nobody and not no one, the debut and not the first time; no "
+    "10 points and not Ten points, nobody and not no one; no "
     "number the facts do not print, not 0, not a rounder threshold; the event's name and a "
     "policy's name carry digits too and need their own fact cited; fall words only in a turn "
     "citing this run's fall, never to say there was none, never about an earlier run; a "
@@ -59,7 +59,7 @@ GROUNDING = (
     "exactly match a cited value, including decimals, and must be written in digits exactly as "
     "the cited fact writes it. Never write a number as a word: not five, not two, not ten, not a "
     "hundred, not first, not second, and never the word one, not even in no one or one of them. "
-    "Write nobody rather than no one, debut or opening rather than first, a single rather than "
+    "Write nobody rather than no one and a single rather than "
     "one, unless the turn cites a fact that carries that very word. Remarks about the sport in "
     "general, the hall, the crowd, the bell, the slope, the wheels or the booth are your own "
     "colour and need no fact; a claim about THIS run, THIS result or a player does. No footage "
@@ -86,16 +86,15 @@ STYLE = (
     "has the name its policy gives it when that is a plain word or two, never one with an "
     "underscore, and otherwise it is just the duck. Write a real exchange between colleagues, "
     "not a ceremony: understatement over drama. Nobody cries, shakes, holds their breath, makes "
-    "history or plans a ceremony; a good time gets a grin and a well-chosen number, a run that "
-    "did not finish gets a shrug, a kind word and a joke about the sport. Build the exchange on "
+    "history or plans a ceremony. Build the exchange on "
     "the angle given for this dialogue and leave the other fields unsaid rather than reciting "
     "them. Every dialogue carries a "
     "joke, at most two, about the sport as the facts and the memories present it: the ducks' "
     "balance, this course, the hall, the crowd, the bell, the limit, the board; never about "
     "files, systems, models or anything a viewer could not see from the stands, and never a "
-    "joke copied from these instructions. Ray answers the substance of what Peter said, never "
-    "his choice of words, then adds a fact; his dryness lives in the content, not in a "
-    "catchphrase. Short lines beat long ones. "
+    "joke copied from these instructions. Each answers the substance of what the other said, "
+    "never his choice of words; Ray's dryness lives in the content, not in a catchphrase. "
+    "Short lines beat long ones. "
 )
 # Left alone, the writer opens, jokes and closes every dialogue the same way, and copies the
 # shape of the broadcast before. Each dialogue draws its own direction instead.
@@ -192,16 +191,18 @@ def complete(messages: list[dict], max_tokens: int, *, model: str, token: str,
             "completion_tokens": answer["usage"]["completion_tokens"]}
 
 
-def direction(rng: random.Random, recent: list[dict]) -> dict:
+def direction(rng: random.Random, recent: list[dict], scenes: tuple[str, ...]) -> dict:
     """The shape of one dialogue, as data, drawn away from what the last ones drew.
 
     `recent` is the directions of the dialogues written lately, newest first. A
     dimension avoids as many of them as half its distinct options: fewer and the
     same opening comes straight back, more and the draw becomes a rotation. The
-    callback is a coin whose odds are its meaning, so it avoids nothing.
+    callback is a coin whose odds are its meaning, so it avoids nothing. The
+    scene comes from the bible's `scenes`; every other dimension comes from
+    this module.
     """
     drawn = {}
-    for name, options in {"turns": LENGTHS, **DIMENSIONS}.items():
+    for name, options in {"turns": LENGTHS, "scene": scenes, **DIMENSIONS}.items():
         lately = set() if name == "callback" else {
             one[name] for one in recent[:len(set(options)) // 2]}
         drawn[name] = rng.choice([option for option in options if option not in lately])
@@ -210,7 +211,7 @@ def direction(rng: random.Random, recent: list[dict]) -> dict:
 
 def directed(drawn: dict) -> str:
     """A direction as the prompt says it."""
-    return (f"This dialogue: {drawn['turns']} turns. "
+    return (f"This dialogue: {drawn['turns']} turns. The scene: {drawn['scene']} "
             + " ".join(drawn[name] for name in DIMENSIONS) + " ")
 
 

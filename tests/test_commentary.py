@@ -79,9 +79,9 @@ CAROL = [
 
 
 def aired(book, run_id, facts, at):
-    made = book.put(run_id, {"turns": [], "lore_refs": [],
-                             "brief": {"facts": facts, "direction": direction(random.Random(0), []),
-                                      "model": "m"}}, PLAN, at)
+    made = book.put(run_id, {"turns": [], "lore_refs": [], "brief": {
+        "facts": facts, "direction": direction(random.Random(0), [], LORE.scenes),
+        "model": "m"}}, PLAN, at)
     book.mark_aired(made.id, at)
     return made
 
@@ -123,7 +123,7 @@ def test_gather_offers_an_earlier_run_only_to_a_callback(tmp_path):
 
 def test_a_callback_the_book_cannot_serve_is_no_callback(tmp_path):
     seed = next(s for s in range(200)
-                if direction(random.Random(s), [])["callback"] == CALLBACK)
+                if direction(random.Random(s), [], LORE.scenes)["callback"] == CALLBACK)
     store = stored(tmp_path, run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R1"))
     book = BroadcastBook(tmp_path)
     _, drawn = briefing(store, "R1", lore=LORE, book=book, rng=random.Random(seed))
@@ -133,13 +133,20 @@ def test_a_callback_the_book_cannot_serve_is_no_callback(tmp_path):
     assert drawn["callback"] == CALLBACK and facts[-1].kind == "recent"
 
 
+def test_briefings_direction_carries_a_scene_from_the_bible(tmp_path):
+    store = stored(tmp_path, run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R1"))
+    book = BroadcastBook(tmp_path)
+    _, drawn = briefing(store, "R1", lore=LORE, book=book, rng=random.Random(1))
+    assert drawn["scene"] in LORE.scenes
+
+
 def test_the_draw_reads_what_the_reserve_wrote_lately(tmp_path):
     store = stored(tmp_path, run("alice", 12.4, "2026-09-11T10:00:00Z", run_id="R1"))
     book = BroadcastBook(tmp_path)
     for minute, opening in enumerate(OPENINGS[:LOOKBACK]):
         book.put("R0", {"turns": [], "lore_refs": [], "brief": {
             "facts": [], "model": "m",
-            "direction": {**direction(random.Random(0), []), "opening": opening}}},
+            "direction": {**direction(random.Random(0), [], LORE.scenes), "opening": opening}}},
             PLAN, f"2026-09-10T11:0{minute}:00Z")
     # Written, not aired: what the reserve is about to say counts.
     for seed in range(20):

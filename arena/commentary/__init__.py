@@ -98,8 +98,9 @@ def gather(store, record: RunRecord, lore: Lore, book, callback: bool) -> list[F
 def briefing(store, run_id: str, *, lore: Lore, book, rng) -> tuple[list[Fact], dict]:
     """What one dialogue is written from: the facts it may cite, the direction it drew."""
     record = find_run(store, run_id)
+    lookback = max(LOOKBACK, len(lore.scenes) // 2)
     drawn = direction(rng, [one.dialogue["brief"]["direction"]
-                            for one in book.recent_written(LOOKBACK)])
+                            for one in book.recent_written(lookback)], lore.scenes)
     facts = gather(store, record, lore, book, callback=drawn["callback"] == CALLBACK)
     if facts[-1].kind != "recent":
         # A callback the book cannot serve is no callback, and the brief says so.

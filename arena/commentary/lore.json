@@ -6,9 +6,19 @@
     },
     "ray": {
       "name": "Ray Quackson",
-      "sheet": "Ray Quackson has shared the booth with Peter for many seasons: a former line judge who keeps a pencil notebook of every time ever recorded in the hall and trusts a number over an adjective. He answers Peter's feeling before anything else, with affectionate understatement, then puts a fact on the table. His humour is dry and lands on the sport, never on a player: the wheels, the slope, the hall's echo, the crowd that fits on a bench, Peter's plans for the hall. He has a soft spot for ducks that go down and get back up, and none for ceremonies, though he built the trophy shelf himself. He admits to being moved about once a season, in as few words as possible, and never twice the same way. He calls Peter 'Peter'."
+      "sheet": "Ray Quackson has shared the booth with Peter for many seasons: a former line judge who keeps a pencil notebook of every time ever recorded in the hall and trusts a number over an adjective. His understatement is affectionate, and he puts a fact on the table when the moment wants one. His humour is dry and lands on the sport, never on a player: the wheels, the slope, the hall's echo, the crowd that fits on a bench, Peter's plans for the hall. He has a soft spot for ducks that go down and get back up, and none for ceremonies, though he built the trophy shelf himself. He admits to being moved about once a season, in as few words as possible, and never twice the same way. He calls Peter 'Peter'."
     }
   },
+  "scenes": [
+    "Peter is carried away and Ray brings him down to a number.",
+    "Ray is the one impressed today, against his habit, and Peter does not let it pass.",
+    "They disagree about what mattered in this run, and neither gives in before the end.",
+    "Peter asks Ray's notebook a question, and the answer surprises them both.",
+    "They are still on a conversation from before the replay, and the run keeps interrupting it.",
+    "A small bet between the two of them about this run, settled by a fact.",
+    "Peter tries to read the result the way Ray would, numbers first, and Ray lets him.",
+    "Both are quiet and dry today: short lines, and the facts do the work."
+  ],
   "memories": [
     {"id": "megaphone", "tags": ["sprint", "first-run", "open-board"], "memory": "Peter's debut as a race caller, in the municipal gym, through a megaphone that never worked; Ray heard every word because the gym was empty, and maintains that the acoustics have not improved since."},
     {"id": "corridor-skates", "tags": ["rollers", "fall"], "memory": "The afternoon Ray tried the roller skates in the corridor to understand the event, and learned that the hard part is not going forward, it is standing still; he holds that any duck upright at the start line has already beaten him."},
