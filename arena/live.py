@@ -18,6 +18,11 @@ SHUTTER_MS = 1600
 HORIZON_MS = 5 * 60_000  # how far ahead the grid is built and served
 BEHIND_MS = 60_000  # how far back it is served, so a late poll still finds now
 KEEP_MS = 120_000  # slots older than this are forgotten
+# How long a screen trusts the grid it holds: it reads a new one every ten seconds
+# and forgives a lost read for thirty. What starts within this of now is never laid
+# again, or a screen would enter one slot and be told, a read later, that another
+# was playing — and cut into the middle of it.
+PROMISED_MS = 30_000
 HEAD = 3  # the newest runs open every cycle
 
 
@@ -94,10 +99,11 @@ def slots_for(entries: list[Entry], start_ms: int, book: BroadcastBook,
 
 
 class Programme:
-    """The grid, built lazily as far as the horizon, rebuilt from the slot
-    playing now whenever the pool or the book changes — and keeping its place
-    in the cycle it is walking, so the rebuild carries on from there instead of
-    opening a new cycle on the newest runs."""
+    """The grid, built lazily as far as the horizon, and laid again when the
+    pool or the book changes: past what screens were promised when something
+    lands, from the slot playing now when a run is withdrawn — keeping its place
+    in the cycle it is walking either way, so the rebuild carries on from there
+    instead of opening a new cycle on the newest runs."""
 
     def __init__(self, source, now_ms, book):
         self._source = source
@@ -181,24 +187,43 @@ class Programme:
             return [s for s in self._slots
                     if s["at_ms"] + s["duration_ms"] > now - BEHIND_MS and s["at_ms"] <= now + HORIZON_MS]
 
-    def invalidate(self) -> None:
-        """Keep what is playing, forget the future; the next read lays it again
-        from a fresh pool. A restart is the same thing with nothing kept.
+    def _forget_from(self, edge: int, now: int) -> None:
+        """Forget every slot from `edge` on, and keep the grid's place: the cycle
+        being walked is the last kept entry's, and the next read lays the rest of
+        it from a fresh pool."""
+        self._slots = [s for s in self._slots if s["at_ms"] < edge]
+        self._laid = [(at, k, run) for at, k, run in self._laid if at < edge]
+        if self._laid:
+            self._cycle = self._laid[-1][1]
+        self._pending = []
+        self._cursor = ((self._slots[-1]["at_ms"] + self._slots[-1]["duration_ms"])
+                        if self._slots else now)
 
-        What the grid does not forget is its place. An entry no shutter has
-        announced yet goes back to the cycle to be laid again; an entry already
-        announced stays where it is, because laying it again would repeat a
-        replay the screen has just seen — it loses its booth for this pass and
-        is offered one when its run next comes round. Every broadcast that
-        lands calls this, some eighty times an hour: a rebuild that opened a
-        new cycle each time would replay the newest runs for ever and never
-        reach the rest of the pool.
+    def landed(self) -> None:
+        """Something new can be laid, a clip or a dialogue: lay the future again
+        from the first entry no screen has been promised.
+
+        An entry that has begun, or begins within PROMISED_MS, keeps every one of
+        its slots — a run announced keeps its replay, a replay playing keeps the
+        booth after it — and what landed is offered to the entries after those. A
+        dialogue lands some seventy times an hour: laying the very next slots
+        again each time is what made the picture cut into the middle of another.
+        The grid keeps its place in the cycle too, or a rebuild would open a new
+        cycle on the newest runs each time and never reach the rest of the pool.
         """
         now = self._now()
         with self._lock:
-            kept = [s for s in self._slots if s["at_ms"] <= now]
-            self._cycle = self._walking(now)
-            self._laid = [(at, k, run) for at, k, run in self._laid if at <= now]
-            self._pending = []  # read the pool again: a withdrawal lands here
-            self._slots = kept
-            self._cursor = (kept[-1]["at_ms"] + kept[-1]["duration_ms"]) if kept else now
+            edge = next((at for at, _, _ in self._laid if at > now + PROMISED_MS), self._cursor)
+            self._forget_from(edge, now)
+
+    def invalidate(self) -> None:
+        """A run was taken off the board: keep the slot playing now and nothing
+        else, whatever was promised — the channel must not play a run its author
+        withdrew. A restart is the same thing with nothing kept.
+
+        An entry already announced stays walked, because laying it again would
+        repeat a replay the screen has just seen.
+        """
+        now = self._now()
+        with self._lock:
+            self._forget_from(now + 1, now)

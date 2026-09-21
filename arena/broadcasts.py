@@ -1,8 +1,10 @@
 """The dialogues waiting to go out, and the ones that just did.
 
 A broadcast is one conversation written for one airing. It is not a property of
-a run and it is not in the store: it is consumed once, kept for twenty airings
-so the writer can read what was said, and then forgotten. The store is a dataset
+a run and it is not in the store: it is consumed once, kept for twenty airings,
+and then forgotten. It is kept so that the memories' cooldown, a callback's one
+fact and the direction it drew can be read from what went out, and so that a
+repetition can be looked into after the fact. The store is a dataset
 repository on the Space, where every write is a commit; these are far too many
 and live far too briefly to belong there.
 """
@@ -138,10 +140,14 @@ class BroadcastBook:
             return
 
     def recent_aired(self, limit: int = 5) -> list[Broadcast]:
-        """Newest last: the writer reads them in the order they went out."""
+        """Newest last, the order they went out."""
         aired = [one for one in self._all() if one.aired_at is not None]
         aired.sort(key=lambda one: one.aired_at)
         return aired[-limit:]
+
+    def recent_written(self, limit: int) -> list[Broadcast]:
+        """Newest first, aired or not: what the reserve said lately or is about to say."""
+        return self._all()[::-1][:limit]
 
     def sweep(self, now: str) -> int:
         """What the book owes nobody any more: the aired ones behind `keep`, and

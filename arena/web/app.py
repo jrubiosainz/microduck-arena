@@ -6,6 +6,7 @@ Space later.
 """
 
 import hashlib
+import random
 import threading
 
 from fastapi import FastAPI
@@ -73,17 +74,18 @@ def create_app(config: ArenaConfig) -> FastAPI:
         else:
             app.state.booth_off = None
             provider = commentary.router_provider(config.commentary_model, token)
+            rng = random.Random()
 
             def writer(run_id: str) -> dict:
                 return commentary.compose(
                     app.state.store, run_id, lore=lore, provider=provider,
-                    model=config.commentary_model, book=app.state.broadcasts,
+                    model=config.commentary_model, book=app.state.broadcasts, rng=rng,
                 )
 
     app.state.clips = ClipRenderer(
         app.state.store, config.origin, config.frontend_dir, config.clip_parallel,
         enabled=config.clips_enabled, backfill=config.clip_backfill,
-        landed=lambda run_id: app.state.programme.invalidate(),
+        landed=lambda run_id: app.state.programme.landed(),
     )
     if config.clip_worker and app.state.clips.available:
         @app.on_event("startup")
@@ -104,7 +106,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     tab = PlanTab(config.origin) if writer and plan_page and find_chrome() else None
     app.state.commentary = CommentaryStock(
         app.state.broadcasts, tab, writer, lambda: pool(app.state.store),
-        landed=lambda: app.state.programme.invalidate(),
+        landed=lambda: app.state.programme.landed(),
     )
     if app.state.commentary.available:
         @app.on_event("startup")

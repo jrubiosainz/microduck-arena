@@ -191,9 +191,11 @@ def _cmd_commentary(args) -> int:
     loopback port for the plan page, like `arena clip`, and puts a broadcast in
     the book the running server reads, where the channel will find it.
     """
+    import random
+
     from . import commentary
     from .broadcasts import BroadcastBook, utcnow
-    from .commentary.generator import Rejected
+    from .commentary.generator import Rejected, directed, write
     from .commentary.lore import load
     from .commentary.tab import PlanTab
     from .recorder import find_chrome
@@ -208,19 +210,19 @@ def _cmd_commentary(args) -> int:
     model = config.commentary_model
     provider = commentary.router_provider(model, token)
     book = BroadcastBook(config.broadcast_dir)
+    rng = random.Random()
     if args.dry_run:
         store = config.build_store()
         try:
-            record = commentary.find_run(store, args.run_id)
+            facts, drawn = commentary.briefing(store, args.run_id, lore=lore, book=book, rng=rng)
         except LookupError as exc:
             print(exc, file=sys.stderr)
             return 1
-        facts, _ = commentary.gather(store, record, lore, book)
         for i, fact in enumerate(facts):
             print(f"[{i}] {fact.text}" + ("  (memory)" if fact.kind == "lore" else ""))
+        print(f"\n{directed(drawn)}")
         try:
-            written = commentary.compose(store, args.run_id, lore=lore, provider=provider,
-                                         model=model, book=book)
+            written = write(facts, drawn, lore=lore, provider=provider, model=model)
         except Rejected as why:
             print(f"\nnot on air: {why}", file=sys.stderr)
             return 1
@@ -246,15 +248,15 @@ def _cmd_commentary(args) -> int:
         return 1
     try:
         written = commentary.compose(app.state.store, args.run_id, lore=lore, provider=provider,
-                                     model=model, book=book)
+                                     model=model, book=book, rng=rng)
     except Rejected as why:
         print(f"not on air: {why}", file=sys.stderr)
         server.should_exit = True
         return 1
     with PlanTab(origin) as tab:
         plan = tab.prepare({"run_id": args.run_id, "turns": written["turns"]})
-    made = book.put(args.run_id, {"turns": written["turns"], "lore_refs": written["lore_refs"]},
-                    plan, utcnow())
+    made = book.put(args.run_id, {"turns": written["turns"], "lore_refs": written["lore_refs"],
+                                  "brief": written["brief"]}, plan, utcnow())
     server.should_exit = True
     print(f"broadcast {made.id} for {args.run_id}, {plan['duration_ms'] / 1000:.1f} s "
           f"under {book.directory}")

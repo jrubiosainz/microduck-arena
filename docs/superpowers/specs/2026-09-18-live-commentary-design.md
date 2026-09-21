@@ -18,6 +18,11 @@ This spec amends the section "The commentary, written at publish time" of
 `2026-09-17-live-channel-design.md`. That section's title is now wrong: writing
 no longer happens at publish time, and a run no longer owns one dialogue.
 
+Amended on 2026-09-21 by `2026-09-21-commentary-prompt-loop-design.md`: the
+model that judged a dialogue has left the live path, the writer no longer reads
+the recent wording, and the reserve is no longer sized on one refusal in two.
+The passages concerned are corrected below and say so.
+
 ## The decisions behind it
 
 Four, taken by the owner before the design:
@@ -30,9 +35,12 @@ Four, taken by the owner before the design:
   ready for a run about to air, the grid lays its replay and no booth, exactly
   as it does today for a run whose commentary was refused. The channel never
   stops and never waits.
-- **The history is what just went out.** The writer is given the last five
+- **The history is what just went out.** The channel's memory is the last
   dialogues *broadcast*, all runs together, in the order the spectator heard
-  them — not the last five published, and not the run's own past.
+  them — not the last five published, and not the run's own past. (Amended
+  2026-09-21: that history feeds the memories' cooldown, the direction's draw and
+  the one fact a callback cites. The writer never reads its wording; a writer
+  shown recent turns writes the next dialogue in their shape.)
 - **The reserve gets its own browser.** A tab that shares a browser with
   another tab is backgrounded, and a backgrounded renderer stops committing
   frames; this was learned the hard way on the video render. The reserve runs
@@ -42,8 +50,10 @@ Four, taken by the owner before the design:
 ## What stays exactly as it is
 
 The clip pipeline, the grid's arithmetic, the shared clock, every segment on the
-page, the booth's scene, the shutter, the home tile. The writer's prompt, its
-audit, the bible and the character sheets. `prepare` remains the one thing that
+page, the booth's scene, the shutter, the home tile. The writer's local checks.
+(Amended 2026-09-21: the prompt, the bible and the character sheets no longer
+stay as they are — improving them is the work — and the audit, the second model
+call that judged a dialogue, is gone from the live path.) `prepare` remains the one thing that
 turns a dialogue into a timed plan, and it remains in JavaScript, run by a
 browser, so that the file the store keeps is exactly what the page plays.
 
@@ -132,12 +142,16 @@ One turn of the loop:
 2. `gather(store, record, lore)` — **now**, so the standings, the records and
    the memories are the ones true at this moment. This is where "data always up
    to date" comes from; it needs no new machinery, only a later call.
-3. Read the last five aired broadcasts, newest last, and give them to the writer
-   as the recent wording, and to the audit as what a rehash would be.
-4. Call the router. A `Rejected` is not an error: log the reason, move to the
-   next run, and let this one come round again. With refusals running near one
-   in two, the reserve is sized on the assumption that half the turns produce
-   nothing.
+3. Draw the dialogue's direction — from the run's id at first, and per airing,
+   away from what the last written broadcasts drew, once the 09-21 spec's second
+   push is out. If it draws a callback, add the one fact it may cite. (Amended
+   2026-09-21: this step used to hand the writer the last five dialogues as the
+   recent wording, and the audit the same as what a rehash would be.)
+4. Call the router, once. A `Rejected` is not an error: log the reason, move to
+   the next run, and let this one come round again. (Amended 2026-09-21: only
+   the local checks refuse now, about four attempts in ten on the real log, and
+   a refused run waits five minutes before it is tried again, so that one run
+   cannot spend the hour's attempts.)
 5. `prepare` the dialogue in the reserve's own tab, and write the broadcast.
 6. Tell the programme something landed.
 
@@ -164,9 +178,12 @@ replays with no booths, which is a supported way to run.
 - `ARENA_COMMENTARY=0` turns writing off, as it does today, and the reserve
   never starts.
 - At most **one hundred and twenty** generation attempts an hour, counted
-  whether they succeed or are refused. Steady state is about eighty booths an
-  hour; the cap is half again as much, so it never binds in normal running and
-  a loop that has gone wrong cannot spend the night on the router.
+  whether they succeed or are refused. Steady state is about seventy booths an
+  hour, measured, and some 115 attempts with four refusals in ten; the cap sits
+  at that edge on purpose, and a loop that has gone wrong cannot spend the night
+  on the router. (Amended 2026-09-21: this spec said the cap never binds in
+  normal running. It can, by a booth now and then, until the landing rate
+  improves; it is the owner's bound on what the channel spends.)
 - One generation at a time. There is no parallelism to win here: the reserve is
   ahead of the playhead by minutes.
 
@@ -181,7 +198,15 @@ second shutter and a booth whose `duration_ms` is that broadcast's plan's, and
 the slot carries `"broadcast": "<id>"` beside its `run_id`. With none, the run
 contributes a shutter and a replay, and that is all.
 
-`invalidate()` is unchanged and is what a landed broadcast calls. Because it
+`invalidate()` is unchanged and is what a landed broadcast calls. (Amended
+2026-09-21: it no longer is. The day dialogues first landed on the Space, some
+seventy times an hour, a landing that fell on a run's announcing shutter took
+the announced replay off the grid a second later, and a screen that had entered
+it from the grid it held cut into the middle of another slot at its next read.
+A landing now calls `landed()`, which lays the future again only from the first
+entry no screen has been promised: an entry that has begun, or begins within
+thirty seconds — the time a screen trusts the grid it holds — keeps every one of
+its slots. `invalidate()` is the withdrawal's alone.) Because it
 keeps every slot up to and including the one playing now and discards the
 future, a broadcast claimed by a future slot simply becomes unclaimed again and
 is re-offered to the next build. A broadcast claimed by a slot that has already

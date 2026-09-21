@@ -14,6 +14,7 @@ from arena.live import (
     BEHIND_MS,
     HEAD,
     KEEP_MS,
+    PROMISED_MS,
     SHUTTER_MS,
     Entry,
     Programme,
@@ -237,10 +238,8 @@ def test_a_landing_every_minute_still_walks_the_cycle_to_its_end(tmp_path):
         # The reserve keeps every run stocked, and each dialogue it lands tells
         # the programme to rebuild its future.
         for run_id in sorted({one.run_id for one in entries} - book.runs_stocked()):
-            book.put(run_id, {"run_id": run_id, "turns": [], "lore_refs": []},
-                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
-                     "2026-09-18T09:00:00Z")
-            programme.invalidate()
+            stocked(book, run_id)
+            programme.landed()
         now = clock.ms
         playing = next(s for s in programme.slots()
                        if s["at_ms"] <= now < s["at_ms"] + s["duration_ms"])
@@ -258,6 +257,66 @@ def test_a_landing_every_minute_still_walks_the_cycle_to_its_end(tmp_path):
     # thirty of them for eight runs and a five-minute horizon — whether the
     # process has been up twelve minutes or a fortnight.
     assert len(programme._laid) < 60
+
+
+def stocked(book, run_id):
+    book.put(run_id, {"run_id": run_id, "turns": [], "lore_refs": []},
+             {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
+             "2026-09-18T09:00:00Z")
+
+
+def test_a_landing_lays_again_nothing_a_screen_was_promised(tmp_path):
+    """A screen reads the grid every ten seconds and enters each slot from the
+    grid it holds. A landing that laid the next few seconds again had it enter
+    one slot and be told, a poll later, that another was playing: the picture
+    cut into the middle of something else. Seen on the Space the day dialogues
+    first landed there, a landing falling on a run's announcing shutter: the
+    replay it announced was gone from the grid a second later."""
+    book = BroadcastBook(tmp_path)
+    clock = Clock(10_000_000)
+    entries = [entry(f"R{i}", at=f"2026-09-{i + 1:02d}T10:00:00Z") for i in range(6)]
+    programme = Programme(lambda: entries, clock, book)
+    for _ in range(180):  # three minutes of channel, a landing every second
+        before = programme.slots()
+        promised = [s for s in before if s["at_ms"] <= clock.ms + PROMISED_MS]
+        for run_id in sorted({one.run_id for one in entries} - book.runs_stocked())[:1]:
+            stocked(book, run_id)
+        programme.landed()
+        after = programme.slots()
+        assert [s for s in promised if s not in after] == []
+        clock.ms += 1_000
+
+
+def test_an_entry_a_screen_was_promised_keeps_every_one_of_its_slots(tmp_path):
+    """The promise is an entry's, not a slot's: a run announced keeps its replay,
+    and a run whose replay is playing keeps the booth laid after it, however far
+    past the promised window that booth starts."""
+    book = BroadcastBook(tmp_path)
+    clock = Clock(10_000_000)
+    entries = [entry("A", replay_ms=40_000), entry("B", at="2026-09-09T10:00:00Z")]
+    stocked(book, "A")
+    programme = Programme(lambda: entries, clock, book)
+    whole = [s for s in programme.slots() if s["at_ms"] < 10_000_000 + 1600 + 40_000 + 1600 + 4000]
+    assert [s["kind"] for s in whole] == ["shutter", "replay", "shutter", "booth"]
+    clock.ms += 800  # inside the shutter that announces A; its booth starts 42 s from here
+    stocked(book, "B")
+    programme.landed()
+    assert [s for s in whole if s not in programme.slots()] == []
+
+
+def test_what_lands_is_laid_from_the_first_entry_nobody_was_promised(tmp_path):
+    book = BroadcastBook(tmp_path)
+    clock = Clock(10_000_000)
+    entries = [entry("A"), entry("B", at="2026-09-09T10:00:00Z")]
+    programme = Programme(lambda: entries, clock, book)
+    programme.slots()
+    entries.append(entry("C", at="2026-09-20T10:00:00Z"))
+    programme.landed()
+    shutters = [s for s in programme.slots() if s["kind"] == "shutter"]
+    first_c = next(s for s in shutters if s["next"]["run_id"] == "C")
+    # Every entry begun within the promise stands; C opens the first one after it.
+    assert first_c["at_ms"] > clock.ms + PROMISED_MS
+    assert first_c == next(s for s in shutters if s["at_ms"] > clock.ms + PROMISED_MS)
 
 
 def test_an_idle_gap_is_not_built_cycle_by_cycle(tmp_path):

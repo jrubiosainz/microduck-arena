@@ -136,7 +136,8 @@ are dropped. The cycle counter never resets within a process.
 discards the future, re-reads the pool and continues from the end of the current
 slot with the next cycle number. It is called when a clip or a commentary lands
 (the worker), when a run is withdrawn (the route), and it is what a restart is
-too. It is the entry point project 2's breaking-news insertion will use.
+too. (Amended 2026-09-21, see `2026-09-18-live-commentary-design.md`: a landing
+calls `landed()` instead, which leaves alone every entry a screen was promised.) It is the entry point project 2's breaking-news insertion will use.
 
 An empty pool makes an empty grid: the channel is off air.
 
@@ -476,6 +477,12 @@ at most two, with the instruction that they are optional and that most of the
 time none fits. Every memory used is recorded in `dialogue.lore_refs`.
 
 ### Continuity
+
+Amended on 2026-09-21 by `2026-09-21-commentary-prompt-loop-design.md`: the audit
+named below no longer runs on the live path, the recent broadcasts reach the
+writer only as the one fact a callback cites, the direction is to be drawn per
+airing, and the default model is `deepseek-ai/DeepSeek-V3.1`. What follows is
+kept as the record of what was measured.
 
 The five most recent `commentary.json` files by `written_at` (excluding the run
 being written) are "your recent broadcasts": each one's result facts in one
