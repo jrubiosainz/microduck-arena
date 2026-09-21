@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  ROUNDS_IN_VIEW, exclusivePick, otherRounds, raceHall, renderEntryPanel, renderEventFacts,
+  OTHER_ROUNDS, exclusivePick, otherRounds, raceHall, renderEntryPanel, renderEventFacts,
   renderVoteButton,
 } from "./race.js";
 
@@ -444,31 +444,14 @@ describe("otherRounds: the way on, under the board", () => {
     expect(links[0]).toBe("#/e/roller-sprint-2m");
   });
 
-  it("carries EVERY other round, not a chosen few", () => {
-    // Four are in view and the rest scroll in, so there is nowhere left for a
-    // "see all" to send you that you are not already looking at.
+  it("shows four and counts all of them", () => {
     const strip = otherRounds(programme, here, new Map());
-    expect(strip.querySelectorAll(".challenge-note")).toHaveLength(programme.length - 1);
-    expect(strip.querySelector(".rounds-on__all")).toBeNull();
-    expect(ROUNDS_IN_VIEW).toBe(4);
-  });
-
-  it("gives the track its own way to be scrolled, by key as well as by arrow", () => {
-    // An overflow box is not reachable by tab on its own, and the arrows are
-    // a mouse's way in.
-    const track = otherRounds(programme, here, new Map()).querySelector(".rounds-on__track");
-    expect(track.tabIndex).toBe(0);
-    expect(track.getAttribute("aria-label")).toBe("The other rounds");
-    // One either side of the track, not a pair above it: they point along the
-    // thing they move.
-    const body = otherRounds(programme, here, new Map()).querySelector(".rounds-on__body");
-    expect([...body.children].map((n) => n.className.split(" ")[0]))
-      .toEqual(["rounds-on__step", "rounds-on__track", "rounds-on__step"]);
-    const ways = [...body.querySelectorAll(".rounds-on__step")];
-    expect(ways.map((b) => b.dataset.way)).toEqual(["back", "on"]);
-    // The glyphs carry no meaning to a reader, so each button says what it is.
-    expect(ways.map((b) => b.getAttribute("aria-label")))
-      .toEqual(["Previous rounds", "More rounds"]);
+    expect(strip.querySelectorAll(".challenge-note")).toHaveLength(OTHER_ROUNDS);
+    // The heading counts the PROGRAMME, not the four on screen — otherwise
+    // "see all" would send you somewhere you have already been.
+    const all = strip.querySelector(".rounds-on__all");
+    expect(all.textContent).toBe("See all 6");
+    expect(all.getAttribute("href")).toBe("#/");
   });
 
   it("gives each card the holder its board names, and none to a board it has none for", () => {
@@ -481,6 +464,5 @@ describe("otherRounds: the way on, under the board", () => {
     expect(cards[1].querySelector(".flyer-leader-name").textContent).toBe("be the first");
     // A planned event says so rather than inviting an entry it cannot take.
     expect(cards[3].querySelector(".flyer-leader-name").textContent).toBe("course not built yet");
-    expect(cards[4].querySelector(".flyer-leader-name").textContent).toBe("course not built yet");
   });
 });

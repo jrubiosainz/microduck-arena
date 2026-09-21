@@ -330,23 +330,21 @@ export function exclusivePick(boxes, changed) {
   return changed.dataset.pick;
 }
 
-/** How many cards the carousel shows at once; the rest scroll into view. */
-export const ROUNDS_IN_VIEW = 4;
+/** How many other rounds the strip under a race shows. */
+export const OTHER_ROUNDS = 4;
 
 /**
- * The way on, under the board: every OTHER round, as the same sheets the
- * front page pins to its wall, on a track you can scroll.
+ * The way on, under the board: the next few rounds as the same sheets the
+ * front page pins to its wall.
  *
- * All of them and not a chosen four — with the whole programme reachable
- * here, a "see all" button would only send you to a page that shows the same
- * thing. The current event is left out: a card back to the page you are
- * already on is a dead end dressed as a way forward.
+ * The current event is left out — a card back to the page you are already on
+ * is a dead end dressed as a way forward — and the heading counts the whole
+ * programme, so "see all 8" is the real number rather than a guess.
  */
 export function otherRounds(events, event, boards) {
-  const others = events.filter((e) => e.id !== event.id);
+  const others = events.filter((e) => e.id !== event.id).slice(0, OTHER_ROUNDS);
   const strip = document.createElement("section");
   strip.className = "rounds-on";
-
   const head = document.createElement("div");
   head.className = "rounds-on__head";
   const titles = document.createElement("div");
@@ -357,50 +355,15 @@ export function otherRounds(events, event, boards) {
   heading.className = "rounds-on__title";
   heading.textContent = "Watch the other rounds.";
   titles.append(eyebrow, heading);
-
-  const track = document.createElement("div");
-  track.className = "rounds-on__track";
-  // Focusable so the track can be scrolled by keyboard: an overflow box is
-  // not reachable by tab on its own, and the arrows below are a mouse's way.
-  track.tabIndex = 0;
-  track.setAttribute("role", "group");
-  track.setAttribute("aria-label", "The other rounds");
-  track.append(...others.map((e) => flyer(e, boards.get(e.id) ?? [])));
-
-  // The only thing left on scroll: while the track moves, the sheets pass
-  // UNDER the pointer and each takes its hover swing on the way past — a row
-  // rippling one card after another, which is not a hover, it is the scroll.
-  // The flag turns the swing off for the duration; the stylesheet reads it.
-  let settling;
-  track.addEventListener("scroll", () => {
-    track.dataset.scrolling = "";
-    clearTimeout(settling);
-    settling = setTimeout(() => delete track.dataset.scrolling, 140);
-  }, { passive: true });
-
-  // One arrow either side of the track rather than a pair above it: they
-  // point along the thing they move, and the eye does not have to travel back
-  // up to the heading to find them.
-  const step = (way, label, glyph) => {
-    const button = document.createElement("button");
-    button.className = "rounds-on__step";
-    button.dataset.way = way;
-    button.setAttribute("aria-label", label);
-    button.textContent = glyph;
-    // One viewport of cards per press, whatever the window is showing.
-    button.addEventListener("click", () => {
-      const dir = way === "on" ? 1 : -1;
-      track.scrollBy({ left: dir * track.clientWidth, behavior: "smooth" });
-    });
-    return button;
-  };
-
-  const body = document.createElement("div");
-  body.className = "rounds-on__body";
-  body.append(step("back", "Previous rounds", "\u2190"), track, step("on", "More rounds", "\u2192"));
-
-  head.append(titles);
-  strip.append(head, body);
+  const all = document.createElement("a");
+  all.className = "rounds-on__all";
+  all.href = menuHref;
+  all.textContent = `See all ${events.length}`;
+  head.append(titles, all);
+  const wall = document.createElement("div");
+  wall.className = "rounds-on__wall";
+  wall.append(...others.map((e) => flyer(e, boards.get(e.id) ?? [])));
+  strip.append(head, wall);
   return strip;
 }
 
@@ -413,7 +376,7 @@ export function otherRounds(events, event, boards) {
  */
 export async function keepRacing(root, event) {
   const events = await getEvents();
-  const others = events.filter((e) => e.id !== event.id);
+  const others = events.filter((e) => e.id !== event.id).slice(0, OTHER_ROUNDS);
   const boards = new Map();
   await Promise.all(others.map(async (e) => {
     if (e.status === "planned") return;
@@ -423,16 +386,14 @@ export async function keepRacing(root, event) {
   const foot = root.querySelector("footer");
   if (foot) foot.before(strip); else root.append(strip);
 
-
   const stills = await renderThumbnails(others);
-  const frames = [...strip.querySelectorAll(".challenge-art")];
   others.forEach((e, i) => {
     const url = stills.get(e.id);
-    if (!url || !frames[i]) return; // no WebGL, or this rig failed — frame stays dark
+    if (!url) return; // no WebGL, or this rig failed — the frame stays dark
     const img = document.createElement("img");
     img.src = url;
     img.alt = "";
-    frames[i].replaceChildren(img);
+    strip.querySelectorAll(".challenge-art")[i].replaceChildren(img);
   });
 }
 

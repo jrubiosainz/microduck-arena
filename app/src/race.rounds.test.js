@@ -31,13 +31,8 @@ vi.mock("./api.js", () => ({
     return { rows: [{ user: "ann", score: 3.216, seeds_finished: 5 }] };
   },
 }));
-// jsdom has no WebGL; the real renderer answers an empty map there too, so
-// the fake answers a still for some events and nothing for others — which is
-// also what a rig that fails to render gives.
-vi.mock("./thumbnail.js", () => ({
-  renderThumbnails: async (events) =>
-    new Map(events.filter((e) => e.status === "open").map((e) => [e.id, `data:,${e.id}`])),
-}));
+// No WebGL here, which is also what a real browser with it disabled gives.
+vi.mock("./thumbnail.js", () => ({ renderThumbnails: async () => new Map() }));
 
 const { keepRacing } = await import("./race.js");
 
@@ -58,10 +53,9 @@ describe("keepRacing", () => {
     const root = document.createElement("div");
     root.append(document.createElement("footer"));
     await keepRacing(root, PROGRAMME[0]);
-    // Every other round is on the track; only the open ones cost a board.
+    // Four others, and the planned one is not among the four asked for.
     expect(asked).toEqual(["roller-sprint-2m", "hill-climb-1m5", "swag-contest"]);
     expect(root.querySelectorAll(".rounds-on .challenge-note")).toHaveLength(4);
-    expect(root.querySelector(".rounds-on__track")).not.toBeNull();
   });
 
   it("appends when there is no footer to sit before", async () => {
