@@ -62,6 +62,10 @@ CAROL = [
      "text": "The participant is @carol, racing a policy named carol-v1."},
     {"ref": "run#/result", "kind": "result",
      "text": "The mean finish time is 11.20 s, every one of the 5 seeds finished."},
+    {"ref": "run#/board", "kind": "result",
+     "text": "This run takes the lead of the 2 m Sprint board."},
+    {"ref": "run#/points", "kind": "result",
+     "text": "This run earned 100 points: a first run on this event (100)."},
     {"ref": "lore:pit", "kind": "lore", "text": "The pit, and what fell in it."},
 ]
 
@@ -83,6 +87,11 @@ def test_a_callback_is_the_last_other_run_to_air_told_by_its_result_facts(tmp_pa
     assert fact.text == ("Earlier this season: The participant is @carol, racing a policy named "
                          "carol-v1. The mean finish time is 11.20 s, every one of the 5 seeds "
                          "finished.")
+    # The board and the points sentences speak in the present tense of "this
+    # run": borrowed by a callback they would describe the wrong run, so a
+    # callback carries neither.
+    assert "board" not in fact.text and "lead" not in fact.text
+    assert "points" not in fact.text and "earned" not in fact.text
     assert fact.identities == ("carol",)
     assert callback_fact(BroadcastBook(tmp_path / "empty"), "R1") == []
 

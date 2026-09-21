@@ -218,6 +218,19 @@ def test_a_callback_cites_its_fact_and_quotes_no_number_from_it():
                         TURNS[2]])
 
 
+def test_a_callback_quotes_no_number_word_from_its_fact_either():
+    # A callback's own fact can itself be a points sentence, complete with a
+    # banned number word ("first"): citing it must not license speaking that
+    # word about this run, any more than the digits it also carries.
+    points = Fact("recent:R7",
+                  "Earlier this season: @dave's run earned 100 points: a first run on this "
+                  "event (100).", "recent", identities=("dave",))
+    called_back = {"speaker": "ray", "text": "Dave ran a first run here, Peter.",
+                   "fact_refs": [6]}
+    with pytest.raises(Rejected, match="number word"):
+        run_case(turns=[TURNS[0], called_back, TURNS[2]], facts=[*FACTS, points])
+
+
 class Answered:
     """What the router sends back when it is happy."""
 

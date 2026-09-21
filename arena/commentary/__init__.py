@@ -53,12 +53,20 @@ def used_memories(book, cooldown: int = COOLDOWN) -> set[str]:
             for ref in one.dialogue["lore_refs"]}
 
 
+# The board and the points sentences speak in the present tense of "this run"
+# ("This run takes the lead of…", "This run earned…"): borrowed by a callback
+# they would describe the wrong run, and no judge stands behind the claim any
+# more. Only the event, the participant and the plain result travel.
+CALLBACK_REFS = ("run#/event", "run#/participant", "run#/result")
+
+
 def callback_fact(book, run_id: str) -> list[Fact]:
-    """The one earlier run a callback may cite: the last to air that was another run's."""
+    """The one earlier run a callback may cite: the last one other than this
+    run to air, and of it only the event, the participant and the result."""
     for one in reversed(recent_broadcasts(book)):
         if one.run_id != run_id:
             about = " ".join(fact["text"] for fact in one.dialogue["brief"]["facts"]
-                             if fact["kind"] == "result")
+                             if fact["ref"] in CALLBACK_REFS)
             # The handles that text prints are the ones a callback may speak, read
             # with the writer's own pattern so "@alice's" yields the same identity.
             names = AT_NAME.findall(about)

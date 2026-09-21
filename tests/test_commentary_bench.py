@@ -54,6 +54,31 @@ def test_props_are_the_writers_own_words_by_share_of_dialogues():
     assert "the" not in found and "12" not in found and "s" not in found
 
 
+def test_tokens_keeps_a_decimal_and_a_contraction_whole():
+    # Split at the dot and the apostrophe, "12.40" and "won't" stop being one
+    # figure and one word: PROPS would then report "won" as a real sports word
+    # nobody said, and a turn with a decimal would count as longer than it is.
+    found = bench.tokens("We've won't 12.40 s @Nico-robot's that's")
+    assert found == ["we've", "won't", "12.40", "s", "nico", "robot's", "that's"]
+
+
+def test_props_drops_a_contraction_and_keeps_a_possessives_noun():
+    run_fact = ("result", "The mean finish time is 12.40 s.")
+    session = [aired("We've won't 12.40 s @Nico-robot's that's, Ray!", facts=[run_fact])]
+    found = dict(bench.props(session))
+    # The possessive's noun is a prop like any other; the contractions are
+    # function words in disguise (we have, will not, that is) and no prop at all.
+    assert found["robot"] == 1.0
+    for word in ("won", "ve", "t", "s", "we've", "won't", "that's", "robot's"):
+        assert word not in found
+
+
+def test_a_decimal_with_its_unit_does_not_inflate_the_sentence_count():
+    # The old tokenizer split "12.40 s, Ray!" into four words - 12, 40, s, ray
+    # - long enough to count as a sentence; the new one sees three.
+    assert bench.repeats([aired("12.40 s, Ray!")]) == (0, 0)
+
+
 def test_the_reserves_log_is_tallied_by_reason():
     lines = ["booth  on",
              "commentary: R1 written",
@@ -81,6 +106,9 @@ VERDICT = {"grounded": {"ok": True, "turn": None, "why": ""},
            "followed": {"opening": True, "angle": False}}
 
 
+DRAWN = {"opening": "Peter opens mid-thought.", "angle": "Build it on the time or the result."}
+
+
 def test_the_judge_is_shown_the_brief_and_the_dialogue_and_answers_in_json():
     asked = []
 
@@ -89,7 +117,7 @@ def test_the_judge_is_shown_the_brief_and_the_dialogue_and_answers_in_json():
         return {"content": "```json\n" + json.dumps(VERDICT) + "\n```"}
 
     one = aired("Well.", facts=[("result", "The mean finish time is 12.40 s.")])
-    one["dialogue"]["brief"]["direction"] = {"turns": 3, "opening": "Peter opens mid-thought."}
+    one["dialogue"]["brief"]["direction"] = DRAWN
     sheets = {"peter": {"name": "Peter", "sheet": "Warm."}}
     assert bench.judge(provider, one, sheets) == VERDICT
     [(messages, max_tokens)] = asked
@@ -98,8 +126,7 @@ def test_the_judge_is_shown_the_brief_and_the_dialogue_and_answers_in_json():
     assert "Warm." in messages[0]["content"]
     shown = json.loads(messages[1]["content"])
     assert shown == {"facts": one["dialogue"]["brief"]["facts"],
-                     "direction": {"turns": 3, "opening": "Peter opens mid-thought."},
-                     "dialogue": one["dialogue"]["turns"]}
+                     "direction": DRAWN, "dialogue": one["dialogue"]["turns"]}
 
 
 @pytest.mark.parametrize("broken", [
@@ -109,14 +136,17 @@ def test_the_judge_is_shown_the_brief_and_the_dialogue_and_answers_in_json():
     {**VERDICT, "grounded": {"ok": "true", "turn": None, "why": ""}},
     {**VERDICT, "scene": "no-such-scene"},
     {**VERDICT, "followed": {"opening": "yes"}},
+    {**VERDICT, "followed": {"opening": True}},  # missing "angle", one of the direction's own keys
     ["not", "an", "object"],
 ])
 def test_a_verdict_that_is_not_the_shape_asked_for_costs_itself(broken):
     def provider(messages, max_tokens):
         return {"content": json.dumps(broken)}
 
+    one = aired("Well.")
+    one["dialogue"]["brief"]["direction"] = DRAWN
     with pytest.raises(ValueError):
-        bench.judge(provider, aired("Well."), {})
+        bench.judge(provider, one, {})
 
 
 def test_the_mechanic_gives_rates_reasons_scenes_and_adherence():

@@ -15,7 +15,8 @@ from ..live import cycle
 from .generator import Rejected
 
 DEPTH = 8  # runs kept stocked: about ten minutes of programme
-PER_HOUR = 120  # generation attempts, refusals included; steady state is about 80
+PER_HOUR = 120  # generation attempts, refusals included: about 115 an hour, 71 booths, on
+                # the real log; the cap sits at that edge on purpose, the owner's own bound.
 IDLE_S = 5.0  # how long to wait when every run in reach is stocked
 RETRY_S = 300.0  # how long a refused run waits: the grid's horizon
 

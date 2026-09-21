@@ -12,7 +12,7 @@ def site(slots, now_ms=5000):
     def get(url):
         asked.append(url)
         if url == f"{SITE}/api/live":
-            return {"now_ms": now_ms, "build": "b1", "slots": slots}
+            return {"now_ms": now_ms, "origin_ms": 1700000000000, "slots": slots}
         return {"dialogue": {"turns": [], "about": url.rsplit("/", 1)[1]}, "plan": {}}
 
     get.asked = asked
@@ -29,7 +29,7 @@ def test_it_keeps_each_started_booth_once(tmp_path):
     # B2 has not started: a future slot may still be laid again.
     assert [p.name for p in tmp_path.iterdir()] == ["4000-B1.json"]
     assert json.loads((tmp_path / "4000-B1.json").read_text()) == {
-        "at_ms": 4000, "build": "b1", "run_id": "A",
+        "at_ms": 4000, "origin_ms": 1700000000000, "run_id": "A",
         "dialogue": {"turns": [], "about": "B1"}, "plan": {}}
     assert collector.collect(SITE, tmp_path, seen, get) == 0
     assert get.asked.count(f"{SITE}/api/live/broadcast/B1") == 1

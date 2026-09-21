@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 import httpx
 from huggingface_hub import get_token
 
-POLL_S = 20  # a started slot stays in the grid for two minutes
+POLL_S = 20  # /api/live serves a started slot for one minute behind now (BEHIND_MS)
 
 
 def on_disk(out: Path) -> set[str]:
@@ -37,7 +37,8 @@ def collect(site: str, out: Path, seen: set[str], get) -> int:
              and slot["broadcast"] not in seen]
     for slot in fresh:
         body = get(f"{site}/api/live/broadcast/{slot['broadcast']}")
-        one = {"at_ms": slot["at_ms"], "build": live["build"], "run_id": slot["run_id"], **body}
+        one = {"at_ms": slot["at_ms"], "origin_ms": live["origin_ms"], "run_id": slot["run_id"],
+               **body}
         (out / f"{slot['at_ms']}-{slot['broadcast']}.json").write_text(
             json.dumps(one, indent=2, ensure_ascii=False))
         seen.add(slot["broadcast"])

@@ -82,7 +82,20 @@ def load(directory: Path) -> list[dict]:
 
 
 def tokens(text: str) -> list[str]:
-    return re.findall(r"[^\W_]+", text.casefold())
+    # A decimal is one figure, not two ("12.40" is not "12" and "40"), and a
+    # contraction is one word, not a stem and a fragment ("won't" is not "won"
+    # and "t"): split either way, the fragment reads as a word nobody said.
+    return re.findall(r"\d+(?:\.\d+)?|[^\W\d_]+(?:['’][^\W\d_]+)*", text.casefold())
+
+
+def _noun(word: str) -> str | None:
+    """The word PROPS counts for a token straight from tokens(): a trailing
+    's or ’s is a possessive, so the noun it modifies is what may be a prop;
+    any other apostrophe is a contraction of function words (don't, we've,
+    that's), so the token is dropped rather than counted as if it were one."""
+    if word.endswith(("'s", "’s")):
+        return word[:-2]
+    return None if "'" in word or "’" in word else word
 
 
 def grams(text: str) -> set[tuple[str, ...]]:
@@ -124,9 +137,10 @@ def props(session: list[dict], top: int = 20) -> list[tuple[str, float]]:
     contains. A memory is not such a fact — a prop out of the bible is still a prop."""
     used = Counter()
     for one in session:
-        given = {word for fact in one["dialogue"]["brief"]["facts"] if fact["kind"] != "lore"
-                 for word in tokens(fact["text"])}
-        said = {word for turn in one["dialogue"]["turns"] for word in tokens(turn["text"])}
+        given = {noun for fact in one["dialogue"]["brief"]["facts"] if fact["kind"] != "lore"
+                 for word in tokens(fact["text"]) if (noun := _noun(word)) is not None}
+        said = {noun for turn in one["dialogue"]["turns"] for word in tokens(turn["text"])
+                if (noun := _noun(word)) is not None}
         used.update(said - given - FUNCTION_WORDS)
     return [(word, count / len(session)) for word, count in used.most_common(top)]
 
@@ -158,8 +172,9 @@ def judge(provider, one: dict, characters: dict) -> dict:
         [{"role": "system",
           "content": JUDGE + "Characters: " + json.dumps(characters, ensure_ascii=False)},
          {"role": "user", "content": json.dumps(shown, ensure_ascii=False)}], JUDGE_LIMIT)
-    # An answer cut short carries no content; read as empty, it fails as any other
-    # answer that is not the JSON asked for.
+    # A finish cut short still normally carries partial content; only a null
+    # content is empty. Either way, whatever is read here fails below like any
+    # other answer that is not the JSON asked for.
     content = (answer["content"] or "").strip()
     if content.startswith("```"):  # a code fence is dressing, not an answer
         content = content.partition("\n")[2].rpartition("```")[0]
@@ -179,8 +194,9 @@ def judge(provider, one: dict, characters: dict) -> dict:
     if verdict["scene"] not in SCENES:
         raise ValueError(f"scene must be one of {sorted(SCENES)}")
     followed = verdict["followed"]
-    if not isinstance(followed, dict) or any(type(v) is not bool for v in followed.values()):
-        raise ValueError("followed must be an object of booleans")
+    if (not isinstance(followed, dict) or set(followed) != set(brief["direction"])
+            or any(type(v) is not bool for v in followed.values())):
+        raise ValueError("followed must have exactly the direction's own keys, each a boolean")
     return verdict
 
 
