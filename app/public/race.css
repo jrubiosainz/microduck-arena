@@ -525,10 +525,23 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
 /* Left of the board: what goes ON THE STAGE. Deliberately not the stickers on
    the right, which filter which rows the table shows — the two groups share
    the words "all", "mine" and "top", and nothing but their look would keep
-   them apart. These are plain ink-on-paper actions: press one and it ticks a
-   set of boxes, press nothing and it holds no state of its own. */
-.picks { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.picks__label {
+   them apart.
+   Checkboxes, because they act on checkboxes: a control that ticks boxes
+   should look like the boxes it ticks. Their union is what plays, so "mine"
+   and "top 5" compose rather than one replacing the other. */
+.picks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.picks legend {
+  float: left; /* a legend is not a flex item; this puts it on the line */
+  margin-right: 14px;
+  padding: 0;
   color: var(--ink-70);
   font-family: var(--type-eyebrow-family);
   font-weight: var(--type-eyebrow-weight);
@@ -536,18 +549,14 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
   letter-spacing: var(--type-eyebrow-tracking);
   text-transform: uppercase;
 }
-.picks button {
-  padding: 5px 12px;
-  border: 2px solid var(--ink);
-  background: var(--paper);
-  color: var(--ink);
-  font: 400 0.76rem/1 var(--display);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+.picks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
+  font-size: 0.86rem;
 }
-.picks button:hover { background: var(--warm-paper); }
-.picks button:active { translate: 1px 1px; }
+.picks input { accent-color: var(--orange); cursor: pointer; }
 .modes { display: flex; gap: 10px; }
 
 /* Three stickers pressed on by hand, each its own colour and its own lean.
@@ -600,7 +609,7 @@ table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 .swatch:focus-visible,
 .controls button:focus-visible,
 .modes button:focus-visible,
-.picks button:focus-visible,
+.picks input:focus-visible,
 .entry__actions button:focus-visible,
 .entry__signin:focus-visible,
 .entry__speed select:focus-visible,

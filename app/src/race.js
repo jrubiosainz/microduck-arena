@@ -290,12 +290,12 @@ export function raceHall(event) {
       </div>
     </div>
     <div class="boardtop">
-      <div class="picks" role="group" aria-label="Which runs to put on the stage">
-        <span class="picks__label">Watch</span>
-        <button data-pick="all">All</button>
-        <button data-pick="mine">Mine</button>
-        <button data-pick="top">Top 5</button>
-      </div>
+      <fieldset class="picks">
+        <legend>Put on the stage</legend>
+        <label><input type="checkbox" data-pick="all"> All</label>
+        <label><input type="checkbox" data-pick="mine"> Mine</label>
+        <label><input type="checkbox" data-pick="top"> Top 5</label>
+      </fieldset>
       <div class="modes" role="group" aria-label="Which runs to show">
         <button data-mode="top" aria-pressed="true">Top</button>
         <button data-mode="mine" aria-pressed="false">Mine</button>
@@ -369,14 +369,20 @@ export async function renderRace(root, { event, state }) {
     wallsButton.setAttribute("aria-pressed", String(wallsShown));
     wallsButton.textContent = wallsShown ? "Hide walls" : "Show walls";
   });
-  // Tick a set of lanes at once. Actions, not toggles, so no aria-pressed:
-  // pressing one does a thing and leaves no state of its own — the ticked
-  // boxes ARE the state, and they can be changed by hand afterwards.
-  for (const button of root.querySelectorAll(".picks button")) {
-    button.addEventListener("click", () => {
-      race(selectLanes(board, button.dataset.pick), lastTiers);
-    });
+  // Checkboxes and not buttons, because they act on checkboxes: a control
+  // that ticks boxes should look like the boxes it ticks. Their union is what
+  // plays, so "mine" and "top 5" compose instead of one replacing the other.
+  const pickBoxes = [...root.querySelectorAll(".picks input")];
+  const picked = () => pickBoxes.filter((b) => b.checked).map((b) => b.dataset.pick);
+  for (const box of pickBoxes) {
+    box.addEventListener("change", () => race(selectLanes(board, picked()), lastTiers));
   }
+  // A row ticked by hand no longer matches any pick, so the picks stop
+  // claiming to describe it. Silent rather than re-running the replay: the
+  // row's own handler is already doing that.
+  const clearPicks = () => {
+    for (const box of pickBoxes) box.checked = false;
+  };
 
   // Who each duck belongs to. Off by default: with one lane the answer is on
   // the panel beside it, and four plates over four ducks is a legend nobody
@@ -449,7 +455,10 @@ export async function renderRace(root, { event, state }) {
       // rank exactly as the server computed it.
       { event, rows: visibleRows(merged, { mode, me: me?.user ?? null }) },
       {
-        onSelectionChange: (runIds) => race(runIds, tiers),
+        onSelectionChange: (runIds) => {
+          clearPicks();
+          return race(runIds, tiers);
+        },
         me: me?.user ?? null,
         onWithdraw: async (runId, policy) => {
           // Asked before doing, because it is someone's standing and the button

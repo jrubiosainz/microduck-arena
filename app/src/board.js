@@ -250,11 +250,15 @@ export function renderBoard(
   container.append(table);
 }
 
-/** How many lanes `selectLanes(container, "top")` ticks. */
+/** How many lanes the "Top 5" pick ticks. */
 export const TOP_LANES = 5;
 
 /**
- * Tick a set of lanes at once, and say which run ids ended up ticked.
+ * Tick the UNION of a set of picks, and say which run ids ended up ticked.
+ *
+ * A union and not three separate buttons: "mine" and "top 5" overlap, and a
+ * person who wants both should tick both rather than choose. Passing none
+ * clears the stage, which is what unticking the last box has to mean.
  *
  * Operates on the boxes that are RENDERED, which is the point: a board
  * filtered to "Mine" has no other rows in the DOM, so "all" there means all
@@ -262,14 +266,15 @@ export const TOP_LANES = 5;
  * with no box — a trial, which is on the stage and nowhere else — is
  * untouched, because it has no run id to play from.
  */
-export function selectLanes(container, which) {
-  const boxes = [...container.querySelectorAll("input[type=checkbox]")];
-  const wanted = (box) => {
-    if (which === "mine") return box.dataset.mine !== undefined;
-    if (which === "top") return Number(box.dataset.rank) <= TOP_LANES;
-    return true;
-  };
-  for (const box of boxes) box.checked = wanted(box);
+export function selectLanes(container, picks) {
+  const wanted = new Set(picks);
+  const inPick = (box) =>
+    (wanted.has("all")) ||
+    (wanted.has("mine") && box.dataset.mine !== undefined) ||
+    (wanted.has("top") && Number(box.dataset.rank) <= TOP_LANES);
+  for (const box of container.querySelectorAll("input[type=checkbox]")) {
+    box.checked = inPick(box);
+  }
   return selectedRunIds(container);
 }
 
