@@ -4,7 +4,7 @@
 import { getMe, getPlayer } from "./api.js";
 import { formatScore } from "./format.js";
 import { menuHref, runHref } from "./router.js";
-import { avatar, footer, signage } from "./signage.js";
+import { avatar, chequer, footer, signage } from "./signage.js";
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -148,7 +148,8 @@ export function noProfile(user) {
 
 export async function renderPlayer(root, user) {
   const [player, me] = await Promise.all([getPlayer(user), getMe()]);
-  root.replaceChildren(signage(me));
+  // The chequer straight under the strip, where the page begins.
+  root.replaceChildren(signage(me), chequer("page-checker"));
   const hall = el("main", "hall hall--warm");
   hall.append(player ? profile(player, me) : noProfile(user));
   root.append(hall, footer());

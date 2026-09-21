@@ -60,6 +60,21 @@ export function chip(me) {
   return link;
 }
 
+/**
+ * The chequer: orange on beige, the finish line.
+ *
+ * Here rather than on either page because both wear one — the front page
+ * between its chapters, a player's under the strip — and the decision worth
+ * keeping in one place is that it is decorative and says nothing to a reader.
+ * Each page dresses it through its own class.
+ */
+export function chequer(className) {
+  const band = document.createElement("div");
+  band.className = className;
+  band.setAttribute("aria-hidden", "true");
+  return band;
+}
+
 export function signage(me) {
   const header = document.createElement("header");
   header.className = "signage";

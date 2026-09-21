@@ -25,7 +25,20 @@
    both have to read the same figure: a horizontal edge against a leaning band
    shows bare paper beneath whichever end lifts, and no amount of moving either
    one fixes that — the edges have to be parallel, or reach past each other. */
-.hall { --slant: calc(100vw * 0.01746); }
+.hall {
+  --slant: calc(100vw * 0.01746);
+  /* The dot field, read off pollen-robotics.com/microduck rather than
+     invented: orange at a third, 3.2px dots on a 16px grid, under a wash that
+     clears at one edge and is solid by 40% in. Declared here because two
+     surfaces wear it — the band on the front page and the foot of a player's
+     — and a recipe copied twice is a recipe that drifts. */
+  --dots: radial-gradient(
+    color-mix(in srgb, var(--orange) 34%, transparent) 3.2px,
+    transparent 3.9px
+  );
+  --dots-grid: 16px 16px;
+  --dots-wash-up: linear-gradient(to top, transparent 0%, var(--warm-paper) 40%);
+}
 
 .ladder-row:focus-visible, .challenge-link:focus-visible,
 .profile-results a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
@@ -299,13 +312,8 @@
      `to top` starts the gradient at the BOTTOM edge: clear there, solid by 40%
      of the way up — so the dots gather along the band's lower edge, against
      the tilted rule, rather than under the yellow strip. */
-  background-image:
-    linear-gradient(to top, transparent 0%, var(--warm-paper) 40%),
-    radial-gradient(
-      color-mix(in srgb, var(--orange) 34%, transparent) 3.2px,
-      transparent 3.9px
-    );
-  background-size: 100% 100%, 16px 16px;
+  background-image: var(--dots-wash-up), var(--dots);
+  background-size: 100% 100%, var(--dots-grid);
   background-repeat: no-repeat, repeat;
 }
 /* The pitch keeps the charter's 66-character measure; the board takes what is
@@ -661,6 +669,39 @@
 }
 
 /* ── Profile: a paper scrapbook ────────────────────────────────────────────── */
+
+/* The chequer under the strip, where a player's page begins. It leans like
+   the front page's, and can: the page's own ground is the beige the chequer
+   is drawn on, so the end that dips exposes nothing but more of the same. */
+.page-checker {
+  position: relative;
+  z-index: 1;
+  height: 16px;
+  width: 108vw;
+  margin-left: calc(50% - 54vw);
+  rotate: calc(-1 * var(--rotate-1-0));
+  background-color: var(--warm-paper);
+  background-image:
+    linear-gradient(45deg, var(--orange) 25%, transparent 25% 75%, var(--orange) 75%),
+    linear-gradient(45deg, var(--orange) 25%, transparent 25% 75%, var(--orange) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
+/* The dot field at the foot of the page, the same one the front page's band
+   wears, gathered along the bottom edge. Inside the column so it turns and
+   overhangs without reaching the window's edges, and behind the results. */
+.hall--warm::after {
+  content: "";
+  position: absolute;
+  inset: 40% -6% -6%;
+  z-index: -1;
+  pointer-events: none;
+  transform: rotate(calc(-1 * var(--rotate-2-5)));
+  background-image: var(--dots-wash-up), var(--dots);
+  background-size: 100% 100%, var(--dots-grid);
+  background-repeat: no-repeat, repeat;
+}
 
 /* The player's page stands on warm paper, not the hall's lighter ground: it
    is one long sheet of results and the beige is what the rest of the site

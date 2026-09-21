@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { avatar, chip, footer, signage } from "./signage.js";
+import { avatar, chequer, chip, footer, signage } from "./signage.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
 describe("avatar", () => {
@@ -137,6 +137,20 @@ describe("footer", () => {
     for (const link of el.querySelectorAll("a")) {
       expect(link.target).toBe("_blank");
       expect(link.rel).toBe("noopener");
+    }
+  });
+});
+
+describe("the chequer", () => {
+  it("is decorative, and each page dresses it through its own class", () => {
+    // Two pages wear one — the front between its chapters, a player's under
+    // the strip — and the decision worth keeping in one place is that it says
+    // nothing to a reader.
+    for (const name of ["chapter-checker", "page-checker"]) {
+      const band = chequer(name);
+      expect(band.className).toBe(name);
+      expect(band.getAttribute("aria-hidden")).toBe("true");
+      expect(band.textContent).toBe("");
     }
   });
 });

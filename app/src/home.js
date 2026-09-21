@@ -10,7 +10,7 @@ import { FLOCK, MICRODUCK, MICRODUCK_RL, STORE } from "./links.js";
 import { renderLive } from "./live.js";
 import { liveHref, playerHref } from "./router.js";
 import { signInHref } from "./session.js";
-import { avatar } from "./signage.js";
+import { avatar, chequer } from "./signage.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
@@ -199,18 +199,6 @@ export function flockBand() {
   return band;
 }
 
-/**
- * The chequer between chapters: orange on beige, the finish line.
- *
- * It replaces a plain ink rule. A line divides two things; a chequered band
- * says which kind of place this is, and it is the same device the race page
- * lays over its strip of other rounds, so the two read as one site.
- */
-export function chapterChecker() {
-  const band = el("div", "chapter-checker");
-  band.setAttribute("aria-hidden", "true");
-  return band;
-}
 
 /** The channel's frame beside the ladder: the stage the player mounts in, and
  * the picture over it as the way to the full screen. The button the player
@@ -284,7 +272,7 @@ export async function renderHome(root, state) {
   const flyers = events.map((event, i) => flyer(event, boards[i].rows));
   wall.append(...flyers);
   rounds.append(el("h3", "eyebrow", "Pick your round"), wall);
-  hall.append(chapterChecker(), rounds);
+  hall.append(chequer("chapter-checker"), rounds);
 
   // After the wall is on screen: the stills replace the dark frames as they
   // arrive, rather than holding the whole page for WebGL and a 1.3 MB GLB.

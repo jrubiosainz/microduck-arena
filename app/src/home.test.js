@@ -4,8 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { flyer } from "./flyer.js";
 import {
-  chapterChecker, demoAsked, demoRows, flockBand, ladder, liveFrame, masthead, pageTexture,
-  playerCard,
+  demoAsked, demoRows, flockBand, ladder, liveFrame, masthead, pageTexture, playerCard,
 } from "./home.js";
 
 const open = {
@@ -93,8 +92,12 @@ describe("the first chapter's band", () => {
     // Declarations only. A comment explaining why a property is NOT used must
     // not read as that property being used — which is exactly what happened.
     const dotRules = dots[1].replace(/\/\*[\s\S]*?\*\//g, "");
-    expect(dotRules, "the dots are not built from the orange token")
-      .toMatch(/color-mix\(in srgb, var\(--orange\)/);
+    // The recipe itself lives on .hall, because the foot of a player's page
+    // wears it too and a recipe copied twice is a recipe that drifts.
+    expect(css, "the dots are not built from the orange token")
+      .toMatch(/--dots:[\s\S]*?color-mix\(in srgb, var\(--orange\)/);
+    expect(dotRules, "the band does not use the shared dot field")
+      .toMatch(/var\(--dots\)/);
     expect(dotRules, "the dots sit square instead of leaning with the page")
       .toMatch(/rotate\(calc\(-1 \* var\(--rotate-2-5\)\)\)/);
     // The fade must stay a background layer. `mask-image` resolves through
@@ -103,8 +106,10 @@ describe("the first chapter's band", () => {
     // `to top` puts the gradient's 0% at the BOTTOM edge, so the dots gather
     // along the band's lower edge against the tilted rule. Flipping this to
     // `to bottom` moves the whole field to the other end of the band.
-    expect(dotRules, "the dots are not gathered at the band's lower edge")
-      .toMatch(/linear-gradient\(to top, transparent 0%, var\(--warm-paper\)/);
+    expect(css, "the wash does not clear at the edge the dots gather on")
+      .toMatch(/--dots-wash-up:\s*linear-gradient\(to top, transparent 0%, var\(--warm-paper\)/);
+    expect(dotRules, "the band does not paint the wash over the dots")
+      .toMatch(/background-image:\s*var\(--dots-wash-up\), var\(--dots\)/);
     expect(dotRules, "the fade went back to being a mask").not.toMatch(/mask-image/);
     // The wash must sit BEHIND the text. Painted over it, it faded the title
     // to a ghost and swallowed every ladder row after the first.
@@ -572,12 +577,6 @@ describe("the duck's motion", () => {
   });
 });
 
-describe("the chapter chequer, as an element", () => {
-  it("is decorative, so a screen reader does not announce a band of squares", () => {
-    expect(chapterChecker().className).toBe("chapter-checker");
-    expect(chapterChecker().getAttribute("aria-hidden")).toBe("true");
-  });
-});
 
 describe("the channel's frame", () => {
   it("is a stage to mount the channel in, with the picture itself the way into it", () => {
