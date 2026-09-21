@@ -108,13 +108,16 @@
   overflow-wrap: anywhere;
 }
 .player-card-name { overflow-wrap: anywhere; }
-.player-card-you:hover, .player-card-in:hover { background: var(--warm-paper); }
+.player-card-you:hover, .player-card-in:hover { background: var(--cream); }
 .player-card-you:focus-visible, .player-card-in:focus-visible {
   outline: 3px solid var(--cyan);
   outline-offset: 3px;
 }
-.player-card-in { background: var(--orange); }
-.player-card-glyph { font-size: 30px; line-height: 1; }
+/* Beige, like the signed-in plate beside it and like the picture's own ground:
+   the orange made the one square on the cover that is only an invitation shout
+   louder than the mark it sits next to. */
+.player-card-in { background: var(--warm-paper); }
+.player-card-duck { width: 54px; height: auto; }
 /* A square of its own inside the square plate, rather than filling it: at full
    width the picture was the card and the handle read as a caption under it. */
 .player-card-you .avatar {

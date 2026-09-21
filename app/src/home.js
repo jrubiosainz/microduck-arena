@@ -118,8 +118,13 @@ export function playerCard(me, standing) {
   if (!me.signed_in) {
     const link = el("a", "player-card-in fx-shadow-card");
     link.href = signInHref();
+    // The site's own duck, not the emoji: the emoji is a mallard from whatever
+    // font the machine happens to have, and this plate sits beside the mark
+    // that duck head IS.
+    const head = duckHead();
+    head.classList.add("player-card-duck");
     link.append(
-      el("span", "player-card-glyph", "\u{1F986}"),
+      head,
       el("span", "player-card-name", "Sign in"),
       el("span", "player-card-score", "with Hugging Face"),
     );

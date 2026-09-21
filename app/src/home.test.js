@@ -46,10 +46,15 @@ describe("the player card", () => {
     expect(card.querySelector(".player-card-score")).toBeNull();
   });
 
-  it("offers the way in when signed out", () => {
+  it("offers the way in when signed out, under the site's own duck", () => {
     const card = playerCard({ signed_in: false });
     const link = card.querySelector("a.player-card-in");
     expect(link.textContent).toContain("Sign in");
+    // The mark, not the emoji: an emoji duck is a mallard from whatever font
+    // the machine happens to have, beside the head that IS this site's mark.
+    const head = link.querySelector("img.duckhead.player-card-duck");
+    expect(head.getAttribute("src")).toBe("/duck-head-mark.webp");
+    expect(head.getAttribute("alt")).toBe("");
     // Signed out there is no page of yours to link to.
     expect(card.querySelector(".player-card-you")).toBeNull();
   });
