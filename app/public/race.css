@@ -312,11 +312,7 @@ table.board td.tab {
   border-left: 5px solid transparent;
   border-left-color: var(--lane, transparent);
 }
-/* Ink, not the lane's colour. The tinted boxes read as a row of coloured
-   squares of their own; the bar beside them is what actually ties a row to
-   the ring around its duck, and it does that without pretending the checkbox
-   means something too. */
-table.board td.tab input { accent-color: var(--ink); cursor: pointer; }
+table.board td.tab input { accent-color: var(--lane, var(--ink)); cursor: pointer; }
 
 table.board .rank {
   width: 3.5rem;
