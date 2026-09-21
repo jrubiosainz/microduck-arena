@@ -1186,7 +1186,8 @@ table.board .withdraw:focus-visible,
   padding: 18px 0 22px;
   /* No scrollbar: the arrows either side are the affordance, and the half
      card at the edge says there is more. A bar that comes and goes over the
-     cards was the thing being noticed. */
+     cards was the thing being noticed — and on a track that loops it would
+     also lie, sitting halfway along while the wall goes round for ever. */
   scrollbar-width: none;
 }
 .rounds-on__track::-webkit-scrollbar { display: none; }
@@ -1221,6 +1222,8 @@ table.board .withdraw:focus-visible,
   transform-origin: 50% -12px;
 }
 .rounds-on .challenge-note:nth-child(2n) { rotate: var(--rotate-1-0); }
+/* The copies continue the alternation rather than restarting it: nth-child
+   counts across the whole track, which is what is wanted here. */
 .rounds-on .challenge-note--race { --fx-shadow-color: var(--orange); }
 .rounds-on .challenge-note--challenge { --fx-shadow-color: var(--magenta); }
 .rounds-on .challenge-note--showcase { --fx-shadow-color: var(--yellow); }

@@ -365,7 +365,45 @@ export function otherRounds(events, event, boards) {
   track.tabIndex = 0;
   track.setAttribute("role", "group");
   track.setAttribute("aria-label", "The other rounds");
-  track.append(...others.map((e) => flyer(e, boards.get(e.id) ?? [])));
+  const sheets = others.map((e) => flyer(e, boards.get(e.id) ?? []));
+  track.append(...sheets);
+  // A second copy, so scrolling off one end arrives at the other with nothing
+  // to see. It is a DUPLICATE, so it is hidden from anyone not looking at it:
+  // a screen reader would otherwise read the whole programme twice, and tab
+  // would walk it twice.
+  for (const sheet of sheets) {
+    const copy = sheet.cloneNode(true);
+    copy.dataset.copy = "";
+    copy.setAttribute("aria-hidden", "true");
+    for (const focusable of copy.querySelectorAll("a, button")) focusable.tabIndex = -1;
+    track.append(copy);
+  }
+
+  // Where the seam is. Read at the moment it is needed rather than kept: the
+  // window resizes, a still lands, and the track's width moves with them.
+  const lap = () => track.scrollWidth / 2;
+  // Bring the resting position inside the first copy before an animated
+  // scroll, so a smooth step never has to cross the seam while it is running
+  // — that is what turns a loop into a lurch.
+  const normalise = (dir) => {
+    const half = lap();
+    if (!half) return;
+    if (dir > 0 && track.scrollLeft >= half) track.scrollLeft -= half;
+    if (dir < 0 && track.scrollLeft < track.clientWidth) track.scrollLeft += half;
+  };
+  // A drag or a trackpad has no press to hang the correction on, so the seam
+  // is crossed after the scrolling settles. Instantly, and onto identical
+  // content, so there is nothing to see.
+  let settling;
+  track.addEventListener("scroll", () => {
+    clearTimeout(settling);
+    settling = setTimeout(() => {
+      const half = lap();
+      if (!half) return;
+      if (track.scrollLeft >= half) track.scrollLeft -= half;
+      else if (track.scrollLeft <= 0) track.scrollLeft += half;
+    }, 140);
+  }, { passive: true });
 
   // One arrow either side of the track rather than a pair above it: they
   // point along the thing they move, and the eye does not have to travel back
@@ -378,7 +416,9 @@ export function otherRounds(events, event, boards) {
     button.textContent = glyph;
     // One viewport of cards per press, whatever the window is showing.
     button.addEventListener("click", () => {
-      track.scrollBy({ left: (way === "on" ? 1 : -1) * track.clientWidth, behavior: "smooth" });
+      const dir = way === "on" ? 1 : -1;
+      normalise(dir);
+      track.scrollBy({ left: dir * track.clientWidth, behavior: "smooth" });
     });
     return button;
   };

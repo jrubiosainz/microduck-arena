@@ -55,7 +55,7 @@ describe("keepRacing", () => {
     await keepRacing(root, PROGRAMME[0]);
     // Every other round is on the track; only the open ones cost a board.
     expect(asked).toEqual(["roller-sprint-2m", "hill-climb-1m5", "swag-contest"]);
-    expect(root.querySelectorAll(".rounds-on .challenge-note")).toHaveLength(4);
+    expect(root.querySelectorAll(".rounds-on .challenge-note:not([data-copy])")).toHaveLength(4);
     expect(root.querySelector(".rounds-on__track")).not.toBeNull();
   });
 

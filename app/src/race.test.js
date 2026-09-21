@@ -439,7 +439,8 @@ describe("otherRounds: the way on, under the board", () => {
   it("leaves out the round you are already on", () => {
     // A card back to this page is a dead end dressed as a way forward.
     const strip = otherRounds(programme, here, new Map());
-    const links = [...strip.querySelectorAll("a.challenge-link")].map((a) => a.getAttribute("href"));
+    const links = [...strip.querySelectorAll(".challenge-note:not([data-copy]) a.challenge-link")]
+      .map((a) => a.getAttribute("href"));
     expect(links).not.toContain("#/e/sprint-2m");
     expect(links[0]).toBe("#/e/roller-sprint-2m");
   });
@@ -448,9 +449,24 @@ describe("otherRounds: the way on, under the board", () => {
     // Four are in view and the rest scroll in, so there is nowhere left for a
     // "see all" to send you that you are not already looking at.
     const strip = otherRounds(programme, here, new Map());
-    expect(strip.querySelectorAll(".challenge-note")).toHaveLength(programme.length - 1);
+    const real = strip.querySelectorAll(".challenge-note:not([data-copy])");
+    expect(real).toHaveLength(programme.length - 1);
     expect(strip.querySelector(".rounds-on__all")).toBeNull();
     expect(ROUNDS_IN_VIEW).toBe(4);
+  });
+
+  it("lays a second copy so the track can go round, and hides it from readers", () => {
+    // The loop needs the wall twice over. A screen reader would otherwise
+    // read the whole programme twice, and tab would walk it twice.
+    const strip = otherRounds(programme, here, new Map());
+    const copies = [...strip.querySelectorAll(".challenge-note[data-copy]")];
+    expect(copies).toHaveLength(programme.length - 1);
+    expect(copies.every((c) => c.getAttribute("aria-hidden") === "true")).toBe(true);
+    expect(copies.every((c) => [...c.querySelectorAll("a, button")]
+      .every((f) => f.tabIndex === -1))).toBe(true);
+    // The originals stay reachable.
+    const first = strip.querySelector(".challenge-note:not([data-copy]) a.challenge-link");
+    expect(first.tabIndex).toBe(0);
   });
 
   it("gives the track its own way to be scrolled, by key as well as by arrow", () => {
@@ -476,7 +492,7 @@ describe("otherRounds: the way on, under the board", () => {
       ["roller-sprint-2m", [{ user: "ann", score: 3.216, seeds_finished: 5 }]],
     ]);
     const strip = otherRounds(programme, here, boards);
-    const cards = [...strip.querySelectorAll(".challenge-note")];
+    const cards = [...strip.querySelectorAll(".challenge-note:not([data-copy])")];
     expect(cards[0].querySelector(".flyer-leader-name").textContent).toBe("ann");
     expect(cards[1].querySelector(".flyer-leader-name").textContent).toBe("be the first");
     // A planned event says so rather than inviting an entry it cannot take.
