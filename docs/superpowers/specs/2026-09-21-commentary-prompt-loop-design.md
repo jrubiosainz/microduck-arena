@@ -15,9 +15,9 @@ improve the prompt, push, and start again.
 This spec amends `2026-09-18-live-commentary-design.md`, which said the prompt
 and its audit "stay exactly as they are" and sized the reserve on half its turns
 producing nothing; those passages are corrected in place and point here. It also
-amends, in `2026-09-17-live-channel-design.md`, the paragraph "Continuity", the
-sentence "Then the audit call returns…" and the default model under "Provider
-and configuration".
+amends, in `2026-09-17-live-channel-design.md`, the paragraph "Continuity" and
+the one after it on `direction(run_id)`, the sentence "Then the audit call
+returns…" and the default model under "Provider and configuration".
 
 ## What was found
 
@@ -83,9 +83,10 @@ it: the judge was its only reader.
 
 **Callbacks.** The writer is given nothing about earlier dialogues unless its
 direction draws a callback. Then `gather()` adds exactly one fact, "Earlier this
-season: " followed by the result fact of the most recently aired broadcast about
-another run, read from that broadcast's brief (below), with the handles that
-text prints as its identities. A callback the book cannot serve is no callback,
+season: " followed by the result facts of the most recently aired broadcast
+about another run — its event, participant, result, board and points, which is
+what this fact carried before 89e2af6 — read from that broadcast's brief
+(below), with the handles that text prints as its identities. A callback the book cannot serve is no callback,
 and the direction says so. The prompt's rule — a callback quotes no number from
 that fact — becomes a local check: the numbers and number words of a `recent`
 fact are not citable. A figure from another run can therefore not reach the air
@@ -104,7 +105,8 @@ assumption goes.
 
 ## The brief
 
-A broadcast gains one field, `brief`: what the writer was handed.
+A broadcast's `dialogue` gains one field beside `turns` and `lore_refs`, which
+already records how it was written: `brief`, what the writer was handed.
 
 ```json
 "brief": {
@@ -118,16 +120,21 @@ A broadcast gains one field, `brief`: what the writer was handed.
 `facts` is every fact offered, cited or not. `direction` is the draw as data —
 each dimension's own sentence — and the prompt's direction paragraph is rendered
 from it. `compose()` returns the brief in place of today's `facts` list, which
-nothing reads; the reserve and `arena commentary` pass it to `BroadcastBook.put`.
-`GET /api/live/broadcast/<id>` serves it beside `dialogue` and `plan`; the page
-ignores it.
+nothing reads; the reserve and `arena commentary` put it in the dialogue they
+hand the book. The book, its file format and `GET /api/live/broadcast/<id>` do
+not change: the route already serves the dialogue whole, and the page reads
+`turns` and nothing else.
 
 It earns its place three times: the judge reads the facts the writer actually
-had, not a later reconstruction; the callback reads its result fact from it; and
-the draw reads the recent directions from it to stay away from them.
+had, not a later reconstruction; the callback reads its result facts from it;
+and the draw reads the recent directions from it to stay away from them.
 
-A broadcast file without a brief is not a broadcast. The book is per process and
-a Space restart empties it, so nothing is migrated.
+Nothing is migrated. The book is per process and a Space restart empties it; a
+developer's machine empties its broadcasts directory once.
+
+The reserve also says when a dialogue lands — `commentary: <run> written` —
+as it already says when one is refused, so that its log is a whole record of its
+attempts.
 
 ## The instrument
 
@@ -135,8 +142,9 @@ Two scripts in `scripts/`, outside the `arena` package, so that nothing on the
 live path can import them.
 
 **`scripts/collect_broadcasts.py <site> <dir>`** polls `<site>/api/live` and, for
-every booth slot that has started, fetches its broadcast once and writes
-`<at_ms>-<id>.json` with the slot's `at_ms` and the broadcast. It sends the
+every booth slot that has started, by the server's own `now_ms`, fetches its
+broadcast once and writes `<at_ms>-<id>.json` with the slot's `at_ms`, the
+server's `build` and the broadcast. It sends the
 developer's Hub token as a bearer, which is what a private Space requires. It
 exists because the book keeps only twenty aired broadcasts, about seventeen
 minutes of channel. Only started slots are collected because a future slot may
@@ -147,12 +155,15 @@ a prompt edit is tried before it is pushed.
 and prints one plain-text report:
 
 - **Phrases.** A sentence of four words or more is a *repeat* when at least half
-  of its word 4-grams occur in the twenty dialogues aired before it. The report
-  gives the share of repeated sentences and the fifteen 4-grams present in the
-  most dialogues, with their counts: the tics, by name.
+  of its word 4-grams occur in the twenty dialogues aired before it. A 4-gram a
+  dialogue shares with its own brief's facts is the facts', not the writer's,
+  and is never counted as heard. The report gives the share of repeated
+  sentences and the fifteen 4-grams present in the most dialogues, with their
+  counts: the tics, by name.
 - **Props.** The writer's own vocabulary: the words of a dialogue that none of
-  its brief's facts contain, a short list of English function words kept in the
-  script set aside. The report gives, for the twenty most
+  its brief's facts about the run contain — a memory is not one of those: a prop
+  out of the bible is still a prop — a short list of English function words kept
+  in the script set aside. The report gives, for the twenty most
   widespread, the share of dialogues they appear in. A bell in four dialogues
   out of five is a prop problem, whether or not the bible names it.
 - **Mechanic**, with `--judge <model>`: one router call per dialogue. The judge's
@@ -186,11 +197,13 @@ after separate by themselves, and no version needs stamping on a broadcast.
 ## The draw, per airing
 
 `direction()` stops hashing the run. Each dialogue draws its own, from a
-`random.Random` the caller supplies, and each dimension avoids the options the
-last five written broadcasts drew, as long as one remains — read from their
-briefs, the way `used_memories` already keeps the bible from repeating itself.
-Written, not aired: the reserve is minutes ahead of the playhead, and what it is
-about to say counts.
+`random.Random` the caller supplies, and each dimension avoids what the most
+recent written broadcasts drew — as many of them as half the dimension's
+distinct options, so that a draw stays a draw and never becomes a rotation —
+read from their briefs, the way `used_memories` already keeps the bible from
+repeating itself. The callback is a coin, one dialogue in four, and avoids
+nothing: its odds are its meaning. Written, not aired: the reserve is minutes
+ahead of the playhead, and what it is about to say counts.
 
 This goes out after the baseline, as its own push, so that its effect is
 measured rather than assumed.
