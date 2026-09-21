@@ -66,15 +66,13 @@ def test_gather_puts_results_notables_memories_and_recent_runs_in_one_citable_li
     aired = book.put("R0", dialogue, PLAN, "2026-09-10T11:00:00Z")
     book.mark_aired(aired.id, "2026-09-10T11:05:00Z")
 
-    facts, recent = gather(store, mine, LORE, book)
+    facts = gather(store, mine, LORE, book)
     kinds = [f.kind for f in facts]
     assert kinds[:5] == ["result"] * 5
     assert "notable" in kinds and "lore" in kinds and kinds[-1] == "recent"
     assert facts[-1].ref == f"recent:{aired.id}"
     assert facts[-1].text == "Earlier on the channel: Eleven two, @carol! 11.20 s, Peter."
     assert facts[-1].identities == ("carol",)
-    assert recent == [{"ref": f"recent:{aired.id}",
-                        "turns": ["Eleven two, @carol!", "11.20 s, Peter."]}]
     assert sum(1 for f in facts if f.kind == "lore") <= 2
     assert all(f.ref.startswith("lore:") for f in facts if f.kind == "lore")
 
@@ -85,14 +83,11 @@ def test_compose_writes_with_a_provider_and_carries_the_facts(tmp_path):
     book = BroadcastBook(tmp_path)
 
     def provider(messages, max_tokens):
-        if max_tokens == 96:
-            content = {"grounded": True, "english": True, "personalities": True, "fresh": True}
-        else:
-            content = [
-                {"speaker": "peter", "text": "12.40 s for alice, Ray!", "fact_refs": [1, 2]},
-                {"speaker": "ray", "text": "12.40 s, every seed finished, Peter.", "fact_refs": [2]},
-                {"speaker": "peter", "text": "A throne, my friend.", "fact_refs": [3]},
-            ]
+        content = [
+            {"speaker": "peter", "text": "12.40 s for alice, Ray!", "fact_refs": [1, 2]},
+            {"speaker": "ray", "text": "12.40 s, every seed finished, Peter.", "fact_refs": [2]},
+            {"speaker": "peter", "text": "A throne, my friend.", "fact_refs": [3]},
+        ]
         return {"content": json.dumps(content), "finish_reason": "stop", "model": "m",
                 "prompt_tokens": 10, "completion_tokens": 10}
 

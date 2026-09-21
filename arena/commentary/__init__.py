@@ -62,8 +62,8 @@ def _recent_fact(one) -> Fact:
                 identities=tuple(dict.fromkeys(names)))
 
 
-def gather(store, record: RunRecord, lore: Lore, book) -> tuple[list[Fact], list[dict]]:
-    """Everything the writer may cite for this run, and the recent wording.
+def gather(store, record: RunRecord, lore: Lore, book) -> list[Fact]:
+    """Everything the writer may cite for this run.
 
     Read at the moment of writing, not at publish: the standings, the records
     and the memories are the ones true when Peter and Ray open their mouths.
@@ -79,18 +79,15 @@ def gather(store, record: RunRecord, lore: Lore, book) -> tuple[list[Fact], list
     used = used_memories(book)
     facts += [Fact(f"lore:{m.id}", m.memory, "lore", m.tags)
               for m in select_memories(lore, facts, used)]
-    recent = recent_broadcasts(book)
-    facts += [_recent_fact(one) for one in recent]
-    wording = [{"ref": f"recent:{one.id}",
-                "turns": [t["text"] for t in one.dialogue["turns"]]} for one in recent]
-    return facts, wording
+    facts += [_recent_fact(one) for one in recent_broadcasts(book)]
+    return facts
 
 
 def compose(store, run_id: str, *, lore: Lore, provider, model: str, book) -> dict:
     """A checked dialogue for one run, or Rejected from the writer."""
     record = find_run(store, run_id)
-    facts, recent = gather(store, record, lore, book)
-    written = write(run_id, facts, recent, lore=lore, provider=provider, model=model)
+    facts = gather(store, record, lore, book)
+    written = write(run_id, facts, lore=lore, provider=provider, model=model)
     cited = {ref for turn in written["turns"] for ref in turn["fact_refs"]}
     return {
         "run_id": run_id, **written,

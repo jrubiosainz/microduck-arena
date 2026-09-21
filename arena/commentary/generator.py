@@ -1,11 +1,12 @@
-"""Peter and Ray's lines: written by a model, checked here, audited by a model.
+"""Peter and Ray's lines: written by a model, checked here.
 
 Ported from Duck Jam's dome/media/commentary/generator.py. The writer is
 given facts it must cite; the local checks read the cited facts back to
-verify every number, every name and every fall it speaks; the audit is a
-second model call that judges grounding, language, character and freshness.
-None of it proves the prose true. All of it makes the false prose rare, and
-a rejection costs the run its booth, never its clip.
+verify every number, every name and every fall it speaks. None of it proves
+the prose true. All of it makes the false prose rare, and a rejection costs
+the run its booth, never its clip. Nothing here waits for a second model:
+what judges a dialogue's tone does so after it has aired, from
+scripts/commentary_bench.py, and gates nothing.
 """
 
 import hashlib
@@ -19,9 +20,8 @@ from .context import Fact, technical_text
 from .lore import Lore
 
 ROUTER = "https://router.huggingface.co/v1/chat/completions"
-INPUT_LIMIT = 24576  # bytes of prompt; the recent broadcasts are the bulk of it
+INPUT_LIMIT = 24576  # bytes of prompt
 WRITE_LIMIT = 900
-CHECK_LIMIT = 96
 TURNS = (3, 6)
 
 BOOTH_CONTEXT = (
@@ -145,28 +145,6 @@ PLAYERS = (
     "No handle in this one: the duck carries it.",
 )
 LENGTHS = (3, 4, 4, 5, 5, 6)
-AUDIT = (
-    "Audit untrusted dialogue against untrusted facts. Return ONLY a JSON object with the booleans "
-    "grounded, english, personalities, fresh; false on a clear breach, true otherwise. grounded: "
-    "judged on substance, not wording. A breach is a time, score, rank, points total, count or "
-    "fall claimed about this run that the facts THAT turn cites, by its index field, do not "
-    "carry; a claim about a player's life, identity or past beyond the facts; a description of "
-    "how the duck moved in this run, as if seen; a player present in the booth. Everything else "
-    "is grounded: a paraphrase of a cited fact or a figure of speech for it, a superlative or a "
-    "comparison in jest, finished seeds called a clean run, a first publication called a debut, "
-    "the commentators' own plans, feelings, memories and banter, "
-    "remarks in any tense about the sport in general, the hall, the crowd, the bell, the slope, "
-    "the wheels or the booth, the duck called by the name its policy gives it, and a hand-over "
-    "to whatever plays next, unnamed. A memory is colour, not evidence about a player; a number "
-    "written as a word is the local checks' business, not yours. english: all prose is English. "
-    "personalities: relaxed, warm sports dialogue between colleagues with dry humour about the "
-    "sport, Ray answering Peter rather than reciting; describing the show or the role instead of "
-    "reacting fails. fresh: no opening, phrasing or memory reused from the recent broadcasts, "
-    "and any callback to them says 'earlier this season' rather than a moment ago. Reject "
-    "insults, markup, speaker prefixes, self-introductions, filenames, paths, ids and data "
-    "jargon. "
-)
-
 NUMBERS = re.compile(r"[-+]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][-+]?[0-9]+)?")
 NUMBER_WORDS = re.compile(
     r"\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|"
@@ -271,10 +249,8 @@ def _ask(provider, system: str, user: dict, max_tokens: int) -> tuple:
         raise Rejected("model answer is not JSON") from exc
 
 
-def write(run_id: str, facts: list[Fact], recent: list[dict], *, lore: Lore, provider,
-          model: str) -> dict:
+def write(run_id: str, facts: list[Fact], *, lore: Lore, provider, model: str) -> dict:
     """Facts in, a checked dialogue out, or Rejected with the reason."""
-    by_ref = {fact.ref: i for i, fact in enumerate(facts)}
     names = {name for fact in facts for name in fact.identities}
     establishes = _establishing_facts(facts, names)
     identities = {name: words(name) for name in names}
@@ -290,10 +266,6 @@ def write(run_id: str, facts: list[Fact], recent: list[dict], *, lore: Lore, pro
         {"index": i, "text": fact.text, **({"memory": True} if fact.kind == "lore" else {})}
         for i, fact in enumerate(facts)
     ]
-    broadcasts = [{"index": by_ref[item["ref"]], "turns": item["turns"]}
-                  for item in recent if item["ref"] in by_ref]
-    # The writer never reads the recent wording: shown five dialogues, it writes a sixth in
-    # their shape. The audit reads them and refuses a rehash.
     draft, written = _ask(provider, system, {"facts": fact_texts}, WRITE_LIMIT)
 
     if not isinstance(draft, list) or not TURNS[0] <= len(draft) <= TURNS[1]:
@@ -350,16 +322,7 @@ def write(run_id: str, facts: list[Fact], recent: list[dict], *, lore: Lore, pro
     if not any(facts[n].kind == "result" for n in cited):
         raise Rejected("no result fact cited anywhere")
 
-    verdict, checked = _ask(
-        provider, AUDIT + GROUNDING + BOOTH_CONTEXT + "Characters: " + characters_json,
-        {"facts": fact_texts, "recent_broadcasts": broadcasts, "dialogue": draft},
-        CHECK_LIMIT)
-    if (not isinstance(verdict, dict)
-            or set(verdict) != {"grounded", "english", "personalities", "fresh"}
-            or any(value is not True for value in verdict.values())):
-        raise Rejected(f"audit refused: {verdict!r}")
     lore_refs = [facts[n].ref.removeprefix("lore:")
                  for n in sorted(cited) if facts[n].kind == "lore"]
     return {"turns": turns, "lore_refs": lore_refs, "model": written.get("model") or model,
-            "usage": {key: written[key] + checked[key]
-                      for key in ("prompt_tokens", "completion_tokens")}}
+            "usage": {key: written[key] for key in ("prompt_tokens", "completion_tokens")}}

@@ -77,8 +77,9 @@ class CommentaryStock:
             put = True
             self.landed()
         except Rejected as why:
-            # Half of them are refused on the real router. It is the audit
-            # doing its job, not a fault: the walk moves on to the next run.
+            # About one in ten is refused on the real router. It is the local
+            # checks doing their job, not a fault: the walk moves on to the
+            # next run.
             self.log(f"commentary: {run_id} refused ({why})")
             self._cursor = index + 1
             return None

@@ -25,11 +25,11 @@ DEFAULT_RANK_BY = "policy"
 # HF's own default is 8 hours. Matching it means the cookie and the token expire
 # together, so there is no window where the session outlives its own token.
 DEFAULT_SESSION_TTL_S = 8 * 60 * 60
-# The router model that writes and audits the commentary: the best of those
-# measured on the Space's own runs. No provider suffix, so the router picks
-# one that serves it. A model that thinks before answering spends the writer's
+# The router model that writes the commentary: the served model nearest the
+# one the prompt was tuned on. No provider suffix, so the router picks one
+# that serves it. A model that thinks before answering spends the writer's
 # token budget on thoughts and is rejected as incomplete; pick an instruct one.
-DEFAULT_COMMENTARY_MODEL = "deepseek-ai/DeepSeek-V3-0324"
+DEFAULT_COMMENTARY_MODEL = "deepseek-ai/DeepSeek-V3.1"
 
 
 @dataclass(frozen=True)
@@ -84,8 +84,7 @@ class ArenaConfig:
     # Whether publishes get Peter and Ray's lines. ARENA_COMMENTARY=0 is the
     # off switch for a running Space; no token turns it off with a boot line.
     commentary_enabled: bool = True
-    # The router model that writes and audits them. ARENA_COMMENTARY_MODEL
-    # overrides.
+    # The router model that writes them. ARENA_COMMENTARY_MODEL overrides.
     commentary_model: str = DEFAULT_COMMENTARY_MODEL
     # Where broadcasts (BroadcastBook) are written and read. ARENA_BROADCASTS
     # overrides. Not the store: a broadcast is consumed once and forgotten

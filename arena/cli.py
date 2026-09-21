@@ -215,7 +215,7 @@ def _cmd_commentary(args) -> int:
         except LookupError as exc:
             print(exc, file=sys.stderr)
             return 1
-        facts, _ = commentary.gather(store, record, lore, book)
+        facts = commentary.gather(store, record, lore, book)
         for i, fact in enumerate(facts):
             print(f"[{i}] {fact.text}" + ("  (memory)" if fact.kind == "lore" else ""))
         try:

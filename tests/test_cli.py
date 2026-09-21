@@ -118,14 +118,11 @@ def test_commentary_dry_run_prints_facts_memories_and_the_dialogue(tmp_path, cap
     store.append(record, b"trace")
 
     def provider(messages, max_tokens):
-        if max_tokens == 96:
-            content = {"grounded": True, "english": True, "personalities": True, "fresh": True}
-        else:
-            content = [
-                {"speaker": "peter", "text": "12.40 s for alice, Ray!", "fact_refs": [1, 2]},
-                {"speaker": "ray", "text": "12.40 s, every seed finished, Peter.", "fact_refs": [2]},
-                {"speaker": "peter", "text": "A throne, my friend.", "fact_refs": [3]},
-            ]
+        content = [
+            {"speaker": "peter", "text": "12.40 s for alice, Ray!", "fact_refs": [1, 2]},
+            {"speaker": "ray", "text": "12.40 s, every seed finished, Peter.", "fact_refs": [2]},
+            {"speaker": "peter", "text": "A throne, my friend.", "fact_refs": [3]},
+        ]
         return {"content": json.dumps(content), "finish_reason": "stop", "model": "fake/model",
                 "prompt_tokens": 10, "completion_tokens": 10}
 
