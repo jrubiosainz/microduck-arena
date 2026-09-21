@@ -42,7 +42,9 @@ export function chip(me) {
   if (!me) return document.createElement("span");
   if (!me.signed_in) {
     const link = document.createElement("a");
-    link.className = "sticker sticker-lavender";
+    // Orange, the carrying accent: signing in is the one thing this strip is
+    // asking of anyone who has not.
+    link.className = "sticker sticker-orange";
     link.href = signInHref();
     link.textContent = "Sign in with Hugging Face";
     return link;
