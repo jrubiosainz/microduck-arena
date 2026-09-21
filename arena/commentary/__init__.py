@@ -12,7 +12,7 @@ from ..manifest import Manifest, all_events
 from ..points import counting, receipts
 from ..store import RunRecord
 from .context import Fact, result_facts
-from .generator import AT_NAME, CALLBACK, NO_CALLBACK, complete, direction, write
+from .generator import AT_NAME, CALLBACK, LOOKBACK, NO_CALLBACK, complete, direction, write
 from .lore import Lore, select_memories
 from .notable import notable_facts, pick, profiles, situation
 
@@ -95,10 +95,11 @@ def gather(store, record: RunRecord, lore: Lore, book, callback: bool) -> list[F
     return facts + (callback_fact(book, record.run_id) if callback else [])
 
 
-def briefing(store, run_id: str, *, lore: Lore, book) -> tuple[list[Fact], dict]:
+def briefing(store, run_id: str, *, lore: Lore, book, rng) -> tuple[list[Fact], dict]:
     """What one dialogue is written from: the facts it may cite, the direction it drew."""
     record = find_run(store, run_id)
-    drawn = direction(run_id)
+    drawn = direction(rng, [one.dialogue["brief"]["direction"]
+                            for one in book.recent_written(LOOKBACK)])
     facts = gather(store, record, lore, book, callback=drawn["callback"] == CALLBACK)
     if facts[-1].kind != "recent":
         # A callback the book cannot serve is no callback, and the brief says so.
@@ -106,9 +107,9 @@ def briefing(store, run_id: str, *, lore: Lore, book) -> tuple[list[Fact], dict]
     return facts, drawn
 
 
-def compose(store, run_id: str, *, lore: Lore, provider, model: str, book) -> dict:
+def compose(store, run_id: str, *, lore: Lore, provider, model: str, book, rng) -> dict:
     """A checked dialogue for one run with the brief it was written from, or Rejected."""
-    facts, drawn = briefing(store, run_id, lore=lore, book=book)
+    facts, drawn = briefing(store, run_id, lore=lore, book=book, rng=rng)
     written = write(facts, drawn, lore=lore, provider=provider, model=model)
     return {
         "run_id": run_id, **written,
