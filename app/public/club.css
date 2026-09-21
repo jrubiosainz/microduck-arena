@@ -123,7 +123,9 @@
    the orange made the one square on the cover that is only an invitation shout
    louder than the mark it sits next to. */
 .player-card-in { background: var(--warm-paper); }
-.player-card-duck { width: 54px; height: auto; }
+/* Smaller than the signed-in plate's picture: that one IS the person, this
+   one only says whose door this is. */
+.player-card-duck { width: 36px; height: auto; }
 /* A square of its own inside the square plate, rather than filling it: at full
    width the picture was the card and the handle read as a caption under it. */
 .player-card-you .avatar {
