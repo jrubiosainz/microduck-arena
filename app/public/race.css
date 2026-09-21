@@ -1142,24 +1142,51 @@ table.board .withdraw:focus-visible,
   text-transform: uppercase;
   color: var(--paper);
 }
-.rounds-on__all {
-  padding: 8px 16px;
+/* One viewport of cards per press. A mouse's way in; the track itself is
+   focusable, so a keyboard scrolls it directly. */
+.rounds-on__nav { display: flex; gap: 8px; }
+.rounds-on__step {
+  width: 38px;
+  height: 38px;
   border: 2px solid var(--paper);
+  background: transparent;
   color: var(--paper);
-  font: 400 0.8rem/1 var(--display);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  text-decoration: none;
-  white-space: nowrap;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
 }
-.rounds-on__all:hover { background: var(--paper); color: var(--ink); }
-.rounds-on__all:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+.rounds-on__step:hover { background: var(--paper); color: var(--ink); }
+.rounds-on__step:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 
-.rounds-on__wall {
+/* Four across, the rest scrolling in from the side. Column tracks rather than
+   a wrapping grid, so the row never breaks and the overflow is what carries
+   the remainder. The padding at the foot leaves the cards' offset shadows and
+   their hover lift somewhere to go inside the scroller. */
+.rounds-on__track {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-medium)), 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 3 * var(--space-gutter-max)) / 4);
   gap: var(--space-gutter-max);
   align-items: start;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding-bottom: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--paper-60) transparent;
+}
+.rounds-on__track > * { scroll-snap-align: start; }
+.rounds-on__track:focus-visible { outline: 3px solid var(--cyan); outline-offset: 4px; }
+
+@media (max-width: 900px) {
+  .rounds-on__track { grid-auto-columns: calc((100% - var(--space-gutter-max)) / 2); }
+}
+@media (max-width: 560px) {
+  .rounds-on__track { grid-auto-columns: 82%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rounds-on__track { scroll-behavior: auto; }
 }
 
 /* The flyer, as club.css draws it. Restated because the race theme disables
