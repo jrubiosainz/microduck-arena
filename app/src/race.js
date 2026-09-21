@@ -1,6 +1,7 @@
 // One race: the stage, the file column beside it, the standing beneath.
 
 import {
+  getEvents,
   getLeaderboard,
   getMe,
   getTrace,
@@ -373,7 +374,7 @@ export function otherRounds(events, event, boards) {
  * this is the part that fetches, and it asks for a leaderboard per card and a
  * still per card. A planned event has no board worth asking for.
  */
-async function keepRacing(root, event) {
+export async function keepRacing(root, event) {
   const events = await getEvents();
   const others = events.filter((e) => e.id !== event.id).slice(0, OTHER_ROUNDS);
   const boards = new Map();
@@ -382,7 +383,8 @@ async function keepRacing(root, event) {
     boards.set(e.id, (await getLeaderboard(e.id).catch(() => ({ rows: [] }))).rows);
   }));
   const strip = otherRounds(events, event, boards);
-  root.querySelector("footer")?.before(strip) ?? root.append(strip);
+  const foot = root.querySelector("footer");
+  if (foot) foot.before(strip); else root.append(strip);
 
   const stills = await renderThumbnails(others);
   others.forEach((e, i) => {
@@ -408,7 +410,12 @@ export async function renderRace(root, { event, state }) {
   // per card and a WebGL still each; the race above is what the visitor came
   // for, and none of this may hold it up. Every failure leaves the strip off
   // rather than taking the page with it.
-  keepRacing(root, event).catch(() => {});
+  keepRacing(root, event).catch((error) => {
+    // Named, not swallowed. This was `catch(() => {})` and it hid a missing
+    // import: the strip simply never appeared and nothing said why. A failure
+    // here still must not take the page down, but it must be findable.
+    console.error("The other-rounds strip did not load:", error);
+  });
   renderVoteButton(root, event);
 
   renderEventFacts(root, event);
