@@ -66,7 +66,45 @@ def test_the_reserves_log_is_tallied_by_reason():
 
 def test_the_report_names_each_measure():
     text = bench.report([aired("Rank 1 of 1 is a short ladder.")] * 2,
-                        ["commentary: R1 written"])
+                        ["commentary: R1 written"], [])
     assert "2 dialogues" in text
     assert "repeated sentences: 1 of 2" in text
     assert "rank 1 of 1" in text and "ladder" in text and "written" in text
+
+
+VERDICT = {"grounded": {"ok": True, "turn": None, "why": ""},
+           "english": {"ok": True, "turn": None, "why": ""},
+           "personalities": {"ok": False, "turn": 1, "why": "Ray recites the board."},
+           "scene": "feeling-then-fact",
+           "followed": {"opening": True, "angle": False}}
+
+
+def test_the_judge_is_shown_the_brief_and_the_dialogue_and_answers_in_json():
+    asked = []
+
+    def provider(messages, max_tokens):
+        asked.append((messages, max_tokens))
+        return {"content": "```json\n" + json.dumps(VERDICT) + "\n```"}
+
+    one = aired("Well.", facts=[("result", "The mean finish time is 12.40 s.")])
+    one["dialogue"]["brief"]["direction"] = {"turns": 3, "opening": "Peter opens mid-thought."}
+    sheets = {"peter": {"name": "Peter", "sheet": "Warm."}}
+    assert bench.judge(provider, one, sheets) == VERDICT
+    [(messages, max_tokens)] = asked
+    assert max_tokens == bench.JUDGE_LIMIT
+    assert all(label in messages[0]["content"] for label in bench.SCENES)
+    assert "Warm." in messages[0]["content"]
+    shown = json.loads(messages[1]["content"])
+    assert shown == {"facts": one["dialogue"]["brief"]["facts"],
+                     "direction": {"turns": 3, "opening": "Peter opens mid-thought."},
+                     "dialogue": one["dialogue"]["turns"]}
+
+
+def test_the_mechanic_gives_rates_reasons_scenes_and_adherence():
+    fine = {**VERDICT, "personalities": {"ok": True, "turn": None, "why": ""},
+            "scene": "teasing", "followed": {"opening": True, "angle": True}}
+    lines = "\n".join(bench.mechanic([VERDICT, fine]))
+    assert "grounded  2 of 2" in lines
+    assert "personalities  1 of 2" in lines and "turn 1: Ray recites the board." in lines
+    assert "feeling-then-fact" in lines and "teasing" in lines
+    assert "angle  1 of 2" in lines and "opening  2 of 2" in lines
