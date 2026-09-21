@@ -142,8 +142,9 @@ One turn of the loop:
 2. `gather(store, record, lore)` — **now**, so the standings, the records and
    the memories are the ones true at this moment. This is where "data always up
    to date" comes from; it needs no new machinery, only a later call.
-3. Draw the dialogue's direction, away from what the last written broadcasts
-   drew. If it draws a callback, add the one fact it may cite. (Amended
+3. Draw the dialogue's direction — from the run's id at first, and per airing,
+   away from what the last written broadcasts drew, once the 09-21 spec's second
+   push is out. If it draws a callback, add the one fact it may cite. (Amended
    2026-09-21: this step used to hand the writer the last five dialogues as the
    recent wording, and the audit the same as what a rehash would be.)
 4. Call the router, once. A `Rejected` is not an error: log the reason, move to

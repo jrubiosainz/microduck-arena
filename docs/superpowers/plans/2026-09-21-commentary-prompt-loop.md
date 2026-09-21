@@ -1189,7 +1189,7 @@ Expected within ten minutes: `serve.log` carries `commentary: <run> written` lin
 - [ ] **Step 4: The bench reads it**
 
 Run: `uv run --frozen python scripts/commentary_bench.py <scratchpad>/session --log <scratchpad>/serve.log --judge deepseek-ai/DeepSeek-V3.1`
-Expected: the four blocks (PHRASES, PROPS, LANDING, MECHANIC). Report the landing rate to the owner: it is the number that sizes the reserve (the spec expects about nine in ten).
+Expected: the four blocks (PHRASES, PROPS, LANDING, MECHANIC). Report the landing rate to the owner: it is the number that sizes the reserve (measured here on 2026-09-21: about six in ten, not the nine in ten this plan first expected; the spec was corrected).
 
 - [ ] **Step 5: Stop both and hand over**
 

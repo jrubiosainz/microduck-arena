@@ -477,6 +477,12 @@ time none fits. Every memory used is recorded in `dialogue.lore_refs`.
 
 ### Continuity
 
+Amended on 2026-09-21 by `2026-09-21-commentary-prompt-loop-design.md`: the audit
+named below no longer runs on the live path, the recent broadcasts reach the
+writer only as the one fact a callback cites, the direction is to be drawn per
+airing, and the default model is `deepseek-ai/DeepSeek-V3.1`. What follows is
+kept as the record of what was measured.
+
 The five most recent `commentary.json` files by `written_at` (excluding the run
 being written) are "your recent broadcasts": each one's result facts in one
 line, and its turns. The writer receives the facts only, the audit the facts

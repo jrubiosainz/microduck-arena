@@ -83,10 +83,12 @@ it: the judge was its only reader.
 
 **Callbacks.** The writer is given nothing about earlier dialogues unless its
 direction draws a callback. Then `gather()` adds exactly one fact, "Earlier this
-season: " followed by the result facts of the most recently aired broadcast
-about another run — its event, participant, result, board and points, which is
-what this fact carried before 89e2af6 — read from that broadcast's brief
-(below), with the handles that text prints as its identities. A callback the book cannot serve is no callback,
+season: " followed by the event, the participant and the result of the most
+recently aired broadcast about another run, read from that broadcast's brief
+(below), with the handles that text prints as its identities. That run's board
+and points stay out: they are written in the present tense of "this run" —
+"This run takes the lead of…" — and, cited alone, would air about the wrong run
+with no judge behind them. A callback the book cannot serve is no callback,
 and the direction says so. The prompt's rule — a callback quotes no number from
 that fact — becomes a local check: the numbers and number words of a `recent`
 fact are not citable. A figure from another run can therefore not reach the air
@@ -160,7 +162,8 @@ live path can import them.
 **`scripts/collect_broadcasts.py <site> <dir>`** polls `<site>/api/live` and, for
 every booth slot that has started, by the server's own `now_ms`, fetches its
 broadcast once and writes `<at_ms>-<id>.json` with the slot's `at_ms`, the
-server's `build` and the broadcast. It sends the
+server's `origin_ms` — the millisecond its process built the grid, which changes
+at every restart and so separates one deploy from the next — and the broadcast. It sends the
 developer's Hub token as a bearer, which is what a private Space requires. It
 exists because the book keeps only twenty aired broadcasts, about seventeen
 minutes of channel. Only started slots are collected because a future slot may
@@ -209,6 +212,10 @@ measurement: two or three repeated sentences in a hundred.
 An iteration is a push, a rebuild, and about twenty-five minutes of channel.
 Because the book is per process, every deploy starts an empty chain: before and
 after separate by themselves, and no version needs stamping on a broadcast.
+After a deploy the reserve stocks the whole pool at once, some thirty runs, so
+the hour's 120 attempts run short from about its fortieth minute: one session
+fits in that first hour, and a second one taken in the same hour sees fewer
+booths.
 
 ## The draw, per airing
 
