@@ -171,6 +171,12 @@ const FLOCK_LINKS = [
 function discordMark() {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
+  // Its own size, in the markup. An <svg> with a viewBox and no dimensions
+  // fills its container, and this one's size came from club.css alone — so
+  // clicking a round, which disables that sheet a moment before the new page
+  // replaces the DOM, flashed the Discord mark across the whole window.
+  svg.setAttribute("width", "15");
+  svg.setAttribute("height", "15");
   svg.setAttribute("class", "flock-mark");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("focusable", "false");

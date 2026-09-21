@@ -61,6 +61,14 @@ describe("the player card", () => {
     const head = link.querySelector("img.duckhead.player-card-duck");
     expect(head.getAttribute("src")).toBe("/duck-head-mark.webp");
     expect(head.getAttribute("alt")).toBe("");
+    // The plate's duck must out-rank `.masthead .duckhead`, which is two
+    // classes: a one-class rule lost to it and the duck stayed full size.
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css, "the plate's duck is sized by a rule the masthead's beats")
+      .toMatch(/\.player-card-in \.duckhead\s*\{[^}]*width/);
     // Signed out there is no page of yours to link to.
     expect(card.querySelector(".player-card-you")).toBeNull();
   });
@@ -449,6 +457,15 @@ describe("the flock band", () => {
     expect(marks[0].closest("a").getAttribute("href")).toContain("discord.com");
     // Decorative: the word beside it already says what the link is.
     expect(marks[0].getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("gives the Discord mark its own size, not the stylesheet's", () => {
+    // An <svg> with a viewBox and no dimensions fills its container. Clicking
+    // a round disables club.css a moment before the new page replaces the
+    // DOM, and for that moment the mark filled the window.
+    const mark = flockBand().querySelector("svg.flock-mark");
+    expect(mark.getAttribute("width")).toBe("15");
+    expect(mark.getAttribute("height")).toBe("15");
   });
 
   it("does not move", () => {
