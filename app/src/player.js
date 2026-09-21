@@ -90,12 +90,9 @@ export function profile(player, me = null) {
   // player stands on it are on the outside; the policies are behind the fold,
   // because a page listing thirty runs flat says nothing about any of them.
   const rounds = el("div", "profile-rounds");
-  byEvent(player.publications).forEach((group, i) => {
+  for (const group of byEvent(player.publications)) {
     const fold = document.createElement("details");
     fold.className = "profile-round";
-    // The first is open: it is the player's best, and a page of shut folds
-    // makes someone click before it says anything at all.
-    fold.open = i === 0;
     const head = document.createElement("summary");
     head.append(
       el("span", "profile-round__name", group.title),
@@ -105,7 +102,7 @@ export function profile(player, me = null) {
     );
     fold.append(head, results(group.publications, player, me));
     rounds.append(fold);
-  });
+  }
 
   box.append(header, el("h3", "eyebrow", "Rounds entered"), rounds);
   return box;

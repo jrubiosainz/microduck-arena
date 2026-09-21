@@ -48,8 +48,9 @@ describe("a player's profile", () => {
       .toEqual(["#1", "#2"]);
     expect(folds.map((f) => f.querySelector(".profile-round__count").textContent))
       .toEqual(["2 policies", "1 policy"]);
-    // The first is open, so the page says something before anyone clicks.
-    expect(folds.map((f) => f.open)).toEqual([true, false]);
+    // Every round starts shut: the summary already carries the name and the
+    // standing, which is what a reader is scanning for.
+    expect(folds.map((f) => f.open)).toEqual([false, false]);
     // Every run is still reachable, newest first within its round.
     const items = [...el.querySelectorAll(".profile-results a")];
     expect(items.map((a) => a.getAttribute("href"))).toEqual(["#/r/r2", "#/r/r1", "#/r/r3"]);
