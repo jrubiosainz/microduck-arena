@@ -12,6 +12,7 @@ import threading
 from dataclasses import dataclass
 
 from .broadcasts import BroadcastBook, utcnow
+from .store import clip_version
 from .manifest import all_events
 
 SHUTTER_MS = 1600
@@ -33,6 +34,8 @@ class Entry:
     event_title: str
     submitted_at: str
     replay_ms: int
+    # Which render of the clip: the screens build its media URLs from this.
+    clip: str
 
 
 def pool(store) -> list[Entry]:
@@ -55,7 +58,7 @@ def pool(store) -> list[Entry]:
             if replay_ms % 40:
                 continue
             entries.append(Entry(record.run_id, record.user, manifest.title,
-                                 record.submitted_at, replay_ms))
+                                 record.submitted_at, replay_ms, clip_version(clip)))
     return entries
 
 
@@ -88,13 +91,14 @@ def slots_for(entries: list[Entry], start_ms: int, book: BroadcastBook,
     for entry in entries:
         add({"kind": "shutter", "duration_ms": SHUTTER_MS,
              "next": {"run_id": entry.run_id, "event": entry.event_title, "user": entry.user}})
-        add({"kind": "replay", "duration_ms": entry.replay_ms, "run_id": entry.run_id})
+        add({"kind": "replay", "duration_ms": entry.replay_ms, "run_id": entry.run_id,
+             "clip": entry.clip})
         waiting = book.unaired(entry.run_id)
         if waiting is not None and waiting.id not in claimed:
             claimed.add(waiting.id)
             add({"kind": "shutter", "duration_ms": SHUTTER_MS, "next": None})
             add({"kind": "booth", "duration_ms": waiting.plan["duration_ms"],
-                 "run_id": entry.run_id, "broadcast": waiting.id})
+                 "run_id": entry.run_id, "broadcast": waiting.id, "clip": entry.clip})
     return slots
 
 

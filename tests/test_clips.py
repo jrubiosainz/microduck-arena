@@ -197,9 +197,13 @@ def test_the_clip_route_says_none_queued_then_ready_with_its_files(tmp_path):
                                    "landscape.mp4": b"L", "vertical.mp4": b"V", "poster.png": b"P"})
     body = api.get(url).json()
     assert body["state"] == "ready"
-    assert body["poster"] == f"{url}/poster.png"
+    # Every media URL carries the render it belongs to: the files are cached
+    # for a year as immutable, and a clip rendered again on a new stage would
+    # otherwise play as the old one for everyone who had watched it once.
+    assert body["poster"] == f"{url}/poster.png?v=20260916T100500Z"
     assert body["layouts"]["vertical"] == {
-        "url": f"{url}/vertical.mp4", "width": 1080, "height": 1920, "seconds": 7.52
+        "url": f"{url}/vertical.mp4?v=20260916T100500Z", "width": 1080, "height": 1920,
+        "seconds": 7.52
     }
 
     inline = api.get(f"{url}/landscape.mp4")
@@ -235,7 +239,9 @@ def test_a_run_link_unfurls_with_the_poster_once_the_clip_is_ready(tmp_path, mon
                                              "poster.png": b"P"})
     page = api.get(f"/r/{record.run_id}").text
     assert (f'<meta property="og:image" content="https://arena.hf.space/api/runs/'
-            f'{record.run_id}/clip/poster.png">') in page
+            f'{record.run_id}/clip/poster.png?v=20260916T100500Z">') in page
+    assert (f'<meta property="og:video" content="https://arena.hf.space/api/runs/'
+            f'{record.run_id}/clip/landscape.mp4?v=20260916T100500Z">') in page
     assert '<meta property="og:video:width" content="1920">' in page
     assert '<meta name="twitter:card" content="summary_large_image">' in page
     assert api.get("/r/NOPE").status_code == 404

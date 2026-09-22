@@ -18,7 +18,7 @@ from ..course import wall_boxes
 from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, standings
-from ..store import CLIP_MEDIA, RunRecord
+from ..store import CLIP_MEDIA, RunRecord, clip_version
 from ..trace import decode, decode_settle
 
 router = APIRouter(prefix="/api")
@@ -417,12 +417,11 @@ def run_clip(run_id: str, request: Request) -> JSONResponse:
     _find_run(store, run_id)
     state, written = store.clip_state(run_id)
     if state == "ready":
-        base = f"/api/runs/{run_id}/clip"
         body = {
             "state": state,
-            "poster": f"{base}/{written['poster']}",
+            "poster": clip_url(run_id, written["poster"], written),
             "layouts": {
-                name: {"url": f"{base}/{layout['file']}", "width": layout["width"],
+                name: {"url": clip_url(run_id, layout["file"], written), "width": layout["width"],
                        "height": layout["height"], "seconds": layout["seconds"]}
                 for name, layout in written["layouts"].items()
             },
@@ -443,6 +442,12 @@ def run_clip(run_id: str, request: Request) -> JSONResponse:
 
 
 _CLIP_TYPES = {"mp4": "video/mp4", "png": "image/png"}
+
+
+def clip_url(run_id: str, name: str, manifest: dict, origin: str = "") -> str:
+    """Where one of a clip's files is served, versioned by the render it
+    belongs to — the route below caches them as immutable."""
+    return f"{origin}/api/runs/{run_id}/clip/{name}?v={clip_version(manifest)}"
 
 
 @router.get("/runs/{run_id}/clip/{name}")

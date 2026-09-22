@@ -31,7 +31,7 @@ from tests.test_withdraw import sign_in, spaced  # noqa: F401 — spaced is a fi
 
 
 def entry(run_id, at="2026-09-10T10:00:00Z", replay_ms=8000, user="alice"):
-    return Entry(run_id, user, "2 m Sprint", at, replay_ms)
+    return Entry(run_id, user, "2 m Sprint", at, replay_ms, "20260916T100500Z")
 
 
 def test_the_pool_is_ready_clips_of_open_events_that_are_not_withdrawn(tmp_path):
@@ -39,7 +39,8 @@ def test_the_pool_is_ready_clips_of_open_events_that_are_not_withdrawn(tmp_path)
     for run_id, event in (("A", "sprint-2m"), ("B", "sprint-2m"), ("C", "sprint-2m"),
                           ("D", "highest-jump"), ("E", "sprint-2m")):
         store.append(make_record(run_id=run_id, event_id=event, user=run_id.lower()), b"t")
-    clip = lambda seconds: json.dumps({"layouts": {"landscape": {"seconds": seconds}}}).encode()
+    clip = lambda seconds: json.dumps({"rendered_at": "2026-09-16T10:05:00Z",
+                                       "layouts": {"landscape": {"seconds": seconds}}}).encode()
     # A commentary file sitting in the clip folder is not read by the pool at
     # all any more: whether one is there changes nothing about what plays.
     store.put_clip("A", {"clip.json": clip(8.0),
@@ -54,7 +55,9 @@ def test_the_pool_is_ready_clips_of_open_events_that_are_not_withdrawn(tmp_path)
                               withdrawn_at="2026-09-14T12:00:00Z"))
     entries = {e.run_id: e for e in pool(store)}
     assert set(entries) == {"A", "B"}
-    assert entries["A"] == Entry("A", "a", "2 m Sprint", "2026-09-03T10:00:00Z", 8000)
+    # The render's stamp travels with the entry: it versions the media URLs.
+    assert entries["A"] == Entry("A", "a", "2 m Sprint", "2026-09-03T10:00:00Z", 8000,
+                                 "20260916T100500Z")
     assert entries["B"].replay_ms == 13800
 
 
@@ -88,10 +91,13 @@ def test_slots_are_shutter_replay_and_a_booth_only_with_a_broadcast_waiting(tmp_
     assert [s["kind"] for s in slots] == ["shutter", "replay", "shutter", "booth", "shutter", "replay"]
     assert slots[0] == {"kind": "shutter", "at_ms": 1_000_000, "duration_ms": SHUTTER_MS,
                         "next": {"run_id": "A", "event": "2 m Sprint", "user": "alice"}}
-    assert slots[1] == {"kind": "replay", "at_ms": 1_001_600, "duration_ms": 8000, "run_id": "A"}
+    # The slots that load a clip's media say which render of it: the screen
+    # builds the URL from that, and a re-rendered clip is a new URL.
+    assert slots[1] == {"kind": "replay", "at_ms": 1_001_600, "duration_ms": 8000, "run_id": "A",
+                        "clip": "20260916T100500Z"}
     assert slots[2]["next"] is None
     assert slots[3] == {"kind": "booth", "at_ms": 1_011_200, "duration_ms": 20000,
-                        "run_id": "A", "broadcast": made.id}
+                        "run_id": "A", "broadcast": made.id, "clip": "20260916T100500Z"}
     for a, b in pairwise(slots):
         assert b["at_ms"] == a["at_ms"] + a["duration_ms"]
     assert all(s["duration_ms"] % 40 == 0 for s in slots)
@@ -99,7 +105,7 @@ def test_slots_are_shutter_replay_and_a_booth_only_with_a_broadcast_waiting(tmp_
 
 def test_a_run_with_no_broadcast_gets_a_replay_and_no_booth(tmp_path):
     book = BroadcastBook(tmp_path)
-    entries = [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)]
+    entries = [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000, "20260918T000000Z")]
     laid = slots_for(entries, 0, book)
     assert [slot["kind"] for slot in laid] == ["shutter", "replay"]
 
@@ -109,7 +115,7 @@ def test_a_run_with_a_broadcast_gets_its_booth_at_the_plan_s_length(tmp_path):
     made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
                     {"duration_ms": 41400, "captions": [], "notes": [], "gestures": []},
                     "2026-09-18T09:00:00Z")
-    entries = [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)]
+    entries = [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000, "20260918T000000Z")]
     laid = slots_for(entries, 0, book)
     assert [slot["kind"] for slot in laid] == ["shutter", "replay", "shutter", "booth"]
     booth = laid[3]
@@ -123,7 +129,7 @@ def test_one_broadcast_is_laid_once_even_when_the_run_comes_round_twice(tmp_path
     book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
              {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
              "2026-09-18T09:00:00Z")
-    twice = Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)
+    twice = Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000, "20260918T000000Z")
     laid = slots_for([twice, twice], 0, book)
     assert [slot["kind"] for slot in laid] == [
         "shutter", "replay", "shutter", "booth", "shutter", "replay"]
@@ -136,7 +142,7 @@ def test_a_playing_booth_is_never_handed_to_a_second_slot(tmp_path):
     made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
                     "2026-09-18T09:00:00Z")
-    entries = [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)]
+    entries = [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000, "20260918T000000Z")]
     again = slots_for(entries, 0, book, claimed={made.id})
     assert [slot["kind"] for slot in again] == ["shutter", "replay"]
 
@@ -151,7 +157,7 @@ def test_invalidate_does_not_let_the_playing_booth_be_relaid_in_the_future(tmp_p
                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
                     "2026-09-18T09:00:00Z")
     at = [1_000_000]
-    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)],
+    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000, "20260918T000000Z")],
                           lambda: at[0], book)
     first = programme.slots()
     booth = next(s for s in first if s["kind"] == "booth")
@@ -170,7 +176,7 @@ def test_a_broadcast_is_laid_once_however_often_its_run_comes_round(tmp_path):
     made = book.put("run-a", {"run_id": "run-a", "turns": [], "lore_refs": []},
                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
                     "2026-09-18T09:00:00Z")
-    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)],
+    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000, "20260918T000000Z")],
                           lambda: 1_000_000, book)
     booths = [slot for slot in programme.slots() if slot["kind"] == "booth"]
     assert [slot["broadcast"] for slot in booths] == [made.id]
@@ -361,7 +367,7 @@ def test_a_booth_whose_slot_has_passed_is_marked_aired(tmp_path):
                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
                     "2026-09-18T09:00:00Z")
     at = [1_000_000]
-    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)],
+    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000, "20260918T000000Z")],
                           lambda: at[0], book)
     programme.slots()
     assert book.get(made.id).aired_at is None
@@ -380,7 +386,7 @@ def test_a_booth_is_marked_aired_even_though_its_slot_would_have_been_pruned(tmp
                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
                     "2026-09-18T09:00:00Z")
     at = [1_000_000]
-    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)],
+    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000, "20260918T000000Z")],
                           lambda: at[0], book)
     programme.slots()
     assert book.get(made.id).aired_at is None
@@ -400,7 +406,7 @@ def test_a_mark_that_cannot_be_written_does_not_take_the_grid_down(tmp_path, mon
                     {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []},
                     "2026-09-18T09:00:00Z")
     at = [1_000_000]
-    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000)],
+    programme = Programme(lambda: [Entry("run-a", "nicolas", "Sprint", "2026-09-18", 8000, "20260918T000000Z")],
                           lambda: at[0], book)
     programme.slots()
 

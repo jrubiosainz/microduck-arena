@@ -12,7 +12,7 @@ vi.mock("./booth.js", () => ({
 }));
 vi.mock("../api.js", () => ({
   getBroadcast: vi.fn((id) => Promise.resolve(state.broadcasts.get(id) ?? null)),
-  clipUrl: (runId, name) => `/api/runs/${runId}/clip/${name}`,
+  clipUrl: (runId, name, version) => `/api/runs/${runId}/clip/${name}?v=${version}`,
 }));
 
 import { createInterlude } from "./interlude.js";
@@ -25,8 +25,8 @@ describe("createInterlude", () => {
   });
 
   it("mounts a run's second airing on its own dialogue instead of the first's", async () => {
-    const first = { kind: "booth", at_ms: 0, duration_ms: 1000, run_id: "A", broadcast: "b1" };
-    const second = { kind: "booth", at_ms: 1000, duration_ms: 1000, run_id: "A", broadcast: "b2" };
+    const first = { kind: "booth", at_ms: 0, duration_ms: 1000, run_id: "A", broadcast: "b1", clip: "20260916T100500Z" };
+    const second = { kind: "booth", at_ms: 1000, duration_ms: 1000, run_id: "A", broadcast: "b2", clip: "20260916T100500Z" };
     const dialogue1 = { dialogue: { turns: [{ text: "one" }] }, plan: { duration_ms: 1000, captions: [] } };
     const dialogue2 = { dialogue: { turns: [{ text: "two" }] }, plan: { duration_ms: 1000, captions: [] } };
     state.broadcasts.set("b1", dialogue1);
@@ -37,10 +37,10 @@ describe("createInterlude", () => {
     const booth = state.booths[0];
 
     await interlude.show(first);
-    expect(booth.prepare).toHaveBeenLastCalledWith(dialogue1, "/api/runs/A/clip/poster.png");
+    expect(booth.prepare).toHaveBeenLastCalledWith(dialogue1, "/api/runs/A/clip/poster.png?v=20260916T100500Z");
 
     await interlude.show(second);
     expect(booth.prepare).toHaveBeenCalledTimes(2);
-    expect(booth.prepare).toHaveBeenLastCalledWith(dialogue2, "/api/runs/A/clip/poster.png");
+    expect(booth.prepare).toHaveBeenLastCalledWith(dialogue2, "/api/runs/A/clip/poster.png?v=20260916T100500Z");
   });
 });

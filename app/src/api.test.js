@@ -163,7 +163,11 @@ describe("the channel", () => {
     expect(await getBroadcast("gone")).toBe(null);
   });
 
-  it("addresses a clip's files under the run", () => {
-    expect(clipUrl("01ABC", "clip.mp4")).toBe("/api/runs/01ABC/clip/clip.mp4");
+  it("addresses a clip's files under the run, versioned by the render they belong to", () => {
+    // The files are cached for a year as immutable, so a clip rendered again
+    // on a new stage has to be a new URL or the old one plays for ever.
+    expect(clipUrl("01ABC", "clip.mp4", "20260922T151828Z")).toBe(
+      "/api/runs/01ABC/clip/clip.mp4?v=20260922T151828Z",
+    );
   });
 });

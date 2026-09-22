@@ -27,7 +27,7 @@ export function createReplay(stage, { onRefused }) {
 
   function load(slot) {
     const video = videos.find((v) => v !== active?.video);
-    video.src = clipUrl(slot.run_id, "landscape.mp4");
+    video.src = clipUrl(slot.run_id, "landscape.mp4", slot.clip);
     video.load();
     prepared = { video, slot };
   }
