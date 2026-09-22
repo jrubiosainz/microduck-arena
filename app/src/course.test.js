@@ -28,6 +28,18 @@ describe("buildCourse", () => {
     expect(course.getObjectByName("finish").position.x).toBeCloseTo(2, 12);
   });
 
+  it("lays Duck Jam's checker of paper and ink across the finish", () => {
+    const finish = buildCourse({ length_m: 2, width_m: 0.8 }).getObjectByName("finish");
+    const tiles = finish.children;
+    expect(tiles.length).toBeGreaterThanOrEqual(6);
+    const inks = tiles.map((tile) => tile.material.color.getHex());
+    expect(new Set(inks).size).toBe(2);
+    for (let i = 1; i < inks.length; i += 1) expect(inks[i]).not.toBe(inks[i - 1]);
+    const zs = tiles.map((tile) => tile.position.z);
+    expect(Math.min(...zs)).toBeLessThan(-0.3);
+    expect(Math.max(...zs)).toBeGreaterThan(0.3);
+  });
+
   it("lays the ground flat and centres it between the lines", () => {
     const ground = buildCourse({ length_m: 2, width_m: 0.8 }).getObjectByName("ground");
     expect(ground.rotation.x).toBeCloseTo(-Math.PI / 2, 12);

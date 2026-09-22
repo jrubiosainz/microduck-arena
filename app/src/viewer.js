@@ -33,6 +33,7 @@ import {
   rigGeometries,
 } from "./rig.js";
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
+import { attachStadium } from "./stadium.js";
 import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
@@ -164,6 +165,8 @@ export function cameraPose(spec, lead, sideOffset, rise) {
 const TRAVEL_TURN = (30 * Math.PI) / 180;
 const TRAVEL_REACH = 1.3;
 const TRAVEL_LIFT = 8;
+// How far beyond the camera's farthest stand the near stand starts.
+const STAND_CLEARANCE = 0.3;
 
 /**
  * The camera `u` of the way through a clip's opening travel, 0 to 1: an orbit
@@ -189,36 +192,47 @@ export function travelPose(chase, u) {
   };
 }
 
-// The GLB is one 1.3 MB download shared by every rig, so it is memoised on its
-// own and never re-fetched when you move between a walking race and a roller
-// race.
-let glbPromise = null;
+// The racers' model, 1.3 MB, and the crowd's: the same GLB decimated to a
+// tenth of its triangles, 154 KB, made with
+//   npx @gltf-transform/cli@4 simplify --ratio 0.05 --error 0.02 microduck.glb microduck-crowd.glb
+// Measured on a 1080p clip frame under SwiftShader, the Space's renderer:
+// 300 ms alone, 1050 ms with the far stand's fifty-four spectators at full
+// detail, 350 ms with the whole stadium in this model and the skin filter in
+// rig.js. Two metres off they look the same.
+const MODEL = "microduck.glb";
+const CROWD_MODEL = "microduck-crowd.glb";
 
-function loadGlb() {
-  if (!glbPromise) {
-    glbPromise = new GLTFLoader()
-      .loadAsync(`${MODEL_DIR}/microduck.glb`)
-      .then((gltf) => gltf.scene);
+// Each GLB is memoised on its own and never re-fetched when you move between
+// a walking race and a roller race.
+const glbs = new Map();
+
+function loadGlb(model) {
+  if (!glbs.has(model)) {
+    glbs.set(
+      model,
+      new GLTFLoader().loadAsync(`${MODEL_DIR}/${model}`).then((gltf) => gltf.scene),
+    );
   }
-  return glbPromise;
+  return glbs.get(model);
 }
 
-// Per-rig assets, memoised per rig: the roller rig has its own kinematic tree
-// and five STLs the GLB does not carry. Exported for the booth, which builds
-// its own scene from the same rig.
+// Per-rig assets, memoised per rig and model: the roller rig has its own
+// kinematic tree and five STLs the GLB does not carry. Exported for the booth,
+// which builds its own scene from the same rig.
 const rigAssets = new Map();
 
-export function loadAssets(rig) {
-  if (!rigAssets.has(rig)) {
+export function loadAssets(rig, model = MODEL) {
+  const key = `${rig}:${model}`;
+  if (!rigAssets.has(key)) {
     rigAssets.set(
-      rig,
+      key,
       (async () => {
-        const [kinematics, glbScene] = await Promise.all([loadKinematics(rig), loadGlb()]);
+        const [kinematics, glbScene] = await Promise.all([loadKinematics(rig), loadGlb(model)]);
         return { kinematics, geometries: await rigGeometries(kinematics, glbScene) };
       })(),
     );
   }
-  return rigAssets.get(rig);
+  return rigAssets.get(key);
 }
 
 export async function createViewer(
@@ -230,8 +244,12 @@ export async function createViewer(
   // only because nothing reads the parameter after this line.
   //
   // The rig is fixed for the life of this viewer, which matches the page: one
-  // race page shows one event, and an event declares one rig.
-  const { kinematics, geometries } = await loadAssets(rigName);
+  // race page shows one event, and an event declares one rig. The crowd is
+  // always on foot, in its own lighter model.
+  const [{ kinematics, geometries }, spectators] = await Promise.all([
+    loadAssets(rigName),
+    loadAssets("legs", CROWD_MODEL),
+  ]);
 
   // Under SwiftShader MSAA cost 2.7× per frame (401 → 151 ms at 1080p), and a
   // clip is encoded by x264 anyway, which softens edges; the interactive pages keep it.
@@ -313,6 +331,9 @@ export async function createViewer(
 
   let lanes = [];
   let course = null;
+  // The stadium's crowd, rebuilt with the course: posed in draw, disposed
+  // with the course in clearScene.
+  let audience = null;
   let wallsVisible = false;
   let namesVisible = false;
   let sideOffset = 1.15;
@@ -328,6 +349,8 @@ export async function createViewer(
     }
     lanes = [];
     if (course) {
+      audience.dispose();
+      audience = null;
       scene.remove(course);
       course = null;
     }
@@ -346,6 +369,10 @@ export async function createViewer(
         wallsVisible,
         entries.map((entry) => entry.colour),
       );
+      // The near stand starts a stride beyond where the chase camera stands,
+      // clip travel included, so the lens is never inside it.
+      const chase = cameraPose(spec, 0, sideOffset, 0).position[2];
+      audience = attachStadium(course, spectators, chase * TRAVEL_REACH + STAND_CLEARANCE);
     }
     lanes = entries.map((entry, i) => {
       const tier = entry.tier ?? "ghost";
@@ -443,7 +470,7 @@ export async function createViewer(
   const _trunk = new Vector3();
   let raf = null;
 
-  function draw(travel = 1) {
+  function draw(travel = 1, seconds = player.time) {
     const indices = player.frameIndices();
     lanes.forEach((lane, i) => {
       const frame = frameAt(lane.trace, indices[i]);
@@ -455,6 +482,7 @@ export async function createViewer(
         lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);
       }
     });
+    audience?.pose(seconds);
 
     if (chase && lanes.length) {
       // Follow the leader along +x, the direction of travel, from behind and
@@ -473,12 +501,15 @@ export async function createViewer(
 
   function tick(now) {
     player.advance(now);
-    draw();
+    // The crowd on the wall clock: it fidgets before a lane is ticked and after
+    // a publication's race has run out, when the replay's clock stands still.
+    draw(1, now / 1000);
     raf = requestAnimationFrame(tick);
   }
 
-  /** Manual mode: pose every lane at `seconds` and render once, the camera
-   * `travel` of the way through its opening travel (travelPose). */
+  /** Manual mode: pose every lane — and the crowd, so a clip's frames come out
+   * the same every render — at `seconds`, and render once, the camera `travel`
+   * of the way through its opening travel (travelPose). */
   function frame(seconds, travel = 1) {
     player.seek(seconds);
     draw(travel);

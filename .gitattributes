@@ -35,6 +35,7 @@ saved_model/**/* filter=lfs diff=lfs merge=lfs -text
 *tfevents* filter=lfs diff=lfs merge=lfs -text
 app/public/robot/meshes/roller_blade.stl filter=lfs diff=lfs merge=lfs -text
 app/public/robot/microduck.glb filter=lfs diff=lfs merge=lfs -text
+app/public/robot/microduck-crowd.glb filter=lfs diff=lfs merge=lfs -text
 app/public/sound/commentator-peter.f32 filter=lfs diff=lfs merge=lfs -text
 app/public/sound/commentator-ray.f32 filter=lfs diff=lfs merge=lfs -text
 app/public/sound/microduck-victory.wav filter=lfs diff=lfs merge=lfs -text

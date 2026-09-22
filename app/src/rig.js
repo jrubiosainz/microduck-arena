@@ -56,6 +56,15 @@ export const JOINT_NAMES = [
   "right_ankle",
 ];
 
+/** The STAND keyframe: arena/constants.py DEFAULT_POSE, in JOINT_NAMES order. */
+export const STAND = [
+  0, -0.08726646259971647, -0.457924, -0.00494, 0.452984,
+  0.3490658503988659, 0.3490658503988659, 0, 0,
+  0, 0.08726646259971647, 0.457924, 0.00494, -0.452984,
+];
+// The trunk's height in the keyframe: course.py's SPAWN_HEIGHT_M.
+export const TRUNK_HEIGHT = 0.12;
+
 /** MJCF (w,x,y,z) -> three.js (x,y,z,w). */
 function setMjcfQuat(target, q) {
   target.set(q[1], q[2], q[3], q[0]);
@@ -260,6 +269,27 @@ export function creasedGeometries(glbScene) {
   return byName;
 }
 
+// The parts of the standing duck nobody sees from outside, measured rather
+// than guessed: the whole rig drawn with a colour per part from thirty-six
+// seats round it (twelve bearings, three heights), and every part under a
+// fifth of a percent of its pixels from all of them. The boards, speaker and
+// mouth parts are inside the head; the bearings sit inside every joint. NOT
+// the motors or the battery, which on a skeletal robot are a seventh of what
+// shows — the slot-based guess that dropped them left the crowd half bodied.
+const HIDDEN = new Set([
+  "pcb__raspberry_pi_zero_2_w.stl",
+  "elec_rpi_robot_hat_pcb.stl",
+  "banana_pcb_locker.stl",
+  "speaker.stl",
+  "motor_support.stl",
+  "m12_lens_holder.stl",
+  "jaw_soft.stl",
+  "soft_mouth_top.stl",
+  "yaw_roll_motion.stl",
+  "seeed_bearing__configuration_default.stl",
+  "seeed_bearing__configuration__22x16x4.stl",
+]);
+
 /**
  * Hang geometry off the rig.
  *
@@ -272,7 +302,7 @@ export function attachMeshes(
   rig,
   kinematics,
   source,
-  { livery = "classic", opacity = 1 } = {},
+  { livery = "classic", opacity = 1, skin = false } = {},
 ) {
   // Which part of the machine takes which material, from the simulator's own
   // mapping. Its colours are LINEAR and authored for ACES tone mapping — see
@@ -289,6 +319,10 @@ export function attachMeshes(
       // The livery wins; the kinematics' own colour is the fallback for a mesh
       // the mapping does not name.
       const spec = slots[geom.mesh];
+      // The skin is what a spectator across the track is: what shows. The
+      // hidden parts are most of the triangles and, measured under SwiftShader,
+      // ten layers of overdraw that were most of what a crowd cost a clip frame.
+      if (skin && HIDDEN.has(geom.mesh)) continue;
       const material = new MeshStandardMaterial({
         color: spec
           ? new Color().setRGB(...spec.color, LinearSRGBColorSpace)

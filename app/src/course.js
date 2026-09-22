@@ -16,6 +16,7 @@ import {
   PlaneGeometry,
   RingGeometry,
 } from "three";
+import { PALETTE, flat } from "./palette.js";
 
 // Fallback only. The real spacing is the course's own width, below.
 export const LANE_SPACING = 0.45;
@@ -46,7 +47,7 @@ export function laneSpacing({ width_m = 0.8, walls = [] } = {}) {
 // ciel, lime hi-vis, lavande, jaune bec.
 export const LANE_COLORS = [0xff7a2f, 0x8fb8dc, 0xc8ff2e, 0x9d87e8, 0xffd23f];
 export const LANE_CSS = ["#ff7a2f", "#8fb8dc", "#c8ff2e", "#9d87e8", "#ffd23f"];
-const OVERRUN = 0.4; // ground extends this far past both lines
+export const OVERRUN = 0.4; // ground extends this far past both lines
 const LINE_WIDTH = 0.03;
 
 /** Lateral offset for lane `i` of `n`, in three.js z. */
@@ -130,7 +131,7 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   course.add(ground);
 
   course.add(line(0, span, 0xf5f5f5, "start"));
-  course.add(line(length_m, span, 0xff7a2f, "finish"));
+  course.add(checker(length_m, span));
   course.add(buildWalls(walls, lanes, spacing));
 
   // One stripe per lane, so a table row can point at its duck.
@@ -156,6 +157,26 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   }
 
   return course;
+}
+
+// Duck Jam's finish: a row of paper and ink tiles across the track, each 12 cm
+// along it and 13 across, as many as the span takes.
+const TILE = [0.12, 0.13];
+
+function checker(x, span) {
+  const finish = new Group();
+  finish.name = "finish";
+  finish.position.set(x, 0.003, 0);
+  const count = Math.round(span / TILE[1]);
+  for (let i = 0; i < count; i += 1) {
+    const tile = new Mesh(
+      new BoxGeometry(TILE[0], 0.002, TILE[1]),
+      flat(i % 2 ? PALETTE.paper : PALETTE.ink),
+    );
+    tile.position.z = (i - (count - 1) / 2) * TILE[1];
+    finish.add(tile);
+  }
+  return finish;
 }
 
 function line(x, span, color, name) {

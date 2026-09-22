@@ -23,20 +23,12 @@ import {
 } from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { applyFrame } from "../replay.js";
-import { attachMeshes, buildRigTree, setJoint } from "../rig.js";
+import { STAND, TRUNK_HEIGHT, attachMeshes, buildRigTree, setJoint } from "../rig.js";
 import { loadAssets } from "../viewer.js";
 import { BOOTH_TURN, direct } from "./direction.js";
 import { poseAt } from "./score.js";
 import { booth as buildSet, checkerboard, token } from "./set.js";
 
-/** The STAND keyframe: arena/constants.py DEFAULT_POSE, in JOINT_NAMES order. */
-export const STAND = [
-  0, -0.08726646259971647, -0.457924, -0.00494, 0.452984,
-  0.3490658503988659, 0.3490658503988659, 0, 0,
-  0, 0.08726646259971647, 0.457924, 0.00494, -0.452984,
-];
-// The trunk's height in the keyframe: course.py's SPAWN_HEIGHT_M.
-const TRUNK_HEIGHT = 0.12;
 // Which joint holds which index of a trace frame's fourteen angles. A glance's
 // yaw is signed so Peter looks toward Ray and Ray toward Peter.
 const HEAD = { neck: ["neck_pitch", 5], pitch: ["head_pitch", 6], yaw: ["head_yaw", 7], roll: ["head_roll", 8] };
