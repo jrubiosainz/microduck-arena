@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { BoxGeometry, Matrix4, Vector3 } from "three";
 import { buildCourse } from "./course.js";
 import { PALETTE, SHELLS, colour } from "./palette.js";
-import { GAP, attachStadium, buildCones, buildRail, buildStand, crowd, seats } from "./stadium.js";
+import { JURY_APRON, GAP, attachStadium, buildCones, buildRail, buildStand, crowd, seats } from "./stadium.js";
 import { TRUNK_HEIGHT, attachMeshes, buildRigTree, meshNames } from "./rig.js";
 
 const LENGTH = 2;
@@ -25,37 +25,48 @@ describe("buildStand", () => {
   it.each([
     ["far", -1],
     ["near", 1],
-  ])("stacks three tiers on the %s side from the inner face out, each taller", (_, side) => {
+  ])("stacks six tiers on the %s side from the inner face out, each taller", (_, side) => {
     const stand = buildStand(LENGTH, INNER, side);
-    const tiers = stand.children;
-    expect(tiers).toHaveLength(3);
+    const tiers = stand.children.filter((child) => child.name === "tier");
+    expect(tiers).toHaveLength(6);
     let lastEdge = INNER;
     let lastHeight = 0;
     for (const tier of tiers) {
       const { width, height, depth } = tier.geometry.parameters;
       // Beyond the tier before it, on its own side of the track.
       expect(side * tier.position.z - depth / 2).toBeCloseTo(lastEdge, 9);
-      expect(height).toBeGreaterThan(lastHeight);
-      // Standing on the ground, the length of it.
-      expect(tier.position.y).toBeCloseTo(height / 2);
+      const top = tier.position.y + height / 2;
+      expect(top).toBeGreaterThan(lastHeight);
+      // Thin decks preserve the seating surface without a solid front wall.
+      expect(height).toBeCloseTo(0.035);
       expect(width).toBeGreaterThan(LENGTH);
       expect(tier.position.x).toBeCloseTo(LENGTH / 2);
       lastEdge = side * tier.position.z + depth / 2;
-      lastHeight = height;
+      lastHeight = top;
     }
   });
 });
 
 describe("seats", () => {
+  it("raises the first far row enough to see the nearest racer over the judges", () => {
+    const seat = seats(LENGTH, SPAN / 2 + JURY_APRON, -1)[0];
+    const eyeHeight = seat.y + 0.24;
+    const judgeZ = -(SPAN / 2 + 0.59);
+    const fraction = (judgeZ - seat.z) / -seat.z;
+    const sightHeight = eyeHeight + (0.12 - eyeHeight) * fraction;
+    // Clear the head shell; slender antennas do not block the view.
+    expect(sightHeight).toBeGreaterThan(0.46);
+    expect(seat.y).toBeCloseTo(0.40);
+  });
   it("puts eighteen seats on top of each tier, spread along the track", () => {
     const stand = buildStand(LENGTH, INNER, -1);
     const placed = seats(LENGTH, INNER, -1);
-    expect(placed).toHaveLength(54);
-    for (const tier of stand.children) {
+    expect(placed).toHaveLength(108);
+    for (const tier of stand.children.filter((child) => child.name === "tier")) {
       const { height, depth } = tier.geometry.parameters;
       const row = placed.filter((seat) => Math.abs(seat.z - tier.position.z) < depth / 2);
       expect(row).toHaveLength(18);
-      for (const seat of row) expect(seat.y).toBeCloseTo(height);
+      for (const seat of row) expect(seat.y).toBeCloseTo(tier.position.y + height / 2);
       const xs = row.map((seat) => seat.x);
       expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(LENGTH);
     }
@@ -107,7 +118,7 @@ describe("buildCones", () => {
 
 describe("crowd", () => {
   const placed = [...seats(LENGTH, INNER, -1), ...seats(LENGTH, INNER, 1)];
-  const SCALE = 0.8;
+  const SCALE = 1;
   // One instanced mesh per shell colour per side of the track. Seat i wears
   // shell i mod 5; which flock and instance it landed in is found by position.
   const flockOf = (audience, shell) => audience.group.children.find((mesh) => mesh.userData.shell === shell);
@@ -139,7 +150,7 @@ describe("crowd", () => {
   it("draws each shell colour on each side as one instanced mesh, one instance per seat", () => {
     const audience = crowd(kinematics, boxes(), placed);
     expect(audience.group.children).toHaveLength(SHELLS.length * 2);
-    expect(audience.group.children.reduce((sum, mesh) => sum + mesh.count, 0)).toBe(placed.length);
+    expect(audience.group.getObjectByName("crowd").children.reduce((sum, mesh) => sum + mesh.count, 0)).toBe(placed.length);
     for (const mesh of audience.group.children) expect(mesh.isInstancedMesh).toBe(true);
     const all = instances(audience);
     expect(all.every(({ seat }) => seat)).toBe(true);
@@ -188,7 +199,7 @@ describe("crowd", () => {
     }
   });
 
-  it("stands each duck on its own seat, at four fifths of its size, facing its seat's way", () => {
+  it("stands each duck on its own seat, at the same scale as a racing duck, facing its seat's way", () => {
     const audience = crowd(kinematics, boxes(), placed);
     for (const { matrix, at, seat } of instances(audience)) {
       expect(at.y).toBeGreaterThanOrEqual(seat.y);
@@ -306,13 +317,16 @@ describe("attachStadium", () => {
     const span = course.getObjectByName("ground").geometry.parameters.height;
     expect(span).toBeGreaterThan(2);
     const audience = attachStadium(course, spectators(), 0);
-    const stands = course.children.filter((child) => child.name === "stand");
+    const stands = course.getObjectByName("stadium").children.filter((child) => child.name === "stand");
     expect(stands).toHaveLength(2);
-    for (const stand of stands) expect(inner(stand)).toBeCloseTo(span / 2 + GAP, 9);
-    expect(course.children.filter((child) => child.name === "rail")).toHaveLength(2);
-    expect(course.children.filter((child) => child.name === "cones")).toHaveLength(2);
+    for (const stand of stands) {
+      const far = stand.children[0].position.z < 0;
+      expect(inner(stand)).toBeCloseTo(span / 2 + (far ? JURY_APRON : GAP), 9);
+    }
+    expect(course.getObjectByName("stadium").children.filter((child) => child.name === "rail")).toHaveLength(2);
+    expect(course.getObjectByName("stadium").children.filter((child) => child.name === "cones")).toHaveLength(2);
     expect(audience.group.parent).toBe(course);
-    expect(audience.group.children.reduce((sum, mesh) => sum + mesh.count, 0)).toBe(108);
+    expect(audience.group.getObjectByName("crowd").children.reduce((sum, mesh) => sum + mesh.count, 0)).toBe(216);
   });
 
   it("backs the whole near side off behind the camera, Duck Jam's layout kept between its pieces", () => {
@@ -324,8 +338,8 @@ describe("attachStadium", () => {
     const course = buildCourse({ length_m: LENGTH }, 1);
     attachStadium(course, spectators(), 2.0);
     const side = (name, sign) =>
-      course.children.find((child) => child.name === name && Math.sign(child.children[0].position.z) === sign);
-    expect(inner(side("stand", -1))).toBeCloseTo(SPAN / 2 + GAP, 9);
+      course.getObjectByName("stadium").children.find((child) => child.name === name && Math.sign(child.children[0].position.z) === sign);
+    expect(inner(side("stand", -1))).toBeCloseTo(SPAN / 2 + JURY_APRON, 9);
     expect(side("rail", -1).children[0].position.z).toBeCloseTo(-SPAN / 2, 9);
     expect(inner(side("stand", 1))).toBeCloseTo(2.0, 9);
     expect(side("rail", 1).children[0].position.z).toBeCloseTo(2.0 - GAP, 9);
@@ -335,12 +349,16 @@ describe("attachStadium", () => {
     }
   });
 
-  it("rides with the course, so it tilts with a slope and leaves with a re-race", () => {
+  it("keeps the stands and crowd level while the course slopes", () => {
     const course = buildCourse({ length_m: LENGTH, slope_deg: 8 }, 1);
     attachStadium(course, spectators(), 0);
     course.updateMatrixWorld(true);
-    const stand = course.children.find((child) => child.name === "stand");
+    const stand = course.getObjectByName("stadium").children.find((child) => child.name === "stand");
     const far = new Vector3(LENGTH, 0, 0).applyMatrix4(stand.matrixWorld);
-    expect(far.y).toBeCloseTo(LENGTH * Math.sin((8 * Math.PI) / 180), 6);
+    expect(far.y).toBeCloseTo(0, 6);
+    const up = new Vector3(0, 1, 0).transformDirection(stand.matrixWorld);
+    expect(up.y).toBeCloseTo(1, 6);
+    const crowd = course.getObjectByName("crowd");
+    expect(new Vector3(LENGTH, 0, 0).applyMatrix4(crowd.matrixWorld).y).toBeCloseTo(0, 6);
   });
 });

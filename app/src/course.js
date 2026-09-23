@@ -9,6 +9,8 @@
 
 import {
   BoxGeometry,
+  ExtrudeGeometry,
+  Shape,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -118,7 +120,7 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
     // flat plane facing up takes all of the sky, and the robots ended up as
     // silhouettes against their own track.
     new MeshStandardMaterial({
-      color: 0x22242a,
+      color: slope_deg ? 0x456d7b : 0x22242a,
       roughness: 1,
       metalness: 0,
       envMapIntensity: 0.15,
@@ -129,6 +131,31 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   ground.position.set(length_m / 2, 0, 0);
   ground.name = "ground";
   course.add(ground);
+
+  if (slope_deg > 0) {
+    const angle = course.rotation.z;
+    const end = length_m + OVERRUN;
+    // In the tilted course frame, the wedge's underside maps to a level floor.
+    const bottom = (x) => (-0.014 - x * Math.sin(angle)) / Math.cos(angle);
+    const profile = new Shape();
+    profile.moveTo(0, -0.004);
+    profile.lineTo(end, -0.004);
+    profile.lineTo(end, bottom(end));
+    profile.lineTo(0, bottom(0));
+    profile.closePath();
+    const geometry = new ExtrudeGeometry(profile, { depth: span, bevelEnabled: false });
+    geometry.translate(0, 0, -span / 2);
+    const base = new Mesh(geometry, new MeshStandardMaterial({ color: 0x244b59, roughness: 0.95 }));
+    base.name = "ramp-base";
+    course.add(base);
+    for (const side of [-1, 1]) {
+      const edge = new Mesh(new BoxGeometry(end, 0.003, 0.025),
+        new MeshStandardMaterial({ color: 0xffc548, roughness: 0.85 }));
+      edge.name = "ramp-edge";
+      edge.position.set(end / 2, 0.003, side * (span / 2 - 0.016));
+      course.add(edge);
+    }
+  }
 
   course.add(line(0, span, 0xf5f5f5, "start"));
   course.add(checker(length_m, span));

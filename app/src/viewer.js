@@ -11,11 +11,10 @@
 import {
   ACESFilmicToneMapping,
   AmbientLight,
+  Box3,
   HemisphereLight,
   Color,
   DirectionalLight,
-  Fog,
-  GridHelper,
   PerspectiveCamera,
   PMREMGenerator,
   Scene,
@@ -34,6 +33,9 @@ import {
 } from "./rig.js";
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
 import { attachStadium } from "./stadium.js";
+import { buildJudges } from "./judges.js";
+import { loadGymBranding } from "./gym-branding.js";
+import { buildGym } from "./gym.js";
 import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
@@ -140,7 +142,7 @@ const PLATE_LIFT = 0.16;
 /**
  * Where the camera stands and what it looks at, for one frame.
  *
- * `null` is the chase camera the publication and race pages always had:
+ * `null` is the close chase camera used on the race page:
  * behind the leader, trackside, the side offset widening with the arena. An
  * event's `[clip.camera]` spec overrides its constants or fixes the camera
  * outright; `distance` scales a chase's offsets, which is how the vertical
@@ -246,9 +248,11 @@ export async function createViewer(
   // The rig is fixed for the life of this viewer, which matches the page: one
   // race page shows one event, and an event declares one rig. The crowd is
   // always on foot, in its own lighter model.
-  const [{ kinematics, geometries }, spectators] = await Promise.all([
+  const [{ kinematics, geometries }, spectators, reachy, branding] = await Promise.all([
     loadAssets(rigName),
     loadAssets("legs", CROWD_MODEL),
+    loadGlb("reachy-mini/reachy-mini.glb"),
+    loadGymBranding(),
   ]);
 
   // Under SwiftShader MSAA cost 2.7× per frame (401 → 151 ms at 1080p), and a
@@ -279,10 +283,7 @@ export async function createViewer(
     scene.environmentIntensity = ENV_INTENSITY * brightness;
     return brightness;
   }
-  // --deep-ink: the stage is a screen, and the club draws every screen — the
-  // CRT, the stills on the flyers — on deep ink.
-  scene.background = new Color(0x08080c);
-  scene.fog = new Fog(0x08080c, 4.5, 16);
+  scene.background = new Color(0xb8dce7);
 
   // Four lights, because ACES tone mapping pulls mid-tones DOWN and the first
   // attempt at this left the robots as dark blobs. Ambient sets the floor, the
@@ -301,10 +302,6 @@ export async function createViewer(
   scene.add(rim);
   // Sky above, ground bounce below.
   scene.add(new HemisphereLight(0xcfe0ff, 0x2b2b30, HEMI));
-
-  const grid = new GridHelper(24, 48, 0x23232b, 0x17171d);
-  grid.position.y = -0.001; // just under the course so it reads as backdrop
-  scene.add(grid);
 
   const camera = new PerspectiveCamera(spec?.fov ?? 42, 1, 0.02, 100);
   camera.position.set(-0.35, 0.34, 1.15);
@@ -331,6 +328,8 @@ export async function createViewer(
 
   let lanes = [];
   let course = null;
+  let gym = null;
+  let judges = null;
   // The stadium's crowd, rebuilt with the course: posed in draw, disposed
   // with the course in clearScene.
   let audience = null;
@@ -338,9 +337,14 @@ export async function createViewer(
   let namesVisible = false;
   let sideOffset = 1.15;
   let slopeDeg = 0;
+  let courseLength = 2;
   let player = new Player([]);
 
   function clearScene() {
+    judges?.dispose();
+    judges = null;
+    gym?.dispose();
+    gym = null;
     for (const lane of lanes) {
       scene.remove(lane.rig.placer);
       lane.marker?.removeFromParent();
@@ -361,6 +365,7 @@ export async function createViewer(
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
     slopeDeg = event?.slope_deg ?? 0;
+    courseLength = event?.length_m ?? 2;
     if (event) {
       course = attachCourse(
         scene,
@@ -372,7 +377,20 @@ export async function createViewer(
       // The near stand starts a stride beyond where the chase camera stands,
       // clip travel included, so the lens is never inside it.
       const chase = cameraPose(spec, 0, sideOffset, 0).position[2];
-      audience = attachStadium(course, spectators, chase * TRAVEL_REACH + STAND_CLEARANCE);
+      const clearance = chase * TRAVEL_REACH + STAND_CLEARANCE;
+      audience = attachStadium(course, spectators, clearance);
+      const ground = course.getObjectByName("ground");
+      const { width, height } = ground.geometry.parameters;
+      course.updateMatrixWorld(true);
+      const stadiumBounds = new Box3().setFromObject(course);
+      gym = buildGym(event.length_m ?? 2, stadiumBounds.min.z, stadiumBounds.max.z, branding, height);
+      scene.add(gym.group);
+      judges = buildJudges(reachy, event.length_m ?? 2, Math.max(1, entries.length) * spacing / 2, gym.sponsorMaps);
+      scene.add(judges.group);
+      if (!slopeDeg) {
+        ground.material.dispose();
+        ground.material = gym.floorMaterial(width, height);
+      }
     }
     lanes = entries.map((entry, i) => {
       const tier = entry.tier ?? "ghost";
@@ -409,7 +427,7 @@ export async function createViewer(
         plate.sprite.visible = namesVisible;
         scene.add(plate.sprite);
       }
-      return { ...entry, rig, marker, plate, tier };
+      return { ...entry, rig, marker, plate, tier, gazeTarget: new Vector3() };
     });
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
     player.play();
@@ -483,11 +501,16 @@ export async function createViewer(
       }
     });
     audience?.pose(seconds);
+    judges?.pose(seconds, lanes.map((lane) =>
+      lane.rig.bodies.get("trunk_base").getWorldPosition(lane.gazeTarget),
+    ));
 
-    if (chase && lanes.length) {
+    if (chase && course) {
       // Follow the leader along +x, the direction of travel, from behind and
       // slightly to one side so the gait is visible rather than end-on.
-      const lead = Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]));
+      const lead = lanes.length
+        ? Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]))
+        : courseLength / 2;
       const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
       const pose = travelPose(cameraPose(spec, lead, sideOffset, rise), travel);
       camera.position.set(...pose.position);

@@ -22,6 +22,23 @@ describe("laneOffsetZ", () => {
 });
 
 describe("buildCourse", () => {
+  it("gives the hill a solid wedge resting on the floor and a distinct surface", () => {
+    const hill = buildCourse({ length_m: 1.5, slope_deg: 8 });
+    hill.updateMatrixWorld(true);
+    const base = hill.getObjectByName("ramp-base");
+    expect(base).toBeTruthy();
+    const positions = base.geometry.attributes.position;
+    const vertices = Array.from({ length: positions.count }, (_, i) =>
+      new Vector3().fromBufferAttribute(positions, i).applyMatrix4(base.matrixWorld));
+    expect(Math.min(...vertices.map((v) => v.y))).toBeCloseTo(-0.014, 6);
+    expect(Math.max(...vertices.map((v) => v.y))).toBeGreaterThan(0.25);
+    const flat = buildCourse({ length_m: 1.5 });
+    expect(flat.getObjectByName("ramp-base")).toBeUndefined();
+    expect(hill.getObjectByName("ground").material.color.getHex()).not.toBe(
+      flat.getObjectByName("ground").material.color.getHex(),
+    );
+  });
+
   it("puts the start line at 0 and the finish at the course length", () => {
     const course = buildCourse({ length_m: 2, width_m: 0.8 });
     expect(course.getObjectByName("start").position.x).toBeCloseTo(0, 12);
