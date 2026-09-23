@@ -10,7 +10,13 @@
 
 /* 15 px rather than the shell's body step: a timing board reads as one, and
    its density is part of what it is. The face stays the club's. */
-body { font: 15px/1.55 var(--body); }
+/* Warm paper for the ground, one step off the shell's white: the objects on
+   this page are all paper — the entry note, the board, the flyers under it —
+   and on white they had nothing to sit on. The board goes the other way, to
+   full paper, so the results read as the sheet pinned to the wall rather than
+   as part of the wall. Scoped to this sheet, so the front page keeps its own
+   ground. */
+body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 
 /* ── race page chrome ─────────────────────────────────────── */
 
@@ -335,7 +341,7 @@ button.link {
 table.board {
   width: 100%;
   border-collapse: collapse;
-  background: var(--warm-paper);
+  background: var(--paper);
   border: 3px solid var(--ink);
   box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
 }
@@ -1221,7 +1227,10 @@ table.board .withdraw:focus-visible,
 .rounds-on .challenge-note--race { --fx-shadow-color: var(--orange); }
 .rounds-on .challenge-note--challenge { --fx-shadow-color: var(--magenta); }
 .rounds-on .challenge-note--showcase { --fx-shadow-color: var(--yellow); }
-.rounds-on .challenge-note--planned { background: var(--warm-paper); color: var(--ink-70); }
+/* Cream, not warm paper: warm paper is the page's own ground now, and a
+   planned round on it would have been a floating border with nothing behind
+   it. Cream still reads a step back from the white sheets beside it. */
+.rounds-on .challenge-note--planned { background: var(--cream); color: var(--ink-70); }
 .rounds-on .challenge-link { display: block; flex: 1; color: inherit; text-decoration: none; }
 .rounds-on .challenge-link:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 .rounds-on .challenge-art {
