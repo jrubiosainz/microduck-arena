@@ -294,21 +294,21 @@ export function raceHall(event) {
         <aside class="entry" id="entry"></aside>
       </div>
     </div>
-    <div class="boardtop">
-      <fieldset class="picks">
-        <legend>Put on the stage</legend>
-        <label><input type="checkbox" data-pick="all"> All</label>
-        <label><input type="checkbox" data-pick="mine"> Mine</label>
-        <label><input type="checkbox" data-pick="top"> Top 5</label>
-      </fieldset>
-      <div class="modes" role="group" aria-label="Which runs to show">
-        <button data-mode="top" aria-pressed="true">Top</button>
-        <button data-mode="mine" aria-pressed="false">Mine</button>
-        <button data-mode="all" aria-pressed="false">All</button>
-      </div>
-    </div>
     <div class="boardsheet">
       <span class="flyer-tape"></span>
+      <div class="boardtop">
+        <fieldset class="picks">
+          <legend>Put on the stage</legend>
+          <label><input type="checkbox" data-pick="all"> All</label>
+          <label><input type="checkbox" data-pick="mine"> Mine</label>
+          <label><input type="checkbox" data-pick="top"> Top 5</label>
+        </fieldset>
+        <div class="modes" role="group" aria-label="Which runs to show">
+          <button data-mode="top" aria-pressed="true">Top</button>
+          <button data-mode="mine" aria-pressed="false">Mine</button>
+          <button data-mode="all" aria-pressed="false">All</button>
+        </div>
+      </div>
       <div id="board"></div>
     </div>
   `;

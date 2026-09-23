@@ -333,17 +333,19 @@ button.link {
    flyer, which is one small thing pinned to a wall; this sheet grows a row per
    published run, and a long table tilted off true reads as a rendering fault
    rather than as paper. The tape stays — it is still stuck up. */
+/* The frame belongs to the sheet now, not to the table: the toolbar and the
+   results are one piece of paper, so one border and one shadow go round both. */
 .boardsheet {
   position: relative;
   margin-top: 30px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
 }
 
 table.board {
   width: 100%;
   border-collapse: collapse;
-  background: var(--paper);
-  border: 3px solid var(--ink);
-  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
 }
 
 table.board th {
@@ -458,6 +460,9 @@ table.board tr.provisional .votes { color: var(--ink); }
 }
 
 .empty { color: var(--ink-70); margin-top: 22px; }
+/* Inside the frame it has no margin to sit on: the sheet's own padding is
+   what keeps it off the border. */
+.boardsheet .empty { margin: 0; padding: 18px var(--space-card-padding-min); }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -613,15 +618,17 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
 
 /* ── which runs the board shows ───────────────────────────────────────── */
 
+/* The sheet's own header, inside its frame and above the column heads: these
+   controls act on this table and nothing else, and floating them above the
+   paper left two objects where there is one. */
 .boardtop {
   display: flex;
   flex-wrap: wrap;
   gap: 10px var(--space-gutter-min);
   justify-content: space-between;
   align-items: center;
-  /* Tight to the table: these tick its boxes, and an airy gap read as though
-     they belonged to the stage above instead. */
-  margin: 18px 0 4px;
+  padding: 11px var(--space-card-padding-min);
+  border-bottom: 3px solid var(--ink);
 }
 
 /* Left of the board: what goes ON THE STAGE. Deliberately not the stickers on
@@ -652,46 +659,45 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
   letter-spacing: var(--type-eyebrow-tracking);
   text-transform: uppercase;
 }
+/* The same face and size as the keys across the header from them, so the two
+   groups read as one row of controls rather than as a caption beside three
+   buttons. The legend keeps the eyebrow orange it shares with the column
+   heads directly beneath it. */
 .picks label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  color: var(--orange-inked);
-  font-size: 0.86rem;
-}
-.picks input { accent-color: var(--orange); cursor: pointer; }
-.modes { display: flex; gap: 10px; }
-
-/* Three stickers pressed on by hand, each its own colour and its own lean.
-   They were a segmented control; joined, square and grey they were the one
-   thing left on the page that still belonged to the old board. */
-.modes button {
-  padding: 7px 15px;
-  border: 2px solid var(--ink);
-  background: var(--yellow);
   color: var(--ink);
   font: 400 0.8rem/1 var(--display);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.picks input { accent-color: var(--ink); cursor: pointer; }
+.modes { display: flex; gap: 8px; }
+
+/* They were three stickers, each its own colour and its own lean, pressed on
+   above the paper. On the sheet's own header that is three accents and three
+   angles inside a frame that is straight, so they go quiet: hollow keys in
+   ink, no colour, no shadow, no lean. The one that is on fills with ink —
+   nothing else on the sheet is a solid ink block, so the state is legible
+   without spending a colour on it. */
+.modes button {
+  padding: 6px 13px;
+  border: 2px solid var(--ink);
+  background: none;
+  color: var(--ink);
+  font: 400 0.8rem/1 var(--display);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
-  rotate: calc(-1 * var(--rotate-1-0));
 }
-.modes button:nth-child(2) { background: var(--sky); rotate: var(--rotate-1-5); }
-.modes button:nth-child(3) { background: var(--cream); }
-/* aria-pressed carries the state, so the styling reads from it rather than
-   from a class that could drift out of step with what a screen reader hears.
-   The one that is on takes the action's orange; its shadow stays ink like its
-   neighbours', so the ground is what says which is pressed and the row does
-   not carry two accents shouting at once. */
+.modes button:hover { background: var(--warm-paper); }
 .modes button[aria-pressed="true"] {
-  background: var(--orange);
+  background: var(--ink);
+  color: var(--paper);
 }
-.modes button:active {
-  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
-  box-shadow: none;
-}
+.modes button:active { translate: 1px 1px; }
 
 /* The link to a policy's training environment. Same weight as the download
    glyph beside it: both are offers, neither is the point of the row. */

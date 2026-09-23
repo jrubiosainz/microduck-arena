@@ -385,6 +385,16 @@ describe("raceHall: the page's frame", () => {
     ]);
   });
 
+  it("puts the picks and the filters inside the board's own frame, above it", () => {
+    // One piece of paper: these controls act on this table and nothing else,
+    // and floating them above the sheet made two objects out of one.
+    const sheet = hall().querySelector(".boardsheet");
+    expect(sheet.querySelector(".boardtop")).not.toBeNull();
+    const order = [...sheet.children];
+    expect(order.indexOf(sheet.querySelector(".boardtop")))
+      .toBeLessThan(order.indexOf(sheet.querySelector("#board")));
+  });
+
   it("puts the stage picks left of the board, apart from the row filters", () => {
     // The two groups share the words all / mine / top and mean different
     // things: these decide what plays, those decide what the table lists.
