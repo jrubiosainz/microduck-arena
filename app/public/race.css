@@ -281,6 +281,10 @@ button.link {
   padding: 11px 12px;
   border-top: 3px solid var(--deep-ink);
 }
+/* Outlined rather than filled: four paper slabs across the panel shouted
+   louder than the picture above them. Hollow keys — white rule, deep ink
+   inside, white lettering — read as engraving on the chassis, and the one
+   that is ON still fills, so the state is what catches the eye. */
 .controls button {
   font: 400 0.8rem/1 var(--display);
   letter-spacing: 0.05em;
@@ -288,15 +292,18 @@ button.link {
   white-space: nowrap;
   padding: 7px 12px;
   cursor: pointer;
-  color: var(--ink);
-  background: var(--paper);
-  border: 2px solid var(--deep-ink);
-  /* The shadow falls on the panel, not on the page: a key standing off its
-     own chassis. */
-  box-shadow: 3px 3px var(--shadow-blur) var(--deep-ink);
+  color: var(--paper);
+  background: var(--deep-ink);
+  border: 2px solid var(--paper);
+  box-shadow: none;
 }
-.controls button:active { translate: 3px 3px; box-shadow: none; }
-.controls button[aria-pressed="true"] { background: var(--yellow); }
+.controls button:hover { background: var(--ink-70); }
+.controls button:active { translate: 2px 2px; }
+.controls button[aria-pressed="true"] {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: var(--ink);
+}
 .controls .hint {
   margin-left: auto;
   color: var(--paper-60);
