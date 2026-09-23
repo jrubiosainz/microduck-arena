@@ -658,7 +658,7 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: var(--ink);
+  accent-color: var(--orange);
   cursor: pointer;
 }
 
@@ -668,8 +668,8 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
    above the paper. On the sheet's own header that is three accents and three
    angles inside a frame that is straight, so they go quiet: hollow keys in
    ink, no colour, no shadow, no lean. The one that is on fills with ink —
-   nothing else on the sheet is a solid ink block, so the state is legible
-   without spending a colour on it. */
+   the one that is on fills with the action's orange, which is the same colour
+   the Watch button in every row already carries. */
 .modes button {
   padding: 6px 13px;
   border: 2px solid var(--ink);
@@ -682,8 +682,9 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
 }
 .modes button:hover { background: var(--warm-paper); }
 .modes button[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--orange);
+  border-color: var(--ink);
+  color: var(--ink);
 }
 .modes button:active { translate: 1px 1px; }
 
