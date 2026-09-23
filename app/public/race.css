@@ -249,9 +249,12 @@ button.link {
    The screen keeps its own rules because `run.js` and `vote.js` build a bare
    `.stage` with no deck around it — the frame moves out to the chassis only
    where there IS one. */
+/* The panel takes the scene's own background — `viewer.js` clears to
+   #08080C, which is this token — so the chassis is one unbroken surface and
+   the picture ends without a seam under it. */
 .deck {
   --fx-shadow-color: var(--cyan);
-  background: var(--ink);
+  background: var(--deep-ink);
   border: 5px solid var(--ink);
   margin-bottom: 26px;
 }
@@ -271,15 +274,16 @@ button.link {
 
 /* ── the transport ───────────────────────────────────────────────────── */
 
-/* The deck below the screen: ink panel, a hairline where the picture ends,
-   the hint pushed to the far end the way a counter sits apart from the keys. */
+/* The deck below the screen: no rule between them, since the panel is now
+   the same deep ink the scene clears to and a line across it would be the
+   only thing marking a join that is not there. The hint sits at the far end
+   the way a counter sits apart from the keys. */
 .controls {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   padding: 11px 12px;
-  border-top: 3px solid var(--deep-ink);
 }
 /* Outlined rather than filled: four paper slabs across the panel shouted
    louder than the picture above them. Hollow keys — a light grey rule, deep
@@ -430,13 +434,12 @@ table.board tr.provisional .votes { color: var(--ink); }
    is not any more, so it names the rings in exactly their own colours. */
 .key {
   position: absolute;
-  right: 12px;
+  left: 12px;
   bottom: 10px;
   z-index: 1; /* over the vignette, which is an ::after on the same box */
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 4px 14px;
   margin: 0;
   padding: 0;
