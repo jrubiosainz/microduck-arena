@@ -36,16 +36,19 @@
    bug, and out of sight until the pointer is on the stage — a page that is
    nothing but a picture should not wear a permanent bar across it, but it
    must not be a trap either. */
+/* Small, in the corner the front page's way-in button also uses, and quiet
+   until the pointer is on the picture: the channel is what the page is for,
+   and the way out should not sit on top of it. */
 .live-back {
   position: absolute;
-  bottom: calc(24 * var(--u));
-  left: calc(32 * var(--u));
+  bottom: calc(16 * var(--u));
+  right: calc(16 * var(--u));
   z-index: 8;
-  padding: calc(10 * var(--u)) calc(20 * var(--u));
-  border: calc(3 * var(--u)) solid var(--paper);
+  padding: calc(5 * var(--u)) calc(11 * var(--u));
+  border: calc(2 * var(--u)) solid var(--paper);
   background: rgba(8, 8, 12, 0.72);
   color: var(--paper);
-  font: 400 calc(24 * var(--u)) / 1 var(--display);
+  font: 400 calc(13 * var(--u)) / 1 var(--display);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-decoration: none;
@@ -54,7 +57,7 @@
 .live-back::before { content: "\2190\00a0"; }
 .live:hover .live-back,
 .live-back:focus-visible { opacity: 1; }
-.live-back:hover { background: var(--magenta); border-color: var(--magenta); }
+.live-back:hover { background: var(--orange); border-color: var(--orange); color: var(--ink); }
 .live-back:focus-visible { outline: calc(3 * var(--u)) solid var(--cyan); outline-offset: calc(3 * var(--u)); }
 
 @media (prefers-reduced-motion: no-preference) {

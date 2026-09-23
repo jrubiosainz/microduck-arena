@@ -547,7 +547,7 @@
 }
 .season-live:hover .season-live-full,
 .season-live-full:focus-visible { opacity: 1; }
-.season-live-full:hover { background: var(--magenta); border-color: var(--magenta); }
+.season-live-full:hover { background: var(--orange); border-color: var(--orange); color: var(--ink); }
 .season-live-full:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 
 @media (prefers-reduced-motion: no-preference) {
