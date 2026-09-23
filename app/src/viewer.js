@@ -58,7 +58,7 @@ import { readBrightness, writeBrightness } from "./brightness.js";
 // metal with nothing to reflect really does read black — that hazard is real,
 // it just was not this bug.
 const EXPOSURE = 1.0;
-const ENV_INTENSITY = 1.0;
+const ENV_INTENSITY = 0.35;
 const AMBIENT = 0.18;
 const KEY = 1.7;
 const FILL = 0.55;
@@ -275,12 +275,11 @@ export async function createViewer(
   const scene = new Scene();
   scene.environment = environment;
 
-  // One control drives both, because they are the two things that decide
-  // whether the robot reads at all and they should not be tuned apart.
+  // Keep reflected light fixed: scaling it with exposure washes out pale surfaces.
   function setBrightness(value) {
     brightness = writeBrightness(value);
     renderer.toneMappingExposure = EXPOSURE * brightness;
-    scene.environmentIntensity = ENV_INTENSITY * brightness;
+    scene.environmentIntensity = ENV_INTENSITY;
     return brightness;
   }
   scene.background = new Color(0xb8dce7);

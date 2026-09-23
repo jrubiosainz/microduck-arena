@@ -80,6 +80,7 @@ export async function createBooth(canvas) {
 
   const scene = new Scene();
   scene.environment = environment;
+  scene.environmentIntensity = 0.35;
   scene.background = token("deep-ink");
   // The viewer's four lights; the key also throws the set's shadows.
   scene.add(new AmbientLight(0xffffff, 0.18));
