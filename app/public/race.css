@@ -359,7 +359,10 @@ table.board th {
 }
 table.board td { padding: 11px 10px; border-top: 2px solid var(--ink); }
 table.board tbody tr:first-child td { border-top: 0; }
-table.board tbody tr:hover { background: var(--cream); }
+/* No row hover: the row does not do anything when you click it any more, and
+   a surface that lights up under the pointer is promising that it will. What
+   is clickable here lights up on its own — the button, the two glyphs and the
+   lane box. */
 
 /* Two blocks with the slack between them: who and which policy on the left,
    then the measurements and the button that plays them on the right. Policy
