@@ -8,7 +8,7 @@ import {
 import { floorLogoTexture, sponsorTexture } from "./gym-branding.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
-function parquet() {
+export function parquet() {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 1024;
   const ctx = canvas.getContext("2d");

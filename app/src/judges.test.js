@@ -55,6 +55,14 @@ describe("official Reachy Mini asset", () => {
     expect(head.getObjectByName("antenna_right")).toBeTruthy();
     expect(head.getObjectByName("antenna_left")).toBeTruthy();
   });
+  it("seats three full-scale judges symmetrically for the roller arena", () => {
+    const panel = buildJudges(model, 2, 0.425, [], 3);
+    const robots = panel.group.children.filter(child => child.name.startsWith("judge-"));
+    expect(robots).toHaveLength(3);
+    expect(robots.map(robot => robot.position.x)).toEqual([0.55, 1, 1.45]);
+    robots.forEach(robot => expect(robot.scale.toArray()).toEqual([1, 1, 1]));
+    panel.dispose();
+  });
   it("seats four independent rigs outside the lanes and preserves shared assets on teardown", () => {
     const panel = buildJudges(model, 2, 1.275, [new Texture(), new Texture(), new Texture()]);
     const robots = panel.group.children.filter((child) => child.name.startsWith("judge-"));

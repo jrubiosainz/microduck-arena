@@ -25,7 +25,7 @@ export function judgeGaze(seconds, index, position, racers) {
   };
 }
 
-export function buildJudges(model, length, edge, sponsorMaps) {
+export function buildJudges(model, length, edge, sponsorMaps, count = 4) {
   const group = new Group();
   group.name = "judges";
   const furniture = [];
@@ -57,8 +57,8 @@ export function buildJudges(model, length, edge, sponsorMaps) {
   for (const x of [centre - 0.82, centre + 0.82]) {
     for (const dz of [-0.09, 0.09]) box(0.035, 0.25, 0.035, x, 0.125, z + dz, 1);
   }
-  const judges = Array.from({ length: 4 }, (_, i) => {
-    const x = centre + (i - 1.5) * 0.45;
+  const judges = Array.from({ length: count }, (_, i) => {
+    const x = centre + (i - (count - 1) / 2) * 0.45;
     const seatZ = z + 0.24;
     box(0.22, 0.028, 0.22, x, 0.18, seatZ, 2);
     box(0.22, 0.16, 0.025, x, 0.26, seatZ + 0.115, 2);

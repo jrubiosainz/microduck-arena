@@ -36,6 +36,7 @@ import { attachStadium } from "./stadium.js";
 import { buildJudges } from "./judges.js";
 import { loadGymBranding } from "./gym-branding.js";
 import { buildGym } from "./gym.js";
+import { buildRollerHall } from "./roller-hall.js";
 import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
@@ -352,7 +353,7 @@ export async function createViewer(
     }
     lanes = [];
     if (course) {
-      audience.dispose();
+      audience?.dispose();
       audience = null;
       scene.remove(course);
       course = null;
@@ -377,14 +378,19 @@ export async function createViewer(
       // clip travel included, so the lens is never inside it.
       const chase = cameraPose(spec, 0, sideOffset, 0).position[2];
       const clearance = chase * TRAVEL_REACH + STAND_CLEARANCE;
-      audience = attachStadium(course, spectators, clearance);
       const ground = course.getObjectByName("ground");
       const { width, height } = ground.geometry.parameters;
-      course.updateMatrixWorld(true);
-      const stadiumBounds = new Box3().setFromObject(course);
-      gym = buildGym(event.length_m ?? 2, stadiumBounds.min.z, stadiumBounds.max.z, branding, height);
+      const roller = event.id === "roller-sprint-2m";
+      if (roller) {
+        gym = buildRollerHall(courseLength, height, branding, spectators);
+      } else {
+        audience = attachStadium(course, spectators, clearance);
+        course.updateMatrixWorld(true);
+        const stadiumBounds = new Box3().setFromObject(course);
+        gym = buildGym(courseLength, stadiumBounds.min.z, stadiumBounds.max.z, branding, height);
+      }
       scene.add(gym.group);
-      judges = buildJudges(reachy, event.length_m ?? 2, Math.max(1, entries.length) * spacing / 2, gym.sponsorMaps);
+      judges = buildJudges(reachy, courseLength, Math.max(1, entries.length) * spacing / 2, gym.sponsorMaps, roller ? 3 : 4);
       scene.add(judges.group);
       if (!slopeDeg) {
         ground.material.dispose();
@@ -500,6 +506,7 @@ export async function createViewer(
       }
     });
     audience?.pose(seconds);
+    gym?.pose?.(seconds);
     judges?.pose(seconds, lanes.map((lane) =>
       lane.rig.bodies.get("trunk_base").getWorldPosition(lane.gazeTarget),
     ));
@@ -511,13 +518,15 @@ export async function createViewer(
         ? Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]))
         : courseLength / 2;
       const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
-      const pose = travelPose(cameraPose(spec, lead, sideOffset, rise), travel);
+      const pose = travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel);
       camera.position.set(...pose.position);
       _target.set(...pose.target);
       if (controls) controls.target.copy(_target);
       else camera.lookAt(_target);
     }
     controls?.update();
+    const lead = lanes.length ? Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0])) : courseLength / 2;
+    gym?.renderScreens?.(renderer, scene, seconds, lead);
     renderer.render(scene, camera);
   }
 
