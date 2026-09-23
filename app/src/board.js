@@ -123,7 +123,8 @@ export function renderBoard(
     "<th>policy</th>" +
     (voted ? "<th class='votes'>votes</th>" : "<th class='time'>time</th>") +
     "<th class='speed'>m/s</th>" +
-    "<th class='seeds'>seeds</th><th class='env'></th><th class='grab'></th>" +
+    "<th class='seeds'>seeds</th><th class='record'>record</th>" +
+    "<th class='env'></th><th class='grab'></th>" +
     "<th class='mine'></th></tr></thead>";
   const body = document.createElement("tbody");
 
@@ -133,15 +134,10 @@ export function renderBoard(
     if (row.provisional) tr.classList.add("provisional");
     tr.classList.add(`tier-${row.tier}`);
 
-    if (!row.provisional) {
-      // The row is the way to the run's page. Its own controls — the lane box,
-      // the two links, the withdraw button — keep their own behaviour.
-      tr.classList.add("linked");
-      tr.addEventListener("click", (event) => {
-        if (event.target.closest("a, button, input")) return;
-        location.hash = runHref(row.runId);
-      });
-    }
+    // The way to the run's page is the button in the record column, and only
+    // that button. The whole row used to be clickable, which meant reaching for
+    // the lane box or the download arrow and missing by a few pixels took you
+    // off the board — and nothing on the row said it would.
 
     // A trial has no run id to tick: it is on the stage and nowhere else.
     let lane = null;
@@ -199,6 +195,21 @@ export function renderBoard(
       grab.append(link);
     }
 
+    // The run's page is where the video is. A named button rather than a glyph
+    // beside the two that already are: this one leaves the board, and the two
+    // others fetch a file and open a repo.
+    const record = document.createElement("td");
+    record.className = "record";
+    if (!row.provisional) {
+      const watch = document.createElement("a");
+      watch.className = "record-link";
+      watch.href = runHref(row.runId);
+      watch.textContent = "Watch";
+      watch.title = `Watch ${row.user}'s run with ${row.policy}`;
+      watch.setAttribute("aria-label", watch.title);
+      record.append(watch);
+    }
+
     const env = document.createElement("td");
     env.className = "env";
     if (row.envUrl) {
@@ -239,6 +250,7 @@ export function renderBoard(
         : cell(row.score, "time"),
       cell(row.speed, "speed"),
       cell(row.seeds, "seeds"),
+      record,
       env,
       grab,
       own,

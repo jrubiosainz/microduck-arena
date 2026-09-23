@@ -360,7 +360,40 @@ table.board th {
 table.board td { padding: 11px 10px; border-top: 2px solid var(--ink); }
 table.board tbody tr:first-child td { border-top: 0; }
 table.board tbody tr:hover { background: var(--cream); }
-table.board tr.linked { cursor: pointer; }
+
+/* Who and which policy hug their own text instead of sharing the table's
+   slack between them, which is what held them a hand apart and pushed the
+   time out with them. The record column is the only one left without a
+   width, so the slack all lands there — between the numbers and the actions,
+   where a gap belongs. */
+table.board th:nth-child(3),
+table.board td:nth-child(3),
+table.board th:nth-child(4),
+table.board td:nth-child(4) { width: 1%; white-space: nowrap; }
+
+/* The one way to a run's page, and it says so. Orange with the charter's
+   offset shadow: the action colour, on the one action in the row that leaves
+   the board. */
+table.board .record { width: auto; text-align: right; }
+.record-link {
+  display: inline-block;
+  padding: 6px 12px;
+  background: var(--orange);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+  font: 400 0.78rem/1 var(--display);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.record-link:hover { background: var(--yellow); }
+.record-link:active {
+  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
+  box-shadow: none;
+}
+.record-link:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
 
 /* the lane tab: a filled bar for a duck on the stage, hollow otherwise */
 table.board .tab { width: 34px; padding-left: 0; padding-right: 4px; }

@@ -100,6 +100,34 @@ describe("renderBoard", () => {
     expect(text).toContain("alice");
   });
 
+  it("heads a record column and puts one button in it, per published run", () => {
+    const container = render([row()]);
+    expect(container.querySelector("th.record").textContent).toBe("record");
+    const watch = container.querySelector("td.record a.record-link");
+    expect(watch.getAttribute("href")).toBe("#/r/01AAA");
+    expect(watch.textContent).toBe("Watch");
+    // Named for a screen reader as well as for the eye: "Watch" alone, read
+    // out of eight identical rows, says nothing about which run it opens.
+    expect(watch.getAttribute("aria-label")).toBe("Watch alice's run with walker");
+  });
+
+  it("leaves the record cell empty for a trial, which has no run to watch", () => {
+    const container = render([{ ...row({ run_id: null }), provisional: true }]);
+    expect(container.querySelector("td.record").children).toHaveLength(0);
+  });
+
+  it("stops making the whole row the way to the run", () => {
+    // A row that navigates on any click sends you off the board when you reach
+    // for the lane box or the download arrow and miss, and nothing on it says
+    // it will. The button in the record column is the only way now.
+    const container = render([row()]);
+    const tr = container.querySelector("tbody tr");
+    expect(tr.classList.contains("linked")).toBe(false);
+    location.hash = "#/e/sprint-2m";
+    tr.click();
+    expect(location.hash).toBe("#/e/sprint-2m");
+  });
+
   it("says why an empty board is empty, naming the event", () => {
     const container = render([]);
     expect(container.querySelector("table")).toBeNull();
