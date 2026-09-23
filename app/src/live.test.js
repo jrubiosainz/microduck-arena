@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildStage, fullscreenToggle, openSound, renderLive } from "./live.js";
+import { buildStage, openSound, renderLive } from "./live.js";
 
 // The booth needs WebGL, which jsdom has not: the page is tested with a
 // segment that shows a bare canvas. `gate` holds its loading open for the
@@ -458,61 +458,20 @@ describe("openSound", () => {
   });
 });
 
-describe("fullscreenToggle", () => {
-  const fakeScreen = () => {
-    const listeners = [];
-    return {
-      fullscreenEnabled: true,
-      fullscreenElement: null,
-      exitFullscreen() { this.fullscreenElement = null; listeners.forEach((f) => f()); },
-      addEventListener(_name, fn) { listeners.push(fn); },
-    };
-  };
-  const stage = (screen) => {
-    const target = document.createElement("div");
-    target.requestFullscreen = () => {
-      screen.fullscreenElement = target;
-      screen.addEventListener.length; // no-op, keeps the shape honest
-      return Promise.resolve();
-    };
-    return target;
-  };
+describe("the way back off the channel's own page", () => {
+  it("is on the page that IS the channel, and not on the framed player", () => {
+    // Trapped is what this fixes: #/live draws the stage and nothing else, so
+    // without this the only way out was the browser's own back button.
+    const page = document.createElement("div");
+    buildStage(page, false);
+    const back = page.querySelector("a.live-back");
+    expect(back.getAttribute("href")).toBe("#/");
+    expect(back.textContent).toBe("Back to the arena");
 
-  it("is not drawn where fullscreen is refused", () => {
-    // The Space runs in an iframe on huggingface.co, and one without
-    // allow="fullscreen" refuses the request. A button that cannot do its one
-    // job should not be there at all.
-    expect(fullscreenToggle(document.createElement("div"), { fullscreenEnabled: false })).toBeNull();
-  });
-
-  it("says which way it goes, and follows the document rather than a flag", () => {
-    const screen = fakeScreen();
-    const target = stage(screen);
-    const button = fullscreenToggle(target, screen);
-    expect(button.getAttribute("aria-label")).toBe("Fill the screen");
-
-    button.click();
-    // Escape leaves fullscreen without touching this button, so the label has
-    // to be read off the document, not off a flag we kept.
-    screen.exitFullscreen();
-    expect(button.getAttribute("aria-label")).toBe("Fill the screen");
-  });
-
-  it("swallows the click, so the framed player's link is not followed too", () => {
-    // On the front page the whole box is a link to the live page. Without
-    // this, filling the screen would also navigate away from it.
-    const screen = fakeScreen();
-    const button = fullscreenToggle(stage(screen), screen);
-    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
-    button.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(true);
-  });
-
-  it("does not throw when the browser refuses the request", () => {
-    const screen = fakeScreen();
-    const target = document.createElement("div");
-    target.requestFullscreen = () => Promise.reject(new Error("disallowed by permissions policy"));
-    const button = fullscreenToggle(target, screen);
-    expect(() => button.click()).not.toThrow();
+    // Framed, the channel is a box on the front page and the rest of that
+    // page is already the way out.
+    const framed = document.createElement("div");
+    buildStage(framed, true);
+    expect(framed.querySelector(".live-back")).toBeNull();
   });
 });

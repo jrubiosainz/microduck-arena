@@ -525,8 +525,34 @@
   background: var(--deep-ink);
 }
 .season-live-stage { display: block; }
-.season-live-door { position: absolute; inset: 0; z-index: 7; }
-.season-live-door:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+/* The way in, as a button that appears when the pointer is on the picture.
+   It used to be a link across the whole box: clicking the channel anywhere
+   left the front page with no warning, and the page it arrived at had no way
+   back. Now nothing happens unless you press the thing that says what it
+   does. */
+.season-live-full {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 7;
+  padding: 7px 14px;
+  border: 2px solid var(--paper);
+  background: rgba(8, 8, 12, 0.72);
+  color: var(--paper);
+  font: 400 0.78rem/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  opacity: 0;
+}
+.season-live:hover .season-live-full,
+.season-live-full:focus-visible { opacity: 1; }
+.season-live-full:hover { background: var(--magenta); border-color: var(--magenta); }
+.season-live-full:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .season-live-full { transition: opacity 140ms ease; }
+}
 
 /* ── Flyers: one per event, taped up crooked ───────────────────────────────── */
 

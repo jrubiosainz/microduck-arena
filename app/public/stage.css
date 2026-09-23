@@ -32,44 +32,33 @@
 .live[data-live-state="reconnecting"] .live-bug::after { content: " · RECONNECTING"; color: var(--sky); }
 .live[data-live-state="off-air"] .live-bug { display: none; }
 
-/* The way to fill the screen, and back. Bottom right, opposite the LIVE bug,
-   and out of sight until the pointer is on the stage or the button has focus
-   — a control over a picture should not sit on it permanently.
-   z-index 8 puts it over the link that covers the framed player on the front
-   page: without that it would be under the door and unclickable, and the
-   click that did land would follow the link instead of filling the screen. */
-.live-full {
+/* The way back off the channel's own page. Bottom left, opposite the LIVE
+   bug, and out of sight until the pointer is on the stage — a page that is
+   nothing but a picture should not wear a permanent bar across it, but it
+   must not be a trap either. */
+.live-back {
   position: absolute;
   bottom: calc(24 * var(--u));
-  right: calc(32 * var(--u));
+  left: calc(32 * var(--u));
   z-index: 8;
-  display: grid;
-  place-items: center;
-  width: calc(56 * var(--u));
-  height: calc(56 * var(--u));
-  padding: 0;
+  padding: calc(10 * var(--u)) calc(20 * var(--u));
   border: calc(3 * var(--u)) solid var(--paper);
   background: rgba(8, 8, 12, 0.72);
   color: var(--paper);
-  font-size: calc(30 * var(--u));
-  line-height: 1;
-  cursor: pointer;
+  font: 400 calc(24 * var(--u)) / 1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
   opacity: 0;
 }
-.live:hover .live-full,
-.live-full:focus-visible { opacity: 1; }
-.live-full:hover { background: var(--magenta); border-color: var(--magenta); }
-.live-full:focus-visible { outline: calc(3 * var(--u)) solid var(--cyan); outline-offset: calc(3 * var(--u)); }
-
-/* Filling the screen, the stage is the whole window: the 16:9 box the page
-   gave it would otherwise letterbox inside the letterbox. */
-.live:fullscreen { width: 100vw; height: 100vh; aspect-ratio: auto; }
-/* And the way back stays reachable — a pointer that has not moved since the
-   screen filled would otherwise have nothing to hover. */
-.live:fullscreen .live-full { opacity: 1; }
+.live-back::before { content: "\2190\00a0"; }
+.live:hover .live-back,
+.live-back:focus-visible { opacity: 1; }
+.live-back:hover { background: var(--magenta); border-color: var(--magenta); }
+.live-back:focus-visible { outline: calc(3 * var(--u)) solid var(--cyan); outline-offset: calc(3 * var(--u)); }
 
 @media (prefers-reduced-motion: no-preference) {
-  .live-full { transition: opacity 140ms ease; }
+  .live-back { transition: opacity 140ms ease; }
 }
 
 /* The card: the wordmark and a word, on deep ink, when there is nothing to play. */
