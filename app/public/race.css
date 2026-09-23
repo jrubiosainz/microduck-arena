@@ -368,7 +368,7 @@ table.board tbody tr:hover { background: var(--cream); }
    Who hugs its own text, with a wider gutter than the table's so the handle
    and the policy name do not read as one column. */
 table.board th:nth-child(3),
-table.board td:nth-child(3) { width: 1%; white-space: nowrap; padding-right: 26px; }
+table.board td:nth-child(3) { width: 1%; white-space: nowrap; padding-right: 60px; }
 
 /* The one way to a run's page, and it says so. Orange with the charter's
    offset shadow: the action colour, on the one action in the row that leaves
