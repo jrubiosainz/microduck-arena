@@ -240,6 +240,23 @@ button.link {
 }
 .stage canvas { display: block; width: 100%; height: 44vh; min-height: 260px; }
 
+/* ── the deck ─────────────────────────────────────────────────────────── */
+
+/* One chassis, the way a cassette deck is one object: the screen on top, the
+   transport under it, a single ink frame around both. The buttons used to
+   float on the page below the picture, which read as page furniture rather
+   than as the controls OF this picture.
+   The screen keeps its own rules because `run.js` and `vote.js` build a bare
+   `.stage` with no deck around it — the frame moves out to the chassis only
+   where there IS one. */
+.deck {
+  --fx-shadow-color: var(--cyan);
+  background: var(--ink);
+  border: 5px solid var(--ink);
+  margin-bottom: 26px;
+}
+.deck .stage { border: 0; }
+
 /* ── the stage's vignette ─────────────────────────────────────────────── */
 
 .stage::after {
@@ -252,22 +269,43 @@ button.link {
   background: radial-gradient(130% 100% at 50% 50%, transparent 72%, rgba(0, 0, 0, 0.26) 100%);
 }
 
-.controls { display: flex; gap: 8px; align-items: center; margin: 12px 0 26px; }
+/* ── the transport ───────────────────────────────────────────────────── */
+
+/* The deck below the screen: ink panel, a hairline where the picture ends,
+   the hint pushed to the far end the way a counter sits apart from the keys. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 11px 12px;
+  border-top: 3px solid var(--deep-ink);
+}
 .controls button {
-  font: 400 0.85rem/1 var(--display);
+  font: 400 0.8rem/1 var(--display);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
-  padding: 8px 13px;
+  padding: 7px 12px;
   cursor: pointer;
   color: var(--ink);
   background: var(--paper);
-  border: 2px solid var(--ink);
-  box-shadow: 3px 3px var(--shadow-blur) var(--ink);
+  border: 2px solid var(--deep-ink);
+  /* The shadow falls on the panel, not on the page: a key standing off its
+     own chassis. */
+  box-shadow: 3px 3px var(--shadow-blur) var(--deep-ink);
 }
 .controls button:active { translate: 3px 3px; box-shadow: none; }
 .controls button[aria-pressed="true"] { background: var(--yellow); }
-.controls .hint { color: var(--ink-70); font-size: 0.88rem; }
+.controls .hint {
+  margin-left: auto;
+  color: var(--paper-60);
+  font-family: var(--type-mono-label-family);
+  font-weight: var(--type-mono-label-weight);
+  font-size: var(--type-mono-label-size);
+  letter-spacing: var(--type-mono-label-tracking);
+  text-transform: uppercase;
+}
 
 /* ── the board ────────────────────────────────────────────────────────── */
 

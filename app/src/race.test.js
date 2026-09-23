@@ -330,7 +330,7 @@ describe("raceHall: the page's frame", () => {
     const column = hall().querySelector(".racegrid > div:first-child");
     const parts = [...column.children].map((n) => n.className);
     expect(parts[0]).toBe("racetitle");
-    expect(parts.indexOf("facts")).toBeLessThan(parts.findIndex((c) => c.startsWith("stage")));
+    expect(parts.indexOf("facts")).toBeLessThan(parts.findIndex((c) => c.startsWith("deck")));
   });
 
   it("offers a way back, to the front page rather than to history", () => {
@@ -342,7 +342,22 @@ describe("raceHall: the page's frame", () => {
   });
 
   it("frames the stage with the charter's shadow primitive", () => {
-    expect(hall().querySelector(".stage").className).toContain("fx-shadow-card");
+    // On the chassis, which is the whole object: the screen and the transport
+    // under it share one frame and therefore one shadow.
+    const deck = hall().querySelector(".deck");
+    expect(deck.className).toContain("fx-shadow-card");
+    expect(deck.querySelector(".stage")).not.toBeNull();
+  });
+
+  it("puts the stage's buttons on the chassis, under the picture", () => {
+    // They control this picture, so they live on the same object rather than
+    // floating on the page below it.
+    const controls = hall().querySelector(".deck > .controls");
+    expect(controls).not.toBeNull();
+    expect([...controls.querySelectorAll("button")].map((b) => b.id)).toEqual([
+      "playpause", "follow", "walls", "names",
+    ]);
+    expect(controls.querySelector("#stage-hint")).not.toBeNull();
   });
 
   it("names the kind of event over its title, as the flyer did", () => {
