@@ -9,7 +9,7 @@ import {
   tryPolicy,
   withdrawRun,
 } from "./api.js";
-import { renderBoard, selectLanes, selectedRunIds, tiersByRunId } from "./board.js";
+import { buildRows, renderBoard, setAllLanes, tiersByRunId } from "./board.js";
 import { flyer } from "./flyer.js";
 import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
@@ -297,16 +297,13 @@ export function raceHall(event) {
     <div class="boardsheet">
       <span class="flyer-tape"></span>
       <div class="boardtop">
-        <fieldset class="picks">
-          <legend>Put on the stage</legend>
-          <label><input type="checkbox" data-pick="all"> All</label>
-          <label><input type="checkbox" data-pick="mine"> Mine</label>
-          <label><input type="checkbox" data-pick="top"> Top 5</label>
-        </fieldset>
-        <div class="modes" role="group" aria-label="Which runs to show">
-          <button data-mode="top" aria-pressed="true">Top</button>
-          <button data-mode="mine" aria-pressed="false">Mine</button>
+        <input type="checkbox" class="pickall" id="pickall"
+               title="Put every row shown on the stage, or take them all off"
+               aria-label="Put every row shown on the stage">
+        <div class="modes" role="group" aria-label="Which runs the table lists">
           <button data-mode="all" aria-pressed="false">All</button>
+          <button data-mode="mine" aria-pressed="false">Mine</button>
+          <button data-mode="top" aria-pressed="true">Top 3</button>
         </div>
       </div>
       <div id="board"></div>
@@ -315,22 +312,6 @@ export function raceHall(event) {
   return hall;
 }
 
-/**
- * Keep at most one stage pick ticked, and name it.
- *
- * Exclusive like radios, but checkboxes: a radio group cannot be returned to
- * nothing, and unticking the live pick has to be able to clear the stage.
- * Null is that case, and the caller passes it straight to selectLanes.
- *
- * Its own function so the rule is testable — everything around it needs a
- * WebGL viewer, and "ticking one unticks the others" is exactly the kind of
- * thing that works until a fourth pick is added.
- */
-export function exclusivePick(boxes, changed) {
-  if (!changed.checked) return null;
-  for (const box of boxes) box.checked = box === changed;
-  return changed.dataset.pick;
-}
 
 /**
  * The way on, under the board: every other round, as the same sheets the
@@ -447,15 +428,44 @@ export async function renderRace(root, { event, state }) {
   // Declared above every handler that closes over it. Further down it worked
   // only because a click always happens after that line — a handler moved above
   // it would fail with a temporal-dead-zone error that reads like nothing.
-  let mode = "top";
+  //
+  // Two narrowings rather than three modes: Mine and Top each turn on and off
+  // on their own and compose, and All is the state where neither is on.
+  const filters = { mine: false, top: true };
 
+  // The run ids on the stage. Null until the first board says which lanes it
+  // opens on, a Set from then on — and the page's from then on, not the
+  // table's. Declared here for the same reason `filters` is: two handlers
+  // below close over it.
+  let selection = null;
+
+  // Nothing of yours to list when nobody is signed in, and a key that can only
+  // empty the table is worse than no key. Taken out before the list is read,
+  // so nothing below is holding a button that is no longer on the page.
+  if (!modeIsUseful("mine", me?.user ?? null)) {
+    root.querySelector('.modes button[data-mode="mine"]')?.remove();
+  }
   const modeButtons = [...root.querySelectorAll(".modes button")];
+  const showFilters = () => {
+    for (const button of modeButtons) {
+      const on =
+        button.dataset.mode === "all"
+          ? !filters.mine && !filters.top
+          : filters[button.dataset.mode];
+      button.setAttribute("aria-pressed", String(on));
+    }
+  };
+  showFilters();
   for (const button of modeButtons) {
     button.addEventListener("click", async () => {
-      mode = button.dataset.mode;
-      for (const other of modeButtons) {
-        other.setAttribute("aria-pressed", String(other.dataset.mode === mode));
+      const key = button.dataset.mode;
+      if (key === "all") {
+        filters.mine = false;
+        filters.top = false;
+      } else {
+        filters[key] = !filters[key];
       }
+      showFilters();
       await paint();
     });
   }
@@ -472,20 +482,20 @@ export async function renderRace(root, { event, state }) {
     wallsButton.setAttribute("aria-pressed", String(wallsShown));
     wallsButton.textContent = wallsShown ? "Hide walls" : "Show walls";
   });
-  // Checkboxes and not buttons, because they act on checkboxes: a control
-  // that ticks boxes should look like the boxes it ticks. Their union is what
-  // plays, so "mine" and "top 5" compose instead of one replacing the other.
-  const pickBoxes = [...root.querySelectorAll(".picks input")];
-  for (const box of pickBoxes) {
-    box.addEventListener("change", () => {
-      race(selectLanes(board, exclusivePick(pickBoxes, box)), lastTiers);
-    });
-  }
-  // A row ticked by hand no longer matches any pick, so the picks stop
-  // claiming to describe it. Silent rather than re-running the replay: the
-  // row's own handler is already doing that.
-  const clearPicks = () => {
-    for (const box of pickBoxes) box.checked = false;
+  // One box, above the column of lane boxes it ticks: every row the table is
+  // SHOWING goes on the stage, or comes off it. A checkbox and not a button
+  // because it ticks checkboxes, and it carries the three states they have
+  // between them — all, none, and some.
+  const pickAll = root.querySelector(".pickall");
+  pickAll.addEventListener("change", () => {
+    selection = new Set(setAllLanes(board, pickAll.checked));
+    race([...selection], lastTiers);
+  });
+  const showPickAll = () => {
+    const boxes = [...board.querySelectorAll("input[type=checkbox]")];
+    const ticked = boxes.filter((box) => box.checked).length;
+    pickAll.checked = boxes.length > 0 && ticked === boxes.length;
+    pickAll.indeterminate = ticked > 0 && ticked < boxes.length;
   };
 
   // Who each duck belongs to. Off by default: with one lane the answer is on
@@ -553,15 +563,39 @@ export async function renderRace(root, { event, state }) {
     }
     const merged = insertProvisional(rows, trial);
     const tiers = tiersByRunId(merged);
+
+    // What is on the stage is the page's, not the table's. The table is
+    // rebuilt from scratch on every filter and every publish, and reading the
+    // lanes back off the boxes it just drew would re-pick them each time —
+    // which is exactly what used to happen: filter to your own runs, tick
+    // them, go back to the whole board, and the board had quietly gone back to
+    // its own opening three.
+    if (selection === null) {
+      selection = new Set(
+        buildRows(merged).filter((row) => row.selected && row.runId).map((row) => row.runId),
+      );
+    }
+    // A run that has been withdrawn since the last paint keeps no lane.
+    const live = new Set(merged.map((row) => row.run_id).filter(Boolean));
+    for (const runId of selection) if (!live.has(runId)) selection.delete(runId);
+
     renderBoard(
       board,
       // Filtered, never re-ranked: visibleRows narrows the list and leaves every
       // rank exactly as the server computed it.
-      { event, rows: visibleRows(merged, { mode, me: me?.user ?? null }) },
+      { event, rows: visibleRows(merged, { ...filters, me: me?.user ?? null }) },
       {
+        selected: selection,
         onSelectionChange: (runIds) => {
-          clearPicks();
-          return race(runIds, tiers);
+          // The rows on screen are the only ones this can speak for: the rest
+          // of the selection is not in the DOM to be read.
+          const shown = new Set(
+            [...board.querySelectorAll("input[type=checkbox]")].map((box) => box.dataset.runId),
+          );
+          for (const runId of selection) if (shown.has(runId)) selection.delete(runId);
+          for (const runId of runIds) selection.add(runId);
+          showPickAll();
+          return race([...selection], tiers);
         },
         me: me?.user ?? null,
         onWithdraw: async (runId, policy) => {
@@ -581,14 +615,15 @@ export async function renderRace(root, { event, state }) {
         },
       },
     );
-    await race(selectedRunIds(board), tiers);
+    showPickAll();
+    await race([...selection], tiers);
   }
 
   renderEntryPanel(entry, me, {
     event,
     onLiveryChange: (livery) => {
       currentLivery = livery;
-      race(selectedRunIds(board), lastTiers);
+      race([...selection], lastTiers);
     },
     onTry: async ({ file, name, livery, commandVx }) => {
       trial = await tryPolicy(event.id, file, name, livery, commandVx);

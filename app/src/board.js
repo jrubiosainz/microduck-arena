@@ -40,7 +40,13 @@ const ENV_ICON =
   '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" ' +
   'stroke-linejoin="round" d="M9.5 2.5h4v4M13.5 2.5 8 8M12 9.75v3a.75.75 0 0 1-.75.75h-8a.75.75 0 0 1-.75-.75v-8a.75.75 0 0 1 .75-.75h3"/></svg>';
 
-export function buildRows(rows, { me = null } = {}) {
+/**
+ * `selected`, when given, is the set of run ids that are ON THE STAGE — kept
+ * by the page rather than recomputed here, so that ticking a row and then
+ * changing what the table lists does not silently re-pick the lanes. Without
+ * it the board opens on its own first lanes, which is what a fresh page wants.
+ */
+export function buildRows(rows, { me = null, selected = null } = {}) {
   let lanes = 0;
   // The leader is the best PUBLISHED finisher — not simply rank 1, because a
   // trial can outrank it and you still want to see what you are chasing.
@@ -49,8 +55,10 @@ export function buildRows(rows, { me = null } = {}) {
     const dnf = row.seeds_finished === 0;
     // A trial always takes a lane: it is the run you just asked for. Published
     // rows fill the remaining lanes up to the cap.
-    const selected = !dnf && (row.provisional || lanes < DEFAULT_LANES);
-    if (selected) lanes += 1;
+    const racing = selected
+      ? Boolean(row.provisional || (row.run_id && selected.has(row.run_id)))
+      : !dnf && (row.provisional || lanes < DEFAULT_LANES);
+    if (racing) lanes += 1;
     return {
       rank: row.rank,
       user: row.user,
@@ -81,7 +89,7 @@ export function buildRows(rows, { me = null } = {}) {
       envUrl: row.env_url || null,
       runId: row.run_id,
       dnf,
-      selected,
+      selected: racing,
       provisional: Boolean(row.provisional),
       tier: row.provisional
         ? TIERS.TRIAL
@@ -90,7 +98,7 @@ export function buildRows(rows, { me = null } = {}) {
           : TIERS.GHOST,
       // The colour of this row's ground stripe in the stage, so the two can be
       // matched by eye. Only a racing row has one.
-      laneColor: selected ? LANE_CSS[(lanes - 1) % LANE_CSS.length] : null,
+      laneColor: racing ? LANE_CSS[(lanes - 1) % LANE_CSS.length] : null,
     };
   });
 }
@@ -98,9 +106,9 @@ export function buildRows(rows, { me = null } = {}) {
 export function renderBoard(
   container,
   { event, rows },
-  { onSelectionChange, onWithdraw, me = null } = {},
+  { onSelectionChange, onWithdraw, me = null, selected = null } = {},
 ) {
-  const built = buildRows(rows, { me });
+  const built = buildRows(rows, { me, selected });
   container.innerHTML = "";
 
   if (built.length === 0) {
@@ -146,8 +154,8 @@ export function renderBoard(
       lane.type = "checkbox";
       lane.checked = row.selected;
       lane.dataset.runId = row.runId;
-      // What selectLanes below picks by. On the box itself rather than looked
-      // up from the rows again: the table is what is on screen, and a filter
+      // What a pick reads to know whose row this is. On the box itself rather
+      // than looked up from the rows: the table is what is on screen, and a filter
       // may have left some of those rows out of it entirely.
       lane.dataset.rank = String(row.rank);
       if (row.mine) lane.dataset.mine = "";
@@ -262,29 +270,18 @@ export function renderBoard(
   container.append(table);
 }
 
-/** How many lanes the "Top 5" pick ticks. */
-export const TOP_LANES = 5;
-
 /**
- * Tick one pick's lanes, and say which run ids ended up ticked.
+ * Tick, or untick, every lane the board is SHOWING, and say what ended up
+ * ticked.
  *
- * At most one, and possibly none: the three are exclusive, and unticking the
- * live one clears the stage. That last part is why they are checkboxes rather
- * than radios — a radio group cannot be returned to nothing.
- *
- * Operates on the boxes that are RENDERED, which is the point: a board
- * filtered to "Mine" has no other rows in the DOM, so "all" there means all
- * of what you are looking at and not all of what the server holds. Anything
- * with no box — a trial, which is on the stage and nowhere else — is
- * untouched, because it has no run id to play from.
+ * Showing is the whole point: a board filtered to your own runs has no other
+ * rows in the DOM, so "all" there means all of what you are looking at and not
+ * all of what the server holds — which is how you put your own six runs on the
+ * stage and then go back to the full table with only those six racing.
  */
-export function selectLanes(container, pick) {
-  const inPick = (box) =>
-    pick === "all" ||
-    (pick === "mine" && box.dataset.mine !== undefined) ||
-    (pick === "top" && Number(box.dataset.rank) <= TOP_LANES);
+export function setAllLanes(container, on) {
   for (const box of container.querySelectorAll("input[type=checkbox]")) {
-    box.checked = inPick(box);
+    box.checked = on;
   }
   return selectedRunIds(container);
 }

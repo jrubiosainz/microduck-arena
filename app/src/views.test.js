@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MODES, modeIsUseful, visibleRows } from "./views.js";
+import { MODES, TOP_ROWS, modeIsUseful, visibleRows } from "./views.js";
 
 const field = (n, mineAt = []) =>
   Array.from({ length: n }, (_, i) => ({
@@ -11,70 +11,80 @@ const field = (n, mineAt = []) =>
   }));
 
 describe("visibleRows", () => {
-  it("shows everything in all", () => {
-    expect(visibleRows(field(12), { mode: "all" })).toHaveLength(12);
+  it("shows everything when neither narrowing is on", () => {
+    // "All" is not a third mode: it is the absence of the other two.
+    expect(visibleRows(field(12))).toHaveLength(12);
+    expect(visibleRows(field(12), { mine: false, top: false })).toHaveLength(12);
   });
 
-  it("shows the five leaders in top", () => {
-    const shown = visibleRows(field(12), { mode: "top" });
-    expect(shown.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5]);
+  it("shows the three leaders in top, and only those", () => {
+    expect(TOP_ROWS).toBe(3);
+    const shown = visibleRows(field(12), { top: true });
+    expect(shown.map((r) => r.rank)).toEqual([1, 2, 3]);
   });
 
-  it("adds your best when you are outside the five", () => {
-    const shown = visibleRows(field(12, [8]), { mode: "top", me: "alice" });
-    expect(shown.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5, 9]);
+  it("does not add your best to top — that is what mine is for", () => {
+    // The two keys compose, so top no longer has to smuggle your row in.
+    const shown = visibleRows(field(12, [8]), { top: true, me: "alice" });
+    expect(shown.map((r) => r.rank)).toEqual([1, 2, 3]);
   });
 
-  it("adds only your BEST, not all of your runs", () => {
-    const shown = visibleRows(field(12, [7, 8, 9]), { mode: "top", me: "alice" });
-    expect(shown.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5, 8]);
+  it("shows every one of your runs in mine, and nothing else", () => {
+    const shown = visibleRows(field(12, [7, 9]), { mine: true, me: "alice" });
+    expect(shown.map((r) => r.rank)).toEqual([8, 10]);
   });
 
-  it("does not duplicate you when you are already in the five", () => {
-    const shown = visibleRows(field(12, [2]), { mode: "top", me: "alice" });
-    expect(shown.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5]);
-  });
-
-  it("shows your runs and the podium in mine", () => {
-    const shown = visibleRows(field(12, [7, 9]), { mode: "mine", me: "alice" });
+  it("takes the UNION when both are on, not the intersection", () => {
+    // An intersection would be empty in exactly the case someone turns both
+    // on for: the podium, and where you actually are.
+    const shown = visibleRows(field(12, [7, 9]), { mine: true, top: true, me: "alice" });
     expect(shown.map((r) => r.rank)).toEqual([1, 2, 3, 8, 10]);
+  });
+
+  it("does not list you twice when you are on the podium", () => {
+    const shown = visibleRows(field(12, [1]), { mine: true, top: true, me: "alice" });
+    expect(shown.map((r) => r.rank)).toEqual([1, 2, 3]);
   });
 
   it("NEVER renumbers a rank", () => {
     // The rule that matters: a view that renumbered 1..n would tell someone
     // they were third when they were eleventh.
-    for (const mode of MODES) {
-      for (const row of visibleRows(field(12, [10]), { mode, me: "alice" })) {
-        expect(row.rank).toBe(Number(row.run_id.slice(1)));
+    for (const mine of [false, true]) {
+      for (const top of [false, true]) {
+        for (const row of visibleRows(field(12, [10]), { mine, top, me: "alice" })) {
+          expect(row.rank).toBe(Number(row.run_id.slice(1)));
+        }
       }
     }
   });
 
   it("keeps the rows in their ranked order", () => {
-    const shown = visibleRows(field(12, [9]), { mode: "top", me: "alice" });
+    const shown = visibleRows(field(12, [9]), { mine: true, top: true, me: "alice" });
     expect(shown.map((r) => r.rank)).toEqual([...shown.map((r) => r.rank)].sort((a, b) => a - b));
   });
 
-  it("always keeps a trial, whatever the mode", () => {
+  it("always keeps a trial, whichever keys are on", () => {
     // It is the run you just asked for; hiding it would make Test look broken.
     const rows = [...field(9), { rank: 0, run_id: null, user: "you", provisional: true }];
-    for (const mode of MODES) {
-      expect(visibleRows(rows, { mode, me: "nobody" }).some((r) => r.provisional)).toBe(true);
+    for (const mine of [false, true]) {
+      for (const top of [false, true]) {
+        expect(visibleRows(rows, { mine, top, me: "nobody" }).some((r) => r.provisional)).toBe(true);
+      }
     }
   });
 
   it("is harmless when nobody is signed in", () => {
-    expect(visibleRows(field(12), { mode: "top" }).map((r) => r.rank)).toEqual([1, 2, 3, 4, 5]);
-    expect(visibleRows(field(12), { mode: "mine" }).map((r) => r.rank)).toEqual([1, 2, 3]);
+    expect(visibleRows(field(12), { top: true }).map((r) => r.rank)).toEqual([1, 2, 3]);
+    expect(visibleRows(field(12), { mine: true })).toHaveLength(0);
   });
 
   it("copes with a field smaller than the cut", () => {
-    expect(visibleRows(field(2), { mode: "top" })).toHaveLength(2);
-    expect(visibleRows([], { mode: "top" })).toHaveLength(0);
+    expect(visibleRows(field(2), { top: true })).toHaveLength(2);
+    expect(visibleRows([], { top: true })).toHaveLength(0);
   });
 
-  it("falls back to top on a mode it does not know", () => {
-    expect(visibleRows(field(12), { mode: "nonsense" }).map((r) => r.rank)).toEqual([1, 2, 3, 4, 5]);
+  it("names the three keys the header offers", () => {
+    expect(MODES).toEqual(["all", "mine", "top"]);
   });
 });
 

@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  exclusivePick, otherRounds, raceHall, renderEntryPanel, renderEventFacts, renderVoteButton,
+  otherRounds, raceHall, renderEntryPanel, renderEventFacts, renderVoteButton,
 } from "./race.js";
 
 const event = {
@@ -395,18 +395,26 @@ describe("raceHall: the page's frame", () => {
       .toBeLessThan(order.indexOf(sheet.querySelector("#board")));
   });
 
-  it("puts the stage picks left of the board, apart from the row filters", () => {
-    // The two groups share the words all / mine / top and mean different
-    // things: these decide what plays, those decide what the table lists.
+  it("puts one box left of the filters, above the column of boxes it ticks", () => {
+    // It ticks checkboxes, so it is a checkbox. One, not three: what goes on
+    // the stage is now either everything the table is showing or nothing, and
+    // anything in between is picked row by row.
     const top = hall().querySelector(".boardtop");
-    expect([...top.children].map((n) => n.className)).toEqual(["picks", "modes"]);
-    const picks = [...top.querySelectorAll(".picks input")];
-    // Checkboxes, because they act on checkboxes — and unticked to begin
-    // with, since the board picks its own opening lanes.
-    expect(picks.map((b) => b.type)).toEqual(["checkbox", "checkbox", "checkbox"]);
-    expect(picks.map((b) => b.dataset.pick)).toEqual(["all", "mine", "top"]);
-    expect(picks.some((b) => b.checked)).toBe(false);
-    expect(top.querySelector(".picks legend").textContent).toBe("Put on the stage");
+    expect([...top.children].map((n) => n.className)).toEqual(["pickall", "modes"]);
+    const all = top.querySelector(".pickall");
+    expect(all.type).toBe("checkbox");
+    expect(all.checked).toBe(false);
+    // Unlabelled on screen, so it has to say what it is somewhere.
+    expect(all.getAttribute("aria-label")).toBe("Put every row shown on the stage");
+  });
+
+  it("offers All, Mine and Top 3 as what the table lists, opening on Top 3", () => {
+    const keys = [...hall().querySelectorAll(".modes button")];
+    expect(keys.map((b) => b.dataset.mode)).toEqual(["all", "mine", "top"]);
+    expect(keys.map((b) => b.textContent)).toEqual(["All", "Mine", "Top 3"]);
+    // Mine and Top compose, so neither can be the one that is always on. The
+    // markup opens on Top 3 and renderRace turns the rest on and off from it.
+    expect(keys.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "true"]);
   });
 
   it("carries no brightness slider", () => {
@@ -417,32 +425,6 @@ describe("raceHall: the page's frame", () => {
   });
 });
 
-describe("exclusivePick: at most one stage pick", () => {
-  const boxes = () => {
-    const hall = raceHall({ ...event, title: "x" });
-    return [...hall.querySelectorAll(".picks input")];
-  };
-
-  it("unticks the others when one is ticked", () => {
-    const [all, mine, top] = boxes();
-    all.checked = true;
-    expect(exclusivePick([all, mine, top], all)).toBe("all");
-
-    // The case asked for: All is on, Mine is clicked, All must go.
-    mine.checked = true;
-    expect(exclusivePick([all, mine, top], mine)).toBe("mine");
-    expect([all.checked, mine.checked, top.checked]).toEqual([false, true, false]);
-  });
-
-  it("answers null when the live one is unticked, and leaves the rest alone", () => {
-    // A radio group cannot do this, which is why these are checkboxes: the
-    // stage has to be able to end up empty.
-    const [all, mine, top] = boxes();
-    mine.checked = false;
-    expect(exclusivePick([all, mine, top], mine)).toBeNull();
-    expect([all.checked, mine.checked, top.checked]).toEqual([false, false, false]);
-  });
-});
 
 describe("otherRounds: the way on, under the board", () => {
   // `event` at the top of this file carries what formatEventFacts reads; the

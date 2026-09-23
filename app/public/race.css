@@ -631,49 +631,20 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
   border-bottom: 3px solid var(--ink);
 }
 
-/* Left of the board: what goes ON THE STAGE. Deliberately not the stickers on
-   the right, which filter which rows the table shows — the two groups share
-   the words "all", "mine" and "top", and nothing but their look would keep
-   them apart.
-   Checkboxes, because they act on checkboxes: a control that ticks boxes
-   should look like the boxes it ticks. Exclusive, like radios — but radios
-   cannot be returned to nothing, and unticking the live one has to be able to
-   clear the stage. "At most one" is the shape, and only a checkbox has it. */
-.picks {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 14px;
+/* Left of the header, over the column of lane boxes it ticks: one box that
+   puts everything the table is SHOWING on the stage, or takes it all off.
+   It was three — All, Mine, Top 5 — which said the same words as the filters
+   across from them and meant something else, and nothing but their look kept
+   the two apart. Anything between all and nothing is picked row by row now.
+   Sized up from the row boxes: it commands them, so it is not smaller. */
+.pickall {
+  width: 16px;
+  height: 16px;
   margin: 0;
-  padding: 0;
-  border: 0;
-}
-.picks legend {
-  float: left; /* a legend is not a flex item; this puts it on the line */
-  margin-right: 14px;
-  padding: 0;
-  color: var(--orange-inked);
-  font-family: var(--type-eyebrow-family);
-  font-weight: var(--type-eyebrow-weight);
-  font-size: var(--type-eyebrow-size);
-  letter-spacing: var(--type-eyebrow-tracking);
-  text-transform: uppercase;
-}
-/* The same face and size as the keys across the header from them, so the two
-   groups read as one row of controls rather than as a caption beside three
-   buttons. The legend keeps the eyebrow orange it shares with the column
-   heads directly beneath it. */
-.picks label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  accent-color: var(--ink);
   cursor: pointer;
-  color: var(--ink);
-  font: 400 0.8rem/1 var(--display);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
-.picks input { accent-color: var(--ink); cursor: pointer; }
+
 .modes { display: flex; gap: 8px; }
 
 /* They were three stickers, each its own colour and its own lean, pressed on
@@ -718,7 +689,7 @@ table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 .swatch:focus-visible,
 .controls button:focus-visible,
 .modes button:focus-visible,
-.picks input:focus-visible,
+.pickall:focus-visible,
 .entry__actions button:focus-visible,
 .entry__signin:focus-visible,
 .entry__speed select:focus-visible,
