@@ -282,9 +282,12 @@ button.link {
   border-top: 3px solid var(--deep-ink);
 }
 /* Outlined rather than filled: four paper slabs across the panel shouted
-   louder than the picture above them. Hollow keys — white rule, deep ink
-   inside, white lettering — read as engraving on the chassis, and the one
-   that is ON still fills, so the state is what catches the eye. */
+   louder than the picture above them. Hollow keys — a light grey rule, deep
+   ink inside, the same grey lettering — read as engraving on the chassis.
+   The grey is paper at 60%, which the charter already spends on secondary
+   labels over ink, so it is the palette's own quiet rather than a new colour.
+   Full paper is kept for the hover: the key you are pointing at is the only
+   one that brightens. */
 .controls button {
   font: 400 0.8rem/1 var(--display);
   letter-spacing: 0.05em;
@@ -292,18 +295,16 @@ button.link {
   white-space: nowrap;
   padding: 7px 12px;
   cursor: pointer;
-  color: var(--paper);
+  color: var(--paper-60);
   background: var(--deep-ink);
-  border: 2px solid var(--paper);
+  border: 2px solid var(--paper-60);
   box-shadow: none;
 }
-.controls button:hover { background: var(--ink-70); }
+.controls button:hover { color: var(--paper); border-color: var(--paper); }
 .controls button:active { translate: 2px 2px; }
-.controls button[aria-pressed="true"] {
-  background: var(--yellow);
-  border-color: var(--yellow);
-  color: var(--ink);
-}
+/* No lit state: both toggles say "Hide walls" / "Hide names" when they are
+   on, so the label carries it and a filled key would be saying it twice. The
+   `aria-pressed` attribute still carries it for anyone not reading the panel. */
 .controls .hint {
   margin-left: auto;
   color: var(--paper-60);
