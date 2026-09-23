@@ -401,11 +401,12 @@ describe("raceHall: the page's frame", () => {
     // anything in between is picked row by row.
     const top = hall().querySelector(".boardtop");
     expect([...top.children].map((n) => n.className)).toEqual(["pickall", "modes"]);
-    const all = top.querySelector(".pickall");
+    const all = top.querySelector(".pickall .pickall-box");
     expect(all.type).toBe("checkbox");
     expect(all.checked).toBe(false);
-    // Unlabelled on screen, so it has to say what it is somewhere.
-    expect(all.getAttribute("aria-label")).toBe("Put every row shown on the stage");
+    // Labelled, because what ticking a box on this page means is not something
+    // a column of bare boxes can say for itself.
+    expect(top.querySelector(".pickall span").textContent).toBe("Put on the stage");
   });
 
   it("offers All, Mine and Top 3 as what the table lists, opening on Top 3", () => {

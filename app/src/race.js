@@ -297,9 +297,10 @@ export function raceHall(event) {
     <div class="boardsheet">
       <span class="flyer-tape"></span>
       <div class="boardtop">
-        <input type="checkbox" class="pickall" id="pickall"
-               title="Put every row shown on the stage, or take them all off"
-               aria-label="Put every row shown on the stage">
+        <label class="pickall" title="Put every row shown on the stage, or take them all off">
+          <input type="checkbox" class="pickall-box">
+          <span>Put on the stage</span>
+        </label>
         <div class="modes" role="group" aria-label="Which runs the table lists">
           <button data-mode="all" aria-pressed="false">All</button>
           <button data-mode="mine" aria-pressed="false">Mine</button>
@@ -484,9 +485,10 @@ export async function renderRace(root, { event, state }) {
   });
   // One box, above the column of lane boxes it ticks: every row the table is
   // SHOWING goes on the stage, or comes off it. A checkbox and not a button
-  // because it ticks checkboxes, and it carries the three states they have
-  // between them — all, none, and some.
-  const pickAll = root.querySelector(".pickall");
+  // because it ticks checkboxes, and labelled, because what ticking a box on
+  // this page MEANS — that run appears on the stage — is not something the
+  // boxes can say for themselves.
+  const pickAll = root.querySelector(".pickall-box");
   pickAll.addEventListener("change", () => {
     selection = new Set(setAllLanes(board, pickAll.checked));
     race([...selection], lastTiers);
@@ -494,8 +496,10 @@ export async function renderRace(root, { event, state }) {
   const showPickAll = () => {
     const boxes = [...board.querySelectorAll("input[type=checkbox]")];
     const ticked = boxes.filter((box) => box.checked).length;
+    // Ticked only when everything shown is on the stage. No dash for "some":
+    // an empty box is the honest answer to "is everything ticked", and the
+    // rows below already say which ones are.
     pickAll.checked = boxes.length > 0 && ticked === boxes.length;
-    pickAll.indeterminate = ticked > 0 && ticked < boxes.length;
   };
 
   // Who each duck belongs to. Off by default: with one lane the answer is on

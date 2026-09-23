@@ -638,6 +638,23 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
    the two apart. Anything between all and nothing is picked row by row now.
    Sized up from the row boxes: it commands them, so it is not smaller. */
 .pickall {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+/* The eyebrow the old fieldset's legend wore, and for the same reason: the
+   column of boxes under it cannot say what ticking one does. It shares the
+   face and the orange with the column heads directly beneath it. */
+.pickall span {
+  color: var(--orange-inked);
+  font-family: var(--type-eyebrow-family);
+  font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size);
+  letter-spacing: var(--type-eyebrow-tracking);
+  text-transform: uppercase;
+}
+.pickall-box {
   width: 16px;
   height: 16px;
   margin: 0;
@@ -689,7 +706,7 @@ table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 .swatch:focus-visible,
 .controls button:focus-visible,
 .modes button:focus-visible,
-.pickall:focus-visible,
+.pickall-box:focus-visible,
 .entry__actions button:focus-visible,
 .entry__signin:focus-visible,
 .entry__speed select:focus-visible,
