@@ -28,6 +28,47 @@ function el(tag, className, text) {
   return node;
 }
 
+/**
+ * The button that fills the screen with the channel, and gives it back.
+ *
+ * One control for both directions, because there is only ever one thing to
+ * want: the label and the glyph follow `fullscreenElement` rather than a flag
+ * of our own, so pressing Escape — which leaves fullscreen without going
+ * anywhere near this button — leaves it telling the truth.
+ *
+ * Null where fullscreen is not available. The Space runs inside an iframe on
+ * huggingface.co, and an iframe without `allow="fullscreen"` refuses the
+ * request; a button that cannot do its one job should not be drawn.
+ *
+ * `screen` is the document by default and is injected only so this can be
+ * exercised without a browser that has the API at all.
+ */
+export function fullscreenToggle(target, screen = typeof document === "undefined" ? null : document) {
+  if (!screen?.fullscreenEnabled) return null;
+  const button = el("button", "live-full");
+  button.type = "button";
+  const show = () => {
+    const filled = screen.fullscreenElement === target;
+    button.textContent = filled ? "\u2921" : "\u2922";
+    button.setAttribute("aria-label", filled ? "Leave full screen" : "Fill the screen");
+    button.dataset.filled = filled ? "" : undefined;
+    if (!filled) delete button.dataset.filled;
+  };
+  show();
+  button.addEventListener("click", (event) => {
+    // The framed channel sits under a link covering the whole box; without
+    // this, filling the screen would also follow it.
+    event.preventDefault();
+    event.stopPropagation();
+    if (screen.fullscreenElement === target) screen.exitFullscreen?.();
+    // A refusal is not an error worth showing: the button simply did nothing,
+    // and Escape or the browser's own chrome is still there either way.
+    else target.requestFullscreen?.().catch(() => {});
+  });
+  screen.addEventListener?.("fullscreenchange", show);
+  return button;
+}
+
 /** The stage and its chrome, and nothing else on the page. Framed, the same
  * stage is a player on somebody else's page rather than the page itself. */
 export function buildStage(root, framed) {
@@ -42,8 +83,10 @@ export function buildStage(root, framed) {
   join.type = "button";
   join.hidden = true;
   page.append(stage, bug, card, join);
+  const full = fullscreenToggle(page);
+  if (full) page.append(full);
   root.replaceChildren(page);
-  return { page, stage, bug, card, join };
+  return { page, stage, bug, card, join, full };
 }
 
 /**
