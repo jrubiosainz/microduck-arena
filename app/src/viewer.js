@@ -122,21 +122,25 @@ export function placeLane(rig, laneZ) {
   rig.placer.rotation.set(0, 0, 0);
 }
 
-/**
- * Put a lane's follow-spot under its duck, at the trace's world `x`.
- *
- * The ring is the opposite case to the duck: it has no frame of its own, so it
- * is parented to the course (or the scene, with no course) and lies on the
- * ramp, tilted with it. A world x is the ramp's run, so along the slope it is
- * x / cos. Left in the scene at height zero, it sat 21 cm under the hill's top.
- */
-export function placeMarker(marker, ground, x, slopeDeg) {
+// Project the midpoint of the feet vertically onto the course. Parenting the
+// ring to the course also aligns its plane with the ramp.
+export function placeMarker(marker, ground, feet, slopeDeg) {
   if (marker.parent !== ground) ground.add(marker);
-  marker.position.x = x / Math.cos((slopeDeg * Math.PI) / 180);
+  const angle = slopeDeg * Math.PI / 180;
+  marker.position.set((feet.x + 0.004 * Math.sin(angle)) / Math.cos(angle), 0.004, feet.z);
+}
+
+const leftFoot = new Vector3();
+const rightFoot = new Vector3();
+
+export function feetPosition(rig, target) {
+  rig.joints.get("left_ankle").body.getWorldPosition(leftFoot);
+  rig.joints.get("right_ankle").body.getWorldPosition(rightFoot);
+  return target.copy(leftFoot).add(rightFoot).multiplyScalar(0.5);
 }
 
 // A nameplate's height in metres and how far above the trunk it floats. Tuned
-// by eye on the clip page; the publication page hangs none.
+// by eye on the clip page.
 const PLATE_HEIGHT = 0.05;
 const PLATE_LIFT = 0.16;
 
@@ -418,13 +422,12 @@ export async function createViewer(
 
       // The follow-spot, on the course so it climbs a slope with it (placeMarker).
       const marker = buildMarker(tier, entry.colour ?? null);
-      marker.position.z = z;
 
       // The duck's name, hung over its head in its lane's colour: the clip
       // has four ducks and no legend, so the name rides the duck.
       let plate = null;
       if (entry.name) {
-        plate = nameplate(entry.name, entry.nameColour ?? "#faf8f2", "#08080c");
+        plate = nameplate(entry.name, `#${marker.material.color.getHexString()}`, "#08080c");
         plate.sprite.scale.set(PLATE_HEIGHT * plate.ratio, PLATE_HEIGHT, 1);
         // Remembered on the viewer, like the walls: setLanes rebuilds every
         // lane on each replay, so a plate built after the toggle was pressed
@@ -491,6 +494,7 @@ export async function createViewer(
 
   const _target = new Vector3();
   const _trunk = new Vector3();
+  const _feet = new Vector3();
   let raf = null;
 
   function draw(travel = 1, seconds = player.time) {
@@ -498,8 +502,8 @@ export async function createViewer(
     lanes.forEach((lane, i) => {
       const frame = frameAt(lane.trace, indices[i]);
       applyFrame(lane.rig, frame);
-      // Keep the marker under its duck. frame[0] is MJCF +x, which is three +x.
-      if (lane.marker) placeMarker(lane.marker, course ?? scene, frame[0], slopeDeg);
+      // Follow both feet, including sideways drift and the lane offset.
+      if (lane.marker) placeMarker(lane.marker, course ?? scene, feetPosition(lane.rig, _feet), slopeDeg);
       if (lane.plate) {
         lane.rig.bodies.get("trunk_base").getWorldPosition(_trunk);
         lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);

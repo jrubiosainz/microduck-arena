@@ -3,7 +3,7 @@
 // asks for the soundtrack once. ?run=<id>&layout=landscape|vertical&frame=N.
 
 import { getRun, getSettle, getTrace } from "../api.js";
-import { LANE_COLORS, LANE_CSS } from "../course.js";
+import { LANE_COLORS } from "../course.js";
 import { formatScore } from "../format.js";
 import { lanesFor } from "../lanes.js";
 import { CTRL_DT, frameCount, leadIn } from "../replay.js";
@@ -80,7 +80,6 @@ async function main() {
         colour: LANE_COLORS[i % LANE_COLORS.length],
         opacity: 1,
         name: `@${lane.user}`,
-        nameColour: LANE_CSS[i % LANE_CSS.length],
       }))
       // The camera stands beyond the last lane: reversed, the author's duck is
       // the one in the foreground, still in the colour its page gives it.
@@ -88,6 +87,7 @@ async function main() {
     run.event,
     { loop: false },
   );
+  viewer.setNamesVisible(true);
   const plan = clipPlan(frameCount(traces[0]), config.tape_max_s, settle);
   const score = clipScore({ run, plan, trace: replays[0] });
   letter(run);

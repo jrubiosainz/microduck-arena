@@ -241,6 +241,7 @@ export function buildMarker(tier = "ghost", colour = null) {
     new RingGeometry(0.085, 0.115, 32),
     new MeshBasicMaterial({
       color: colour ?? TIER_MARKER[tier] ?? TIER_MARKER.ghost,
+      toneMapped: false,
       transparent: true,
       opacity: colour !== null || tier !== "ghost" ? 0.95 : 0.4,
     }),
