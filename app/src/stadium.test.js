@@ -1,7 +1,7 @@
 // Duck Jam's runway stadium, in the course's own frame: +x down the track, +y
 // up, +z the chase camera's side of the track and -z the far side.
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { BoxGeometry, Matrix4, Vector3 } from "three";
 import { buildCourse } from "./course.js";
@@ -9,6 +9,11 @@ import { PALETTE, SHELLS, colour } from "./palette.js";
 import { JURY_APRON, GAP, attachStadium, buildCones, buildRail, buildStand, crowd, seats } from "./stadium.js";
 import { TRUNK_HEIGHT, attachMeshes, buildRigTree, meshNames } from "./rig.js";
 
+beforeAll(() => {
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+    beginPath() {}, roundRect() {}, fill() {}, stroke() {}, moveTo() {}, lineTo() {}, fillText() {},
+  });
+});
 const LENGTH = 2;
 const SPAN = 0.85;
 const INNER = SPAN / 2 + GAP;
@@ -147,6 +152,21 @@ describe("crowd", () => {
     return false;
   };
 
+  it("keeps articulated sitting and standing poses and blends the wave per spectator", () => {
+    const audience = crowd(kinematics, boxes(), placed);
+    for (const mesh of audience.group.children) {
+      expect(mesh.geometry.morphAttributes.position[0].count).toBe(mesh.geometry.attributes.position.count);
+      expect(mesh.morphTexture.source.data.data.filter((_, i) => i % 2 === 1).every(v => v === 0)).toBe(true);
+    }
+    audience.pose(7);
+    const amounts = audience.group.children.flatMap(mesh => Array.from(mesh.morphTexture.source.data.data).filter((_,i) => i % 2 === 1));
+    expect(amounts.some(v => v > .9)).toBe(true);
+    expect(amounts.some(v => v === 0)).toBe(true);
+    audience.pose(0);
+    for (const mesh of audience.group.children) expect(mesh.morphTexture.source.data.data.filter((_,i) => i % 2 === 1).every(v => v === 0)).toBe(true);
+    audience.dispose();
+  });
+
   it("draws each shell colour on each side as one instanced mesh, one instance per seat", () => {
     const audience = crowd(kinematics, boxes(), placed);
     expect(audience.group.children).toHaveLength(SHELLS.length * 2);
@@ -240,7 +260,7 @@ describe("crowd", () => {
     expect(Float32Array.from(mesh.instanceMatrix.array)).toEqual(first);
   });
 
-  it("bounces five centimetres, twelve radians a second", () => {
+  it("keeps only a small seated fidget between waves", () => {
     // Duck Jam's 7 rad/s and 3.6 cm read from its high seat, over the near
     // stand; from the arena's low chase the crowd is smaller and further, and
     // that fidget did not read as moving at all.
@@ -252,14 +272,14 @@ describe("crowd", () => {
       audience.pose(t);
       heights.push(new Vector3().setFromMatrixPosition(instance(mesh, 0)).y);
     }
-    expect(Math.max(...heights) - Math.min(...heights)).toBeCloseTo(0.05, 3);
+    expect(Math.max(...heights) - Math.min(...heights)).toBeCloseTo(0.006, 3);
     // A full bounce every 2π/12 s: that far from one peak to the next.
     const peaks = heights.flatMap((y, i) => (i > 0 && i < heights.length - 1 && y > heights[i - 1] && y >= heights[i + 1] ? [i * step] : []));
     expect(peaks.length).toBeGreaterThan(2);
     for (let k = 1; k < peaks.length; k += 1) expect(peaks[k] - peaks[k - 1]).toBeCloseTo((2 * Math.PI) / 12, 2);
   });
 
-  it("sways a fifth of a radian either way", () => {
+  it("sways gently while seated", () => {
     const audience = crowd(kinematics, boxes(), placed);
     const mesh = audience.group.children[0];
     const yaws = [];
@@ -268,8 +288,8 @@ describe("crowd", () => {
       const forward = new Vector3(1, 0, 0).transformDirection(instance(mesh, 0));
       yaws.push(Math.atan2(forward.x, forward.z));
     }
-    expect(Math.max(...yaws)).toBeCloseTo(0.2, 2);
-    expect(Math.min(...yaws)).toBeCloseTo(-0.2, 2);
+    expect(Math.max(...yaws)).toBeCloseTo(0.05, 2);
+    expect(Math.min(...yaws)).toBeCloseTo(-0.05, 2);
   });
 
   it("is built from the skin, not the whole machine", () => {

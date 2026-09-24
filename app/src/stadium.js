@@ -27,6 +27,8 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { OVERRUN } from "./course.js";
 import { PALETTE, SHELLS, colour, flat } from "./palette.js";
+import { crowdStanding } from "./crowd-behaviour.js";
+import { crowdBubbles } from "./crowd-bubbles.js";
 import { applyFrame } from "./replay.js";
 import { STAND, TRUNK_HEIGHT, attachMeshes, buildRigTree } from "./rig.js";
 
@@ -148,16 +150,16 @@ export function buildCones(length, edge, side) {
   return cones;
 }
 
-// Spectators use the same metre-scale robot as the racers.
-// Duck Jam's fidget — a bounce and a sway, each seat at its own point in the
-// cycle, a golden angle apart — but brisker and wider: its 7 rad/s over 3.6 cm
-// read from Duck Jam's high seat over the near stand, and from the arena's low
-// chase, with the crowd smaller and further off, did not read as moving.
-const BOUNCE = 0.025;
-const SWAY = 0.2;
+// Full-scale spectators sit between waves; the shared clock controls standing.
+// A small sway keeps resting spectators alive without bouncing them off seats.
+const SWAY = 0.05;
 const TEMPO = 12;
 const PHASE_STEP = 2.39996;
 const REST = Float32Array.from([0, 0, TRUNK_HEIGHT, 1, 0, 0, 0, ...STAND]);
+const sitting = [...STAND];
+sitting[2] = -1.3; sitting[3] = 1.5; sitting[4] = -0.2;
+sitting[11] = 1.3; sitting[12] = -1.5; sitting[13] = 0.2;
+const SIT = Float32Array.from([0, 0, 0.055, 1, 0, 0, 0, ...sitting]);
 
 // Which colour a part of the spectator is painted: Duck Jam's `paintOf`.
 const PAINT = [
@@ -185,6 +187,10 @@ export function crowd(kinematics, geometries, placed) {
   const group = new Group();
   group.name = "crowd";
   const bodies = new Map(SHELLS.map((shell) => [shell, fused(kinematics, geometries, shell)]));
+  const minX = Math.min(...placed.map(s => s.x)), maxX = Math.max(...placed.map(s => s.x));
+  const positions = placed.map(s => (s.x - minX) / Math.max(.01, maxX - minX));
+  const bubbles = crowdBubbles(placed);
+  const morph = { morphTargetInfluences: [0] };
   const flocks = [];
   for (const side of [-1, 1]) {
     SHELLS.forEach((shell, s) => {
@@ -205,30 +211,43 @@ export function crowd(kinematics, geometries, placed) {
   }
 
   const seat = new Object3D();
-  function pose(seconds) {
+  function pose(seconds, mood) {
+    const amounts = crowdStanding(seconds, positions, mood);
+    bubbles.pose(seconds, amounts);
     for (const { seats: mine, mesh } of flocks) {
       mine.forEach((i, k) => {
         const phase = seconds * TEMPO + i * PHASE_STEP;
+        const cheerPhase = seconds * TEMPO * 2.2 + i * PHASE_STEP;
         const { x, y, z, yaw } = placed[i];
-        seat.position.set(x, y + BOUNCE * (1 + Math.sin(phase)), z);
-        seat.rotation.set(0, yaw + SWAY * Math.sin(phase * 0.7), 0);
+        const standing = amounts[i];
+        morph.morphTargetInfluences[0] = standing;
+        mesh.setMorphAt(k, morph);
+        const bounce = (1 - standing) * .003 * (1 + Math.sin(phase))
+          + standing * (.01 + .018 * (1 + Math.sin(cheerPhase)));
+        const sway = (1 - standing) * SWAY * Math.sin(phase * .7)
+          + standing * .18 * Math.sin(cheerPhase * .7);
+        seat.position.set(x, y + bounce, z);
+        seat.rotation.set(standing * .06 * Math.sin(cheerPhase * .8), yaw + sway, 0);
         seat.updateMatrix();
         mesh.setMatrixAt(k, seat.matrix);
       });
       mesh.instanceMatrix.needsUpdate = true;
+      mesh.morphTexture.needsUpdate = true;
     }
   }
   pose(0);
   // The bounds three culls by, once: a seat's fidget stays within the margin.
   for (const { mesh } of flocks) {
     mesh.computeBoundingSphere();
-    mesh.boundingSphere.radius += BOUNCE * 2 + 0.1;
+    mesh.boundingSphere.radius += 0.15;
   }
 
   return {
     group,
+    bubbles: bubbles.group,
     pose,
     dispose() {
+      bubbles.dispose();
       for (const geometry of bodies.values()) geometry.dispose();
       for (const { mesh } of flocks) {
         mesh.material.dispose();
@@ -239,10 +258,10 @@ export function crowd(kinematics, geometries, placed) {
 }
 
 /** One shell colour's rig at rest, as a single painted geometry in the placer's frame. */
-function fused(kinematics, geometries, shell) {
+function fused(kinematics, geometries, shell, frame = SIT) {
   const rig = buildRigTree(kinematics);
   attachMeshes(rig, kinematics, geometries, { skin: true });
-  applyFrame(rig, REST);
+  applyFrame(rig, frame);
   rig.placer.updateMatrixWorld(true);
   const parts = [];
   rig.placer.traverse((node) => {
@@ -258,6 +277,12 @@ function fused(kinematics, geometries, shell) {
   });
   const geometry = mergeGeometries(parts);
   for (const part of parts) part.dispose();
+  if (frame === SIT) {
+    const standing = fused(kinematics, geometries, shell, REST);
+    geometry.morphAttributes.position = [standing.attributes.position.clone()];
+    geometry.morphAttributes.normal = [standing.attributes.normal.clone()];
+    standing.dispose();
+  }
   return geometry;
 }
 
@@ -286,7 +311,7 @@ export function attachStadium(course, { kinematics, geometries }, clearance) {
     placed.push(...seats(length, inner, side));
   }
   const audience = crowd(kinematics, geometries, placed);
-  stadium.add(audience.group);
+  stadium.add(audience.group, audience.bubbles);
   return {
     group: stadium,
     pose: audience.pose,

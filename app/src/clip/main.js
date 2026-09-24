@@ -9,6 +9,7 @@ import { lanesFor } from "../lanes.js";
 import { CTRL_DT, frameCount, leadIn } from "../replay.js";
 import { createViewer } from "../viewer.js";
 import { actAt, clipPlan, stepAt, travelAt } from "./plan.js";
+import { stadiumDirection } from "./direction.js";
 import { clipScore } from "./score.js";
 import { renderSoundtrack } from "./soundtrack.js";
 
@@ -90,13 +91,14 @@ async function main() {
   viewer.setNamesVisible(true);
   const plan = clipPlan(frameCount(traces[0]), config.tape_max_s, settle);
   const score = clipScore({ run, plan, trace: replays[0] });
+  const crowdDirection = stadiumDirection(score.crowd ?? {});
   letter(run);
 
   /** Frame `i` of the plan. Returns the trace step it drew. */
   function draw(i) {
     const act = actAt(plan, i);
     const step = stepAt(plan, i);
-    viewer.frame(step * CTRL_DT, travelAt(plan, i));
+    viewer.frame(step * CTRL_DT, travelAt(plan, i), i / plan.fps, crowdDirection);
     // The clock starts where the record's does, after the settle, and stops on
     // the author's last step while the rivals race on.
     $("osd-clock").textContent = clock(Math.max(0, Math.min(step, plan.steps - 1) - plan.settle));

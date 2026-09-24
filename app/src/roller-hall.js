@@ -200,7 +200,7 @@ export function buildRollerHall(length, span, branding, spectators) {
     group.add(panel);
   });
   const audience = crowd(spectators.kinematics, spectators.geometries, placed);
-  group.add(audience.group);
+  group.add(audience.group, audience.bubbles);
   // Three independently rendered camera feeds; all screens are hidden during
   // capture, preventing recursive screens and framebuffer feedback.
   const screens = new Group();

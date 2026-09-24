@@ -3,6 +3,7 @@
 // sample reaches ±1 (the live programme refuses a clip that clips). No
 // segments, no smoothing afterwards, no mixing left to ffmpeg.
 
+import { olaAt, scheduleOla } from "../crowd-behaviour.js";
 import { stadiumDirection } from "./direction.js";
 import { StadiumAmbience, prepareStadium } from "./stadium.js";
 
@@ -54,6 +55,10 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
 
   if (!score.crowd) return interleave(await context.startRendering());
 
+  for (let t = 0; t < seconds; t += 28) {
+    const { start } = olaAt(t);
+    if (start < seconds) scheduleOla(context, limiter, start);
+  }
   await prepareStadium(Context);
   const crowd = context.createGain();
   crowd.gain.value = CROWD_GAIN;

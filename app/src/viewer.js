@@ -35,10 +35,11 @@ import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js"
 import { attachStadium } from "./stadium.js";
 import { buildJudges } from "./judges.js";
 import { loadGymBranding } from "./gym-branding.js";
+import { stadiumDirection } from "./clip/direction.js";
 import { buildGym } from "./gym.js";
 import { buildRollerHall } from "./roller-hall.js";
 import { nameplate } from "./plate.js";
-import { Player, applyFrame, frameAt } from "./replay.js";
+import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
 
 // ── Lighting ──────────────────────────────────────────────────────────
@@ -343,6 +344,7 @@ export async function createViewer(
   let slopeDeg = 0;
   let courseLength = 2;
   let player = new Player([]);
+  let crowdDirection = stadiumDirection();
 
   function clearScene() {
     judges?.dispose();
@@ -438,6 +440,21 @@ export async function createViewer(
       return { ...entry, rig, marker, plate, tier, gazeTarget: new Vector3() };
     });
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
+    const progress = [];
+    if (event?.length_m && lanes.length) {
+      for (let second = 0; second < player.duration; second += .1) {
+        const value = Math.max(...lanes.map(lane => {
+          const index = Math.min(frameCount(lane.trace) - 1, Math.floor(second / CTRL_DT));
+          return Math.max(0, Math.min(1, frameAt(lane.trace, index)[0] / courseLength));
+        }));
+        progress.push({ second, value });
+      }
+      progress.push({ second: player.duration, value: Math.max(...lanes.map(lane =>
+        Math.max(0, Math.min(1, frameAt(lane.trace, frameCount(lane.trace) - 1)[0] / courseLength)),
+      )) });
+    }
+    crowdDirection = stadiumDirection({ end: player.duration, progress,
+      verdict: progress.some(sample => sample.value === 1) ? "pass" : null });
     player.play();
   }
 
@@ -496,8 +513,9 @@ export async function createViewer(
   const _trunk = new Vector3();
   const _feet = new Vector3();
   let raf = null;
+  let crowdStart = null;
 
-  function draw(travel = 1, seconds = player.time) {
+  function draw(travel = 1, seconds = player.time, mood = time => crowdDirection(player.time + time - seconds)) {
     const indices = player.frameIndices();
     lanes.forEach((lane, i) => {
       const frame = frameAt(lane.trace, indices[i]);
@@ -509,8 +527,8 @@ export async function createViewer(
         lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);
       }
     });
-    audience?.pose(seconds);
-    gym?.pose?.(seconds);
+    audience?.pose(seconds, mood);
+    gym?.pose?.(seconds, mood);
     judges?.pose(seconds, lanes.map((lane) =>
       lane.rig.bodies.get("trunk_base").getWorldPosition(lane.gazeTarget),
     ));
@@ -538,16 +556,18 @@ export async function createViewer(
     player.advance(now);
     // The crowd on the wall clock: it fidgets before a lane is ticked and after
     // a publication's race has run out, when the replay's clock stands still.
-    draw(1, now / 1000);
+    crowdStart ??= now;
+    const crowdSeconds = (now - crowdStart) / 1000;
+    draw(1, crowdSeconds);
     raf = requestAnimationFrame(tick);
   }
 
   /** Manual mode: pose every lane — and the crowd, so a clip's frames come out
    * the same every render — at `seconds`, and render once, the camera `travel`
    * of the way through its opening travel (travelPose). */
-  function frame(seconds, travel = 1) {
+  function frame(seconds, travel = 1, crowdSeconds = seconds, mood) {
     player.seek(seconds);
-    draw(travel);
+    draw(travel, crowdSeconds, mood);
   }
 
   /** Where lane `i`'s duck stood in the last frame drawn, as fractions of the
