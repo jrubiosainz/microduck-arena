@@ -1,0 +1,70 @@
+/* Reading pages and the small help links shared by the arena's views. */
+.help-link {
+  display: inline-block;
+  margin-block: 12px;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-underline-offset: 4px;
+}
+.help-link:hover, .guide-page a:hover { color: var(--orange-inked); }
+.help-link:focus-visible, .guide-page :focus-visible {
+  outline: 3px solid var(--orange-inked);
+  outline-offset: 5px;
+}
+.guide-page { max-width: 800px; padding-block: 28px 48px; }
+.guide-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  margin-bottom: 28px;
+  font-size: 0.95rem;
+}
+.guide-page a { color: inherit; text-underline-offset: 4px; }
+.guide-article { min-width: 0; line-height: 1.6; overflow-wrap: anywhere; }
+.guide-article h1, .guide-article h2, .guide-article h3 {
+  line-height: 1.15;
+  scroll-margin-top: 28px;
+}
+.guide-article :is(h1, h2, h3):focus { outline: none; }
+.guide-article h1 {
+  font-family: var(--display);
+  font-weight: 400;
+  text-transform: uppercase;
+  font-size: clamp(2rem, 4vw, 3rem);
+  margin: 0 0 20px;
+  max-width: 18ch;
+}
+.guide-article h2 { font-size: 1.3rem; margin: 28px 0 12px; }
+.guide-article h3 { font-size: 1.25rem; margin-top: 32px; }
+.guide-article p { margin: 0 0 20px; max-width: 66ch; }
+.guide-article h1 + p { font-size: 1.2rem; line-height: 1.6; }
+.guide-article ul, .guide-article ol { padding-left: 24px; margin-block: 20px 28px; }
+.guide-article li { padding-left: 4px; margin-block: 10px; }
+.guide-article code { font-family: var(--mono); font-size: 0.85em; }
+.guide-article :not(pre) > code { background: var(--warm-paper); padding: 2px 5px; }
+.guide-article pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 22px;
+  margin-block: 24px;
+  background: var(--ink);
+  color: var(--paper);
+  line-height: 1.7;
+  border-left: 5px solid var(--yellow);
+}
+.guide-table { overflow-x: auto; margin-block: 24px; border: 1px solid var(--ink); }
+.guide-table table { border-collapse: collapse; width: 100%; font-size: 0.95rem; line-height: 1.5; }
+.guide-table th, .guide-table td { padding: 14px 16px; text-align: left; vertical-align: top; }
+.guide-table th { background: var(--yellow); color: var(--ink); }
+.guide-table tr + tr td { border-top: 1px solid var(--warm-paper); }
+.guide-table tbody tr:nth-child(even) { background: var(--warm-paper); }
+@media (max-width: 760px) {
+  .guide-page { padding-inline: 20px; }
+  .guide-article { width: 100%; }
+  .guide-breadcrumbs { margin-bottom: 24px; }
+  .guide-table th, .guide-table td { min-width: 120px; padding: 12px; }
+  .site-nav { flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+  .masthead-player { gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
+}

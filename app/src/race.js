@@ -16,7 +16,7 @@ import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { LANE_CSS } from "./course.js";
 import { MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
-import { dress, menuHref, runHref } from "./router.js";
+import { dress, eventGuideHref, menuHref, runHref } from "./router.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { panelState, signInHref } from "./session.js";
 import { footer, settleIdentity, signage } from "./signage.js";
@@ -66,6 +66,7 @@ export function arrangeLanes(board, lanes, random = Math.random) {
  */
 export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiveryChange } = {}) {
   const state = panelState(me);
+  const help = event?.id ? `<a class="help-link" href="${eventGuideHref(event.id)}">Training & rules ?</a>` : "";
 
   if (state === "signed-out") {
     // NO target="_blank", though Hugging Face's own docs suggest one for the
@@ -79,6 +80,7 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
     // context (see arena/web/routes_auth.py).
     container.innerHTML = `
       <span class="flyer-tape"></span>
+      ${help}
       <p class="entry__lead">Sign in to race a policy.</p>
       <a class="entry__signin" href="${signInHref()}">
         Sign in with Hugging Face
@@ -95,6 +97,7 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
     <span class="flyer-tape"></span>
     <p class="entry__user">Racing as <strong id="entry-user"></strong></p>
     <div id="dropzone"></div>
+    ${help}
     <label class="entry__name">Name
       <input type="text" id="policy-name" placeholder="optional" />
     </label>

@@ -6,12 +6,13 @@
 
 # ── build the frontend ───────────────────────────────────────────────────
 FROM node:20-slim AS frontend
-WORKDIR /build
+WORKDIR /build/app
 # package files first, so `npm ci` is only re-run when dependencies change and
 # not on every source edit.
 COPY app/package.json app/package-lock.json ./
 RUN npm ci
 COPY app/ ./
+COPY docs/guides/ /build/docs/guides/
 RUN npm run build
 
 # ── the app ──────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ RUN pip install --no-cache-dir --user .
 # reference walker scores 44.9 s against the 18.2 s it was measured at.
 RUN python -m arena.golden
 
-COPY --chown=user --from=frontend /build/dist ./app/dist
+COPY --chown=user --from=frontend /build/app/dist ./app/dist
 
 # ARENA_FRONTEND is set explicitly: the default resolves relative to the
 # installed package, which under `pip install --user` is in site-packages and

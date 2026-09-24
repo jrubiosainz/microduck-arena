@@ -71,6 +71,7 @@ describe("the whole front page", () => {
     expect(hall[1]).toBe("chapter-checker");
     expect(hall[2]).toMatch(/^chapter\b/);
     expect(root.querySelector(".door-board .ladder-scroll")).not.toBeNull();
+    expect(root.querySelector('a[href="#/guides/points"]')).toBeNull();
     // The channel under the pitch, where the four colourways used to be, and
     // nowhere else on the page: two stages would poll and draw twice.
     expect(root.querySelector(".door-meet .season-live-stage")).not.toBeNull();
