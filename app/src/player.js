@@ -3,7 +3,7 @@
 
 import { getMe, getPlayer } from "./api.js";
 import { formatScore } from "./format.js";
-import { dress, menuHref, raceHref, runHref } from "./router.js";
+import { dress, guideHref, menuHref, raceHref, runHref } from "./router.js";
 import { avatar, chequer, footer, settleIdentity, signOutButton, signage } from "./signage.js";
 
 function el(tag, className, text) {
@@ -84,6 +84,9 @@ export function profile(player, me = null) {
     el("span", "sticker", `✦ ${player.points} points`),
     el("span", "sticker sticker-orange", player.rank == null ? "#—" : `#${player.rank}`),
   );
+  const pointsHelp = el("a", "help-link", "How points work ?");
+  pointsHelp.href = guideHref("points");
+  summary.append(pointsHelp);
   // On your own page only, and only where OAuth is what signed you in. It is
   // the page about you; a strip every visitor sees is not the place to offer
   // to sign someone out.

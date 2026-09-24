@@ -11,7 +11,7 @@ import { formatScore, formatSpeed } from "./format.js";
 import { lanesFor } from "./lanes.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
-import { dress, playerHref, raceHref, runHref } from "./router.js";
+import { dress, guideHref, playerHref, raceHref, runHref } from "./router.js";
 import { shareStrip, wireShare } from "./share.js";
 import { footer, signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
@@ -120,6 +120,9 @@ export async function renderRun(root, runId, state) {
   const who = el("a", null, `@${run.user}`);
   who.href = playerHref(run.user);
   $("byline").append(who, ` · ${run.policy_name} · ${run.submitted_at.slice(0, 10)}`);
+  const scoringHelp = el("a", null, "How points work");
+  scoringHelp.href = guideHref("points");
+  $("byline").append(" · ", scoringHelp);
   if (run.withdrawn) $("byline").append(" · ", el("span", "sticker sticker-magenta", "withdrawn"));
   else if (!run.on_board) $("byline").append(" · ", el("span", "sticker", "not on the board"));
   // What you can take away sits with who made it: one line, no section of its own.

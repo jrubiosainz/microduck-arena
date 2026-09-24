@@ -1,4 +1,4 @@
-// Five views, chosen by the hash. Everything else lives in its view.
+// Views chosen by the hash. Everything else lives in its view.
 
 import { getEvents } from "./api.js";
 import { renderHome } from "./home.js";
@@ -8,6 +8,7 @@ import { renderRace } from "./race.js";
 import { renderRun } from "./run.js";
 import { parseRoute } from "./router.js";
 import { renderVote } from "./vote.js";
+import { renderGuides } from "./guides.js";
 
 const root = document.querySelector("#app");
 const state = { events: null, viewer: null, teardown: null };
@@ -28,8 +29,12 @@ async function show() {
   state.teardown = null;
 
   const route = parseRoute(location.hash);
+  document.title = "Microduck Arena";
   try {
-    if (route.view === "race") {
+    if (route.view === "guides") {
+      const event = route.eventId ? (await events()).find(e => e.id === route.eventId) : null;
+      renderGuides(root, { ...route, event });
+    } else if (route.view === "race") {
       const event = (await events()).find((e) => e.id === route.eventId);
       if (!event) {
         // A stale link should land on something useful, not an error.

@@ -34,7 +34,7 @@ export async function createInterlude(stage, { audio }) {
     files.clear();
     failed = !file;
     if (!file) return null;
-    booth.prepare(file, clipUrl(slot.run_id, "poster.png"));
+    booth.prepare(file, clipUrl(slot.run_id, "poster.png", slot.clip));
     current = { slot, file };
     return file;
   }

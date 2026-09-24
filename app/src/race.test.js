@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  otherRounds, raceHall, renderEntryPanel, renderEventFacts, renderVoteButton,
+  arrangeLanes, otherRounds, raceHall, renderEntryPanel, renderEventFacts, renderVoteButton,
 } from "./race.js";
 
 const event = {
@@ -381,7 +381,7 @@ describe("raceHall: the page's frame", () => {
     const key = hall().querySelector(".stage .key");
     expect(key).not.toBeNull();
     expect([...key.children].map((li) => li.textContent)).toEqual([
-      "your test", "best published", "the rest",
+      "Colours match the leaderboard",
     ]);
   });
 
@@ -469,5 +469,33 @@ describe("otherRounds: the way on, under the board", () => {
     expect(cards[1].querySelector(".flyer-leader-name").textContent).toBe("be the first");
     // A planned event says so rather than inviting an entry it cannot take.
     expect(cards[3].querySelector(".flyer-leader-name").textContent).toBe("course not built yet");
+  });
+});
+
+
+describe("arrangeLanes", () => {
+  it("shares leaderboard colours with opaque racers before shuffling their lanes", () => {
+    const board = document.createElement("div");
+    board.innerHTML = '<table><tbody>' + ["a", "b", "c"].map(id =>
+      `<tr><td class="tab"><input data-run-id="${id}"></td></tr>`).join("") + '</tbody></table>';
+    const lanes = [{runId:"a", tier:"leader"}, {runId:"b", tier:"ghost"}, {runId:"c", tier:"ghost"}];
+    const shuffled = arrangeLanes(board, lanes, () => 0);
+    expect(shuffled.map(lane => lane.runId)).toEqual(["b", "c", "a"]);
+    for (const lane of shuffled) {
+      expect(lane.opacity).toBe(1);
+      expect(lane.colour).toBe(board.querySelector(`[data-run-id="${lane.runId}"]`).closest(".tab").style.getPropertyValue("--lane"));
+    }
+    expect(new Set(shuffled.map(lane => lane.colour)).size).toBe(3);
+    const selected = arrangeLanes(board, [lanes.find(lane => lane.runId === "c")], () => 0);
+    expect(board.querySelector('[data-run-id="a"]').closest('.tab').style.getPropertyValue('--lane')).toBe('');
+    expect(selected[0].colour).toBe(board.querySelector('[data-run-id="c"]').closest('.tab').style.getPropertyValue('--lane'));
+  });
+
+  it("matches an unpublished trial to its row even when it ranks between published runs", () => {
+    const board = document.createElement("div");
+    board.innerHTML = '<table><tbody><tr><td class="tab"><input data-run-id="a"></td></tr><tr class="provisional"><td class="tab"></td></tr></tbody></table>';
+    const lanes = arrangeLanes(board, [{runId:null}, {runId:"a"}], () => 0.99);
+    expect(lanes[0].colour).toBe(board.querySelector('.provisional .tab').style.getPropertyValue('--lane'));
+    expect(lanes[0].colour).not.toBe(lanes[1].colour);
   });
 });

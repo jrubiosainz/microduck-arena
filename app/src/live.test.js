@@ -63,7 +63,7 @@ const grid = {
   version: 1, now_ms: 5000, build: "b",
   slots: [
     { kind: "shutter", at_ms: 4000, duration_ms: 1600, next: { run_id: "A", event: "2 m Sprint", user: "carol" } },
-    { kind: "replay", at_ms: 5600, duration_ms: 8000, run_id: "A" },
+    { kind: "replay", at_ms: 5600, duration_ms: 8000, run_id: "A", clip: "20260916T100500Z" },
     { kind: "shutter", at_ms: 13600, duration_ms: 1600, next: null },
     { kind: "booth", at_ms: 15200, duration_ms: 20000, run_id: "A" },
   ],
@@ -266,7 +266,7 @@ describe("renderLive", () => {
     expect(panel.querySelector(".live-upnext-event").textContent).toBe("2 m Sprint");
     expect(panel.querySelector(".live-upnext-user").textContent).toBe("@carol");
     let video = shown(root);
-    expect(video.getAttribute("src")).toBe("/api/runs/A/clip/landscape.mp4");
+    expect(video.getAttribute("src")).toBe("/api/runs/A/clip/landscape.mp4?v=20260916T100500Z");
     expect(video.play).not.toHaveBeenCalled();
     // 5 700 ms: the replay, 100 ms in.
     await vi.advanceTimersByTimeAsync(680);

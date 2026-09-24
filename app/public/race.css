@@ -438,7 +438,7 @@ table.board tbody tr:first-child .time { color: var(--orange-inked); }
 table.board tr.dnf .time { font-size: 1.05rem; color: var(--orange-inked); }
 table.board tr.dnf { color: var(--ink-70); }
 
-table.board tr.provisional td.tab { border-left-style: dashed; border-left-color: var(--lavender-inked); }
+table.board tr.provisional td.tab { border-left-style: dashed; }
 table.board tr.provisional .time { color: var(--ink); }
 
 /* A voted board's one loud column, in the exact slot .time takes on a timed
@@ -511,11 +511,7 @@ table.board tr.provisional .votes { color: var(--ink); }
   border-radius: 50%;
   border: 2px solid currentColor;
 }
-.key--trial { color: var(--lavender); }
-.key--leader { color: var(--orange); }
-.key--ghost { color: var(--paper-60); }
 
-table.board tr.tier-leader td.tab { border-left-color: var(--orange); }
 table.board tr.tier-ghost { color: var(--ink-70); }
 table.board tr.tier-ghost .time { color: var(--ink-70); }
 table.board tr.tier-ghost .votes { color: var(--ink-70); }

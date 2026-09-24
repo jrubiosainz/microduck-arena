@@ -17,8 +17,8 @@ function stubMedia(stage, { refuse = false } = {}) {
   }
 }
 
-const A = { kind: "replay", at_ms: 0, duration_ms: 8000, run_id: "A" };
-const B = { kind: "replay", at_ms: 8000, duration_ms: 8000, run_id: "B" };
+const A = { kind: "replay", at_ms: 0, duration_ms: 8000, run_id: "A", clip: "20260916T100500Z" };
+const B = { kind: "replay", at_ms: 8000, duration_ms: 8000, run_id: "B", clip: "20260922T151828Z" };
 
 describe("createReplay", () => {
   let stage, replay, refused;
@@ -36,14 +36,15 @@ describe("createReplay", () => {
     replay.prepare(A);
     const first = [...videos].find((v) => v.getAttribute("src")?.includes("/A/"));
     expect(first).toBeDefined();
-    expect(first.getAttribute("src")).toBe("/api/runs/A/clip/landscape.mp4");
+    // The slot says which render: the URL is that render's, not the run's.
+    expect(first.getAttribute("src")).toBe("/api/runs/A/clip/landscape.mp4?v=20260916T100500Z");
     await replay.play(A, 2500);
     expect(first.hidden).toBe(false);
     expect(first.currentTime).toBeCloseTo(2.5);
     expect(first.play).toHaveBeenCalled();
     replay.prepare(B);
     const second = [...videos].find((v) => v !== first);
-    expect(second.getAttribute("src")).toBe("/api/runs/B/clip/landscape.mp4");
+    expect(second.getAttribute("src")).toBe("/api/runs/B/clip/landscape.mp4?v=20260922T151828Z");
     await replay.play(B, 0);
     expect(first.hidden).toBe(true);
     expect(second.hidden).toBe(false);
@@ -52,7 +53,7 @@ describe("createReplay", () => {
   it("plays a slot it was not prepared for by preparing it first", async () => {
     await replay.play(B, 100);
     const shown = [...stage.querySelectorAll("video")].find((v) => !v.hidden);
-    expect(shown.getAttribute("src")).toBe("/api/runs/B/clip/landscape.mp4");
+    expect(shown.getAttribute("src")).toBe("/api/runs/B/clip/landscape.mp4?v=20260922T151828Z");
   });
 
   it("shows a first frame under the shutter, then plays the same video without reloading", async () => {

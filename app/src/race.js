@@ -13,9 +13,10 @@ import { buildRows, renderBoard, setAllLanes, tiersByRunId } from "./board.js";
 import { flyer } from "./flyer.js";
 import { createDropzone } from "./dropzone.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
+import { LANE_CSS } from "./course.js";
 import { MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
-import { dress, menuHref, runHref } from "./router.js";
+import { dress, eventGuideHref, menuHref, runHref } from "./router.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { panelState, signInHref } from "./session.js";
 import { footer, settleIdentity, signage } from "./signage.js";
@@ -23,6 +24,33 @@ import { insertProvisional } from "./standings.js";
 import { modeIsUseful, visibleRows } from "./views.js";
 import { createViewer } from "./viewer.js";
 import { voteButton } from "./votebutton.js";
+
+// Colours belong to leaderboard entries; lane positions are shuffled afterwards.
+export function arrangeLanes(board, lanes, random = Math.random) {
+  const byId = new Map(lanes.map(lane => [lane.runId, lane]));
+  let colourIndex = 0;
+  for (const row of board.querySelectorAll("tbody tr")) {
+    const id = row.classList.contains("provisional") ? null : row.querySelector("input[data-run-id]")?.dataset.runId;
+    const lane = byId.get(id);
+    const tab = row.querySelector(".tab");
+    if (lane) {
+      lane.colour = LANE_CSS[colourIndex++ % LANE_CSS.length];
+      tab.style.setProperty("--lane", lane.colour);
+    } else {
+      tab.style.removeProperty("--lane");
+    }
+  }
+  for (const lane of lanes) {
+    // A trial can still be on stage while its row is hidden by a board filter.
+    lane.colour ??= LANE_CSS[colourIndex++ % LANE_CSS.length];
+    lane.opacity = 1;
+  }
+  for (let i = lanes.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
+  }
+  return lanes;
+}
 
 /**
  * The entry column: a sign-in prompt, or the racing/publishing controls.
@@ -38,6 +66,7 @@ import { voteButton } from "./votebutton.js";
  */
 export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiveryChange } = {}) {
   const state = panelState(me);
+  const help = event?.id ? `<a class="help-link" href="${eventGuideHref(event.id)}">Training & rules ?</a>` : "";
 
   if (state === "signed-out") {
     // NO target="_blank", though Hugging Face's own docs suggest one for the
@@ -51,6 +80,7 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
     // context (see arena/web/routes_auth.py).
     container.innerHTML = `
       <span class="flyer-tape"></span>
+      ${help}
       <p class="entry__lead">Sign in to race a policy.</p>
       <a class="entry__signin" href="${signInHref()}">
         Sign in with Hugging Face
@@ -67,6 +97,7 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
     <span class="flyer-tape"></span>
     <p class="entry__user">Racing as <strong id="entry-user"></strong></p>
     <div id="dropzone"></div>
+    ${help}
     <label class="entry__name">Name
       <input type="text" id="policy-name" placeholder="optional" />
     </label>
@@ -276,9 +307,7 @@ export function raceHall(event) {
           <div class="stage">
             <canvas id="stage"></canvas>
             <ul class="key" id="key">
-              <li class="key--trial">your test</li>
-              <li class="key--leader">best published</li>
-              <li class="key--ghost">the rest</li>
+              <li>Colours match the leaderboard</li>
             </ul>
           </div>
           <div class="controls">
@@ -551,7 +580,7 @@ export async function renderRace(root, { event, state }) {
         runId: null, trace: trial.trace, tier: "trial", livery: currentLivery, name: "your test",
       });
     }
-    viewer.setLanes(lanes, event);
+    viewer.setLanes(arrangeLanes(board, lanes), event);
     root.querySelector("#playpause").textContent = "Pause";
     root.querySelector("#stage-hint").textContent = lanes.length
       ? ""

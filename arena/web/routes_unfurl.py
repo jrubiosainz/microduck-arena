@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse
 
 from ..index import standing
 from ..manifest import load_event
-from .routes_read import _find_run, _withdrawn
+from .routes_read import _find_run, _withdrawn, clip_url
 
 router = APIRouter()
 
@@ -51,12 +51,11 @@ def unfurl(run_id: str, request: Request) -> HTMLResponse:
     ]
     if state == "ready":
         land = manifest["layouts"]["landscape"]
-        base = f"{origin}/api/runs/{run_id}/clip"
         tags += [
-            _meta("og:image", f"{base}/{manifest['poster']}"),
+            _meta("og:image", clip_url(run_id, manifest["poster"], manifest, origin)),
             _meta("og:image:width", str(land["width"])),
             _meta("og:image:height", str(land["height"])),
-            _meta("og:video", f"{base}/{land['file']}"),
+            _meta("og:video", clip_url(run_id, land["file"], manifest, origin)),
             _meta("og:video:type", "video/mp4"),
             _meta("og:video:width", str(land["width"])),
             _meta("og:video:height", str(land["height"])),

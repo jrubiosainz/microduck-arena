@@ -26,6 +26,14 @@ _TAIL_BITS = 60  # 12 base32 chars
 # routes_read.py serves them by these exact names).
 CLIP_MEDIA = ("landscape.mp4", "vertical.mp4", "poster.png")
 
+
+def clip_version(manifest: dict) -> str:
+    """The render a clip's media belong to, fit for a URL: its `rendered_at`
+    stripped to digits. The media are served cached for a year as immutable,
+    so a clip rendered again — the same race on a new stage — must be a new
+    URL, or everyone who watched it once keeps watching the old one."""
+    return "".join(ch for ch in manifest.get("rendered_at", "") if ch.isalnum())
+
 _id_lock = threading.Lock()
 _id_state = {"stamp": -1, "rand": 0}
 

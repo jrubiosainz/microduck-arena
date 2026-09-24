@@ -1,4 +1,4 @@
-// Five views, addressed by hash so the browser's own back button works and
+// Views addressed by hash so the browser's own back button works and
 // "back to the races" is an ordinary link rather than a piece of state.
 
 const SEGMENT = "([A-Za-z0-9._-]+)";
@@ -7,9 +7,18 @@ const PLAYER = new RegExp(`^/p/${SEGMENT}/?$`);
 const VOTE = new RegExp(`^/v/${SEGMENT}/?$`);
 const RUN = new RegExp(`^/r/${SEGMENT}/?$`);
 const LIVE = /^\/live\/?$/;
+const GUIDE = new RegExp(`^/guides(?:/${SEGMENT})?/?(?:\\?(.*))?$`);
+const EVENT_GUIDE = new RegExp(`^/e/${SEGMENT}/guide/?$`);
 
 export function parseRoute(hash) {
   const path = String(hash || "").replace(/^#/, "");
+  const eventGuide = path.match(EVENT_GUIDE);
+  if (eventGuide) return { view: "guides", eventId: eventGuide[1], section: null };
+  const guide = path.match(GUIDE);
+  if (guide) return {
+    view: "guides", guideId: guide[1] || "index",
+    section: new URLSearchParams(guide[2]).get("section"),
+  };
   const race = path.match(RACE);
   if (race) return { view: "race", eventId: race[1] };
   const player = path.match(PLAYER);
@@ -23,11 +32,14 @@ export function parseRoute(hash) {
 }
 
 export const raceHref = (eventId) => `#/e/${eventId}`;
+export const eventGuideHref = (eventId) => `#/e/${encodeURIComponent(eventId)}/guide`;
 export const playerHref = (user) => `#/p/${user}`;
 export const voteHref = (eventId) => `#/v/${eventId}`;
 export const runHref = (runId) => `#/r/${runId}`;
 export const menuHref = "#/";
 export const liveHref = "#/live";
+export const guideHref = (id = "index", section = null) =>
+  `#/guides${id === "index" ? "" : `/${encodeURIComponent(id)}`}${section ? `?section=${encodeURIComponent(section)}` : ""}`;
 
 /**
  * Which placement sheet a view wears. The club for the front and a player,

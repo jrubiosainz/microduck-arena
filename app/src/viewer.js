@@ -11,11 +11,10 @@
 import {
   ACESFilmicToneMapping,
   AmbientLight,
+  Box3,
   HemisphereLight,
   Color,
   DirectionalLight,
-  Fog,
-  GridHelper,
   PerspectiveCamera,
   PMREMGenerator,
   Scene,
@@ -33,8 +32,14 @@ import {
   rigGeometries,
 } from "./rig.js";
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
+import { attachStadium } from "./stadium.js";
+import { buildJudges } from "./judges.js";
+import { loadGymBranding } from "./gym-branding.js";
+import { stadiumDirection } from "./clip/direction.js";
+import { buildGym } from "./gym.js";
+import { buildRollerHall } from "./roller-hall.js";
 import { nameplate } from "./plate.js";
-import { Player, applyFrame, frameAt } from "./replay.js";
+import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
 
 // ── Lighting ──────────────────────────────────────────────────────────
@@ -55,7 +60,7 @@ import { readBrightness, writeBrightness } from "./brightness.js";
 // metal with nothing to reflect really does read black — that hazard is real,
 // it just was not this bug.
 const EXPOSURE = 1.0;
-const ENV_INTENSITY = 1.0;
+const ENV_INTENSITY = 0.35;
 const AMBIENT = 0.18;
 const KEY = 1.7;
 const FILL = 0.55;
@@ -118,28 +123,32 @@ export function placeLane(rig, laneZ) {
   rig.placer.rotation.set(0, 0, 0);
 }
 
-/**
- * Put a lane's follow-spot under its duck, at the trace's world `x`.
- *
- * The ring is the opposite case to the duck: it has no frame of its own, so it
- * is parented to the course (or the scene, with no course) and lies on the
- * ramp, tilted with it. A world x is the ramp's run, so along the slope it is
- * x / cos. Left in the scene at height zero, it sat 21 cm under the hill's top.
- */
-export function placeMarker(marker, ground, x, slopeDeg) {
+// Project the midpoint of the feet vertically onto the course. Parenting the
+// ring to the course also aligns its plane with the ramp.
+export function placeMarker(marker, ground, feet, slopeDeg) {
   if (marker.parent !== ground) ground.add(marker);
-  marker.position.x = x / Math.cos((slopeDeg * Math.PI) / 180);
+  const angle = slopeDeg * Math.PI / 180;
+  marker.position.set((feet.x + 0.004 * Math.sin(angle)) / Math.cos(angle), 0.004, feet.z);
+}
+
+const leftFoot = new Vector3();
+const rightFoot = new Vector3();
+
+export function feetPosition(rig, target) {
+  rig.joints.get("left_ankle").body.getWorldPosition(leftFoot);
+  rig.joints.get("right_ankle").body.getWorldPosition(rightFoot);
+  return target.copy(leftFoot).add(rightFoot).multiplyScalar(0.5);
 }
 
 // A nameplate's height in metres and how far above the trunk it floats. Tuned
-// by eye on the clip page; the publication page hangs none.
+// by eye on the clip page.
 const PLATE_HEIGHT = 0.05;
 const PLATE_LIFT = 0.16;
 
 /**
  * Where the camera stands and what it looks at, for one frame.
  *
- * `null` is the chase camera the publication and race pages always had:
+ * `null` is the close chase camera used on the race page:
  * behind the leader, trackside, the side offset widening with the arena. An
  * event's `[clip.camera]` spec overrides its constants or fixes the camera
  * outright; `distance` scales a chase's offsets, which is how the vertical
@@ -164,6 +173,8 @@ export function cameraPose(spec, lead, sideOffset, rise) {
 const TRAVEL_TURN = (30 * Math.PI) / 180;
 const TRAVEL_REACH = 1.3;
 const TRAVEL_LIFT = 8;
+// How far beyond the camera's farthest stand the near stand starts.
+const STAND_CLEARANCE = 0.3;
 
 /**
  * The camera `u` of the way through a clip's opening travel, 0 to 1: an orbit
@@ -189,36 +200,47 @@ export function travelPose(chase, u) {
   };
 }
 
-// The GLB is one 1.3 MB download shared by every rig, so it is memoised on its
-// own and never re-fetched when you move between a walking race and a roller
-// race.
-let glbPromise = null;
+// The racers' model, 1.3 MB, and the crowd's: the same GLB decimated to a
+// tenth of its triangles, 154 KB, made with
+//   npx @gltf-transform/cli@4 simplify --ratio 0.05 --error 0.02 microduck.glb microduck-crowd.glb
+// Measured on a 1080p clip frame under SwiftShader, the Space's renderer:
+// 300 ms alone, 1050 ms with the far stand's fifty-four spectators at full
+// detail, 350 ms with the whole stadium in this model and the skin filter in
+// rig.js. Two metres off they look the same.
+const MODEL = "microduck.glb";
+const CROWD_MODEL = "microduck-crowd.glb";
 
-function loadGlb() {
-  if (!glbPromise) {
-    glbPromise = new GLTFLoader()
-      .loadAsync(`${MODEL_DIR}/microduck.glb`)
-      .then((gltf) => gltf.scene);
+// Each GLB is memoised on its own and never re-fetched when you move between
+// a walking race and a roller race.
+const glbs = new Map();
+
+function loadGlb(model) {
+  if (!glbs.has(model)) {
+    glbs.set(
+      model,
+      new GLTFLoader().loadAsync(`${MODEL_DIR}/${model}`).then((gltf) => gltf.scene),
+    );
   }
-  return glbPromise;
+  return glbs.get(model);
 }
 
-// Per-rig assets, memoised per rig: the roller rig has its own kinematic tree
-// and five STLs the GLB does not carry. Exported for the booth, which builds
-// its own scene from the same rig.
+// Per-rig assets, memoised per rig and model: the roller rig has its own
+// kinematic tree and five STLs the GLB does not carry. Exported for the booth,
+// which builds its own scene from the same rig.
 const rigAssets = new Map();
 
-export function loadAssets(rig) {
-  if (!rigAssets.has(rig)) {
+export function loadAssets(rig, model = MODEL) {
+  const key = `${rig}:${model}`;
+  if (!rigAssets.has(key)) {
     rigAssets.set(
-      rig,
+      key,
       (async () => {
-        const [kinematics, glbScene] = await Promise.all([loadKinematics(rig), loadGlb()]);
+        const [kinematics, glbScene] = await Promise.all([loadKinematics(rig), loadGlb(model)]);
         return { kinematics, geometries: await rigGeometries(kinematics, glbScene) };
       })(),
     );
   }
-  return rigAssets.get(rig);
+  return rigAssets.get(key);
 }
 
 export async function createViewer(
@@ -230,8 +252,14 @@ export async function createViewer(
   // only because nothing reads the parameter after this line.
   //
   // The rig is fixed for the life of this viewer, which matches the page: one
-  // race page shows one event, and an event declares one rig.
-  const { kinematics, geometries } = await loadAssets(rigName);
+  // race page shows one event, and an event declares one rig. The crowd is
+  // always on foot, in its own lighter model.
+  const [{ kinematics, geometries }, spectators, reachy, branding] = await Promise.all([
+    loadAssets(rigName),
+    loadAssets("legs", CROWD_MODEL),
+    loadGlb("reachy-mini/reachy-mini.glb"),
+    loadGymBranding(),
+  ]);
 
   // Under SwiftShader MSAA cost 2.7× per frame (401 → 151 ms at 1080p), and a
   // clip is encoded by x264 anyway, which softens edges; the interactive pages keep it.
@@ -253,18 +281,14 @@ export async function createViewer(
   const scene = new Scene();
   scene.environment = environment;
 
-  // One control drives both, because they are the two things that decide
-  // whether the robot reads at all and they should not be tuned apart.
+  // Keep reflected light fixed: scaling it with exposure washes out pale surfaces.
   function setBrightness(value) {
     brightness = writeBrightness(value);
     renderer.toneMappingExposure = EXPOSURE * brightness;
-    scene.environmentIntensity = ENV_INTENSITY * brightness;
+    scene.environmentIntensity = ENV_INTENSITY;
     return brightness;
   }
-  // --deep-ink: the stage is a screen, and the club draws every screen — the
-  // CRT, the stills on the flyers — on deep ink.
-  scene.background = new Color(0x08080c);
-  scene.fog = new Fog(0x08080c, 4.5, 16);
+  scene.background = new Color(0xb8dce7);
 
   // Four lights, because ACES tone mapping pulls mid-tones DOWN and the first
   // attempt at this left the robots as dark blobs. Ambient sets the floor, the
@@ -283,10 +307,6 @@ export async function createViewer(
   scene.add(rim);
   // Sky above, ground bounce below.
   scene.add(new HemisphereLight(0xcfe0ff, 0x2b2b30, HEMI));
-
-  const grid = new GridHelper(24, 48, 0x23232b, 0x17171d);
-  grid.position.y = -0.001; // just under the course so it reads as backdrop
-  scene.add(grid);
 
   const camera = new PerspectiveCamera(spec?.fov ?? 42, 1, 0.02, 100);
   camera.position.set(-0.35, 0.34, 1.15);
@@ -313,13 +333,24 @@ export async function createViewer(
 
   let lanes = [];
   let course = null;
+  let gym = null;
+  let judges = null;
+  // The stadium's crowd, rebuilt with the course: posed in draw, disposed
+  // with the course in clearScene.
+  let audience = null;
   let wallsVisible = false;
   let namesVisible = false;
   let sideOffset = 1.15;
   let slopeDeg = 0;
+  let courseLength = 2;
   let player = new Player([]);
+  let crowdDirection = stadiumDirection();
 
   function clearScene() {
+    judges?.dispose();
+    judges = null;
+    gym?.dispose();
+    gym = null;
     for (const lane of lanes) {
       scene.remove(lane.rig.placer);
       lane.marker?.removeFromParent();
@@ -328,6 +359,8 @@ export async function createViewer(
     }
     lanes = [];
     if (course) {
+      audience?.dispose();
+      audience = null;
       scene.remove(course);
       course = null;
     }
@@ -338,6 +371,7 @@ export async function createViewer(
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
     slopeDeg = event?.slope_deg ?? 0;
+    courseLength = event?.length_m ?? 2;
     if (event) {
       course = attachCourse(
         scene,
@@ -346,6 +380,28 @@ export async function createViewer(
         wallsVisible,
         entries.map((entry) => entry.colour),
       );
+      // The near stand starts a stride beyond where the chase camera stands,
+      // clip travel included, so the lens is never inside it.
+      const chase = cameraPose(spec, 0, sideOffset, 0).position[2];
+      const clearance = chase * TRAVEL_REACH + STAND_CLEARANCE;
+      const ground = course.getObjectByName("ground");
+      const { width, height } = ground.geometry.parameters;
+      const roller = event.id === "roller-sprint-2m";
+      if (roller) {
+        gym = buildRollerHall(courseLength, height, branding, spectators);
+      } else {
+        audience = attachStadium(course, spectators, clearance);
+        course.updateMatrixWorld(true);
+        const stadiumBounds = new Box3().setFromObject(course);
+        gym = buildGym(courseLength, stadiumBounds.min.z, stadiumBounds.max.z, branding, height);
+      }
+      scene.add(gym.group);
+      judges = buildJudges(reachy, courseLength, Math.max(1, entries.length) * spacing / 2, gym.sponsorMaps, roller ? 3 : 4);
+      scene.add(judges.group);
+      if (!slopeDeg) {
+        ground.material.dispose();
+        ground.material = gym.floorMaterial(width, height);
+      }
     }
     lanes = entries.map((entry, i) => {
       const tier = entry.tier ?? "ghost";
@@ -368,13 +424,12 @@ export async function createViewer(
 
       // The follow-spot, on the course so it climbs a slope with it (placeMarker).
       const marker = buildMarker(tier, entry.colour ?? null);
-      marker.position.z = z;
 
       // The duck's name, hung over its head in its lane's colour: the clip
       // has four ducks and no legend, so the name rides the duck.
       let plate = null;
       if (entry.name) {
-        plate = nameplate(entry.name, entry.nameColour ?? "#faf8f2", "#08080c");
+        plate = nameplate(entry.name, `#${marker.material.color.getHexString()}`, "#08080c");
         plate.sprite.scale.set(PLATE_HEIGHT * plate.ratio, PLATE_HEIGHT, 1);
         // Remembered on the viewer, like the walls: setLanes rebuilds every
         // lane on each replay, so a plate built after the toggle was pressed
@@ -382,9 +437,24 @@ export async function createViewer(
         plate.sprite.visible = namesVisible;
         scene.add(plate.sprite);
       }
-      return { ...entry, rig, marker, plate, tier };
+      return { ...entry, rig, marker, plate, tier, gazeTarget: new Vector3() };
     });
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
+    const progress = [];
+    if (event?.length_m && lanes.length) {
+      for (let second = 0; second < player.duration; second += .1) {
+        const value = Math.max(...lanes.map(lane => {
+          const index = Math.min(frameCount(lane.trace) - 1, Math.floor(second / CTRL_DT));
+          return Math.max(0, Math.min(1, frameAt(lane.trace, index)[0] / courseLength));
+        }));
+        progress.push({ second, value });
+      }
+      progress.push({ second: player.duration, value: Math.max(...lanes.map(lane =>
+        Math.max(0, Math.min(1, frameAt(lane.trace, frameCount(lane.trace) - 1)[0] / courseLength)),
+      )) });
+    }
+    crowdDirection = stadiumDirection({ end: player.duration, progress,
+      verdict: progress.some(sample => sample.value === 1) ? "pass" : null });
     player.play();
   }
 
@@ -441,47 +511,63 @@ export async function createViewer(
 
   const _target = new Vector3();
   const _trunk = new Vector3();
+  const _feet = new Vector3();
   let raf = null;
+  let crowdStart = null;
 
-  function draw(travel = 1) {
+  function draw(travel = 1, seconds = player.time, mood = time => crowdDirection(player.time + time - seconds)) {
     const indices = player.frameIndices();
     lanes.forEach((lane, i) => {
       const frame = frameAt(lane.trace, indices[i]);
       applyFrame(lane.rig, frame);
-      // Keep the marker under its duck. frame[0] is MJCF +x, which is three +x.
-      if (lane.marker) placeMarker(lane.marker, course ?? scene, frame[0], slopeDeg);
+      // Follow both feet, including sideways drift and the lane offset.
+      if (lane.marker) placeMarker(lane.marker, course ?? scene, feetPosition(lane.rig, _feet), slopeDeg);
       if (lane.plate) {
         lane.rig.bodies.get("trunk_base").getWorldPosition(_trunk);
         lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);
       }
     });
+    audience?.pose(seconds, mood);
+    gym?.pose?.(seconds, mood);
+    judges?.pose(seconds, lanes.map((lane) =>
+      lane.rig.bodies.get("trunk_base").getWorldPosition(lane.gazeTarget),
+    ));
 
-    if (chase && lanes.length) {
+    if (chase && course) {
       // Follow the leader along +x, the direction of travel, from behind and
       // slightly to one side so the gait is visible rather than end-on.
-      const lead = Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]));
+      const lead = lanes.length
+        ? Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]))
+        : courseLength / 2;
       const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
-      const pose = travelPose(cameraPose(spec, lead, sideOffset, rise), travel);
+      const pose = travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel);
       camera.position.set(...pose.position);
       _target.set(...pose.target);
       if (controls) controls.target.copy(_target);
       else camera.lookAt(_target);
     }
     controls?.update();
+    const lead = lanes.length ? Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0])) : courseLength / 2;
+    gym?.renderScreens?.(renderer, scene, seconds, lead);
     renderer.render(scene, camera);
   }
 
   function tick(now) {
     player.advance(now);
-    draw();
+    // The crowd on the wall clock: it fidgets before a lane is ticked and after
+    // a publication's race has run out, when the replay's clock stands still.
+    crowdStart ??= now;
+    const crowdSeconds = (now - crowdStart) / 1000;
+    draw(1, crowdSeconds);
     raf = requestAnimationFrame(tick);
   }
 
-  /** Manual mode: pose every lane at `seconds` and render once, the camera
-   * `travel` of the way through its opening travel (travelPose). */
-  function frame(seconds, travel = 1) {
+  /** Manual mode: pose every lane — and the crowd, so a clip's frames come out
+   * the same every render — at `seconds`, and render once, the camera `travel`
+   * of the way through its opening travel (travelPose). */
+  function frame(seconds, travel = 1, crowdSeconds = seconds, mood) {
     player.seek(seconds);
-    draw(travel);
+    draw(travel, crowdSeconds, mood);
   }
 
   /** Where lane `i`'s duck stood in the last frame drawn, as fractions of the

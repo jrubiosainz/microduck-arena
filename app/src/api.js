@@ -160,4 +160,6 @@ export async function getBroadcast(id) {
   return response.json();
 }
 
-export const clipUrl = (runId, name) => `/api/runs/${runId}/clip/${name}`;
+// `version` is the render the file belongs to (a slot's `clip`): the files are
+// cached for a year as immutable, so a clip rendered again is a new URL.
+export const clipUrl = (runId, name, version) => `/api/runs/${runId}/clip/${name}?v=${version}`;

@@ -9,6 +9,8 @@
 
 import {
   BoxGeometry,
+  ExtrudeGeometry,
+  Shape,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -16,6 +18,7 @@ import {
   PlaneGeometry,
   RingGeometry,
 } from "three";
+import { PALETTE, flat } from "./palette.js";
 
 // Fallback only. The real spacing is the course's own width, below.
 export const LANE_SPACING = 0.45;
@@ -46,7 +49,7 @@ export function laneSpacing({ width_m = 0.8, walls = [] } = {}) {
 // ciel, lime hi-vis, lavande, jaune bec.
 export const LANE_COLORS = [0xff7a2f, 0x8fb8dc, 0xc8ff2e, 0x9d87e8, 0xffd23f];
 export const LANE_CSS = ["#ff7a2f", "#8fb8dc", "#c8ff2e", "#9d87e8", "#ffd23f"];
-const OVERRUN = 0.4; // ground extends this far past both lines
+export const OVERRUN = 0.4; // ground extends this far past both lines
 const LINE_WIDTH = 0.03;
 
 /** Lateral offset for lane `i` of `n`, in three.js z. */
@@ -117,7 +120,7 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
     // flat plane facing up takes all of the sky, and the robots ended up as
     // silhouettes against their own track.
     new MeshStandardMaterial({
-      color: 0x22242a,
+      color: slope_deg ? 0x456d7b : 0x22242a,
       roughness: 1,
       metalness: 0,
       envMapIntensity: 0.15,
@@ -129,8 +132,33 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   ground.name = "ground";
   course.add(ground);
 
+  if (slope_deg > 0) {
+    const angle = course.rotation.z;
+    const end = length_m + OVERRUN;
+    // In the tilted course frame, the wedge's underside maps to a level floor.
+    const bottom = (x) => (-0.014 - x * Math.sin(angle)) / Math.cos(angle);
+    const profile = new Shape();
+    profile.moveTo(0, -0.004);
+    profile.lineTo(end, -0.004);
+    profile.lineTo(end, bottom(end));
+    profile.lineTo(0, bottom(0));
+    profile.closePath();
+    const geometry = new ExtrudeGeometry(profile, { depth: span, bevelEnabled: false });
+    geometry.translate(0, 0, -span / 2);
+    const base = new Mesh(geometry, new MeshStandardMaterial({ color: 0x244b59, roughness: 0.95 }));
+    base.name = "ramp-base";
+    course.add(base);
+    for (const side of [-1, 1]) {
+      const edge = new Mesh(new BoxGeometry(end, 0.003, 0.025),
+        new MeshStandardMaterial({ color: 0xffc548, roughness: 0.85 }));
+      edge.name = "ramp-edge";
+      edge.position.set(end / 2, 0.003, side * (span / 2 - 0.016));
+      course.add(edge);
+    }
+  }
+
   course.add(line(0, span, 0xf5f5f5, "start"));
-  course.add(line(length_m, span, 0xff7a2f, "finish"));
+  course.add(checker(length_m, span));
   course.add(buildWalls(walls, lanes, spacing));
 
   // One stripe per lane, so a table row can point at its duck.
@@ -156,6 +184,26 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   }
 
   return course;
+}
+
+// Duck Jam's finish: a row of paper and ink tiles across the track, each 12 cm
+// along it and 13 across, as many as the span takes.
+const TILE = [0.12, 0.13];
+
+function checker(x, span) {
+  const finish = new Group();
+  finish.name = "finish";
+  finish.position.set(x, 0.003, 0);
+  const count = Math.round(span / TILE[1]);
+  for (let i = 0; i < count; i += 1) {
+    const tile = new Mesh(
+      new BoxGeometry(TILE[0], 0.002, TILE[1]),
+      flat(i % 2 ? PALETTE.paper : PALETTE.ink),
+    );
+    tile.position.z = (i - (count - 1) / 2) * TILE[1];
+    finish.add(tile);
+  }
+  return finish;
 }
 
 function line(x, span, color, name) {
@@ -193,6 +241,7 @@ export function buildMarker(tier = "ghost", colour = null) {
     new RingGeometry(0.085, 0.115, 32),
     new MeshBasicMaterial({
       color: colour ?? TIER_MARKER[tier] ?? TIER_MARKER.ghost,
+      toneMapped: false,
       transparent: true,
       opacity: colour !== null || tier !== "ghost" ? 0.95 : 0.4,
     }),

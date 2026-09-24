@@ -7,7 +7,7 @@
 // how a view ends up dragging a whole other view's imports behind it.
 
 import { formatEventFacts, formatScore } from "./format.js";
-import { raceHref } from "./router.js";
+import { eventGuideHref, raceHref } from "./router.js";
 import { voteButton } from "./votebutton.js";
 
 function el(tag, className, text) {
@@ -71,5 +71,10 @@ export function flyer(event, rows) {
     el("p", "challenge-facts", facts),
   );
   note.append(link);
+  if (planned) {
+    const preview = el("a", "help-link", "Preview the challenge ?");
+    preview.href = eventGuideHref(event.id);
+    note.append(preview);
+  }
   return note;
 }

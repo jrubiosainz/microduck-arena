@@ -16,6 +16,9 @@ hf_oauth_scopes:
 
 Race a Microduck policy against every other policy, on a clock you can trust.
 
+New to competing? Read [Train your first policy](docs/guides/train-a-policy.md),
+then open **Training & rules** on your chosen challenge.
+
 Submitted policies are evaluated **server-side** on a fixed course over five
 perturbed seeds, at every commanded speed in the event's declared sweep, and the
 best result is recorded. A time reported by a browser is a number in devtools;

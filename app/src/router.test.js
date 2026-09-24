@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { dress, liveHref, menuHref, parseRoute, playerHref, raceHref, runHref, themeFor, voteHref } from "./router.js";
 
 describe("parseRoute", () => {
+  it("opens guides and shareable sections without confusing them with the home page", () => {
+    expect(parseRoute("#/guides")).toEqual({ view: "guides", guideId: "index", section: null });
+    expect(parseRoute("#/e/sprint-2m/guide")).toEqual({ view: "guides", eventId: "sprint-2m", section: null });
+    expect(parseRoute("#/guides/points?section=how-race-scores-work")).toEqual({
+      view: "guides", guideId: "points", section: "how-race-scores-work",
+    });
+  });
   it("shows the home page by default", () => {
     for (const hash of ["", "#", "#/", undefined, null]) {
       expect(parseRoute(hash)).toEqual({ view: "menu" });

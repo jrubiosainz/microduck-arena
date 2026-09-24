@@ -12,7 +12,7 @@ import { buildCourse, buildMarker } from "./course.js";
 import { applyFrame } from "./replay.js";
 import { buildRigTree } from "./rig.js";
 import { standOnCourse } from "./thumbnail.js";
-import { attachCourse, cameraSideOffset, placeLane, placeMarker } from "./viewer.js";
+import { attachCourse, cameraSideOffset, placeLane, placeMarker, feetPosition } from "./viewer.js";
 
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
 const HILL = { length_m: 1.5, width_m: 0.8, slope_deg: 8, rig: "legs" };
@@ -77,10 +77,31 @@ describe("a replayed duck on a slope", () => {
 });
 
 describe("a replayed duck's follow-spot on a slope", () => {
+  it.each(["kinematics.json", "kinematics_rollers.json"])("tracks articulated feet and lateral drift for %s", (file) => {
+    const rig = buildRigTree(JSON.parse(readFileSync(`public/robot/${file}`, "utf8")));
+    placeLane(rig, 0.85);
+    const course = buildCourse(HILL, 3);
+    const marker = buildMarker("trial");
+    for (const lateral of [-0.3, 0.2]) {
+      const frame = new Float32Array(21);
+      frame.set([1.2, lateral, 0.3, 1, 0, 0, 0]);
+      frame[9] = -0.4;
+      applyFrame(rig, frame);
+      const feet = feetPosition(rig, new Vector3());
+      const left = rig.joints.get("left_ankle").body.getWorldPosition(new Vector3());
+      const right = rig.joints.get("right_ankle").body.getWorldPosition(new Vector3());
+      expect(feet.distanceTo(left.add(right).multiplyScalar(0.5))).toBeLessThan(1e-9);
+      placeMarker(marker, course, feet, HILL.slope_deg);
+      const center = marker.getWorldPosition(new Vector3());
+      expect(center.x).toBeCloseTo(feet.x, 6);
+      expect(center.z).toBeCloseTo(feet.z, 6);
+    }
+  });
+
   it("lies on the drawn ramp under its duck, not at height zero beneath the hill", () => {
     const course = buildCourse(HILL, 1);
     const marker = buildMarker("gold");
-    placeMarker(marker, course, 1.2, HILL.slope_deg);
+    placeMarker(marker, course, new Vector3(1.2, 0.3, 0.27), HILL.slope_deg);
     course.updateMatrixWorld(true);
     const p = new Vector3().setFromMatrixPosition(marker.matrixWorld);
     const tan = Math.tan((HILL.slope_deg * Math.PI) / 180);
@@ -88,6 +109,11 @@ describe("a replayed duck's follow-spot on a slope", () => {
     expect(Math.abs(p.x - 1.2)).toBeLessThan(1e-3);
     expect(p.y).toBeCloseTo(1.2 * tan, 2);
     expect(p.y).toBeGreaterThan(0.15);
+    expect(p.z).toBeCloseTo(0.27, 6);
+    const normal = new Vector3(0, 0, 1).transformDirection(marker.matrixWorld);
+    const angle = HILL.slope_deg * Math.PI / 180;
+    expect(normal.x).toBeCloseTo(-Math.sin(angle), 6);
+    expect(normal.y).toBeCloseTo(Math.cos(angle), 6);
   });
 });
 

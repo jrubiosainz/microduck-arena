@@ -22,10 +22,39 @@ describe("laneOffsetZ", () => {
 });
 
 describe("buildCourse", () => {
+  it("gives the hill a solid wedge resting on the floor and a distinct surface", () => {
+    const hill = buildCourse({ length_m: 1.5, slope_deg: 8 });
+    hill.updateMatrixWorld(true);
+    const base = hill.getObjectByName("ramp-base");
+    expect(base).toBeTruthy();
+    const positions = base.geometry.attributes.position;
+    const vertices = Array.from({ length: positions.count }, (_, i) =>
+      new Vector3().fromBufferAttribute(positions, i).applyMatrix4(base.matrixWorld));
+    expect(Math.min(...vertices.map((v) => v.y))).toBeCloseTo(-0.014, 6);
+    expect(Math.max(...vertices.map((v) => v.y))).toBeGreaterThan(0.25);
+    const flat = buildCourse({ length_m: 1.5 });
+    expect(flat.getObjectByName("ramp-base")).toBeUndefined();
+    expect(hill.getObjectByName("ground").material.color.getHex()).not.toBe(
+      flat.getObjectByName("ground").material.color.getHex(),
+    );
+  });
+
   it("puts the start line at 0 and the finish at the course length", () => {
     const course = buildCourse({ length_m: 2, width_m: 0.8 });
     expect(course.getObjectByName("start").position.x).toBeCloseTo(0, 12);
     expect(course.getObjectByName("finish").position.x).toBeCloseTo(2, 12);
+  });
+
+  it("lays Duck Jam's checker of paper and ink across the finish", () => {
+    const finish = buildCourse({ length_m: 2, width_m: 0.8 }).getObjectByName("finish");
+    const tiles = finish.children;
+    expect(tiles.length).toBeGreaterThanOrEqual(6);
+    const inks = tiles.map((tile) => tile.material.color.getHex());
+    expect(new Set(inks).size).toBe(2);
+    for (let i = 1; i < inks.length; i += 1) expect(inks[i]).not.toBe(inks[i - 1]);
+    const zs = tiles.map((tile) => tile.position.z);
+    expect(Math.min(...zs)).toBeLessThan(-0.3);
+    expect(Math.max(...zs)).toBeGreaterThan(0.3);
   });
 
   it("lays the ground flat and centres it between the lines", () => {

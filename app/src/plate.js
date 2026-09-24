@@ -70,7 +70,7 @@ export function nameplate(text, colour, background) {
   const map = new CanvasTexture(canvas);
   map.colorSpace = SRGBColorSpace;
   map.anisotropy = 8;
-  const sprite = new Sprite(new SpriteMaterial({ map, transparent: true, depthWrite: false }));
+  const sprite = new Sprite(new SpriteMaterial({ map, transparent: true, depthWrite: false, toneMapped: false }));
   sprite.center.set(0.5, 0);
   return {
     sprite,

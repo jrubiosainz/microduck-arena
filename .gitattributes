@@ -35,6 +35,10 @@ saved_model/**/* filter=lfs diff=lfs merge=lfs -text
 *tfevents* filter=lfs diff=lfs merge=lfs -text
 app/public/robot/meshes/roller_blade.stl filter=lfs diff=lfs merge=lfs -text
 app/public/robot/microduck.glb filter=lfs diff=lfs merge=lfs -text
+app/public/robot/microduck-crowd.glb filter=lfs diff=lfs merge=lfs -text
+app/public/sound/commentator-peter.f32 filter=lfs diff=lfs merge=lfs -text
+app/public/sound/commentator-ray.f32 filter=lfs diff=lfs merge=lfs -text
+app/public/sound/microduck-victory.wav filter=lfs diff=lfs merge=lfs -text
 arena/assets/robot/legs/assets/bottom_head_shell.stl filter=lfs diff=lfs merge=lfs -text
 arena/assets/robot/legs/assets/elec_rpi_robot_hat_pcb.stl filter=lfs diff=lfs merge=lfs -text
 arena/assets/robot/legs/assets/face_part.stl filter=lfs diff=lfs merge=lfs -text
@@ -79,3 +83,5 @@ arena/assets/robot/rollers/assets/top_head_shell.stl filter=lfs diff=lfs merge=l
 arena/assets/robot/rollers/assets/upper_leg_left.stl filter=lfs diff=lfs merge=lfs -text
 arena/assets/robot/rollers/assets/upper_leg_right.stl filter=lfs diff=lfs merge=lfs -text
 arena/assets/robot/rollers/assets/yaw2roll.stl filter=lfs diff=lfs merge=lfs -text
+
+app/public/robot/reachy-mini/reachy-mini.glb filter=lfs diff=lfs merge=lfs -text

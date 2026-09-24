@@ -2,7 +2,7 @@
 // pose maths are unit-testable without a browser or a canvas.
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { Box3, Quaternion, Vector3 } from "three";
+import { Box3, BoxGeometry, Quaternion, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
 import {
@@ -344,6 +344,34 @@ describe("attachMeshes against the real GLB", () => {
     // meshes are in millimetres and everything downstream is 1000x off.
     expect(Math.max(size.x, size.y, size.z)).toBeLessThan(1.0);
     expect(Math.max(size.x, size.y, size.z)).toBeGreaterThan(0.05);
+  });
+
+  it("leaves the parts nobody sees out when asked for the skin alone", () => {
+    // A spectator two metres off is what shows of it from outside — and on a
+    // skeletal robot that is the motors and the battery as much as the shells.
+    // Which parts show was measured, not guessed (see HIDDEN in rig.js): the
+    // boards, bearings and mouth parts inside are under a thousandth of the
+    // duck's pixels from any seat, and were ten layers of overdraw a pixel.
+    const geometries = new Map(meshNames(kinematics).map((n) => [n, new BoxGeometry(0.01, 0.01, 0.01)]));
+    const rig = buildRigTree(kinematics);
+    attachMeshes(rig, kinematics, geometries, { skin: true });
+    const attached = [];
+    rig.root.traverse((n) => {
+      if (n.isMesh) attached.push(n.name);
+    });
+    for (const shows of ["top_head_shell.stl", "xl330.stl", "np_f970.stl", "leg.stl", "neck.stl", "hip_l.stl"]) {
+      expect(attached).toContain(shows);
+    }
+    for (const inside of [
+      "pcb__raspberry_pi_zero_2_w.stl",
+      "elec_rpi_robot_hat_pcb.stl",
+      "seeed_bearing__configuration__22x16x4.stl",
+      "seeed_bearing__configuration_default.stl",
+      "speaker.stl",
+      "jaw_soft.stl",
+    ]) {
+      expect(attached).not.toContain(inside);
+    }
   });
 });
 

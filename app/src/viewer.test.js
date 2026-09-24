@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { cameraPose, travelPose } from "./viewer.js";
 
 describe("cameraPose", () => {
-  it("chases the leader from behind and trackside by default, exactly as before", () => {
+  it("chases the leader from behind and trackside by default, at the original close distance", () => {
     expect(cameraPose(null, 1.2, 1.15, 0)).toEqual({
       position: [1.2 - 0.35, 0.34, 1.15],
       target: [1.2, 0.12, 0],
