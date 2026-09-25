@@ -56,6 +56,16 @@ The Space rebuilds itself on each upload. Its own Docker build re-measures the
 golden run and fails if the physics does not reproduce, so a broken build is
 better than a silently wrong leaderboard.
 
+## Releasing
+
+A tag `vX.Y.Z` matching `version` in `pyproject.toml` builds the wheel — package, built site,
+meshes — and attaches it to a GitHub release (`.github/workflows/release.yml`). That wheel is
+what `microduck-challenges` depends on:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
 ## Running as a Space
 
 The container filesystem is ephemeral, so a Space needs somewhere durable to
@@ -144,11 +154,20 @@ One thing this deployment does NOT have yet:
 
 ## Run it
 
+Python 3.12 (`uv` installs it: `uv python install 3.12`).
+
 ```bash
 uv sync
 cd app && npm install && npm run build && cd ..
 uv run arena serve --store ~/arena-board --user $USER
 ```
+
+`arena serve` finds the built site in `app/dist`. A wheel of this package (`uv build --wheel`
+after `uv run python scripts/bundle_frontend.py`) carries it inside the package instead, at
+`arena/frontend/`, so an installed Arena serves its site with nothing else on disk; that is
+what the release workflow attaches to a tag. After building a wheel, delete `arena/frontend/`
+(`rm -rf arena/frontend`) — an editable install prefers it over every later `npm run build` of
+`app/dist`.
 
 Open <http://127.0.0.1:8000>.
 

@@ -32,6 +32,14 @@ DEFAULT_SESSION_TTL_S = 8 * 60 * 60
 DEFAULT_COMMENTARY_MODEL = "deepseek-ai/DeepSeek-V3.1"
 
 
+def default_frontend(package_dir: Path) -> Path:
+    """Inside the package first (a wheel carries the built site), then a checkout's build."""
+    packaged = package_dir / "frontend"
+    if (packaged / "index.html").is_file():
+        return packaged
+    return package_dir.parent / "app" / "dist"
+
+
 @dataclass(frozen=True)
 class ArenaConfig:
     store_dir: Path
@@ -107,7 +115,7 @@ class ArenaConfig:
 
         candidate = frontend_dir or os.environ.get("ARENA_FRONTEND")
         if candidate is None:
-            candidate = Path(__file__).resolve().parents[2] / "app" / "dist"
+            candidate = default_frontend(Path(__file__).resolve().parents[1])
         candidate = Path(candidate)
         # A missing bundle is reported by the app, not raised here: the API is
         # useful on its own and `arena serve` should say "run npm run build"

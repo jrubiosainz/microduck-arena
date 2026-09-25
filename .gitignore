@@ -7,3 +7,4 @@ dist/
 probe-results.json
 app/node_modules/
 app/dist/
+arena/frontend/

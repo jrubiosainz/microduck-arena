@@ -216,3 +216,20 @@ def test_commentary_is_on_by_default_and_has_a_switch_and_a_model(tmp_path, monk
     config = ArenaConfig.from_env(store_dir=tmp_path)
     assert config.commentary_enabled is False
     assert config.commentary_model == "org/other:provider"
+
+
+def test_the_packaged_frontend_wins_when_present(tmp_path):
+    from arena.web.config import default_frontend
+
+    package = tmp_path / "site-packages" / "arena"
+    (package / "frontend").mkdir(parents=True)
+    (package / "frontend" / "index.html").write_text("")
+    assert default_frontend(package) == package / "frontend"
+
+
+def test_app_dist_is_the_fallback(tmp_path):
+    from arena.web.config import default_frontend
+
+    package = tmp_path / "checkout" / "arena"
+    package.mkdir(parents=True)
+    assert default_frontend(package) == tmp_path / "checkout" / "app" / "dist"

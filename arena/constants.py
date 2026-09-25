@@ -58,4 +58,10 @@ TRACE_WIDTH = 3 + 4 + NUM_JOINTS
 #    the policy's pace at exactly the event's declared vx; a v2 time is its best
 #    pace over the whole declared range, so v1 times are systematically slower
 #    and comparing the two would rank by version rather than by policy.
-RUNNER_VERSION = 2
+#
+# 3: the physics moved to MuJoCo 3.10.0 (with onnxruntime 1.24.4 and numpy
+#    2.4.1), the versions mjlab trains with, so the Arena can be installed next
+#    to mjlab-microduck in a challenges checkout. The reference walker was
+#    re-measured on it (arena/golden.py); v2 times were made by a different
+#    solver and are not comparable.
+RUNNER_VERSION = 3

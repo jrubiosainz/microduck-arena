@@ -106,11 +106,11 @@ def test_golden_run_reference_policy_holds_its_time():
     assert result.command_vx == pytest.approx(GOLDEN_COMMAND_VX)
 
 
-# Baseline, measured at RUNNER_VERSION 2 (the speed sweep). At version 1 — one
-# pinned command at 0.25 m/s — the same policy and the same physics scored
-# 18.216 s; the sweep finds it 0.40 m/s and 11.724 s. The gap is the whole
-# reason the sweep exists, so keep the old number here as the contrast.
-GOLDEN_SCORE_S = 11.724
+# Baseline, measured at RUNNER_VERSION 3 (MuJoCo 3.10.0, the version mjlab
+# trains with). At version 2 — same sweep, MuJoCo 3.12.0 — the same policy
+# scored 11.724 s at 0.40 m/s; at version 1 — one pinned command at 0.25 m/s —
+# 18.216 s. Kept as the contrast: the sweep and the physics each moved it.
+GOLDEN_SCORE_S = 11.792
 GOLDEN_COMMAND_VX = 0.40
 PINNED_SCORE_S = 18.216  # what version 1 reported, at the event's declared vx
 

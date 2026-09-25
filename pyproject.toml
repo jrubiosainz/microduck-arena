@@ -1,10 +1,10 @@
 [project]
 name = "microduck-arena"
-version = "0.1.0"
-# Pinned to one minor version for the same reason the physics packages are.
-# The golden run was measured on 3.13, and numpy 2.5.2 does not build for 3.11
-# at all — so an image on python:3.11-slim quietly resolved a different numpy.
-requires-python = ">=3.13,<3.14"
+version = "0.2.0"
+# One minor version, exactly. The golden run is measured on it, and it is the
+# interpreter mjlab (through mujoco-warp) allows, so a microduck-challenges
+# checkout can hold this package and mjlab-microduck in one environment.
+requires-python = ">=3.12,<3.13"
 dependencies = [
     # PINNED EXACTLY, and this is not fussiness. Every recorded time is a
     # measurement made by these three, and MuJoCo's solver changes between
@@ -20,9 +20,13 @@ dependencies = [
     #
     # Moving any of these is a decision to re-baseline the golden run and bump
     # RUNNER_VERSION in the same commit.
-    "mujoco==3.12.0",
-    "onnxruntime==1.29.0",
-    "numpy==2.5.2",
+    #
+    # These three are what mjlab 1.3.0 / mujoco-warp 3.8.1 lock in microduck_rl;
+    # moving them means moving with mjlab, so the challenges repo's uv.lock can
+    # resolve both packages. Version 3 of the runner is that move.
+    "mujoco==3.10.0",
+    "onnxruntime==1.24.4",
+    "numpy==2.4.1",
     # Not physics: these touch no recorded number, so they keep ranges.
     "huggingface-hub>=0.24",
     "fastapi>=0.115",
@@ -34,7 +38,9 @@ dependencies = [
 
 [project.optional-dependencies]
 # onnx is only used by tests, to build deliberately malformed model fixtures.
-dev = ["pytest>=8.0", "ruff>=0.6", "onnx>=1.16", "httpx>=0.27"]
+# <1.23: onnx 1.23.0 writes IR version 14, which onnxruntime 1.24.4 (pinned
+# above) cannot load — capped so the fixtures stay loadable, not out of caution.
+dev = ["pytest>=8.0", "ruff>=0.6", "onnx>=1.16,<1.23", "httpx>=0.27"]
 
 [project.scripts]
 arena = "arena.cli:main"
@@ -45,6 +51,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["arena"]
+# The built site, copied in by scripts/bundle_frontend.py. Gitignored, so it
+# has to be named here: hatchling drops ignored files unless they are artifacts.
+artifacts = ["arena/frontend/**"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
