@@ -83,8 +83,6 @@ def standing(
     run_id: str,
     withdrawn: frozenset[str] = frozenset(),
     runner_version: int = RUNNER_VERSION,
-    above: int = 2,
-    below: int = 5,
 ) -> Standing:
     """Where ONE run stands against everyone else's best, on the board or not.
 
@@ -92,8 +90,8 @@ def standing(
     better run, a withdrawn run, or one from an older runner has no row — and
     still deserves an answer to "where would this have placed". The author's
     own row is taken out and the run put in at its sorted place; `rank` is that
-    place, and `board` is the window around it: `above` rows over it, up to
-    `below` under it, every rank counted on the whole field.
+    place, and `board` is the whole field ranked that way, this run included:
+    the page's table scrolls, so it shows all of it.
     """
     record = next(r for r in records if r.run_id == run_id)
     rows = leaderboard(records, runner_version, entrant=by_user, withdrawn=withdrawn)
@@ -104,5 +102,5 @@ def standing(
     return Standing(
         rank=at + 1,
         on_board=any(row.record.run_id == run_id for row in rows),
-        board=ranked[max(0, at - above) : at + 1 + below],
+        board=ranked,
     )

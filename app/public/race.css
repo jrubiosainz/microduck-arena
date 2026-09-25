@@ -892,13 +892,16 @@ table.board .withdraw:focus-visible,
  * Everything the reveal animates has to be on screen together, or the stars
  * fly to a chip nobody is looking at — which is exactly what happened when
  * the page was three windows long. So the page is the window tall, and of its
- * four rows only the stage is elastic: the head, the board and the seeds are
- * each as tall as their content, and the picture takes whatever is left. */
+ * four rows the head and the seeds are as tall as their content, the board
+ * shows four rows at most and scrolls for the rest, and the picture takes
+ * what is left — never less than its floor, since the board gives first:
+ * min-content here, and on the two grids inside, is what carries the floor
+ * up from the stage. */
 #app:has(> main.run) { height: 100vh; }
 
 .hall.run {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(min-content, 1fr) auto auto;
   gap: var(--space-gutter-min);
   min-height: 0;
   padding-block: 20px;
@@ -936,7 +939,7 @@ table.board .withdraw:focus-visible,
 .run-top {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(min-content, 1fr) auto;
   gap: 6px var(--space-gutter-max);
   min-height: 0;
 }
@@ -946,14 +949,15 @@ table.board .withdraw:focus-visible,
    and the transport under it keeps its height. */
 .run-top .deck {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(min-content, 1fr) auto;
   margin: 0;
-  min-height: 0;
 }
 /* The floor is what leaves the deck's keys and an open seed list their room
    on an 800 px window: any higher and the keys ran under the deck's own
-   frame the moment the seeds unfolded. */
-.run-top .stage { min-height: 196px; }
+   frame the moment the seeds unfolded. `contain: size` keeps the canvas out
+   of the arithmetic: its drawing buffer is sized to the box it was last
+   given, and without this the box could never get smaller than that. */
+.run-top .stage { min-height: 196px; contain: size; }
 .run-top .stage canvas { height: 100%; min-height: 0; }
 .run-facts { grid-column: 1 / -1; margin: 0; color: var(--ink-70); }
 
@@ -1060,35 +1064,44 @@ table.board .withdraw:focus-visible,
   .clip-reel, .clip-render-bar-unknown > span { animation: none; }
 }
 
-/* The pegboard: a window of the board, this run's row in lime, each row a link.
-   One line per row here, the repo beside the handle instead of under it —
-   eight two-line rows leave the stage fourteen pixels, which is nothing. */
-.run-board { margin: 0; min-height: 0; }
-.run-board .pegboard-row { padding: 4px var(--space-card-padding-min); gap: 0 12px; }
-.run-board .pegboard-rank,
-.run-board .pegboard-score { font-size: 1.2rem; line-height: 1.15; }
-.run-board .pegboard-repo { display: inline; margin-left: 8px; }
-/* Which duck is whose: a row on the stage wears its lane's colour on a tab
-   and on its peg, as the challenge board's rows do; the rest keep the ink
-   peg and no tab. */
-.run-board .pegboard-row { border-left: 5px solid var(--lane, transparent); }
-.run-board .pegboard-row::before { background: var(--lane, var(--ink)); }
-.pegboard-row { color: inherit; text-decoration: none; }
-.pegboard-row:hover { background: var(--cream); }
-.pegboard-row-you:hover { background: var(--lime); }
+/* The board: the challenge page's sheet with the whole field on it, this run's
+   row in lime. The sheet's toolbar stays put and the table scrolls under it,
+   so the stage keeps its height whatever the field's size. Tighter rows than
+   the challenge page's: this page is one window tall, and every row here is
+   a row off the picture. The cap is the toolbar, the heading and four rows
+   of 41 px, which is what the old pegboard showed; past it the field
+   scrolls. */
+.run-board { display: grid; min-height: 0; max-height: 254px; }
+.run-board .boardsheet {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  margin-top: 0;
+  min-height: 0;
+}
+.run-board #board { overflow-y: auto; min-height: 0; }
+.run-board table.board th { padding: 6px 10px 5px; }
+.run-board table.board td { padding: 5px 10px; }
+.run-board table.board .time,
+.run-board table.board .votes { font-size: 1.2rem; }
+.run-board table.board .record { padding-left: 12px; }
+.run-board table.board tr.you td { background: var(--lime); }
 
-/* Too short or too narrow for one screen: the page scrolls, as the others do,
-   and the rows get their second line back. */
-@media (max-height: 700px), (max-width: 860px) {
+/* Too short or too narrow for one screen: the page scrolls, as the others do.
+   Under 860 px of height the picture at its floor, the sheet's toolbar and
+   four rows, the head and the seeds no longer share one window — the board
+   was down to two rows and the picture to its floor — so a laptop gets the
+   page at its natural size instead, and the reveal walks it with `bring`. */
+@media (max-height: 860px), (max-width: 860px) {
   #app:has(> main.run) { height: auto; }
   .hall.run { display: block; }
   .hall.run > * + * { margin-top: var(--space-gutter-max); }
-  .run-top { grid-template-columns: minmax(0, 1fr); gap: var(--space-gutter-max); }
-  .run-top .stage { min-height: 260px; }
-  .run-top .stage canvas { height: 44vh; }
-  .run-board .pegboard-row { padding: 14px var(--space-card-padding-min); }
-  .run-board .pegboard-repo { display: block; margin-left: 0; }
+  .run-top .stage { height: 44vh; min-height: 260px; }
+  .run-board { max-height: none; }
   .run-share-screen { flex: none; height: 12.375rem; }
+}
+/* Too narrow for two columns as well: the result goes under the picture. */
+@media (max-width: 860px) {
+  .run-top { grid-template-columns: minmax(0, 1fr); gap: var(--space-gutter-max); }
 }
 
 /* ── the seeds, folded away under their summary ───────────────────────── */

@@ -231,7 +231,7 @@
   to { translate: var(--confetti-sway) calc(100cqh + 100%); scale: 1 1; }
 }
 
-/* ── The pegboard rank climb — .rank-climb and .rank-shuffle on .pegboard-rows ── */
+/* ── The board's rank climb — .rank-climb and .rank-shuffle on its rows ──── */
 
 /* Move the player's row to its new place in the DOM, renumber every rank, and give each moved
    row --peg-dy, where it was minus where it is. Then the climbing row lifts off its peg in a
@@ -239,12 +239,12 @@
    each displaced row drops one peg in a flip, one clack after the one before it, so they fall one
    at a time behind the climber and the last has cleared its peg before the climber lands on it.
    The end of the beat is the climber's peg-drop animationend. */
-.pegboard-row.rank-climb,
-.pegboard-row.rank-shuffle {
+.rank-climb,
+.rank-shuffle {
   translate: 0 calc(var(--peg-slide) + var(--peg-lift));
 }
 
-.pegboard-row.rank-climb {
+.rank-climb {
   position: relative;
   z-index: 1;
   animation:
@@ -253,7 +253,7 @@
     peg-drop var(--t-flip) var(--ease-drop) calc(var(--t-clack) + var(--t-roll)) forwards;
 }
 
-.pegboard-row.rank-shuffle {
+.rank-shuffle {
   animation: peg-slide var(--t-flip) var(--ease-drop) calc((var(--peg-order) + 1) * var(--t-clack)) both;
 }
 
@@ -285,8 +285,8 @@
   .stamp-slam,
   .jolt,
   .confetti-piece,
-  .pegboard-row.rank-climb,
-  .pegboard-row.rank-shuffle {
+  .rank-climb,
+  .rank-shuffle {
     animation-duration: 0s;
     animation-delay: 0s;
   }

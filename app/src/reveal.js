@@ -15,12 +15,12 @@ export function revealFor(run, me, reducedMotion = false) {
 }
 
 /**
- * The pegboard before and after the climb.
+ * The board before and after the climb.
  *
- * `board` is the window the server sent, in board order, one row `you`. Before
+ * `board` is the field the server sent, in board order, one row `you`. Before
  * the climb you sit in the last slot and the rows under you stand one place
  * higher — the board as it was before your run — so every row is renumbered to
- * match. The end state is the window as sent. Same array twice when nothing is
+ * match. The end state is the field as sent. Same array twice when nothing is
  * under you: there is nothing to climb.
  */
 export function climbPlan(board) {
@@ -35,9 +35,11 @@ export function climbPlan(board) {
   return { start, end: board };
 }
 
+/** Renumber the rows of the table in `pegRows`; a row a filter has hidden is left alone. */
 export function setRanks(pegRows, order) {
   for (const row of order) {
-    pegRows.get(row.run_id).querySelector(".pegboard-rank").textContent = String(row.rank);
+    const cell = pegRows.get(row.run_id)?.querySelector(".rank");
+    if (cell) cell.textContent = String(row.rank);
   }
 }
 

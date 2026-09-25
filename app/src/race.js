@@ -9,12 +9,12 @@ import {
   tryPolicy,
   withdrawRun,
 } from "./api.js";
-import { buildRows, renderBoard, setAllLanes, tiersByRunId } from "./board.js";
+import { boardsheetMarkup, podium, wireBoardsheet } from "./boardsheet.js";
 import { flyer } from "./flyer.js";
 import { createDropzone } from "./dropzone.js";
 import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
-import { LANE_CSS } from "./course.js";
+import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
 import { dress, eventGuideHref, menuHref, runHref } from "./router.js";
@@ -22,30 +22,12 @@ import { renderThumbnails } from "./thumbnail.js";
 import { panelState, signInHref } from "./session.js";
 import { footer, settleIdentity, signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
-import { modeIsUseful, visibleRows } from "./views.js";
 import { createViewer } from "./viewer.js";
 import { voteButton } from "./votebutton.js";
 
 // Colours belong to leaderboard entries; lane positions are shuffled afterwards.
 export function arrangeLanes(board, lanes, random = Math.random) {
-  const byId = new Map(lanes.map(lane => [lane.runId, lane]));
-  let colourIndex = 0;
-  for (const row of board.querySelectorAll("tbody tr")) {
-    const id = row.classList.contains("provisional") ? null : row.querySelector("input[data-run-id]")?.dataset.runId;
-    const lane = byId.get(id);
-    const tab = row.querySelector(".tab");
-    if (lane) {
-      lane.colour = LANE_CSS[colourIndex++ % LANE_CSS.length];
-      tab.style.setProperty("--lane", lane.colour);
-    } else {
-      tab.style.removeProperty("--lane");
-    }
-  }
-  for (const lane of lanes) {
-    // A trial can still be on stage while its row is hidden by a board filter.
-    lane.colour ??= LANE_CSS[colourIndex++ % LANE_CSS.length];
-    lane.opacity = 1;
-  }
+  colourLanes(board, lanes);
   for (let i = lanes.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
@@ -310,21 +292,7 @@ export function raceHall(event) {
         <aside class="entry" id="entry"></aside>
       </div>
     </div>
-    <div class="boardsheet">
-      <span class="flyer-tape"></span>
-      <div class="boardtop">
-        <label class="pickall" title="Put every row shown on the stage, or take them all off">
-          <input type="checkbox" class="pickall-box">
-          <span>Put on the stage</span>
-        </label>
-        <div class="modes" role="group" aria-label="Which runs the table lists">
-          <button data-mode="all" aria-pressed="false">All</button>
-          <button data-mode="mine" aria-pressed="false">Mine</button>
-          <button data-mode="top" aria-pressed="true">Top 3</button>
-        </div>
-      </div>
-      <div id="board"></div>
-    </div>
+    ${boardsheetMarkup}
   `;
   return hall;
 }
@@ -441,72 +409,7 @@ export async function renderRace(root, { event, state }) {
   // outside cost three rounds. MIN is 0.5 against a 1.25 default.
   viewer.setBrightness(MIN);
 
-  // Declared above every handler that closes over it. Further down it worked
-  // only because a click always happens after that line — a handler moved above
-  // it would fail with a temporal-dead-zone error that reads like nothing.
-  //
-  // Two narrowings rather than three modes: Mine and Top each turn on and off
-  // on their own and compose, and All is the state where neither is on.
-  const filters = { mine: false, top: true };
-
-  // The run ids on the stage. Null until the first board says which lanes it
-  // opens on, a Set from then on — and the page's from then on, not the
-  // table's. Declared here for the same reason `filters` is: two handlers
-  // below close over it.
-  let selection = null;
-
-  // Nothing of yours to list when nobody is signed in, and a key that can only
-  // empty the table is worse than no key. Taken out before the list is read,
-  // so nothing below is holding a button that is no longer on the page.
-  if (!modeIsUseful("mine", me?.user ?? null)) {
-    root.querySelector('.modes button[data-mode="mine"]')?.remove();
-  }
-  const modeButtons = [...root.querySelectorAll(".modes button")];
-  const showFilters = () => {
-    for (const button of modeButtons) {
-      const on =
-        button.dataset.mode === "all"
-          ? !filters.mine && !filters.top
-          : filters[button.dataset.mode];
-      button.setAttribute("aria-pressed", String(on));
-    }
-  };
-  showFilters();
-  for (const button of modeButtons) {
-    button.addEventListener("click", async () => {
-      const key = button.dataset.mode;
-      if (key === "all") {
-        filters.mine = false;
-        filters.top = false;
-      } else {
-        filters[key] = !filters[key];
-      }
-      showFilters();
-      await paint();
-    });
-  }
-
-  // One box, above the column of lane boxes it ticks: every row the table is
-  // SHOWING goes on the stage, or comes off it. A checkbox and not a button
-  // because it ticks checkboxes, and labelled, because what ticking a box on
-  // this page MEANS — that run appears on the stage — is not something the
-  // boxes can say for themselves.
-  const pickAll = root.querySelector(".pickall-box");
-  pickAll.addEventListener("change", () => {
-    selection = new Set(setAllLanes(board, pickAll.checked));
-    race([...selection], lastTiers);
-  });
-  const showPickAll = () => {
-    const boxes = [...board.querySelectorAll("input[type=checkbox]")];
-    const ticked = boxes.filter((box) => box.checked).length;
-    // Ticked only when everything shown is on the stage. No dash for "some":
-    // an empty box is the honest answer to "is everything ticked", and the
-    // rows below already say which ones are.
-    pickAll.checked = boxes.length > 0 && ticked === boxes.length;
-  };
-
   let trial = null; // the unpublished run, if one has been tested
-  let lastTiers = new Map();
   let currentLivery = "classic"; // mirrors the entry panel's swatch pick
   const traces = new Map();
   const liveries = new Map(); // run id -> the colourway it raced in
@@ -518,7 +421,6 @@ export async function renderRace(root, { event, state }) {
   }
 
   async function race(runIds, tiers = new Map()) {
-    lastTiers = tiers;
     const published = await Promise.all(runIds.map(traceFor));
     const lanes = runIds.map((runId, i) => ({
       runId,
@@ -544,80 +446,48 @@ export async function renderRace(root, { event, state }) {
       : "Tick a lane below, or test a policy, to watch a replay.";
   }
 
-
-  async function paint() {
-    const { rows } = await getLeaderboard(event.id);
-    for (const row of rows) {
-      liveries.set(row.run_id, row.livery ?? "classic");
-      names.set(row.run_id, row.user);
-    }
-    const merged = insertProvisional(rows, trial);
-    const tiers = tiersByRunId(merged);
-
-    // What is on the stage is the page's, not the table's. The table is
-    // rebuilt from scratch on every filter and every publish, and reading the
-    // lanes back off the boxes it just drew would re-pick them each time —
-    // which is exactly what used to happen: filter to your own runs, tick
-    // them, go back to the whole board, and the board had quietly gone back to
-    // its own opening three.
-    if (selection === null) {
-      selection = new Set(
-        buildRows(merged).filter((row) => row.selected && row.runId).map((row) => row.runId),
-      );
-    }
-    // A run that has been withdrawn since the last paint keeps no lane.
-    const live = new Set(merged.map((row) => row.run_id).filter(Boolean));
-    for (const runId of selection) if (!live.has(runId)) selection.delete(runId);
-
-    renderBoard(
-      board,
-      // Filtered, never re-ranked: visibleRows narrows the list and leaves every
-      // rank exactly as the server computed it.
-      { event, rows: visibleRows(merged, { ...filters, me: me?.user ?? null }) },
-      {
-        selected: selection,
-        onSelectionChange: (runIds) => {
-          // The rows on screen are the only ones this can speak for: the rest
-          // of the selection is not in the DOM to be read.
-          const shown = new Set(
-            [...board.querySelectorAll("input[type=checkbox]")].map((box) => box.dataset.runId),
-          );
-          for (const runId of selection) if (shown.has(runId)) selection.delete(runId);
-          for (const runId of runIds) selection.add(runId);
-          showPickAll();
-          return race([...selection], tiers);
-        },
-        me: me?.user ?? null,
-        onWithdraw: async (runId, policy) => {
-          // Asked before doing, because it is someone's standing and the button
-          // sits on every row they own. `confirm` rather than a bespoke dialog:
-          // this is a rare, deliberate action, not a flow worth building UI for.
-          if (!window.confirm(`Take "${policy}" off the board? The policy stays in your Hub repo.`)) {
-            return;
-          }
-          try {
-            await withdrawRun(runId);
-            await paint();
-          } catch (error) {
-            status.textContent = error.message;
-            status.className = "entry__status bad";
-          }
-        },
-      },
-    );
-    showPickAll();
-    await race([...selection], tiers);
-  }
+  // The sheet keeps the lanes and the filters; the page says what the rows
+  // are — the server's, a trial in its place — and races what is ticked.
+  const sheet = wireBoardsheet(hall, {
+    event,
+    me: me?.user ?? null,
+    rows: async () => {
+      const { rows } = await getLeaderboard(event.id);
+      for (const row of rows) {
+        liveries.set(row.run_id, row.livery ?? "classic");
+        names.set(row.run_id, row.user);
+      }
+      return insertProvisional(rows, trial);
+    },
+    opening: podium,
+    onRace: race,
+    onWithdraw: async (runId, policy) => {
+      // Asked before doing, because it is someone's standing and the button
+      // sits on every row they own. `confirm` rather than a bespoke dialog:
+      // this is a rare, deliberate action, not a flow worth building UI for.
+      if (!window.confirm(`Take "${policy}" off the board? The policy stays in your Hub repo.`)) {
+        return;
+      }
+      try {
+        await withdrawRun(runId);
+        await sheet.paint();
+      } catch (error) {
+        const status = entry.querySelector("#entry-status");
+        status.textContent = error.message;
+        status.className = "entry__status bad";
+      }
+    },
+  });
 
   renderEntryPanel(entry, me, {
     event,
     onLiveryChange: (livery) => {
       currentLivery = livery;
-      race([...selection], lastTiers);
+      race([...sheet.selection], sheet.tiers);
     },
     onTry: async ({ file, name, livery, commandVx }) => {
       trial = await tryPolicy(event.id, file, name, livery, commandVx);
-      await paint();
+      await sheet.paint();
     },
     onPublish: async ({ file, name, livery, commandVx, envUrl }) => {
       const published = await submitPolicy(event.id, file, name, livery, commandVx, envUrl);
@@ -627,5 +497,5 @@ export async function renderRace(root, { event, state }) {
     },
   });
 
-  await paint();
+  await sheet.paint();
 }
