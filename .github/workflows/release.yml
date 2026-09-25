@@ -1,0 +1,64 @@
+# .github/workflows/release.yml
+#
+# A tag `vX.Y` becomes a wheel on a GitHub release. The challenges repo
+# depends on that wheel by URL (uv locks its hash), which is how a training
+# checkout gets the evaluator, the event rules and the workshop without PyPI
+# and without building the site itself.
+#
+# The wheel carries the built site and the robot meshes, so this checks out
+# LFS content and refuses a wheel that would ship pointer files.
+name: Release a wheel
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: The tag must be the package version
+        id: check_tag
+        run: |
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME but pyproject.toml says $version"; exit 1; }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+        working-directory: app
+      - run: npm run build
+        working-directory: app
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv run --no-project python scripts/bundle_frontend.py
+      - run: uv build --wheel
+
+      - name: The wheel carries real assets, not LFS pointers
+        id: inspect_wheel
+        run: |
+          python3 - <<'EOF'
+          import glob, zipfile
+          z = zipfile.ZipFile(glob.glob("dist/microduck_arena-*.whl")[0])
+          names = z.namelist()
+          assert "arena/frontend/index.html" in names, "no site in the wheel"
+          assert z.getinfo("arena/frontend/robot/microduck.glb").file_size > 100_000, "LFS pointer, not a mesh"
+          assert z.getinfo("arena/assets/robot/legs/assets/leg.stl").file_size > 10_000, "LFS pointer, not a mesh"
+          print("wheel ok:", len(names), "files")
+          EOF
+
+      - run: gh release create "$GITHUB_REF_NAME" dist/*.whl --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

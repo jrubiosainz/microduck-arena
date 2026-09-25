@@ -56,6 +56,16 @@ The Space rebuilds itself on each upload. Its own Docker build re-measures the
 golden run and fails if the physics does not reproduce, so a broken build is
 better than a silently wrong leaderboard.
 
+## Releasing
+
+A tag `vX.Y` matching `version` in `pyproject.toml` builds the wheel — package, built site,
+meshes — and attaches it to a GitHub release (`.github/workflows/release.yml`). That wheel is
+what `microduck-challenges` depends on:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
 ## Running as a Space
 
 The container filesystem is ephemeral, so a Space needs somewhere durable to
