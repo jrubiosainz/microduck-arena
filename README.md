@@ -58,7 +58,7 @@ better than a silently wrong leaderboard.
 
 ## Releasing
 
-A tag `vX.Y` matching `version` in `pyproject.toml` builds the wheel — package, built site,
+A tag `vX.Y.Z` matching `version` in `pyproject.toml` builds the wheel — package, built site,
 meshes — and attaches it to a GitHub release (`.github/workflows/release.yml`). That wheel is
 what `microduck-challenges` depends on:
 
@@ -165,7 +165,9 @@ uv run arena serve --store ~/arena-board --user $USER
 `arena serve` finds the built site in `app/dist`. A wheel of this package (`uv build --wheel`
 after `uv run python scripts/bundle_frontend.py`) carries it inside the package instead, at
 `arena/frontend/`, so an installed Arena serves its site with nothing else on disk; that is
-what the release workflow attaches to a tag.
+what the release workflow attaches to a tag. After building a wheel, delete `arena/frontend/`
+(`rm -rf arena/frontend`) — an editable install prefers it over every later `npm run build` of
+`app/dist`.
 
 Open <http://127.0.0.1:8000>.
 

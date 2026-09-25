@@ -1,6 +1,6 @@
 # .github/workflows/release.yml
 #
-# A tag `vX.Y` becomes a wheel on a GitHub release. The challenges repo
+# A tag `vX.Y.Z` becomes a wheel on a GitHub release. The challenges repo
 # depends on that wheel by URL (uv locks its hash), which is how a training
 # checkout gets the evaluator, the event rules and the workshop without PyPI
 # and without building the site itself.
@@ -25,7 +25,6 @@ jobs:
           lfs: true
 
       - name: The tag must be the package version
-        id: check_tag
         run: |
           version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
           test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME but pyproject.toml says $version"; exit 1; }
@@ -47,15 +46,14 @@ jobs:
       - run: uv build --wheel
 
       - name: The wheel carries real assets, not LFS pointers
-        id: inspect_wheel
         run: |
           python3 - <<'EOF'
           import glob, zipfile
           z = zipfile.ZipFile(glob.glob("dist/microduck_arena-*.whl")[0])
           names = z.namelist()
           assert "arena/frontend/index.html" in names, "no site in the wheel"
-          assert z.getinfo("arena/frontend/robot/microduck.glb").file_size > 100_000, "LFS pointer, not a mesh"
-          assert z.getinfo("arena/assets/robot/legs/assets/leg.stl").file_size > 10_000, "LFS pointer, not a mesh"
+          pointers = [n for n in names if z.read(n)[:40].startswith(b"version https://git-lfs")]
+          assert not pointers, f"LFS pointers, not files: {pointers[:5]}"
           print("wheel ok:", len(names), "files")
           EOF
 

@@ -29,9 +29,12 @@ POLICY = "BEST_alpha_walking.onnx"
 # because a score can be reproduced by luck from a different speed.
 SCORE_S = 11.792
 COMMAND_VX = 0.40
-# Generous enough for the last bits of floating-point difference between
-# machines, tight enough that a solver change cannot slip through: the 3.13
-# regression was a factor of two.
+# The score check only catches gross drift: the 3.13 regression above was
+# roughly a factor of two. A pin move can be far smaller and still slip past
+# it — 3.12.0 -> 3.10.0 moved this walker 0.58%, well inside this tolerance —
+# which is what check_mujoco_version() is for. The number above was measured
+# on an arm64 Mac; the Space's x86 image measures 11.748s, 0.37% away, which
+# is why 2% stays rather than shrinking further.
 TOLERANCE = 0.02
 
 

@@ -2,6 +2,9 @@
 # node_modules is 200 MB of layer for nothing.
 app/node_modules
 app/dist
+# A host bundle must not enter the build context; the image gets its own copy
+# from the frontend stage.
+arena/frontend/
 .venv
 .git
 __pycache__

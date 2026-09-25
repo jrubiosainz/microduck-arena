@@ -4,9 +4,10 @@
 `npm run build` writes `app/dist` — the pages, the hashed bundle and everything
 in `app/public` (the meshes, the sounds, the stylesheets). Copied to
 `arena/frontend/`, hatchling ships it as a build artefact and `arena serve` or
-`workshop` finds it next to the code, wherever the package is installed. Both
-the Dockerfile and the release workflow run this; nothing else writes that
-directory, and it is never committed.
+`workshop` finds it next to the code, wherever the package is installed. The
+release workflow runs this; the Dockerfile does the same with a `COPY` of the
+built dist to the same path. Nothing else writes that directory, and it is
+never committed.
 
     uv run python scripts/bundle_frontend.py
 """
