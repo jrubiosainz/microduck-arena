@@ -152,6 +152,11 @@ cd app && npm install && npm run build && cd ..
 uv run arena serve --store ~/arena-board --user $USER
 ```
 
+`arena serve` finds the built site in `app/dist`. A wheel of this package (`uv build --wheel`
+after `uv run python scripts/bundle_frontend.py`) carries it inside the package instead, at
+`arena/frontend/`, so an installed Arena serves its site with nothing else on disk; that is
+what the release workflow attaches to a tag.
+
 Open <http://127.0.0.1:8000>.
 
 The home page is the club: `Season standings` ranks players by the points

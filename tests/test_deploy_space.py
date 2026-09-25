@@ -32,3 +32,8 @@ def test_this_repository_has_a_rule_for_every_voice_the_booth_loads():
     attributes = (deploy.ROOT / ".gitattributes").read_text()
     voices = [f"app/public/sound/commentator-{name}.f32" for name in ("peter", "ray")]
     assert deploy.served_as_pointers(voices, attributes) == []
+
+
+def test_the_space_upload_ignores_the_bundle():
+    """The Space's Docker build bundles the site itself; a host bundle would be stale."""
+    assert "arena/frontend/**" in deploy.IGNORE and "app/dist/**" in deploy.IGNORE

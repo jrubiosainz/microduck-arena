@@ -50,13 +50,15 @@ RUN pip install --no-cache-dir --user .
 # reference walker scores 44.9 s against the 18.2 s it was measured at.
 RUN python -m arena.golden
 
-COPY --chown=user --from=frontend /build/app/dist ./app/dist
+# The built site goes INSIDE the package, where the release wheel carries it
+# too (scripts/bundle_frontend.py does on a host what this COPY does here:
+# app/dist -> arena/frontend). The package is then installed again without
+# its dependencies, so the slow layer above stays cached. No ARENA_FRONTEND:
+# the config finds arena/frontend next to the code.
+COPY --chown=user --from=frontend /build/app/dist ./arena/frontend
+RUN pip install --no-cache-dir --no-deps --user .
 
-# ARENA_FRONTEND is set explicitly: the default resolves relative to the
-# installed package, which under `pip install --user` is in site-packages and
-# nowhere near the built bundle.
-ENV ARENA_FRONTEND=/home/user/app/app/dist \
-    ARENA_STORE=/home/user/arena-board \
+ENV ARENA_STORE=/home/user/arena-board \
     ARENA_RANK_BY=policy \
     ARENA_DEV_USER=guest
 

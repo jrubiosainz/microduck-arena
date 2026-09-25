@@ -24,14 +24,15 @@ from huggingface_hub import HfApi
 SPACE = "pollen-robotics/microduck-arena"
 ROOT = Path(__file__).resolve().parent.parent
 
-# What never belongs in the image or the repo. app/dist especially: the
-# Dockerfile builds the bundle itself from app/ sources, and shipping a stale
-# host build would be served in preference to nothing.
+# What never belongs in the image or the repo. app/dist and arena/frontend
+# especially: the Dockerfile builds and bundles the site itself, and a stale
+# host copy would be served in preference to nothing.
 IGNORE = [
     ".git/**",
     ".venv/**",
     "**/node_modules/**",
     "app/dist/**",
+    "arena/frontend/**",
     "**/__pycache__/**",
     "*.pyc",
     ".pytest_cache/**",
