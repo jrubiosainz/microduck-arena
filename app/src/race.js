@@ -9,11 +9,12 @@ import {
   tryPolicy,
   withdrawRun,
 } from "./api.js";
-import { renderBoard, selectLanes, selectedRunIds, tiersByRunId } from "./board.js";
+import { boardsheetMarkup, podium, wireBoardsheet } from "./boardsheet.js";
 import { flyer } from "./flyer.js";
 import { createDropzone } from "./dropzone.js";
+import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
-import { LANE_CSS } from "./course.js";
+import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
 import { formatEventFacts, speedChoices } from "./format.js";
 import { dress, eventGuideHref, menuHref, runHref } from "./router.js";
@@ -21,30 +22,12 @@ import { renderThumbnails } from "./thumbnail.js";
 import { panelState, signInHref } from "./session.js";
 import { footer, settleIdentity, signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
-import { modeIsUseful, visibleRows } from "./views.js";
 import { createViewer } from "./viewer.js";
 import { voteButton } from "./votebutton.js";
 
 // Colours belong to leaderboard entries; lane positions are shuffled afterwards.
 export function arrangeLanes(board, lanes, random = Math.random) {
-  const byId = new Map(lanes.map(lane => [lane.runId, lane]));
-  let colourIndex = 0;
-  for (const row of board.querySelectorAll("tbody tr")) {
-    const id = row.classList.contains("provisional") ? null : row.querySelector("input[data-run-id]")?.dataset.runId;
-    const lane = byId.get(id);
-    const tab = row.querySelector(".tab");
-    if (lane) {
-      lane.colour = LANE_CSS[colourIndex++ % LANE_CSS.length];
-      tab.style.setProperty("--lane", lane.colour);
-    } else {
-      tab.style.removeProperty("--lane");
-    }
-  }
-  for (const lane of lanes) {
-    // A trial can still be on stage while its row is hidden by a board filter.
-    lane.colour ??= LANE_CSS[colourIndex++ % LANE_CSS.length];
-    lane.opacity = 1;
-  }
+  colourLanes(board, lanes);
   for (let i = lanes.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
@@ -303,61 +286,17 @@ export function raceHall(event) {
         ${event.category ? `<p class="raceeyebrow">${event.category.toUpperCase()}</p>` : ""}
         <h2 class="racetitle">${event.title}</h2>
         <dl class="facts" id="facts"></dl>
-        <div class="stage fx-shadow-card">
-          <canvas id="stage"></canvas>
-          <ul class="key" id="key">
-            <li>Colours match the leaderboard</li>
-          </ul>
-        </div>
-        <div class="controls">
-          <button id="playpause">Pause</button>
-          <button id="follow" hidden>Follow the leader</button>
-          <button id="walls" aria-pressed="false" title="The lane walls are in the physics whether or not they are drawn">Show walls</button>
-          <button id="names" aria-pressed="false" title="Who each duck belongs to, hung over its head">Show names</button>
-          <span class="hint" id="stage-hint"></span>
-        </div>
+        ${deckMarkup}
       </div>
       <div class="entry-col">
         <aside class="entry" id="entry"></aside>
       </div>
     </div>
-    <div class="boardtop">
-      <fieldset class="picks">
-        <legend>Put on the stage</legend>
-        <label><input type="checkbox" data-pick="all"> All</label>
-        <label><input type="checkbox" data-pick="mine"> Mine</label>
-        <label><input type="checkbox" data-pick="top"> Top 5</label>
-      </fieldset>
-      <div class="modes" role="group" aria-label="Which runs to show">
-        <button data-mode="top" aria-pressed="true">Top</button>
-        <button data-mode="mine" aria-pressed="false">Mine</button>
-        <button data-mode="all" aria-pressed="false">All</button>
-      </div>
-    </div>
-    <div class="boardsheet">
-      <span class="flyer-tape"></span>
-      <div id="board"></div>
-    </div>
+    ${boardsheetMarkup}
   `;
   return hall;
 }
 
-/**
- * Keep at most one stage pick ticked, and name it.
- *
- * Exclusive like radios, but checkboxes: a radio group cannot be returned to
- * nothing, and unticking the live pick has to be able to clear the stage.
- * Null is that case, and the caller passes it straight to selectLanes.
- *
- * Its own function so the rule is testable — everything around it needs a
- * WebGL viewer, and "ticking one unticks the others" is exactly the kind of
- * thing that works until a fourth pick is added.
- */
-export function exclusivePick(boxes, changed) {
-  if (!changed.checked) return null;
-  for (const box of boxes) box.checked = box === changed;
-  return changed.dataset.pick;
-}
 
 /**
  * The way on, under the board: every other round, as the same sheets the
@@ -459,11 +398,10 @@ export async function renderRace(root, { event, state }) {
     // The event declares its rig, and the roller rig is a different kinematic
     // tree with its own blades, rims and tires — not a repaint of the walker.
     rig: event.rig,
-    onChaseChange: (chasing) => {
-      root.querySelector("#follow").hidden = chasing;
-    },
+    onChaseChange: followKeyFor(root),
   });
   state.viewer = viewer;
+  const deck = wireDeck(root, viewer);
 
   // No slider any more: the stage is pinned at the dimmest the module allows.
   // Worth knowing if this ever looks wrong — brightness.js says in its own
@@ -471,69 +409,7 @@ export async function renderRace(root, { event, state }) {
   // outside cost three rounds. MIN is 0.5 against a 1.25 default.
   viewer.setBrightness(MIN);
 
-  // Declared above every handler that closes over it. Further down it worked
-  // only because a click always happens after that line — a handler moved above
-  // it would fail with a temporal-dead-zone error that reads like nothing.
-  let mode = "top";
-
-  const modeButtons = [...root.querySelectorAll(".modes button")];
-  for (const button of modeButtons) {
-    button.addEventListener("click", async () => {
-      mode = button.dataset.mode;
-      for (const other of modeButtons) {
-        other.setAttribute("aria-pressed", String(other.dataset.mode === mode));
-      }
-      await paint();
-    });
-  }
-
-  root.querySelector("#follow").addEventListener("click", () => viewer.follow());
-
-  // The walls are always there for the robot; this only decides whether you can
-  // see them. aria-pressed rather than a changing label alone, so the state is
-  // readable without reading the button's text.
-  const wallsButton = root.querySelector("#walls");
-  let wallsShown = false;
-  wallsButton.addEventListener("click", () => {
-    wallsShown = viewer.setWallsVisible(!wallsShown);
-    wallsButton.setAttribute("aria-pressed", String(wallsShown));
-    wallsButton.textContent = wallsShown ? "Hide walls" : "Show walls";
-  });
-  // Checkboxes and not buttons, because they act on checkboxes: a control
-  // that ticks boxes should look like the boxes it ticks. Their union is what
-  // plays, so "mine" and "top 5" compose instead of one replacing the other.
-  const pickBoxes = [...root.querySelectorAll(".picks input")];
-  for (const box of pickBoxes) {
-    box.addEventListener("change", () => {
-      race(selectLanes(board, exclusivePick(pickBoxes, box)), lastTiers);
-    });
-  }
-  // A row ticked by hand no longer matches any pick, so the picks stop
-  // claiming to describe it. Silent rather than re-running the replay: the
-  // row's own handler is already doing that.
-  const clearPicks = () => {
-    for (const box of pickBoxes) box.checked = false;
-  };
-
-  // Who each duck belongs to. Off by default: with one lane the answer is on
-  // the panel beside it, and four plates over four ducks is a legend nobody
-  // asked for until they did.
-  const namesButton = root.querySelector("#names");
-  let namesShown = false;
-  namesButton.addEventListener("click", () => {
-    namesShown = viewer.setNamesVisible(!namesShown);
-    namesButton.setAttribute("aria-pressed", String(namesShown));
-    namesButton.textContent = namesShown ? "Hide names" : "Show names";
-  });
-  root.querySelector("#playpause").addEventListener("click", () => {
-    viewer.player.toggle();
-    root.querySelector("#playpause").textContent = viewer.player.playing
-      ? "Pause"
-      : "Play";
-  });
-
   let trial = null; // the unpublished run, if one has been tested
-  let lastTiers = new Map();
   let currentLivery = "classic"; // mirrors the entry panel's swatch pick
   const traces = new Map();
   const liveries = new Map(); // run id -> the colourway it raced in
@@ -545,7 +421,6 @@ export async function renderRace(root, { event, state }) {
   }
 
   async function race(runIds, tiers = new Map()) {
-    lastTiers = tiers;
     const published = await Promise.all(runIds.map(traceFor));
     const lanes = runIds.map((runId, i) => ({
       runId,
@@ -565,61 +440,54 @@ export async function renderRace(root, { event, state }) {
       });
     }
     viewer.setLanes(arrangeLanes(board, lanes), event);
-    root.querySelector("#playpause").textContent = "Pause";
+    deck.reset();
     root.querySelector("#stage-hint").textContent = lanes.length
       ? ""
       : "Tick a lane below, or test a policy, to watch a replay.";
   }
 
-
-  async function paint() {
-    const { rows } = await getLeaderboard(event.id);
-    for (const row of rows) {
-      liveries.set(row.run_id, row.livery ?? "classic");
-      names.set(row.run_id, row.user);
-    }
-    const merged = insertProvisional(rows, trial);
-    const tiers = tiersByRunId(merged);
-    renderBoard(
-      board,
-      // Filtered, never re-ranked: visibleRows narrows the list and leaves every
-      // rank exactly as the server computed it.
-      { event, rows: visibleRows(merged, { mode, me: me?.user ?? null }) },
-      {
-        onSelectionChange: (runIds) => {
-          clearPicks();
-          return race(runIds, tiers);
-        },
-        me: me?.user ?? null,
-        onWithdraw: async (runId, policy) => {
-          // Asked before doing, because it is someone's standing and the button
-          // sits on every row they own. `confirm` rather than a bespoke dialog:
-          // this is a rare, deliberate action, not a flow worth building UI for.
-          if (!window.confirm(`Take "${policy}" off the board? The policy stays in your Hub repo.`)) {
-            return;
-          }
-          try {
-            await withdrawRun(runId);
-            await paint();
-          } catch (error) {
-            status.textContent = error.message;
-            status.className = "entry__status bad";
-          }
-        },
-      },
-    );
-    await race(selectedRunIds(board), tiers);
-  }
+  // The sheet keeps the lanes and the filters; the page says what the rows
+  // are — the server's, a trial in its place — and races what is ticked.
+  const sheet = wireBoardsheet(hall, {
+    event,
+    me: me?.user ?? null,
+    rows: async () => {
+      const { rows } = await getLeaderboard(event.id);
+      for (const row of rows) {
+        liveries.set(row.run_id, row.livery ?? "classic");
+        names.set(row.run_id, row.user);
+      }
+      return insertProvisional(rows, trial);
+    },
+    opening: podium,
+    onRace: race,
+    onWithdraw: async (runId, policy) => {
+      // Asked before doing, because it is someone's standing and the button
+      // sits on every row they own. `confirm` rather than a bespoke dialog:
+      // this is a rare, deliberate action, not a flow worth building UI for.
+      if (!window.confirm(`Take "${policy}" off the board? The policy stays in your Hub repo.`)) {
+        return;
+      }
+      try {
+        await withdrawRun(runId);
+        await sheet.paint();
+      } catch (error) {
+        const status = entry.querySelector("#entry-status");
+        status.textContent = error.message;
+        status.className = "entry__status bad";
+      }
+    },
+  });
 
   renderEntryPanel(entry, me, {
     event,
     onLiveryChange: (livery) => {
       currentLivery = livery;
-      race(selectedRunIds(board), lastTiers);
+      race([...sheet.selection], sheet.tiers);
     },
     onTry: async ({ file, name, livery, commandVx }) => {
       trial = await tryPolicy(event.id, file, name, livery, commandVx);
-      await paint();
+      await sheet.paint();
     },
     onPublish: async ({ file, name, livery, commandVx, envUrl }) => {
       const published = await submitPolicy(event.id, file, name, livery, commandVx, envUrl);
@@ -629,5 +497,5 @@ export async function renderRace(root, { event, state }) {
     },
   });
 
-  await paint();
+  await sheet.paint();
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LANES, TIERS, TOP_LANES, buildRows, renderBoard, selectLanes, tiersByRunId } from "./board.js";
+import { DEFAULT_LANES, TIERS, buildRows, renderBoard, setAllLanes, tiersByRunId } from "./board.js";
 
 const row = (over = {}) => ({
   rank: 1,
@@ -98,6 +98,34 @@ describe("renderBoard", () => {
     expect(text).toContain("11.724s");
     expect(text).toContain("5/5");
     expect(text).toContain("alice");
+  });
+
+  it("heads a record column and puts one button in it, per published run", () => {
+    const container = render([row()]);
+    expect(container.querySelector("th.record").textContent).toBe("record");
+    const watch = container.querySelector("td.record a.record-link");
+    expect(watch.getAttribute("href")).toBe("#/r/01AAA");
+    expect(watch.textContent).toBe("Watch");
+    // Named for a screen reader as well as for the eye: "Watch" alone, read
+    // out of eight identical rows, says nothing about which run it opens.
+    expect(watch.getAttribute("aria-label")).toBe("Watch alice's run with walker");
+  });
+
+  it("leaves the record cell empty for a trial, which has no run to watch", () => {
+    const container = render([{ ...row({ run_id: null }), provisional: true }]);
+    expect(container.querySelector("td.record").children).toHaveLength(0);
+  });
+
+  it("stops making the whole row the way to the run", () => {
+    // A row that navigates on any click sends you off the board when you reach
+    // for the lane box or the download arrow and miss, and nothing on it says
+    // it will. The button in the record column is the only way now.
+    const container = render([row()]);
+    const tr = container.querySelector("tbody tr");
+    expect(tr.classList.contains("linked")).toBe(false);
+    location.hash = "#/e/sprint-2m";
+    tr.click();
+    expect(location.hash).toBe("#/e/sprint-2m");
   });
 
   it("says why an empty board is empty, naming the event", () => {
@@ -449,7 +477,7 @@ describe("the training-environment link", () => {
   });
 });
 
-describe("selectLanes: ticking a set of lanes at once", () => {
+describe("setAllLanes: ticking everything on screen, or nothing", () => {
   const rows = [
     { rank: 1, user: "ann", run_id: "r1", score: 9, seeds_finished: 5, per_seed_total: 5 },
     { rank: 2, user: "coralie", run_id: "r2", score: 10, seeds_finished: 5 },
@@ -458,37 +486,52 @@ describe("selectLanes: ticking a set of lanes at once", () => {
     { rank: 5, user: "cid", run_id: "r5", score: 13, seeds_finished: 5 },
     { rank: 6, user: "dee", run_id: "r6", score: 14, seeds_finished: 5 },
   ];
-  const board = () => {
+  const board = (shown = rows) => {
     const el = document.createElement("div");
-    renderBoard(el, { event: { title: "2 m Sprint" }, rows }, { me: "coralie" });
+    renderBoard(el, { event: { title: "2 m Sprint" }, rows: shown }, { me: "coralie" });
     return el;
   };
 
-  it("ticks every rendered lane for 'all'", () => {
-    expect(selectLanes(board(), "all")).toEqual(["r1", "r2", "r3", "r4", "r5", "r6"]);
+  it("ticks every lane the board is showing", () => {
+    expect(setAllLanes(board(), true)).toEqual(["r1", "r2", "r3", "r4", "r5", "r6"]);
   });
 
-  it("ticks only your own for 'mine'", () => {
-    expect(selectLanes(board(), "mine")).toEqual(["r2", "r4"]);
+  it("clears the stage when unticked", () => {
+    expect(setAllLanes(board(), false)).toEqual([]);
   });
 
-  it("ticks the first five by rank for 'top', not the first five rows", () => {
-    expect(TOP_LANES).toBe(5);
-    expect(selectLanes(board(), "top")).toEqual(["r1", "r2", "r3", "r4", "r5"]);
+  it("speaks only for the rows on screen, which is the point", () => {
+    // Filtered to your own runs, "all" means all of what you are looking at —
+    // so you can put your six on the stage and then go back to the whole
+    // table with only those six racing.
+    const mine = rows.filter((row) => row.user === "coralie");
+    expect(setAllLanes(board(mine), true)).toEqual(["r2", "r4"]);
+  });
+});
+
+describe("buildRows: who is on the stage", () => {
+  const rows = [
+    { rank: 1, user: "ann", run_id: "r1", score: 9, seeds_finished: 5 },
+    { rank: 2, user: "bob", run_id: "r2", score: 10, seeds_finished: 5 },
+    { rank: 3, user: "cid", run_id: "r3", score: 11, seeds_finished: 5 },
+    { rank: 4, user: "dee", run_id: "r4", score: 12, seeds_finished: 5 },
+  ];
+
+  it("opens on its own first lanes when nobody has chosen yet", () => {
+    expect(buildRows(rows).filter((row) => row.selected).map((row) => row.runId))
+      .toEqual(["r1", "r2", "r3"]);
   });
 
-  it("clears the stage when nothing is picked", () => {
-    // The reason these are checkboxes and not radios: a radio group cannot be
-    // returned to nothing, and unticking the live one has to mean an empty
-    // stage rather than whatever was ticked before.
-    expect(selectLanes(board(), null)).toEqual([]);
+  it("takes the page's set when there is one, whatever the order", () => {
+    // The table is rebuilt on every filter and every publish. Re-deriving the
+    // lanes here would undo a choice made two renders ago.
+    const built = buildRows(rows, { selected: new Set(["r4", "r2"]) });
+    expect(built.filter((row) => row.selected).map((row) => row.runId)).toEqual(["r2", "r4"]);
   });
 
-  it("UNticks what falls outside the set, rather than only adding", () => {
-    // The default selection already ticks some lanes. If this only added, a
-    // press of "Mine" would leave whoever was on the stage there with you.
-    const el = board();
-    selectLanes(el, "all");
-    expect(selectLanes(el, "mine")).toEqual(["r2", "r4"]);
+  it("gives an empty set an empty stage rather than falling back", () => {
+    // A Set of nothing is a choice — "clear the stage" — and not the absence
+    // of one, which is the whole difference between null and empty here.
+    expect(buildRows(rows, { selected: new Set() }).some((row) => row.selected)).toBe(false);
   });
 });

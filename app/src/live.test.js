@@ -457,3 +457,21 @@ describe("openSound", () => {
     expect(await sound.open()).not.toBeNull();
   });
 });
+
+describe("the way back off the channel's own page", () => {
+  it("is on the page that IS the channel, and not on the framed player", () => {
+    // Trapped is what this fixes: #/live draws the stage and nothing else, so
+    // without this the only way out was the browser's own back button.
+    const page = document.createElement("div");
+    buildStage(page, false);
+    const back = page.querySelector("a.live-back");
+    expect(back.getAttribute("href")).toBe("#/");
+    expect(back.textContent).toBe("Back to the arena");
+
+    // Framed, the channel is a box on the front page and the rest of that
+    // page is already the way out.
+    const framed = document.createElement("div");
+    buildStage(framed, true);
+    expect(framed.querySelector(".live-back")).toBeNull();
+  });
+});

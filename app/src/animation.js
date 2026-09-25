@@ -124,7 +124,7 @@ export async function rollCounter(flip, signal) {
 /**
  * The pegboard climb, design/motion.css's `.rank-climb` beat.
  *
- * `rows` are the `.pegboard-row` elements in their FINAL order; `climber` is
+ * `rows` are the board's row elements in their FINAL order; `climber` is
  * the one that moves up. Call with the DOM still in the starting order: this
  * measures where each row was, reorders the DOM, measures where each is, and
  * animates every moved row from the one to the other. Ends on the climber's

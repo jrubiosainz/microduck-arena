@@ -612,14 +612,18 @@ describe("the duck's motion", () => {
 
 
 describe("the channel's frame", () => {
-  it("is a stage to mount the channel in, with the picture itself the way into it", () => {
+  it("is a stage to mount the channel in, with a button as the way into it", () => {
     const frame = liveFrame();
     expect(frame.matches("div.season-live")).toBe(true);
     // Through the charter's shadow primitive, not a literal box-shadow.
     expect(frame.className).toContain("fx-shadow-card");
     expect(frame.querySelector(".season-live-stage")).not.toBeNull();
-    const door = frame.querySelector("a.season-live-door");
+    // A button that says what it does, not an invisible link across the whole
+    // picture: that one took a click anywhere on the channel and left the
+    // front page for a page with no way back.
+    const door = frame.querySelector("a.season-live-full");
     expect(door.getAttribute("href")).toBe("#/live");
-    expect(door.getAttribute("aria-label")).toBe("Watch the live channel");
+    expect(door.textContent).toBe("Full screen");
+    expect(frame.querySelector(".season-live-door")).toBeNull();
   });
 });

@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  arrangeLanes, exclusivePick, otherRounds, raceHall, renderEntryPanel, renderEventFacts, renderVoteButton,
+  arrangeLanes, otherRounds, raceHall, renderEntryPanel, renderEventFacts, renderVoteButton,
 } from "./race.js";
 
 const event = {
@@ -330,7 +330,7 @@ describe("raceHall: the page's frame", () => {
     const column = hall().querySelector(".racegrid > div:first-child");
     const parts = [...column.children].map((n) => n.className);
     expect(parts[0]).toBe("racetitle");
-    expect(parts.indexOf("facts")).toBeLessThan(parts.findIndex((c) => c.startsWith("stage")));
+    expect(parts.indexOf("facts")).toBeLessThan(parts.findIndex((c) => c.startsWith("deck")));
   });
 
   it("offers a way back, to the front page rather than to history", () => {
@@ -342,7 +342,22 @@ describe("raceHall: the page's frame", () => {
   });
 
   it("frames the stage with the charter's shadow primitive", () => {
-    expect(hall().querySelector(".stage").className).toContain("fx-shadow-card");
+    // On the chassis, which is the whole object: the screen and the transport
+    // under it share one frame and therefore one shadow.
+    const deck = hall().querySelector(".deck");
+    expect(deck.className).toContain("fx-shadow-card");
+    expect(deck.querySelector(".stage")).not.toBeNull();
+  });
+
+  it("puts the stage's buttons on the chassis, under the picture", () => {
+    // They control this picture, so they live on the same object rather than
+    // floating on the page below it.
+    const controls = hall().querySelector(".deck > .controls");
+    expect(controls).not.toBeNull();
+    expect([...controls.querySelectorAll("button")].map((b) => b.id)).toEqual([
+      "playpause", "follow", "walls", "names",
+    ]);
+    expect(controls.querySelector("#stage-hint")).not.toBeNull();
   });
 
   it("names the kind of event over its title, as the flyer did", () => {
@@ -360,28 +375,41 @@ describe("raceHall: the page's frame", () => {
     expect(button.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("hangs the key in the corner of the picture, not under it", () => {
-    // A key belongs on the thing it explains; reading it should not mean
-    // looking away from the race.
-    const key = hall().querySelector(".stage .key");
-    expect(key).not.toBeNull();
-    expect([...key.children].map((li) => li.textContent)).toEqual([
-      "Colours match the leaderboard",
-    ]);
+  it("hangs no key on the picture: the board's tabs already say which duck is whose", () => {
+    expect(hall().querySelector(".key")).toBeNull();
   });
 
-  it("puts the stage picks left of the board, apart from the row filters", () => {
-    // The two groups share the words all / mine / top and mean different
-    // things: these decide what plays, those decide what the table lists.
+  it("puts the picks and the filters inside the board's own frame, above it", () => {
+    // One piece of paper: these controls act on this table and nothing else,
+    // and floating them above the sheet made two objects out of one.
+    const sheet = hall().querySelector(".boardsheet");
+    expect(sheet.querySelector(".boardtop")).not.toBeNull();
+    const order = [...sheet.children];
+    expect(order.indexOf(sheet.querySelector(".boardtop")))
+      .toBeLessThan(order.indexOf(sheet.querySelector("#board")));
+  });
+
+  it("puts one box left of the filters, above the column of boxes it ticks", () => {
+    // It ticks checkboxes, so it is a checkbox. One, not three: what goes on
+    // the stage is now either everything the table is showing or nothing, and
+    // anything in between is picked row by row.
     const top = hall().querySelector(".boardtop");
-    expect([...top.children].map((n) => n.className)).toEqual(["picks", "modes"]);
-    const picks = [...top.querySelectorAll(".picks input")];
-    // Checkboxes, because they act on checkboxes — and unticked to begin
-    // with, since the board picks its own opening lanes.
-    expect(picks.map((b) => b.type)).toEqual(["checkbox", "checkbox", "checkbox"]);
-    expect(picks.map((b) => b.dataset.pick)).toEqual(["all", "mine", "top"]);
-    expect(picks.some((b) => b.checked)).toBe(false);
-    expect(top.querySelector(".picks legend").textContent).toBe("Put on the stage");
+    expect([...top.children].map((n) => n.className)).toEqual(["pickall", "modes"]);
+    const all = top.querySelector(".pickall .pickall-box");
+    expect(all.type).toBe("checkbox");
+    expect(all.checked).toBe(false);
+    // Labelled, because what ticking a box on this page means is not something
+    // a column of bare boxes can say for itself.
+    expect(top.querySelector(".pickall span").textContent).toBe("Put on the stage");
+  });
+
+  it("offers All, Mine and Top 3 as what the table lists, opening on Top 3", () => {
+    const keys = [...hall().querySelectorAll(".modes button")];
+    expect(keys.map((b) => b.dataset.mode)).toEqual(["all", "mine", "top"]);
+    expect(keys.map((b) => b.textContent)).toEqual(["All", "Mine", "Top 3"]);
+    // Mine and Top compose, so neither can be the one that is always on. The
+    // markup opens on Top 3 and renderRace turns the rest on and off from it.
+    expect(keys.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "true"]);
   });
 
   it("carries no brightness slider", () => {
@@ -392,32 +420,6 @@ describe("raceHall: the page's frame", () => {
   });
 });
 
-describe("exclusivePick: at most one stage pick", () => {
-  const boxes = () => {
-    const hall = raceHall({ ...event, title: "x" });
-    return [...hall.querySelectorAll(".picks input")];
-  };
-
-  it("unticks the others when one is ticked", () => {
-    const [all, mine, top] = boxes();
-    all.checked = true;
-    expect(exclusivePick([all, mine, top], all)).toBe("all");
-
-    // The case asked for: All is on, Mine is clicked, All must go.
-    mine.checked = true;
-    expect(exclusivePick([all, mine, top], mine)).toBe("mine");
-    expect([all.checked, mine.checked, top.checked]).toEqual([false, true, false]);
-  });
-
-  it("answers null when the live one is unticked, and leaves the rest alone", () => {
-    // A radio group cannot do this, which is why these are checkboxes: the
-    // stage has to be able to end up empty.
-    const [all, mine, top] = boxes();
-    mine.checked = false;
-    expect(exclusivePick([all, mine, top], mine)).toBeNull();
-    expect([all.checked, mine.checked, top.checked]).toEqual([false, false, false]);
-  });
-});
 
 describe("otherRounds: the way on, under the board", () => {
   // `event` at the top of this file carries what formatEventFacts reads; the

@@ -10,7 +10,13 @@
 
 /* 15 px rather than the shell's body step: a timing board reads as one, and
    its density is part of what it is. The face stays the club's. */
-body { font: 15px/1.55 var(--body); }
+/* Warm paper for the ground, one step off the shell's white: the objects on
+   this page are all paper — the entry note, the board, the flyers under it —
+   and on white they had nothing to sit on. The board goes the other way, to
+   full paper, so the results read as the sheet pinned to the wall rather than
+   as part of the wall. Scoped to this sheet, so the front page keeps its own
+   ground. */
+body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 
 /* ── race page chrome ─────────────────────────────────────── */
 
@@ -240,6 +246,26 @@ button.link {
 }
 .stage canvas { display: block; width: 100%; height: 44vh; min-height: 260px; }
 
+/* ── the deck ─────────────────────────────────────────────────────────── */
+
+/* One chassis, the way a cassette deck is one object: the screen on top, the
+   transport under it, a single ink frame around both. The buttons used to
+   float on the page below the picture, which read as page furniture rather
+   than as the controls OF this picture.
+   The screen keeps its own rules because `vote.js` builds a bare
+   `.stage` with no deck around it — the frame moves out to the chassis only
+   where there IS one. */
+/* The panel takes the scene's own background — `viewer.js` clears to
+   #08080C, which is this token — so the chassis is one unbroken surface and
+   the picture ends without a seam under it. */
+.deck {
+  --fx-shadow-color: var(--cyan);
+  background: var(--deep-ink);
+  border: 5px solid var(--ink);
+  margin-bottom: 26px;
+}
+.deck .stage { border: 0; }
+
 /* ── the stage's vignette ─────────────────────────────────────────────── */
 
 .stage::after {
@@ -252,22 +278,52 @@ button.link {
   background: radial-gradient(130% 100% at 50% 50%, transparent 72%, rgba(0, 0, 0, 0.26) 100%);
 }
 
-.controls { display: flex; gap: 8px; align-items: center; margin: 12px 0 26px; }
+/* ── the transport ───────────────────────────────────────────────────── */
+
+/* The deck below the screen: no rule between them, since the panel is now
+   the same deep ink the scene clears to and a line across it would be the
+   only thing marking a join that is not there. The hint sits at the far end
+   the way a counter sits apart from the keys. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 11px 12px;
+}
+/* Outlined rather than filled: four paper slabs across the panel shouted
+   louder than the picture above them. Hollow keys — a light grey rule, deep
+   ink inside, the same grey lettering — read as engraving on the chassis.
+   The grey is paper at 60%, which the charter already spends on secondary
+   labels over ink, so it is the palette's own quiet rather than a new colour.
+   Full paper is kept for the hover: the key you are pointing at is the only
+   one that brightens. */
 .controls button {
-  font: 400 0.85rem/1 var(--display);
+  font: 400 0.8rem/1 var(--display);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
-  padding: 8px 13px;
+  padding: 7px 12px;
   cursor: pointer;
-  color: var(--ink);
-  background: var(--paper);
-  border: 2px solid var(--ink);
-  box-shadow: 3px 3px var(--shadow-blur) var(--ink);
+  color: var(--paper-60);
+  background: var(--deep-ink);
+  border: 2px solid var(--paper-60);
+  box-shadow: none;
 }
-.controls button:active { translate: 3px 3px; box-shadow: none; }
-.controls button[aria-pressed="true"] { background: var(--yellow); }
-.controls .hint { color: var(--ink-70); font-size: 0.88rem; }
+.controls button:hover { color: var(--paper); border-color: var(--paper); }
+.controls button:active { translate: 2px 2px; }
+/* No lit state: both toggles say "Hide walls" / "Hide names" when they are
+   on, so the label carries it and a filled key would be saying it twice. The
+   `aria-pressed` attribute still carries it for anyone not reading the panel. */
+.controls .hint {
+  margin-left: auto;
+  color: var(--paper-60);
+  font-family: var(--type-mono-label-family);
+  font-weight: var(--type-mono-label-weight);
+  font-size: var(--type-mono-label-size);
+  letter-spacing: var(--type-mono-label-tracking);
+  text-transform: uppercase;
+}
 
 /* ── the board ────────────────────────────────────────────────────────── */
 
@@ -277,17 +333,19 @@ button.link {
    flyer, which is one small thing pinned to a wall; this sheet grows a row per
    published run, and a long table tilted off true reads as a rendering fault
    rather than as paper. The tape stays — it is still stuck up. */
+/* The frame belongs to the sheet now, not to the table: the toolbar and the
+   results are one piece of paper, so one border and one shadow go round both. */
 .boardsheet {
   position: relative;
   margin-top: 30px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
 }
 
 table.board {
   width: 100%;
   border-collapse: collapse;
-  background: var(--warm-paper);
-  border: 3px solid var(--ink);
-  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
 }
 
 table.board th {
@@ -303,8 +361,44 @@ table.board th {
 }
 table.board td { padding: 11px 10px; border-top: 2px solid var(--ink); }
 table.board tbody tr:first-child td { border-top: 0; }
-table.board tbody tr:hover { background: var(--cream); }
-table.board tr.linked { cursor: pointer; }
+/* No row hover: the row does not do anything when you click it any more, and
+   a surface that lights up under the pointer is promising that it will. What
+   is clickable here lights up on its own — the button, the two glyphs and the
+   lane box. */
+
+/* Two blocks with the slack between them: who and which policy on the left,
+   then the measurements and the button that plays them on the right. Policy
+   is the only column without a width, so it is where the table's spare width
+   goes — everything after it closes up against the record button.
+   Who hugs its own text, with a wider gutter than the table's so the handle
+   and the policy name do not read as one column. */
+table.board th:nth-child(3),
+table.board td:nth-child(3) { width: 1%; white-space: nowrap; padding-right: 80px; }
+
+/* The one way to a run's page, and it says so. Orange with the charter's
+   offset shadow: the action colour, on the one action in the row that leaves
+   the board. It hugs the button, so it sits against the seeds rather than
+   drifting off to the right. */
+table.board .record { width: 1%; white-space: nowrap; padding-left: 22px; }
+.record-link {
+  display: inline-block;
+  padding: 6px 12px;
+  background: var(--orange);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+  font: 400 0.78rem/1 var(--display);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.record-link:hover { background: var(--yellow); }
+.record-link:active {
+  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
+  box-shadow: none;
+}
+.record-link:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
 
 /* the lane tab: a filled bar for a duck on the stage, hollow otherwise */
 table.board .tab { width: 34px; padding-left: 0; padding-right: 4px; }
@@ -366,6 +460,9 @@ table.board tr.provisional .votes { color: var(--ink); }
 }
 
 .empty { color: var(--ink-70); margin-top: 22px; }
+/* Inside the frame it has no margin to sit on: the sheet's own padding is
+   what keeps it off the border. */
+.boardsheet .empty { margin: 0; padding: 18px var(--space-card-padding-min); }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -373,49 +470,8 @@ table.board tr.provisional .votes { color: var(--ink); }
 
 /* ── which duck is which ──────────────────────────────────────────────── */
 
-/* The stage rings each duck in its tier's colour and this is the key to it;
-   the table's rows carry the same colours on their tab. The three are the
-   charter's — lavender for the run you just tested, Pollen orange for the one
-   you are chasing, paper for the rest.
-   In the corner of the picture now, rather than under it: a key belongs on
-   the thing it explains, and reading it no longer means looking away from the
-   race. Standing on deep ink it takes the RING colours themselves instead of
-   their inked variants — those exist for a key printed on paper, and this one
-   is not any more, so it names the rings in exactly their own colours. */
-.key {
-  position: absolute;
-  right: 12px;
-  bottom: 10px;
-  z-index: 1; /* over the vignette, which is an ::after on the same box */
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px 14px;
-  margin: 0;
-  padding: 0;
-  color: var(--paper-60);
-  font-family: var(--type-mono-label-family);
-  font-weight: var(--type-mono-label-weight);
-  font-size: var(--type-mono-label-size);
-  letter-spacing: var(--type-mono-label-tracking);
-  text-transform: uppercase;
-  text-shadow: 0 1px 3px var(--deep-ink);
-  pointer-events: none; /* the canvas still gets the drag for orbiting */
-}
-.key li { display: flex; align-items: center; gap: 6px; }
-/* Round, which the charter's radius-0 rule otherwise forbids — the swatch
-   below says so in as many words. The departure is deliberate and scoped to
-   these three: a ring around a duck is a circle, and a square legend beside a
-   round marker is a legend for something else. */
-.key li::before {
-  content: "";
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-}
-
+/* No key on the picture: the ring under each duck and the tab of its row on
+   the board (above) wear the same lane colour, and that is the whole key. */
 table.board tr.tier-ghost { color: var(--ink-70); }
 table.board tr.tier-ghost .time { color: var(--ink-70); }
 table.board tr.tier-ghost .votes { color: var(--ink-70); }
@@ -458,7 +514,18 @@ table.board tr.tier-ghost .votes { color: var(--ink-70); }
 
 /* Download column. Quiet by default and orange on hover: it is an offer, not
    the point of the row. */
-table.board .grab { width: 4.5rem; text-align: right; }
+/* The three icons at the end are one row of buttons, so they keep one
+   spacing: equal cells, each glyph centred in its own, rather than three
+   widths chosen for three columns that happen to sit side by side. The
+   download used to have half a cell to itself and the gaps stepped. */
+table.board .env,
+table.board .grab,
+table.board .mine {
+  width: 2.6rem;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
+}
 table.board .grab a {
   /* inline-flex, so the glyph centres in the cell rather than sitting on the
      text baseline it no longer has. */
@@ -487,8 +554,7 @@ table.board .grab a:focus-visible { color: var(--ink); background: var(--yellow)
    destructive action should not draw the eye. That produced a button nobody
    could find — the first person to look for it asked where it was. Quiet is a
    dim colour, not an invisible one: a control you cannot see is not discreet,
-   it is missing. */
-table.board .mine { width: 2.2rem; text-align: right; }
+   it is missing. Its cell's width is set with the other two icons above. */
 table.board .withdraw {
   display: inline-flex;
   align-items: center;
@@ -508,38 +574,35 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
 
 /* ── which runs the board shows ───────────────────────────────────────── */
 
+/* The sheet's own header, inside its frame and above the column heads: these
+   controls act on this table and nothing else, and floating them above the
+   paper left two objects where there is one. */
 .boardtop {
   display: flex;
   flex-wrap: wrap;
   gap: 10px var(--space-gutter-min);
   justify-content: space-between;
   align-items: center;
-  /* Tight to the table: these tick its boxes, and an airy gap read as though
-     they belonged to the stage above instead. */
-  margin: 18px 0 4px;
+  padding: 11px var(--space-card-padding-min);
+  border-bottom: 3px solid var(--ink);
 }
 
-/* Left of the board: what goes ON THE STAGE. Deliberately not the stickers on
-   the right, which filter which rows the table shows — the two groups share
-   the words "all", "mine" and "top", and nothing but their look would keep
-   them apart.
-   Checkboxes, because they act on checkboxes: a control that ticks boxes
-   should look like the boxes it ticks. Exclusive, like radios — but radios
-   cannot be returned to nothing, and unticking the live one has to be able to
-   clear the stage. "At most one" is the shape, and only a checkbox has it. */
-.picks {
-  display: flex;
-  flex-wrap: wrap;
+/* Left of the header, over the column of lane boxes it ticks: one box that
+   puts everything the table is SHOWING on the stage, or takes it all off.
+   It was three — All, Mine, Top 5 — which said the same words as the filters
+   across from them and meant something else, and nothing but their look kept
+   the two apart. Anything between all and nothing is picked row by row now.
+   Sized up from the row boxes: it commands them, so it is not smaller. */
+.pickall {
+  display: inline-flex;
   align-items: center;
-  gap: 4px 14px;
-  margin: 0;
-  padding: 0;
-  border: 0;
+  gap: 8px;
+  cursor: pointer;
 }
-.picks legend {
-  float: left; /* a legend is not a flex item; this puts it on the line */
-  margin-right: 14px;
-  padding: 0;
+/* The eyebrow the old fieldset's legend wore, and for the same reason: the
+   column of boxes under it cannot say what ticking one does. It shares the
+   face and the orange with the column heads directly beneath it. */
+.pickall span {
   color: var(--orange-inked);
   font-family: var(--type-eyebrow-family);
   font-weight: var(--type-eyebrow-weight);
@@ -547,50 +610,42 @@ table.board .withdraw:focus-visible { color: var(--paper); background: var(--mag
   letter-spacing: var(--type-eyebrow-tracking);
   text-transform: uppercase;
 }
-.picks label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.pickall-box {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--orange);
   cursor: pointer;
-  color: var(--orange-inked);
-  font-size: 0.86rem;
 }
-.picks input { accent-color: var(--orange); cursor: pointer; }
-.modes { display: flex; gap: 10px; }
 
-/* Three stickers pressed on by hand, each its own colour and its own lean.
-   They were a segmented control; joined, square and grey they were the one
-   thing left on the page that still belonged to the old board. */
+.modes { display: flex; gap: 8px; }
+
+/* They were three stickers, each its own colour and its own lean, pressed on
+   above the paper. On the sheet's own header that is three accents and three
+   angles inside a frame that is straight, so they go quiet: hollow keys in
+   ink, no colour, no shadow, no lean. The one that is on fills with ink —
+   the one that is on fills with the action's orange, which is the same colour
+   the Watch button in every row already carries. */
 .modes button {
-  padding: 7px 15px;
+  padding: 6px 13px;
   border: 2px solid var(--ink);
-  background: var(--yellow);
+  background: none;
   color: var(--ink);
   font: 400 0.8rem/1 var(--display);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
-  rotate: calc(-1 * var(--rotate-1-0));
 }
-.modes button:nth-child(2) { background: var(--sky); rotate: var(--rotate-1-5); }
-.modes button:nth-child(3) { background: var(--cream); }
-/* aria-pressed carries the state, so the styling reads from it rather than
-   from a class that could drift out of step with what a screen reader hears.
-   The one that is on takes the action's orange; its shadow stays ink like its
-   neighbours', so the ground is what says which is pressed and the row does
-   not carry two accents shouting at once. */
+.modes button:hover { background: var(--warm-paper); }
 .modes button[aria-pressed="true"] {
   background: var(--orange);
+  border-color: var(--ink);
+  color: var(--ink);
 }
-.modes button:active {
-  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
-  box-shadow: none;
-}
+.modes button:active { translate: 1px 1px; }
 
 /* The link to a policy's training environment. Same weight as the download
    glyph beside it: both are offers, neither is the point of the row. */
-table.board .env { width: 2.4rem; text-align: right; }
 table.board .env a {
   display: inline-flex;
   align-items: center;
@@ -608,7 +663,7 @@ table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 .swatch:focus-visible,
 .controls button:focus-visible,
 .modes button:focus-visible,
-.picks input:focus-visible,
+.pickall-box:focus-visible,
 .entry__actions button:focus-visible,
 .entry__signin:focus-visible,
 .entry__speed select:focus-visible,
@@ -837,13 +892,16 @@ table.board .withdraw:focus-visible,
  * Everything the reveal animates has to be on screen together, or the stars
  * fly to a chip nobody is looking at — which is exactly what happened when
  * the page was three windows long. So the page is the window tall, and of its
- * four rows only the stage is elastic: the head, the board and the seeds are
- * each as tall as their content, and the picture takes whatever is left. */
+ * four rows the head and the seeds are as tall as their content, the board
+ * shows four rows at most and scrolls for the rest, and the picture takes
+ * what is left — never less than its floor, since the board gives first:
+ * min-content here, and on the two grids inside, is what carries the floor
+ * up from the stage. */
 #app:has(> main.run) { height: 100vh; }
 
 .hall.run {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(min-content, 1fr) auto auto;
   gap: var(--space-gutter-min);
   min-height: 0;
   padding-block: 20px;
@@ -868,7 +926,7 @@ table.board .withdraw:focus-visible,
 /* Hidden, and still holding its place.
  *
  * Every box on this page stands there from the first frame — the scoreboard on
- * zeros, the board with you at the bottom, the stickers you have not earned
+ * zeros, the board with you at the bottom, the receipts you have not earned
  * yet — and a beat unveils its content. `hidden` would take the box out of the
  * flow, the stage would take the height it gave up, and the picture would jump
  * in the middle of the theatre. Measured before this: the stage stepped from
@@ -881,26 +939,27 @@ table.board .withdraw:focus-visible,
 .run-top {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(min-content, 1fr) auto;
   gap: 6px var(--space-gutter-max);
   min-height: 0;
 }
 /* The stage gives the rest of the page its slack, down to a floor below which
-   there is no picture left worth watching. */
-.run-top .stage { min-height: 220px; }
-.run-top .stage canvas { height: 100%; min-height: 0; }
-.run-caption {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 18px;
+   there is no picture left worth watching. It sits in the challenge page's
+   deck, keys and all — a grid here, so the picture is the part that gives
+   and the transport under it keeps its height. */
+.run-top .deck {
+  display: grid;
+  grid-template-rows: minmax(min-content, 1fr) auto;
+  margin: 0;
 }
-.run-legend { margin: 0; }
-.run-legend li { color: var(--lane); }
-.run-legend li::before { background: var(--lane); border-color: var(--lane); }
-.run-legend strong { color: var(--ink); }
-.run-facts { margin: 0; color: var(--ink-70); }
+/* The floor is what leaves the deck's keys and an open seed list their room
+   on an 800 px window: any higher and the keys ran under the deck's own
+   frame the moment the seeds unfolded. `contain: size` keeps the canvas out
+   of the arithmetic: its drawing buffer is sized to the box it was last
+   given, and without this the box could never get smaller than that. */
+.run-top .stage { min-height: 196px; contain: size; }
+.run-top .stage canvas { height: 100%; min-height: 0; }
+.run-facts { grid-column: 1 / -1; margin: 0; color: var(--ink-70); }
 
 /* The result: the split-flap time at the top of the column, the stickers at
    its foot. There is no screen behind the stamp any more — a stamp wants a
@@ -939,9 +998,39 @@ table.board .withdraw:focus-visible,
   rotate: calc(-1 * var(--rotate-4-0));
 }
 
-/* What the run earned, one sticker per receipt. */
-.run-receipts { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; }
+/* What the run earned, one banknote per receipt: the denomination on a panel
+   in its act's colour at the left end, a rule, then what it paid for across
+   the face — one line, no taller than the stickers it replaces. A note and
+   not a sticker: a sticker is pressed, with a shadow to push it onto, and
+   these do nothing. The magenta panel takes paper lettering, as the magenta
+   sticker does. */
+.run-receipts { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
 .run-receipts .mono-label { color: var(--ink-70); }
+.receipt {
+  display: inline-flex;
+  align-items: stretch;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+}
+.receipt-points {
+  padding: 3px 6px;
+  border-right: 2px solid var(--ink);
+  font: 400 0.85rem/1.4 var(--display);
+  letter-spacing: 0.02em;
+}
+/* The mono scale's tighter tracking: three notes have to share one row of
+   the column, and at the label's usual tracking they were ten pixels over. */
+.receipt .mono-label {
+  align-self: center;
+  padding: 0 6px;
+  color: var(--ink);
+  letter-spacing: var(--mono-tracking-min);
+}
+.receipt-lime .receipt-points { background: var(--lime); }
+.receipt-cyan .receipt-points { background: var(--cyan); }
+.receipt-lavender .receipt-points { background: var(--lavender); }
+.receipt-magenta .receipt-points { background: var(--magenta); color: var(--paper); }
 
 /* Share the run: the four networks as marks on one row, the two clips as cyan
    stickers on the next, and one line under them saying what a press did.
@@ -1005,30 +1094,44 @@ table.board .withdraw:focus-visible,
   .clip-reel, .clip-render-bar-unknown > span { animation: none; }
 }
 
-/* The pegboard: a window of the board, this run's row in lime, each row a link.
-   One line per row here, the repo beside the handle instead of under it —
-   eight two-line rows leave the stage fourteen pixels, which is nothing. */
-.run-board { margin: 0; min-height: 0; }
-.run-board .pegboard-row { padding: 4px var(--space-card-padding-min); gap: 0 12px; }
-.run-board .pegboard-rank,
-.run-board .pegboard-score { font-size: 1.2rem; line-height: 1.15; }
-.run-board .pegboard-repo { display: inline; margin-left: 8px; }
-.pegboard-row { color: inherit; text-decoration: none; }
-.pegboard-row:hover { background: var(--cream); }
-.pegboard-row-you:hover { background: var(--lime); }
+/* The board: the challenge page's sheet with the whole field on it, this run's
+   row in lime. The sheet's toolbar stays put and the table scrolls under it,
+   so the stage keeps its height whatever the field's size. Tighter rows than
+   the challenge page's: this page is one window tall, and every row here is
+   a row off the picture. The cap is the toolbar, the heading and four rows
+   of 41 px, which is what the old pegboard showed; past it the field
+   scrolls. */
+.run-board { display: grid; min-height: 0; max-height: 254px; }
+.run-board .boardsheet {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  margin-top: 0;
+  min-height: 0;
+}
+.run-board #board { overflow-y: auto; min-height: 0; }
+.run-board table.board th { padding: 6px 10px 5px; }
+.run-board table.board td { padding: 5px 10px; }
+.run-board table.board .time,
+.run-board table.board .votes { font-size: 1.2rem; }
+.run-board table.board .record { padding-left: 12px; }
+.run-board table.board tr.you td { background: var(--lime); }
 
-/* Too short or too narrow for one screen: the page scrolls, as the others do,
-   and the rows get their second line back. */
-@media (max-height: 700px), (max-width: 860px) {
+/* Too short or too narrow for one screen: the page scrolls, as the others do.
+   Under 860 px of height the picture at its floor, the sheet's toolbar and
+   four rows, the head and the seeds no longer share one window — the board
+   was down to two rows and the picture to its floor — so a laptop gets the
+   page at its natural size instead, and the reveal walks it with `bring`. */
+@media (max-height: 860px), (max-width: 860px) {
   #app:has(> main.run) { height: auto; }
   .hall.run { display: block; }
   .hall.run > * + * { margin-top: var(--space-gutter-max); }
-  .run-top { grid-template-columns: minmax(0, 1fr); gap: var(--space-gutter-max); }
-  .run-top .stage { min-height: 260px; }
-  .run-top .stage canvas { height: 44vh; }
-  .run-board .pegboard-row { padding: 14px var(--space-card-padding-min); }
-  .run-board .pegboard-repo { display: block; margin-left: 0; }
+  .run-top .stage { height: 44vh; min-height: 260px; }
+  .run-board { max-height: none; }
   .run-share-screen { flex: none; height: 12.375rem; }
+}
+/* Too narrow for two columns as well: the result goes under the picture. */
+@media (max-width: 860px) {
+  .run-top { grid-template-columns: minmax(0, 1fr); gap: var(--space-gutter-max); }
 }
 
 /* ── the seeds, folded away under their summary ───────────────────────── */
@@ -1168,7 +1271,10 @@ table.board .withdraw:focus-visible,
 .rounds-on .challenge-note--race { --fx-shadow-color: var(--orange); }
 .rounds-on .challenge-note--challenge { --fx-shadow-color: var(--magenta); }
 .rounds-on .challenge-note--showcase { --fx-shadow-color: var(--yellow); }
-.rounds-on .challenge-note--planned { background: var(--warm-paper); color: var(--ink-70); }
+/* Cream, not warm paper: warm paper is the page's own ground now, and a
+   planned round on it would have been a floating border with nothing behind
+   it. Cream still reads a step back from the white sheets beside it. */
+.rounds-on .challenge-note--planned { background: var(--cream); color: var(--ink-70); }
 .rounds-on .challenge-link { display: block; flex: 1; color: inherit; text-decoration: none; }
 .rounds-on .challenge-link:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 .rounds-on .challenge-art {

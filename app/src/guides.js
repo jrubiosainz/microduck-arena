@@ -21,15 +21,18 @@ export function renderGuides(root, { guideId = "index", eventId, event, section 
   dress("guides");
   const main = document.createElement("main");
   main.className = "hall guide-page";
-  const breadcrumbs = document.createElement("nav");
-  breadcrumbs.className = "guide-breadcrumbs";
-  breadcrumbs.setAttribute("aria-label", "Breadcrumb");
+  // Only a challenge's guide carries a way back: it returns to that challenge,
+  // which the strip's mark cannot. General help has the mark for the front and
+  // nothing else — a "get started" beside it pointed at basics no one needs
+  // before opening a challenge.
   if (eventId) {
+    const breadcrumbs = document.createElement("nav");
+    breadcrumbs.className = "guide-breadcrumbs";
+    breadcrumbs.setAttribute("aria-label", "Breadcrumb");
     breadcrumbs.append(event?.status === "open"
       ? link("← Back to challenge", raceHref(eventId))
       : link("← Back to challenges", menuHref));
-  } else {
-    breadcrumbs.append(link("Arena", menuHref), link("Get started", guideHref()));
+    main.append(breadcrumbs);
   }
 
   const article = document.createElement("article");
@@ -60,7 +63,7 @@ export function renderGuides(root, { guideId = "index", eventId, event, section 
     scroll.append(table);
   }
 
-  main.append(breadcrumbs, article);
+  main.append(article);
   root.replaceChildren(signage(null), chequer("page-checker"), main, footer());
   document.title = `${headings[0].textContent} · Microduck Arena`;
   const target = headings.find(heading => heading.id === section) ?? headings[0];

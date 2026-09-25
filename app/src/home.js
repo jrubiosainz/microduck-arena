@@ -217,9 +217,11 @@ export function flockBand() {
  * raises stands above this door, so asking for the sound is not leaving. */
 export function liveFrame() {
   const frame = el("div", "season-live fx-shadow-card");
-  const door = el("a", "season-live-door");
+  // A button, not the whole picture. An invisible link across the box meant a
+  // click anywhere on the channel left the front page without warning, and
+  // the page it arrived at had no way back at all.
+  const door = el("a", "season-live-full", "Full screen");
   door.href = liveHref;
-  door.setAttribute("aria-label", "Watch the live channel");
   frame.append(el("div", "season-live-stage"), door);
   return frame;
 }

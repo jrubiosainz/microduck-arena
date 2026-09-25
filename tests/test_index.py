@@ -139,9 +139,9 @@ def test_standing_places_a_run_among_everyone_elses_best():
     mine = make_record(run_id="ME", user="me", score=14.5)  # between R4 and R5
     s = standing([*field, mine], "ME")
     assert (s.rank, s.on_board) == (6, True)
-    # Two rows above, the run, five below — with their ranks on the whole board.
-    assert [row.rank for row in s.board] == [4, 5, 6, 7, 8, 9, 10, 11]
-    assert [row.record.run_id for row in s.board][:3] == ["R3", "R4", "ME"]
+    # The whole field, the run in its place: the page's table scrolls.
+    assert [row.rank for row in s.board] == list(range(1, 12))
+    assert [row.record.run_id for row in s.board][4:7] == ["R4", "ME", "R5"]
 
 
 def test_standing_of_a_run_beaten_by_your_own_better_one():

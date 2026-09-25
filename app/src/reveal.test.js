@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { climbPlan, revealFor } from "./reveal.js";
+import { climbPlan, revealFor, setRanks } from "./reveal.js";
+
+describe("setRanks", () => {
+  it("renumbers the rank cell of each row on the table, and skips one that is not", () => {
+    const tr = (rank) => {
+      const row = document.createElement("tr");
+      row.innerHTML = `<td class="rank">${rank}</td>`;
+      return row;
+    };
+    const pegRows = new Map([["R1", tr(1)], ["R2", tr(2)]]);
+    setRanks(pegRows, [{ run_id: "R1", rank: 2 }, { run_id: "R2", rank: 1 }, { run_id: "R3", rank: 3 }]);
+    expect([...pegRows.values()].map((row) => row.querySelector(".rank").textContent)).toEqual(["2", "1"]);
+  });
+});
 
 const run = { user: "ann", seen: false };
 

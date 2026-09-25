@@ -291,17 +291,9 @@ def run_detail(run_id: str, request: Request) -> dict:
         "withdrawn": record.run_id in withdrawn,
         "on_board": place.on_board,
         "rank": place.rank,
+        # The same columns as the event's board: the page draws the same table.
         "board": [
-            {
-                "rank": row.rank,
-                "user": row.record.user,
-                "policy_name": row.record.policy_name,
-                "score": row.record.score,
-                "seeds_finished": row.record.seeds_finished,
-                "run_id": row.record.run_id,
-                "livery": row.record.livery,
-                "you": row.record.run_id == record.run_id,
-            }
+            {**_board_row(row), "you": row.record.run_id == record.run_id}
             for row in place.board
         ],
         # Podium receipts are HELD, so this list can change between two reads.

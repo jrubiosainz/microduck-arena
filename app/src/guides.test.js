@@ -21,6 +21,14 @@ describe("public guides", () => {
     expect(root.querySelector('a[href*="roller-sprint"]')).toBeNull();
   });
 
+  it("gives general help no navigation of its own: the strip's mark is the way back", () => {
+    for (const id of ["index", "train-a-policy", "points"]) {
+      const root = show(id);
+      expect(root.querySelector(".guide-breadcrumbs")).toBeNull();
+      expect(root.querySelector('header.signage .wordmark a[href="#/"]')).not.toBeNull();
+    }
+  });
+
   it("keeps challenge guidance out of general help and points", () => {
     for (const id of ["index", "train-a-policy", "points"]) {
       const root = show(id);

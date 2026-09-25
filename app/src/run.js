@@ -6,22 +6,24 @@
 
 import { getClip, getMe, getRun, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
-import { LANE_COLORS, LANE_CSS } from "./course.js";
-import { formatScore, formatSpeed } from "./format.js";
-import { lanesFor } from "./lanes.js";
+import { boardsheetMarkup, wireBoardsheet } from "./boardsheet.js";
+import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
+import { formatSpeed } from "./format.js";
+import { colourLanes, lanesFor } from "./lanes.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
-import { dress, guideHref, playerHref, raceHref, runHref } from "./router.js";
+import { dress, guideHref, playerHref, raceHref } from "./router.js";
 import { shareStrip, wireShare } from "./share.js";
 import { footer, signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
 import { createViewer } from "./viewer.js";
 
+// The colour each kind of receipt wears on its edge.
 const TONES = {
-  first_event: "sticker-lime",
-  run: "sticker-cyan",
-  own_best: "sticker-lavender",
-  podium: "sticker-magenta",
+  first_event: "receipt-lime",
+  run: "receipt-cyan",
+  own_best: "receipt-lavender",
+  podium: "receipt-magenta",
 };
 
 function el(tag, className, text) {
@@ -39,27 +41,61 @@ function replayLine(run) {
   return `${formatSpeed(run.command_vx, { finished: run.seeds_finished })} m/s · replay: seed ${run.trace_seed}, ${which}`;
 }
 
-function receiptLabel(receipt, eventTitle) {
+/**
+ * One receipt: a banknote, the denomination at one end and what it paid for
+ * across the face. A note and not a sticker — a sticker is something you
+ * press, and these do nothing. "first entry" names no event: the page's
+ * title already does, and with it the three notes no longer fit on one row
+ * of the column.
+ */
+export function receiptCard(receipt) {
   const what = {
-    first_event: `first entry on ${eventTitle}`,
+    first_event: "first entry",
     run: "run",
     own_best: "personal best",
     podium: "podium · held",
   }[receipt.act];
-  return `+${receipt.points} ${what}`;
+  const card = el("span", `receipt ${TONES[receipt.act]}`);
+  card.append(el("strong", "receipt-points", `+${receipt.points}`), el("span", "mono-label", what));
+  return card;
 }
 
-function pegRow(row) {
-  const link = el("a", row.you ? "pegboard-row pegboard-row-you" : "pegboard-row");
-  link.href = runHref(row.run_id);
-  const name = el("span", "pegboard-name", `@${row.user}`);
-  name.append(el("span", "pegboard-repo", row.policy_name));
-  link.append(
-    el("span", "pegboard-rank", String(row.rank)),
-    name,
-    el("span", "pegboard-score", formatScore(row.score, { finished: row.seeds_finished })),
-  );
-  return link;
+/**
+ * The page's frame, as a detached element — DOM a test can exercise rather
+ * than code it can only read, as raceHall is.
+ *
+ * Four rows, and only the stage gives: the page is exactly one window tall,
+ * so everything the reveal animates is on screen at once. race.css does the
+ * arithmetic; this is the order. The stage is the challenge page's deck and
+ * the board its sheet, so a row ticked here means what it means there.
+ */
+export function runHall() {
+  const page = el("main", "hall run");
+  page.innerHTML = `
+    <header class="run-head">
+      <p class="eyebrow">Publication</p>
+      <h2 class="racetitle"><a id="title"></a></h2>
+      <p class="run-byline mono-label" id="byline"></p>
+    </header>
+    <div class="run-top">
+      ${deckMarkup}
+      <section class="run-score">
+        <div class="scoreboard" id="scoreboard">
+          <span class="mono-label">time</span>
+          <div class="flip" id="flip"></div>
+          <span class="stamp" id="stamp"></span>
+        </div>
+        <section class="run-receipts" id="points"></section>
+      </section>
+      <p class="mono-label run-facts" id="facts"></p>
+    </div>
+    <section class="run-board">${boardsheetMarkup}</section>
+    <details class="run-seedlist" id="seedlist">
+      <summary class="eyebrow">Seeds</summary>
+      <ol id="seeds"></ol>
+    </details>
+  `;
+  return page;
 }
 
 export async function renderRun(root, runId, state) {
@@ -73,43 +109,12 @@ export async function renderRun(root, runId, state) {
   const revealing = revealFor(run, me, matchMedia("(prefers-reduced-motion: reduce)").matches);
   const earned = run.receipts.reduce((sum, r) => sum + r.points, 0);
   const plan = climbPlan(run.board);
-  const lanes = lanesFor(run);
   const dnf = run.seeds_finished === 0;
 
-  const page = el("main", "hall run");
+  const page = runHall();
   // Which beat the page is in. Read by nothing yet: it is the hook a screenshot
   // or a test waits on, as in Duck Jam.
   page.dataset.act = revealing ? "race" : "rest";
-  // Four rows, and only the stage gives: the page is exactly one window tall,
-  // so everything the reveal animates is on screen at once. race.css does the
-  // arithmetic; this is the order.
-  page.innerHTML = `
-    <header class="run-head">
-      <p class="eyebrow">Publication</p>
-      <h2 class="racetitle"><a id="title"></a></h2>
-      <p class="run-byline mono-label" id="byline"></p>
-    </header>
-    <div class="run-top">
-      <div class="stage"><canvas id="stage"></canvas></div>
-      <section class="run-score">
-        <div class="scoreboard" id="scoreboard">
-          <span class="mono-label">time</span>
-          <div class="flip" id="flip"></div>
-          <span class="stamp" id="stamp"></span>
-        </div>
-        <section class="run-receipts" id="points"></section>
-      </section>
-      <div class="run-caption">
-        <ul class="key run-legend" id="legend"></ul>
-        <p class="mono-label run-facts" id="facts"></p>
-      </div>
-    </div>
-    <section class="run-board" id="board"><div class="pegboard" id="pegboard"></div></section>
-    <details class="run-seedlist" id="seedlist">
-      <summary class="eyebrow">Seeds</summary>
-      <ol id="seeds"></ol>
-    </details>
-  `;
   root.append(page, footer());
   const $ = (id) => page.querySelector(`#${id}`);
 
@@ -157,22 +162,10 @@ export async function renderRun(root, runId, state) {
   $("facts").textContent = replayLine(run);
   $("facts").classList.toggle("veiled", revealing);
 
-  // The pegboard, in its starting order when revealing: you at the bottom.
-  const pegRows = new Map(plan.end.map((row) => [row.run_id, pegRow(row)]));
-  const order = revealing ? plan.start : plan.end;
-  setRanks(pegRows, order);
-  $("pegboard").append(...order.map((row) => pegRows.get(row.run_id)));
-  // The board stands there from the first frame, you at the bottom — but your
-  // own time only goes up on it once the split-flap has rolled it.
-  const yourScore = pegRows.get(run.run_id).querySelector(".pegboard-score");
-  yourScore.classList.toggle("veiled", revealing);
-
-  const stickers = run.receipts.map((r) =>
-    el("span", `sticker ${TONES[r.act]}`, receiptLabel(r, run.event.title)),
-  );
-  for (const sticker of stickers) sticker.classList.toggle("veiled", revealing);
-  $("points").append(...stickers);
-  if (!stickers.length) $("points").append(el("p", "mono-label", "no points from this run"));
+  const cards = run.receipts.map(receiptCard);
+  for (const card of cards) card.classList.toggle("veiled", revealing);
+  $("points").append(...cards);
+  if (!cards.length) $("points").append(el("p", "mono-label", "no points from this run"));
 
   // Sharing, under the points: the networks on one row, the clips on the
   // next, standing there from the first frame and veiled through a reveal like
@@ -227,47 +220,106 @@ export async function renderRun(root, runId, state) {
     theatre?.abort("leave");
   };
 
-  // The stage: this run in lane one, the three under it beside, all solid.
-  const viewer = await createViewer($("stage"), { rig: run.event.rig });
-  if (revealing && theatre.signal.aborted) {
-    viewer.dispose();
-    return;
-  }
-  state.viewer = viewer;
-  const traces = await Promise.all(lanes.map((lane) => getTrace(lane.run_id)));
-  if (revealing && theatre.signal.aborted) {
-    viewer.dispose();
-    return;
-  }
-  // Who wears which stripe. The times are on the board below, not here.
-  lanes.forEach((lane, i) => {
-    const item = el("li");
-    item.style.setProperty("--lane", LANE_CSS[i % LANE_CSS.length]);
-    item.append(el("strong", null, `@${lane.user}`));
-    $("legend").append(item);
-  });
+  // The board under the picture: the event's whole field as this run sees it,
+  // on the challenge page's sheet, opening on this run and the three ranked
+  // under it. Any row can go on the stage or come off it, and the colours
+  // follow the table, as they do there. Drawn now; raced once the stage is up,
+  // which on a first visit is a model download away.
+  const byId = new Map(run.board.map((row) => [row.run_id, row]));
+  const traces = new Map();
+  const traceFor = async (id) => {
+    if (!traces.has(id)) traces.set(id, await getTrace(id));
+    return traces.get(id);
+  };
+  let viewer = null;
+  let deck = null;
+  let parked = null;
   let crossed;
   const raced = revealing
     ? new Promise((resolve) => {
         crossed = resolve;
       })
     : null;
-  viewer.setLanes(
-    lanes.map((lane, i) => ({
-      runId: lane.run_id,
-      trace: traces[i],
-      livery: lane.livery,
-      // The ring under each duck takes the lane's own colour, the one the key
-      // above and the ground stripe already wear. A tier colour here would say
-      // leader-and-ghosts, which is not what this stage shows: four real runs.
-      colour: LANE_COLORS[i % LANE_COLORS.length],
-      opacity: 1,
-    })),
-    run.event,
-    revealing
-      ? { loop: false, onTick: (t) => t >= (frameCount(traces[0]) - 1) * CTRL_DT && crossed() }
-      : {},
+  // Through a reveal the first replay plays once, and the theatre waits on the
+  // author's own duck reaching its last frame.
+  let firstReplay = revealing;
+  async function race(runIds, tiers) {
+    if (!viewer) {
+      parked = [runIds, tiers];
+      return;
+    }
+    const fetched = await Promise.all(runIds.map(traceFor));
+    if (leaving.signal.aborted) return;
+    const lanes = runIds.map((id, i) => ({
+      runId: id,
+      trace: fetched[i],
+      tier: tiers.get(id) ?? "ghost",
+      livery: byId.get(id).livery,
+      // The plate over the duck, for the names key.
+      name: byId.get(id).user,
+    }));
+    const own = traces.get(run.run_id);
+    const options = firstReplay && own
+      ? { loop: false, onTick: (t) => t >= (frameCount(own) - 1) * CTRL_DT && crossed() }
+      : {};
+    firstReplay = false;
+    viewer.setLanes(colourLanes($("board"), lanes), run.event, options);
+    deck.reset();
+    $("stage-hint").textContent = lanes.length ? "" : "Tick a row below to watch a replay.";
+  }
+  const sheet = wireBoardsheet(page, {
+    // A publication stands by its time even on a voted event — that is the
+    // standing the server sent — so the table reads time, never votes.
+    event: { ...run.event, metric: "mean_finish_time" },
+    me: me?.user ?? null,
+    rows: () => run.board,
+    opening: (rows) => lanesFor({ board: rows }).map((row) => row.run_id),
+    onRace: race,
+    // Everything: the row this page is about has to be on the table, whatever
+    // its rank.
+    filters: { mine: false, top: false },
+  });
+  await sheet.paint();
+
+  // The rows by run: what the reveal renumbers, reorders and climbs. This
+  // run's own is in lime, and in view — a few rows show, the rest scroll.
+  const tbody = $("board").querySelector("tbody");
+  const pegRows = new Map(
+    [...tbody.rows].map((row) => [row.querySelector("input[data-run-id]").dataset.runId, row]),
   );
+  const yourRow = pegRows.get(run.run_id);
+  yourRow.classList.add("you");
+  const showYourRow = () => {
+    const box = $("board");
+    box.scrollTop = yourRow.offsetTop - (box.clientHeight - yourRow.offsetHeight) / 2;
+  };
+  // Your own time only goes up on the board once the split-flap has rolled it.
+  const yourScore = yourRow.querySelector(".time");
+  yourScore.classList.toggle("veiled", revealing);
+  if (revealing) {
+    // The board as it was before this run — you at the bottom, the rows under
+    // you a place higher — until the climb. Held still until then: a row
+    // ticked mid-theatre would restart the replay the theatre is waiting on.
+    setRanks(pegRows, plan.start);
+    tbody.replaceChildren(...plan.start.map((row) => pegRows.get(row.run_id)));
+    sheet.setInert(true);
+  }
+  showYourRow();
+
+  // The stage.
+  const created = await createViewer($("stage"), {
+    rig: run.event.rig,
+    onChaseChange: followKeyFor(page),
+  });
+  if (leaving.signal.aborted) {
+    created.dispose();
+    return;
+  }
+  state.viewer = created;
+  viewer = created;
+  deck = wireDeck(page, viewer);
+  await race(...parked);
+  if (leaving.signal.aborted) return;
   if (!revealing) {
     // No theatre — but the author has still seen their result.
     if (me?.user === run.user && !run.seen) {
@@ -276,7 +328,7 @@ export async function renderRun(root, runId, state) {
     }
     return;
   }
-  // The chip stays on screen so the stickers have somewhere to fly to.
+  // The chip stays on screen so the stars have somewhere to fly to.
   root.querySelector(".signage").classList.add("signage--pinned");
   const startPoints = me.points - earned;
   // Leaving mid-race must not park `reveal()` on `await raced` forever.
@@ -309,9 +361,9 @@ export async function renderRun(root, runId, state) {
       stamp,
       flip: $("flip"),
       yourScore,
-      pegboard: $("pegboard"),
+      pegboard: tbody,
       pegRows,
-      stickers,
+      cards,
       share: strip.root,
     },
     {
@@ -326,6 +378,9 @@ export async function renderRun(root, runId, state) {
         if (me.unseen <= 1) chip.classList.remove("unread");
         viewer.player.loop = true;
         viewer.player.play();
+        deck.reset();
+        sheet.setInert(false);
+        showYourRow();
       },
     },
     theatre.signal,

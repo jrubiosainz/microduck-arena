@@ -5,7 +5,7 @@
 // live/channel.js drives the segments from the clock.
 
 import { getLive } from "./api.js";
-import { dress } from "./router.js";
+import { dress, menuHref } from "./router.js";
 import { createAmbience } from "./live/ambience.js";
 import { createChannel } from "./live/channel.js";
 import { createClock } from "./live/clock.js";
@@ -42,6 +42,13 @@ export function buildStage(root, framed) {
   join.type = "button";
   join.hidden = true;
   page.append(stage, bug, card, join);
+  // The way back, on the page that IS the channel. Framed, this is a box on
+  // the front page and the rest of that page is already the way out.
+  if (!framed) {
+    const back = el("a", "live-back", "Back to the arena");
+    back.href = menuHref;
+    page.append(back);
+  }
   root.replaceChildren(page);
   return { page, stage, bug, card, join };
 }
