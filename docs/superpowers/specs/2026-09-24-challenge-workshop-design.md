@@ -239,7 +239,9 @@ microduck-challenges/
 │   ├── __init__.py          registers every challenge's tasks
 │   ├── sprint_2m/
 │   │   ├── challenge.toml   event, task, kind, [recipe], [params]
-│   │   └── tasks.py         the training env, twin of arena/events/sprint-2m.toml
+│   │   ├── env.py           the complete training env config — the working example
+│   │   ├── rewards.py       this challenge's own reward and termination functions
+│   │   └── tasks.py         registers the task with mjlab
 │   ├── hill_climb_1m5/
 │   └── …
 └── README.md                the same one line as the challenge page
@@ -270,6 +272,22 @@ max   = 5.0
   reads them through `mjlab_microduck.challenge.params(__file__)`, so a
   novice tunes a reward without touching Python, and Python stays the door
   for advanced users.
+- **A challenge folder is everything a user edits, and it works as shipped.**
+  `env.py` is the complete environment config — observations, rewards,
+  terminations, commands, domain randomisation, curriculum, PPO settings —
+  copied from the matching `microduck_rl` task and adapted to the event, the
+  way `microduck_velocity_env_cfg.py` is a self-contained file today.
+  `rewards.py` holds the challenge's own reward and termination functions,
+  and is where a user adds theirs, in Python. The folder imports from
+  `mjlab_microduck` only the robot model (`MICRODUCK_WALK_ROBOT_CFG`: MJCF,
+  meshes, actuators) and the generic function library (`tasks/mdp.py`,
+  symmetry), which a user calls and never edits. A user never needs to change
+  a file in another repository, and the robot model is not in the challenge.
+- **Working example** means: before a challenge opens, Pollen trains its
+  `env.py` unchanged with the `[recipe]`, the resulting policy finishes the
+  event on the Arena, and that entry is the reference on the board. A user
+  who clones, runs `uv run workshop sprint-2m` and changes nothing gets a
+  robot that competes.
 - `uv run workshop` comes from the Arena wheel; the challenges repo declares
   nothing for it. `uv run workshop` alone lists the challenges; `uv run
   workshop sprint-2m` opens one.
@@ -492,7 +510,8 @@ built after the GPU path works end to end.
 - Native Windows. Linux x86 and ARM with an NVIDIA GPU, or HF Jobs, is the
   floor `microduck_rl` sets; macOS can run the workshop's Test and Publish
   on a checkpoint trained elsewhere.
-- Editing the training environment's Python from the page.
+- Editing `env.py` or `rewards.py` from the page: the workshop edits
+  `challenge.toml`; Python is edited in an editor.
 
 ## Risks and open points
 
