@@ -7,6 +7,7 @@
 import { getClip, getMe, getRun, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { LANE_COLORS, LANE_CSS } from "./course.js";
+import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
 import { formatScore, formatSpeed } from "./format.js";
 import { lanesFor } from "./lanes.js";
 import { CTRL_DT, frameCount } from "./replay.js";
@@ -49,9 +50,11 @@ function receiptLabel(receipt, eventTitle) {
   return `+${receipt.points} ${what}`;
 }
 
-function pegRow(row) {
+/** One row of the board's window; `laneColor` while its duck is on the stage. */
+export function pegRow(row, laneColor = null) {
   const link = el("a", row.you ? "pegboard-row pegboard-row-you" : "pegboard-row");
   link.href = runHref(row.run_id);
+  if (laneColor) link.style.setProperty("--lane", laneColor);
   const name = el("span", "pegboard-name", `@${row.user}`);
   name.append(el("span", "pegboard-repo", row.policy_name));
   link.append(
@@ -60,6 +63,44 @@ function pegRow(row) {
     el("span", "pegboard-score", formatScore(row.score, { finished: row.seeds_finished })),
   );
   return link;
+}
+
+/**
+ * The page's frame, as a detached element — DOM a test can exercise rather
+ * than code it can only read, as raceHall is.
+ *
+ * Four rows, and only the stage gives: the page is exactly one window tall,
+ * so everything the reveal animates is on screen at once. race.css does the
+ * arithmetic; this is the order. The stage is the challenge page's deck, keys
+ * included, and the board under it is the key to who is who: no legend.
+ */
+export function runHall() {
+  const page = el("main", "hall run");
+  page.innerHTML = `
+    <header class="run-head">
+      <p class="eyebrow">Publication</p>
+      <h2 class="racetitle"><a id="title"></a></h2>
+      <p class="run-byline mono-label" id="byline"></p>
+    </header>
+    <div class="run-top">
+      ${deckMarkup}
+      <section class="run-score">
+        <div class="scoreboard" id="scoreboard">
+          <span class="mono-label">time</span>
+          <div class="flip" id="flip"></div>
+          <span class="stamp" id="stamp"></span>
+        </div>
+        <section class="run-receipts" id="points"></section>
+      </section>
+      <p class="mono-label run-facts" id="facts"></p>
+    </div>
+    <section class="run-board" id="board"><div class="pegboard" id="pegboard"></div></section>
+    <details class="run-seedlist" id="seedlist">
+      <summary class="eyebrow">Seeds</summary>
+      <ol id="seeds"></ol>
+    </details>
+  `;
+  return page;
 }
 
 export async function renderRun(root, runId, state) {
@@ -76,40 +117,10 @@ export async function renderRun(root, runId, state) {
   const lanes = lanesFor(run);
   const dnf = run.seeds_finished === 0;
 
-  const page = el("main", "hall run");
+  const page = runHall();
   // Which beat the page is in. Read by nothing yet: it is the hook a screenshot
   // or a test waits on, as in Duck Jam.
   page.dataset.act = revealing ? "race" : "rest";
-  // Four rows, and only the stage gives: the page is exactly one window tall,
-  // so everything the reveal animates is on screen at once. race.css does the
-  // arithmetic; this is the order.
-  page.innerHTML = `
-    <header class="run-head">
-      <p class="eyebrow">Publication</p>
-      <h2 class="racetitle"><a id="title"></a></h2>
-      <p class="run-byline mono-label" id="byline"></p>
-    </header>
-    <div class="run-top">
-      <div class="stage"><canvas id="stage"></canvas></div>
-      <section class="run-score">
-        <div class="scoreboard" id="scoreboard">
-          <span class="mono-label">time</span>
-          <div class="flip" id="flip"></div>
-          <span class="stamp" id="stamp"></span>
-        </div>
-        <section class="run-receipts" id="points"></section>
-      </section>
-      <div class="run-caption">
-        <ul class="key run-legend" id="legend"></ul>
-        <p class="mono-label run-facts" id="facts"></p>
-      </div>
-    </div>
-    <section class="run-board" id="board"><div class="pegboard" id="pegboard"></div></section>
-    <details class="run-seedlist" id="seedlist">
-      <summary class="eyebrow">Seeds</summary>
-      <ol id="seeds"></ol>
-    </details>
-  `;
   root.append(page, footer());
   const $ = (id) => page.querySelector(`#${id}`);
 
@@ -158,7 +169,12 @@ export async function renderRun(root, runId, state) {
   $("facts").classList.toggle("veiled", revealing);
 
   // The pegboard, in its starting order when revealing: you at the bottom.
-  const pegRows = new Map(plan.end.map((row) => [row.run_id, pegRow(row)]));
+  // A row whose duck is on the stage wears its lane's colour, so the board
+  // under the picture says which duck is whose.
+  const laneColor = new Map(lanes.map((lane, i) => [lane.run_id, LANE_CSS[i % LANE_CSS.length]]));
+  const pegRows = new Map(
+    plan.end.map((row) => [row.run_id, pegRow(row, laneColor.get(row.run_id))]),
+  );
   const order = revealing ? plan.start : plan.end;
   setRanks(pegRows, order);
   $("pegboard").append(...order.map((row) => pegRows.get(row.run_id)));
@@ -228,24 +244,21 @@ export async function renderRun(root, runId, state) {
   };
 
   // The stage: this run in lane one, the three under it beside, all solid.
-  const viewer = await createViewer($("stage"), { rig: run.event.rig });
+  const viewer = await createViewer($("stage"), {
+    rig: run.event.rig,
+    onChaseChange: followKeyFor(page),
+  });
   if (revealing && theatre.signal.aborted) {
     viewer.dispose();
     return;
   }
   state.viewer = viewer;
+  const deck = wireDeck(page, viewer);
   const traces = await Promise.all(lanes.map((lane) => getTrace(lane.run_id)));
   if (revealing && theatre.signal.aborted) {
     viewer.dispose();
     return;
   }
-  // Who wears which stripe. The times are on the board below, not here.
-  lanes.forEach((lane, i) => {
-    const item = el("li");
-    item.style.setProperty("--lane", LANE_CSS[i % LANE_CSS.length]);
-    item.append(el("strong", null, `@${lane.user}`));
-    $("legend").append(item);
-  });
   let crossed;
   const raced = revealing
     ? new Promise((resolve) => {
@@ -257,9 +270,12 @@ export async function renderRun(root, runId, state) {
       runId: lane.run_id,
       trace: traces[i],
       livery: lane.livery,
-      // The ring under each duck takes the lane's own colour, the one the key
-      // above and the ground stripe already wear. A tier colour here would say
-      // leader-and-ghosts, which is not what this stage shows: four real runs.
+      // The plate over the duck, for the names key.
+      name: lane.user,
+      // The ring under each duck takes the lane's own colour, the one its row
+      // on the board and the ground stripe already wear. A tier colour here
+      // would say leader-and-ghosts, which is not what this stage shows: four
+      // real runs.
       colour: LANE_COLORS[i % LANE_COLORS.length],
       opacity: 1,
     })),
@@ -326,6 +342,7 @@ export async function renderRun(root, runId, state) {
         if (me.unseen <= 1) chip.classList.remove("unread");
         viewer.player.loop = true;
         viewer.player.play();
+        deck.reset();
       },
     },
     theatre.signal,

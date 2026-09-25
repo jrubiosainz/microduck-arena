@@ -252,7 +252,7 @@ button.link {
    transport under it, a single ink frame around both. The buttons used to
    float on the page below the picture, which read as page furniture rather
    than as the controls OF this picture.
-   The screen keeps its own rules because `run.js` and `vote.js` build a bare
+   The screen keeps its own rules because `vote.js` builds a bare
    `.stage` with no deck around it — the frame moves out to the chassis only
    where there IS one. */
 /* The panel takes the scene's own background — `viewer.js` clears to
@@ -470,48 +470,8 @@ table.board tr.provisional .votes { color: var(--ink); }
 
 /* ── which duck is which ──────────────────────────────────────────────── */
 
-/* The stage rings each duck in its tier's colour and this is the key to it;
-   the table's rows carry the same colours on their tab. The three are the
-   charter's — lavender for the run you just tested, Pollen orange for the one
-   you are chasing, paper for the rest.
-   In the corner of the picture now, rather than under it: a key belongs on
-   the thing it explains, and reading it no longer means looking away from the
-   race. Standing on deep ink it takes the RING colours themselves instead of
-   their inked variants — those exist for a key printed on paper, and this one
-   is not any more, so it names the rings in exactly their own colours. */
-.key {
-  position: absolute;
-  left: 12px;
-  bottom: 10px;
-  z-index: 1; /* over the vignette, which is an ::after on the same box */
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin: 0;
-  padding: 0;
-  color: var(--paper-60);
-  font-family: var(--type-mono-label-family);
-  font-weight: var(--type-mono-label-weight);
-  font-size: var(--type-mono-label-size);
-  letter-spacing: var(--type-mono-label-tracking);
-  text-transform: uppercase;
-  text-shadow: 0 1px 3px var(--deep-ink);
-  pointer-events: none; /* the canvas still gets the drag for orbiting */
-}
-.key li { display: flex; align-items: center; gap: 6px; }
-/* Round, which the charter's radius-0 rule otherwise forbids — the swatch
-   below says so in as many words. The departure is deliberate and scoped to
-   these three: a ring around a duck is a circle, and a square legend beside a
-   round marker is a legend for something else. */
-.key li::before {
-  content: "";
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-}
-
+/* No key on the picture: the ring under each duck and the tab of its row on
+   the board (above) wear the same lane colour, and that is the whole key. */
 table.board tr.tier-ghost { color: var(--ink-70); }
 table.board tr.tier-ghost .time { color: var(--ink-70); }
 table.board tr.tier-ghost .votes { color: var(--ink-70); }
@@ -981,21 +941,21 @@ table.board .withdraw:focus-visible,
   min-height: 0;
 }
 /* The stage gives the rest of the page its slack, down to a floor below which
-   there is no picture left worth watching. */
-.run-top .stage { min-height: 220px; }
-.run-top .stage canvas { height: 100%; min-height: 0; }
-.run-caption {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 18px;
+   there is no picture left worth watching. It sits in the challenge page's
+   deck, keys and all — a grid here, so the picture is the part that gives
+   and the transport under it keeps its height. */
+.run-top .deck {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  margin: 0;
+  min-height: 0;
 }
-.run-legend { margin: 0; }
-.run-legend li { color: var(--lane); }
-.run-legend li::before { background: var(--lane); border-color: var(--lane); }
-.run-legend strong { color: var(--ink); }
-.run-facts { margin: 0; color: var(--ink-70); }
+/* The floor is what leaves the deck's keys and an open seed list their room
+   on an 800 px window: any higher and the keys ran under the deck's own
+   frame the moment the seeds unfolded. */
+.run-top .stage { min-height: 196px; }
+.run-top .stage canvas { height: 100%; min-height: 0; }
+.run-facts { grid-column: 1 / -1; margin: 0; color: var(--ink-70); }
 
 /* The result: the split-flap time at the top of the column, the stickers at
    its foot. There is no screen behind the stamp any more — a stamp wants a
@@ -1108,6 +1068,11 @@ table.board .withdraw:focus-visible,
 .run-board .pegboard-rank,
 .run-board .pegboard-score { font-size: 1.2rem; line-height: 1.15; }
 .run-board .pegboard-repo { display: inline; margin-left: 8px; }
+/* Which duck is whose: a row on the stage wears its lane's colour on a tab
+   and on its peg, as the challenge board's rows do; the rest keep the ink
+   peg and no tab. */
+.run-board .pegboard-row { border-left: 5px solid var(--lane, transparent); }
+.run-board .pegboard-row::before { background: var(--lane, var(--ink)); }
 .pegboard-row { color: inherit; text-decoration: none; }
 .pegboard-row:hover { background: var(--cream); }
 .pegboard-row-you:hover { background: var(--lime); }

@@ -12,6 +12,7 @@ import {
 import { buildRows, renderBoard, setAllLanes, tiersByRunId } from "./board.js";
 import { flyer } from "./flyer.js";
 import { createDropzone } from "./dropzone.js";
+import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { LANE_CSS } from "./course.js";
 import { MIN } from "./brightness.js";
@@ -303,21 +304,7 @@ export function raceHall(event) {
         ${event.category ? `<p class="raceeyebrow">${event.category.toUpperCase()}</p>` : ""}
         <h2 class="racetitle">${event.title}</h2>
         <dl class="facts" id="facts"></dl>
-        <div class="deck fx-shadow-card">
-          <div class="stage">
-            <canvas id="stage"></canvas>
-            <ul class="key" id="key">
-              <li>Colours match the leaderboard</li>
-            </ul>
-          </div>
-          <div class="controls">
-            <button id="playpause">Pause</button>
-            <button id="follow" hidden>Follow the leader</button>
-            <button id="walls" aria-pressed="false" title="The lane walls are in the physics whether or not they are drawn">Show walls</button>
-            <button id="names" aria-pressed="false" title="Who each duck belongs to, hung over its head">Show names</button>
-            <span class="hint" id="stage-hint"></span>
-          </div>
-        </div>
+        ${deckMarkup}
       </div>
       <div class="entry-col">
         <aside class="entry" id="entry"></aside>
@@ -443,11 +430,10 @@ export async function renderRace(root, { event, state }) {
     // The event declares its rig, and the roller rig is a different kinematic
     // tree with its own blades, rims and tires — not a repaint of the walker.
     rig: event.rig,
-    onChaseChange: (chasing) => {
-      root.querySelector("#follow").hidden = chasing;
-    },
+    onChaseChange: followKeyFor(root),
   });
   state.viewer = viewer;
+  const deck = wireDeck(root, viewer);
 
   // No slider any more: the stage is pinned at the dimmest the module allows.
   // Worth knowing if this ever looks wrong — brightness.js says in its own
@@ -500,18 +486,6 @@ export async function renderRace(root, { event, state }) {
     });
   }
 
-  root.querySelector("#follow").addEventListener("click", () => viewer.follow());
-
-  // The walls are always there for the robot; this only decides whether you can
-  // see them. aria-pressed rather than a changing label alone, so the state is
-  // readable without reading the button's text.
-  const wallsButton = root.querySelector("#walls");
-  let wallsShown = false;
-  wallsButton.addEventListener("click", () => {
-    wallsShown = viewer.setWallsVisible(!wallsShown);
-    wallsButton.setAttribute("aria-pressed", String(wallsShown));
-    wallsButton.textContent = wallsShown ? "Hide walls" : "Show walls";
-  });
   // One box, above the column of lane boxes it ticks: every row the table is
   // SHOWING goes on the stage, or comes off it. A checkbox and not a button
   // because it ticks checkboxes, and labelled, because what ticking a box on
@@ -530,23 +504,6 @@ export async function renderRace(root, { event, state }) {
     // rows below already say which ones are.
     pickAll.checked = boxes.length > 0 && ticked === boxes.length;
   };
-
-  // Who each duck belongs to. Off by default: with one lane the answer is on
-  // the panel beside it, and four plates over four ducks is a legend nobody
-  // asked for until they did.
-  const namesButton = root.querySelector("#names");
-  let namesShown = false;
-  namesButton.addEventListener("click", () => {
-    namesShown = viewer.setNamesVisible(!namesShown);
-    namesButton.setAttribute("aria-pressed", String(namesShown));
-    namesButton.textContent = namesShown ? "Hide names" : "Show names";
-  });
-  root.querySelector("#playpause").addEventListener("click", () => {
-    viewer.player.toggle();
-    root.querySelector("#playpause").textContent = viewer.player.playing
-      ? "Pause"
-      : "Play";
-  });
 
   let trial = null; // the unpublished run, if one has been tested
   let lastTiers = new Map();
@@ -581,7 +538,7 @@ export async function renderRace(root, { event, state }) {
       });
     }
     viewer.setLanes(arrangeLanes(board, lanes), event);
-    root.querySelector("#playpause").textContent = "Pause";
+    deck.reset();
     root.querySelector("#stage-hint").textContent = lanes.length
       ? ""
       : "Tick a lane below, or test a policy, to watch a replay.";

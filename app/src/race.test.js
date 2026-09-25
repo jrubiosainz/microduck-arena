@@ -375,14 +375,8 @@ describe("raceHall: the page's frame", () => {
     expect(button.getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("hangs the key in the corner of the picture, not under it", () => {
-    // A key belongs on the thing it explains; reading it should not mean
-    // looking away from the race.
-    const key = hall().querySelector(".stage .key");
-    expect(key).not.toBeNull();
-    expect([...key.children].map((li) => li.textContent)).toEqual([
-      "Colours match the leaderboard",
-    ]);
+  it("hangs no key on the picture: the board's tabs already say which duck is whose", () => {
+    expect(hall().querySelector(".key")).toBeNull();
   });
 
   it("puts the picks and the filters inside the board's own frame, above it", () => {
