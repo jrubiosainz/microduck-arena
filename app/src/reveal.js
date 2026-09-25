@@ -47,7 +47,7 @@ export function setRanks(pegRows, order) {
  * Play the reveal on a page run.js built.
  *
  * Every box stands in its place from the first frame — the empty scoreboard,
- * the board with you at the bottom, the stickers you have not earned yet —
+ * the board with you at the bottom, the receipts you have not earned yet —
  * because the page is exactly one window tall and anything that leaves the
  * flow hands its height to the stage, which makes the picture jump mid-beat.
  * So a beat unveils content, it never inserts it.
@@ -61,7 +61,7 @@ export function setRanks(pegRows, order) {
  */
 export async function reveal(parts, show, signal) {
   const { page, chip, chipFlip, facts, scoreboard, stamp, flip, yourScore } = parts;
-  const { pegboard, pegRows, stickers, share } = parts;
+  const { pegboard, pegRows, cards, share } = parts;
   const { run, plan, receipts, raced, startPoints, score, onSeen } = show;
   const act = (name) => {
     page.dataset.act = name;
@@ -79,7 +79,7 @@ export async function reveal(parts, show, signal) {
     flip.replaceChildren(...flipTiles(score));
     unveil(facts);
     unveil(yourScore);
-    for (const sticker of stickers) unveil(sticker);
+    for (const card of cards) unveil(card);
     unveil(share);
     setRanks(pegRows, plan.end);
     pegboard.replaceChildren(...plan.end.map((row) => pegRows.get(row.run_id)));
@@ -131,10 +131,10 @@ export async function reveal(parts, show, signal) {
     }
 
     act("points");
-    bring(stickers[0] ?? pegboard);
-    for (const [i, sticker] of stickers.entries()) {
-      unveil(sticker);
-      await shower(sticker, chip, receipts[i].points, signal);
+    bring(cards[0] ?? pegboard);
+    for (const [i, card] of cards.entries()) {
+      unveil(card);
+      await shower(card, chip, receipts[i].points, signal);
       if (signal.aborted) return;
       await credit(chip, receipts[i].points, signal);
       if (signal.aborted) return;

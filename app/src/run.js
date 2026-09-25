@@ -18,11 +18,12 @@ import { footer, signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
 import { createViewer } from "./viewer.js";
 
+// The colour each kind of receipt wears on its edge.
 const TONES = {
-  first_event: "sticker-lime",
-  run: "sticker-cyan",
-  own_best: "sticker-lavender",
-  podium: "sticker-magenta",
+  first_event: "receipt-lime",
+  run: "receipt-cyan",
+  own_best: "receipt-lavender",
+  podium: "receipt-magenta",
 };
 
 function el(tag, className, text) {
@@ -40,14 +41,23 @@ function replayLine(run) {
   return `${formatSpeed(run.command_vx, { finished: run.seeds_finished })} m/s · replay: seed ${run.trace_seed}, ${which}`;
 }
 
-function receiptLabel(receipt, eventTitle) {
+/**
+ * One receipt: a banknote, the denomination at one end and what it paid for
+ * across the face. A note and not a sticker — a sticker is something you
+ * press, and these do nothing. "first entry" names no event: the page's
+ * title already does, and with it the three notes no longer fit on one row
+ * of the column.
+ */
+export function receiptCard(receipt) {
   const what = {
-    first_event: `first entry on ${eventTitle}`,
+    first_event: "first entry",
     run: "run",
     own_best: "personal best",
     podium: "podium · held",
   }[receipt.act];
-  return `+${receipt.points} ${what}`;
+  const card = el("span", `receipt ${TONES[receipt.act]}`);
+  card.append(el("strong", "receipt-points", `+${receipt.points}`), el("span", "mono-label", what));
+  return card;
 }
 
 /**
@@ -152,12 +162,10 @@ export async function renderRun(root, runId, state) {
   $("facts").textContent = replayLine(run);
   $("facts").classList.toggle("veiled", revealing);
 
-  const stickers = run.receipts.map((r) =>
-    el("span", `sticker ${TONES[r.act]}`, receiptLabel(r, run.event.title)),
-  );
-  for (const sticker of stickers) sticker.classList.toggle("veiled", revealing);
-  $("points").append(...stickers);
-  if (!stickers.length) $("points").append(el("p", "mono-label", "no points from this run"));
+  const cards = run.receipts.map(receiptCard);
+  for (const card of cards) card.classList.toggle("veiled", revealing);
+  $("points").append(...cards);
+  if (!cards.length) $("points").append(el("p", "mono-label", "no points from this run"));
 
   // Sharing, under the points: the networks on one row, the clips on the
   // next, standing there from the first frame and veiled through a reveal like
@@ -320,7 +328,7 @@ export async function renderRun(root, runId, state) {
     }
     return;
   }
-  // The chip stays on screen so the stickers have somewhere to fly to.
+  // The chip stays on screen so the stars have somewhere to fly to.
   root.querySelector(".signage").classList.add("signage--pinned");
   const startPoints = me.points - earned;
   // Leaving mid-race must not park `reveal()` on `await raced` forever.
@@ -355,7 +363,7 @@ export async function renderRun(root, runId, state) {
       yourScore,
       pegboard: tbody,
       pegRows,
-      stickers,
+      cards,
       share: strip.root,
     },
     {

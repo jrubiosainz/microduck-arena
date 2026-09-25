@@ -926,7 +926,7 @@ table.board .withdraw:focus-visible,
 /* Hidden, and still holding its place.
  *
  * Every box on this page stands there from the first frame — the scoreboard on
- * zeros, the board with you at the bottom, the stickers you have not earned
+ * zeros, the board with you at the bottom, the receipts you have not earned
  * yet — and a beat unveils its content. `hidden` would take the box out of the
  * flow, the stage would take the height it gave up, and the picture would jump
  * in the middle of the theatre. Measured before this: the stage stepped from
@@ -998,9 +998,39 @@ table.board .withdraw:focus-visible,
   rotate: calc(-1 * var(--rotate-4-0));
 }
 
-/* What the run earned, one sticker per receipt. */
-.run-receipts { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; }
+/* What the run earned, one banknote per receipt: the denomination on a panel
+   in its act's colour at the left end, a rule, then what it paid for across
+   the face — one line, no taller than the stickers it replaces. A note and
+   not a sticker: a sticker is pressed, with a shadow to push it onto, and
+   these do nothing. The magenta panel takes paper lettering, as the magenta
+   sticker does. */
+.run-receipts { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
 .run-receipts .mono-label { color: var(--ink-70); }
+.receipt {
+  display: inline-flex;
+  align-items: stretch;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+}
+.receipt-points {
+  padding: 3px 6px;
+  border-right: 2px solid var(--ink);
+  font: 400 0.85rem/1.4 var(--display);
+  letter-spacing: 0.02em;
+}
+/* The mono scale's tighter tracking: three notes have to share one row of
+   the column, and at the label's usual tracking they were ten pixels over. */
+.receipt .mono-label {
+  align-self: center;
+  padding: 0 6px;
+  color: var(--ink);
+  letter-spacing: var(--mono-tracking-min);
+}
+.receipt-lime .receipt-points { background: var(--lime); }
+.receipt-cyan .receipt-points { background: var(--cyan); }
+.receipt-lavender .receipt-points { background: var(--lavender); }
+.receipt-magenta .receipt-points { background: var(--magenta); color: var(--paper); }
 
 /* Share the run: the four networks as marks on one row, the two clips as cyan
    stickers on the next, and one line under them saying what a press did.
