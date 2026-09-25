@@ -15,15 +15,19 @@ differently fails loudly and early instead of a year of times later.
 
 Used by the test suite AND by the Docker build, so an image cannot be built
 whose physics does not reproduce the baseline.
+
+Version 3 moved the pins to MuJoCo 3.10.0, the version mjlab trains with, so a
+challenges checkout can install this package next to mjlab-microduck. The
+walker was re-measured on it; the number below is that measurement.
 """
 
-MUJOCO_VERSION = "3.12.0"
+MUJOCO_VERSION = "3.10.0"
 
 EVENT_ID = "sprint-2m"
 POLICY = "BEST_alpha_walking.onnx"
 # The full-sweep score, and the commanded speed the sweep chose for it. Both,
 # because a score can be reproduced by luck from a different speed.
-SCORE_S = 11.724
+SCORE_S = 11.792
 COMMAND_VX = 0.40
 # Generous enough for the last bits of floating-point difference between
 # machines, tight enough that a solver change cannot slip through: the 3.13

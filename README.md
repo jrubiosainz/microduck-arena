@@ -144,6 +144,8 @@ One thing this deployment does NOT have yet:
 
 ## Run it
 
+Python 3.12 (`uv` installs it: `uv python install 3.12`).
+
 ```bash
 uv sync
 cd app && npm install && npm run build && cd ..

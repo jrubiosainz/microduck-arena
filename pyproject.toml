@@ -1,10 +1,10 @@
 [project]
 name = "microduck-arena"
 version = "0.1.0"
-# Pinned to one minor version for the same reason the physics packages are.
-# The golden run was measured on 3.13, and numpy 2.5.2 does not build for 3.11
-# at all — so an image on python:3.11-slim quietly resolved a different numpy.
-requires-python = ">=3.13,<3.14"
+# One minor version, exactly. The golden run is measured on it, and it is the
+# interpreter mjlab (through mujoco-warp) allows, so a microduck-challenges
+# checkout can hold this package and mjlab-microduck in one environment.
+requires-python = ">=3.12,<3.13"
 dependencies = [
     # PINNED EXACTLY, and this is not fussiness. Every recorded time is a
     # measurement made by these three, and MuJoCo's solver changes between
@@ -20,9 +20,13 @@ dependencies = [
     #
     # Moving any of these is a decision to re-baseline the golden run and bump
     # RUNNER_VERSION in the same commit.
-    "mujoco==3.12.0",
-    "onnxruntime==1.29.0",
-    "numpy==2.5.2",
+    #
+    # These three are what mjlab 1.3.0 / mujoco-warp 3.8.1 lock in microduck_rl;
+    # moving them means moving with mjlab, so the challenges repo's uv.lock can
+    # resolve both packages. Version 3 of the runner is that move.
+    "mujoco==3.10.0",
+    "onnxruntime==1.24.4",
+    "numpy==2.4.1",
     # Not physics: these touch no recorded number, so they keep ranges.
     "huggingface-hub>=0.24",
     "fastapi>=0.115",

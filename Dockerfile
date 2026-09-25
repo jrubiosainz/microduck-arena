@@ -16,7 +16,7 @@ COPY docs/guides/ /build/docs/guides/
 RUN npm run build
 
 # ── the app ──────────────────────────────────────────────────────────────
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 # The clip recorder (arena/recorder.py) photographs the arena's own stage in
 # a headless Chromium and encodes it with ffmpeg. That is the one reason this
