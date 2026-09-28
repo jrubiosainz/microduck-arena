@@ -1,6 +1,9 @@
+import json
+
 import pytest
 
-from arena.hub_fetch import FetchError, fetch_policy, parse_repo_ref
+from arena.hub_fetch import FetchError, check_manifest, fetch_policy, parse_repo_ref, rig_of
+from arena.manifest import load_event
 
 
 @pytest.mark.parametrize(
@@ -162,11 +165,6 @@ def test_a_real_community_policy_races_here():
     assert len(result.per_seed) == 5
     assert result.runner_version == RUNNER_VERSION
 
-
-import json
-
-from arena.hub_fetch import check_manifest, rig_of
-from arena.manifest import load_event
 
 GOOD_MANIFEST = {
     "obs_len": 61,
