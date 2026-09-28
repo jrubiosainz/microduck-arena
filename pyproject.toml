@@ -1,6 +1,6 @@
 [project]
 name = "microduck-arena"
-version = "0.3.0"
+version = "0.3.1"
 # One minor version, exactly. The golden run is measured on it, and it is the
 # interpreter mjlab (through mujoco-warp) allows, so a microduck-challenges
 # checkout can hold this package and mjlab-microduck in one environment.
