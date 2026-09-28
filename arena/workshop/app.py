@@ -19,12 +19,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..manifest import load_event
+from ..policy import PolicyError
 from ..web.routes_read import event_summary
 from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write_values
 from .hub import Hub
 from .runs import curve, find_run, find_runs
 from .shell import ShellError, commit_all, gh_ready, git
 from .training import Training, ckpt_repo, train_command
+from .trials import TrialError, tested, trial
 
 NO_SITE = (
     "The workshop's page has not been built.\n\n"
@@ -193,6 +195,7 @@ def _run_summary(run) -> dict:
     return {
         "id": run.id, "name": run.name, "started": run.provenance.get("started"),
         "dirty": bool(run.provenance.get("dirty")), "checkpoints": list(run.checkpoints),
+        "trials": {str(n): r for n, r in tested(run).items()},
     }
 
 
@@ -212,6 +215,21 @@ def _run_or_404(ws: Workshop, run_id: str):
 @router.get("/runs/{run_id}/curve")
 def run_curve(run_id: str, request: Request) -> dict:
     return {"points": curve(_run_or_404(_workshop(request), run_id))}
+
+
+class TrialRequest(BaseModel):
+    checkpoint: int
+
+
+@router.post("/runs/{run_id}/trial")
+async def run_trial(run_id: str, body: TrialRequest, request: Request) -> dict:
+    ws = _workshop(request)
+    run = _run_or_404(ws, run_id)
+    try:
+        # Seconds of export and simulation: off the event loop, which keeps the log flowing.
+        return await run_in_threadpool(trial, ws.root, run, body.checkpoint, ws.challenge.event)
+    except (TrialError, PolicyError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def create_workshop_app(
