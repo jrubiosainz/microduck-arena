@@ -156,7 +156,10 @@ def hub():
 
 
 @pytest.fixture
-def workshop(checkout, fakes, hub):
+def workshop(checkout, fakes, hub, monkeypatch):
+    # As the launcher exports it. A page login replaces it in os.environ; monkeypatch puts the
+    # developer's own back after the test.
+    monkeypatch.setenv("HF_TOKEN", "hf_from_the_launcher")
     opened = []
     app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub, PORT,
                               open_browser=opened.append)

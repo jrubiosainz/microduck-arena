@@ -5,6 +5,7 @@ machine that holds the checkout. The page (workshop.html) is built with the
 site and served from the same folder, so the replay uses the site's viewer.
 """
 
+import os
 import re
 import shutil
 import threading
@@ -97,10 +98,14 @@ class Token(BaseModel):
 @router.post("/login")
 def login(body: Token, request: Request) -> dict:
     ws = _workshop(request)
+    token = body.token.strip()
     try:
-        ws.hub.login(body.token.strip())
+        ws.hub.login(token)
     except Exception as exc:  # the Hub's own sentence is the useful part
         raise HTTPException(status_code=400, detail=f"Hugging Face refused this token: {exc}") from exc
+    # HF_TOKEN outranks the token a login saves, for whoami and for every subprocess: one the
+    # launcher exported, stale, would shadow this login.
+    os.environ["HF_TOKEN"] = token
     return {"user": ws.hub.whoami()}
 
 

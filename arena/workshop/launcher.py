@@ -57,8 +57,10 @@ def main() -> None:
     if token := hf_token():
         env["HF_TOKEN"] = token
     os.chdir(root)
-    command = ["uv", "run", "--frozen", "--group", "workshop", "workshop", *sys.argv[1:], "--arena", ARENA]
-    os.execvpe("uv", command, env)
+    # The uv running this script says where it is, in UV: it may not be on PATH (a fresh install).
+    uv = os.environ.get("UV") or "uv"
+    command = [uv, "run", "--frozen", "--group", "workshop", "workshop", *sys.argv[1:], "--arena", ARENA]
+    os.execvpe(uv, command, env)
 
 
 if __name__ == "__main__":

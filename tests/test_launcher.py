@@ -63,7 +63,8 @@ def _launch(tmp_path, cwd, *args, env=None):
     script = tmp_path / "workshop.py"
     script.write_text(LAUNCHER.read_text().replace(DEFAULT, "ARENA = 'http://arena.test'"))
     log = tmp_path / "calls.jsonl"
-    base = {k: v for k, v in os.environ.items() if k not in ("HF_TOKEN", "HF_HOME")}
+    # UV too: under `uv run pytest`, uv exports its own path as UV, and the launcher would run it.
+    base = {k: v for k, v in os.environ.items() if k not in ("HF_TOKEN", "HF_HOME", "UV")}
     full_env = {**base, "PATH": f"{fakes}{os.pathsep}/usr/bin:/bin", "FAKE_LOG": str(log),
                 "HF_HOME": str(tmp_path / "no-hf"), **(env or {})}
     subprocess.run([sys.executable, str(script), *args], cwd=cwd, env=full_env, check=True)
@@ -112,3 +113,17 @@ def test_uv_does_not_inherit_the_scripts_throwaway_environment(tmp_path):
     (clone / "src" / "microduck_challenges").mkdir(parents=True)
     (uv,) = _launch(tmp_path, clone, "sprint-2m", env={"VIRTUAL_ENV": str(tmp_path / "throwaway")})
     assert uv["virtual_env"] is None
+
+
+def test_it_hands_over_to_the_uv_that_runs_it(tmp_path):
+    """uv exports its own path as UV to what it runs: the one line works where uv is not on PATH
+    (a fresh install before the shell is restarted)."""
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "uv").write_text(FAKE.format(python=sys.executable, tool="the uv in UV"))
+    (elsewhere / "uv").chmod(0o755)
+    clone = tmp_path / "clone"
+    (clone / "src" / "microduck_challenges").mkdir(parents=True)
+    (uv,) = _launch(tmp_path, clone, "sprint-2m", env={"UV": str(elsewhere / "uv")})
+    assert uv["tool"] == "the uv in UV"
+    assert uv["argv"][:3] == ["run", "--frozen", "--group"]
