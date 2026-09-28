@@ -230,6 +230,43 @@ def test_a_manifest_that_disagrees_with_the_event_is_refused_by_field(tmp_path, 
     assert [name for name, _ in downloads] == ["manifest.json"], "refused before the ONNX is fetched"
 
 
+@pytest.mark.parametrize("field", ["obs_len", "action_len", "kind", "robot"])
+@pytest.mark.parametrize("absent", ["missing", "null"])
+def test_a_field_the_manifest_does_not_declare_is_not_checked(tmp_path, field, absent):
+    """Only a declared disagreement refuses: real repos (HannesVonEssen/microduck-climb,
+    q2p/microduck-beak-throw) publish a manifest with no obs_len or no kind."""
+    manifest = {k: v for k, v in GOOD_MANIFEST.items() if k != field} | ({field: None} if absent == "null" else {})
+    assert _fetch(tmp_path, manifest).manifest == manifest
+
+
+def test_a_robot_that_names_no_model_is_not_checked(tmp_path):
+    manifest = GOOD_MANIFEST | {"robot": {"accessories": []}}
+    assert _fetch(tmp_path, manifest).manifest == manifest
+
+
+@pytest.mark.parametrize(
+    "robot,event_id,field",
+    [
+        ("microduck", "sprint-2m", "robot"),
+        (["microduck"], "sprint-2m", "robot"),
+        ({"model": "microduck", "accessories": 3}, "sprint-2m", "accessories"),
+        ({"model": "microduck", "accessories": "rollers"}, "roller-sprint-2m", "accessories"),
+    ],
+)
+def test_a_robot_of_the_wrong_shape_is_refused_naming_it(tmp_path, robot, event_id, field):
+    with pytest.raises(FetchError, match=field):
+        _fetch(tmp_path, GOOD_MANIFEST | {"robot": robot}, event_id=event_id)
+
+
+def test_a_manifest_that_cannot_be_read_is_refused(tmp_path):
+    def download(repo_id, filename, rev):
+        return str(tmp_path)  # a directory: reading it fails with an OSError
+
+    with pytest.raises(FetchError, match="could not read alice/walker/manifest.json"):
+        fetch_policy("alice/walker", event=load_event("sprint-2m"), download=download,
+                     info=lambda repo_id, rev: (["policy.onnx", "manifest.json"], "sha", {}))
+
+
 def test_a_roller_manifest_enters_the_roller_sprint(tmp_path):
     rollers = GOOD_MANIFEST | {"robot": {"model": "microduck", "accessories": ["rollers"]}}
     assert _fetch(tmp_path, rollers, event_id="roller-sprint-2m").manifest == rollers

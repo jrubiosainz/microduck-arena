@@ -21,7 +21,8 @@ was ever missing or wrong.
 A repo's `manifest.json`, when it has one, is read at the same pinned revision
 and, when the caller names the event, checked against it before the ONNX is
 downloaded: the observation and action sizes, the robot the event races, the
-kind of policy it takes. A repo without one is accepted as before.
+kind of policy it takes — each one the manifest declares. A repo without one
+is accepted as before.
 """
 
 import json
@@ -134,25 +135,28 @@ def rig_of(manifest: dict) -> str | None:
 
 
 def check_manifest(manifest: dict, event) -> None:
-    """Refuse a policy whose manifest.json disagrees with `event`, naming the field."""
-    if manifest.get("obs_len") != OBS_SIZE:
+    """Refuse a policy whose manifest.json disagrees with `event`, naming the field.
+
+    Only what the manifest declares is checked: real repos publish one without
+    obs_len or kind, and the ONNX is validated whatever the manifest says.
+    """
+    declared = {k: v for k, v in manifest.items() if v is not None}
+    if declared.get("obs_len", OBS_SIZE) != OBS_SIZE:
+        raise FetchError(f"{MANIFEST}: obs_len is {declared['obs_len']!r}; the Arena feeds {OBS_SIZE} observations")
+    if declared.get("action_len", NUM_JOINTS) != NUM_JOINTS:
+        raise FetchError(f"{MANIFEST}: action_len is {declared['action_len']!r}; the Arena drives {NUM_JOINTS} joints")
+    robot = declared.get("robot", {})
+    if not isinstance(robot, dict):
+        raise FetchError(f"{MANIFEST}: robot is {robot!r}, not an object with a model")
+    if not isinstance(robot.get("accessories") or [], list):
+        raise FetchError(f"{MANIFEST}: robot accessories is {robot['accessories']!r}, not a list")
+    if robot.get("model") is not None and rig_of(manifest) != event.rig:
         raise FetchError(
-            f"{MANIFEST}: obs_len is {manifest.get('obs_len')!r}; the Arena feeds {OBS_SIZE} observations"
-        )
-    if manifest.get("action_len") != NUM_JOINTS:
-        raise FetchError(
-            f"{MANIFEST}: action_len is {manifest.get('action_len')!r}; the Arena drives {NUM_JOINTS} joints"
-        )
-    if rig_of(manifest) != event.rig:
-        robot = manifest.get("robot") or {}
-        raise FetchError(
-            f"{MANIFEST}: robot {robot.get('model')!r} with accessories {robot.get('accessories') or []} "
+            f"{MANIFEST}: robot {robot['model']!r} with accessories {robot.get('accessories') or []} "
             f"is not the {event.rig} robot {event.title} races"
         )
-    if manifest.get("kind") != event.kind:
-        raise FetchError(
-            f"{MANIFEST}: kind is {manifest.get('kind')!r}; {event.title} takes {event.kind} policies"
-        )
+    if declared.get("kind", event.kind) != event.kind:
+        raise FetchError(f"{MANIFEST}: kind is {declared['kind']!r}; {event.title} takes {event.kind} policies")
 
 
 def _read_manifest(repo_id: str, revision: str, download) -> dict:
@@ -161,7 +165,11 @@ def _read_manifest(repo_id: str, revision: str, download) -> dict:
     except Exception as exc:
         raise FetchError(f"could not download {repo_id}/{MANIFEST}: {exc}") from exc
     try:
-        manifest = json.loads(path.read_text())
+        text = path.read_text()
+    except OSError as exc:
+        raise FetchError(f"could not read {repo_id}/{MANIFEST}: {exc}") from exc
+    try:
+        manifest = json.loads(text)
     except ValueError as exc:
         raise FetchError(f"{repo_id}/{MANIFEST} is not valid JSON: {exc}") from exc
     if not isinstance(manifest, dict):
