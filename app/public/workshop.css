@@ -1,0 +1,227 @@
+/* The workshop: a local tool page, one column, readable at 1280 px and on a
+   narrow window. .flyer gives every zone its card (paper, ink border, offset
+   shadow); this sheet only places things and reopens the font size and width
+   a photocopy-sized flyer sets, since a zone here holds a form, not a caption.
+   Colour, type and spacing are all design/tokens.css — no raw hex. */
+
+html, body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+}
+
+.workshop {
+  max-width: var(--space-content-column);
+  margin: 0 auto;
+  padding: var(--space-gutter-max) var(--space-gutter-max) var(--space-chapter-bottom-min);
+}
+
+.workshop__head {
+  margin-bottom: var(--space-title-to-grid-max);
+}
+
+.workshop__head h1 {
+  margin: 4px 0 8px;
+  font-family: var(--type-section-title-family);
+  font-weight: var(--type-section-title-weight);
+  font-size: var(--type-section-title-size);
+  line-height: var(--type-section-title-line);
+  letter-spacing: var(--type-section-title-tracking);
+  text-transform: uppercase;
+}
+
+#arena-link {
+  color: var(--sky-inked);
+}
+
+/* Reopen the flyer's photocopy sizing: a zone is a full-width card that holds
+   a form and a log, not a small taped-up caption. */
+.zone {
+  width: 100%;
+  max-width: none;
+  margin-bottom: var(--space-gutter-max);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.zone > .eyebrow {
+  padding-bottom: 10px;
+  margin-bottom: var(--space-card-padding-min);
+  border-bottom: 2px solid var(--ink);
+}
+
+/* ── Preflight ──────────────────────────────────────────────────────────── */
+
+.preflight {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 var(--space-card-padding-min);
+  padding: 0;
+  list-style: none;
+}
+
+.preflight__ok,
+.preflight__missing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 10px;
+}
+
+.preflight__ok::before {
+  content: "✓";
+  color: var(--lime-inked);
+  font-weight: 700;
+}
+
+.preflight__missing {
+  color: var(--magenta);
+}
+
+.preflight__missing code {
+  flex-basis: 100%;
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--ink);
+  background: var(--warm-paper);
+  border: 1px solid var(--ink);
+  padding: 6px 8px;
+}
+
+.preflight__where,
+.preflight__gh {
+  margin: 0 0 8px;
+}
+
+.preflight__login {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.preflight__login input {
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 6px 8px;
+  font-family: var(--mono);
+}
+
+.preflight__note {
+  color: var(--magenta);
+  flex-basis: 100%;
+}
+
+/* ── Train ──────────────────────────────────────────────────────────────── */
+
+.train-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-card-padding-min);
+}
+
+.train-form fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field input {
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 6px 8px;
+  font-family: var(--body);
+}
+
+.knobs,
+.recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* A knob is one grid row: its label, the range, and the value it reads. */
+.knob {
+  display: grid;
+  grid-template-columns: minmax(10em, 1fr) minmax(10em, 2fr) 3em;
+  align-items: center;
+  gap: 10px;
+}
+
+.knob output {
+  font-family: var(--mono);
+  text-align: right;
+}
+
+.train-form__where,
+.train-form__status {
+  margin: 0;
+}
+
+.train-form__status {
+  color: var(--magenta);
+}
+
+.training__head {
+  margin: 0 0 8px;
+}
+
+.training__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.curve {
+  margin: var(--space-card-padding-min) 0 0;
+  padding: 0;
+}
+
+.curve svg {
+  display: block;
+  width: 100%;
+  height: 120px;
+  color: var(--orange-inked);
+}
+
+.curve figcaption {
+  margin-top: 6px;
+}
+
+.log {
+  margin: var(--space-card-padding-min) 0 0;
+  padding: var(--space-card-padding-min);
+  max-height: 18rem;
+  overflow: auto;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.failed {
+  padding: var(--space-card-padding-min);
+  margin-bottom: var(--space-gutter-max);
+  background: var(--paper);
+  border: 2px solid var(--magenta);
+  color: var(--magenta);
+}
+
+@media (max-width: 640px) {
+  .knob {
+    grid-template-columns: 1fr;
+    row-gap: 4px;
+  }
+}

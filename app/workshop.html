@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Microduck workshop</title>
+    <link rel="icon" href="/duck-head-mark.webp" />
+    <!-- Duck Jam's design system, as on every page of the site. -->
+    <link rel="stylesheet" href="/design/tokens.css" />
+    <link rel="stylesheet" href="/design/effects.css" />
+    <link rel="stylesheet" href="/design/components.css" />
+    <link rel="stylesheet" href="/design/motion.css" />
+    <!-- race.css dresses the deck (stage and transport) the replay plays in. -->
+    <link rel="stylesheet" href="/race.css" />
+    <link rel="stylesheet" href="/workshop.css" />
+  </head>
+  <body>
+    <main class="workshop">
+      <header class="workshop__head">
+        <p class="eyebrow">Microduck workshop</p>
+        <h1 id="title">Workshop</h1>
+        <a id="arena-link" class="mono-label">Back to the challenge on the Arena</a>
+      </header>
+      <section class="zone flyer" id="preflight"></section>
+      <section class="zone flyer">
+        <p class="eyebrow">2 · Train</p>
+        <div id="train-form"></div>
+        <div id="training"></div>
+        <figure class="curve" id="curve"></figure>
+        <pre class="log" id="train-log" tabindex="0" aria-label="Training output"></pre>
+      </section>
+      <section class="zone flyer" id="test-zone">
+        <p class="eyebrow">3 · Test</p>
+        <div id="runs"></div>
+        <p class="trial__status" id="trial-status"></p>
+        <div id="result"></div>
+        <div id="replay"></div>
+      </section>
+      <section class="zone flyer" id="publish-zone">
+        <p class="eyebrow">4 · Publish</p>
+        <div id="code"></div>
+        <div id="publish-form"></div>
+      </section>
+    </main>
+    <script type="module" src="/src/workshop/main.js"></script>
+  </body>
+</html>

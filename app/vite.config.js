@@ -45,9 +45,17 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    // Three pages: the app, the clip the recorder photographs, and the plan
-    // the booth's dialogue is timed by.
-    rollupOptions: { input: { main: page("index.html"), clip: page("clip.html"), plan: page("plan.html") } },
+    // Four pages: the app, the clip the recorder photographs, the plan the
+    // booth's dialogue is timed by, and the workshop (served by `workshop`,
+    // never by the Space's API).
+    rollupOptions: {
+      input: {
+        main: page("index.html"),
+        clip: page("clip.html"),
+        plan: page("plan.html"),
+        workshop: page("workshop.html"),
+      },
+    },
   },
   // `npm run dev` serves the UI on 5173 with hot reload and forwards the API to
   // `arena serve` on 8000, so the frontend can be iterated on without a rebuild.
