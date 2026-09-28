@@ -4,7 +4,12 @@ Walk 2 metres on flat ground. The lowest average time wins.
 
 ## Train
 
-Start with `Mjlab-Velocity-Flat-MicroDuck` in Microduck RL.
+Open **Train my robot** on the challenge page, or run this in a terminal:
+
+```bash
+uv run https://pollen-robotics-microduck-arena.hf.space/workshop.py sprint-2m
+```
+
 Get a stable walk first, then increase speed. Practice small changes in starting
 pose and heading; aim to finish all five attempts.
 
@@ -17,4 +22,4 @@ Each fall or timeout counts as **50 seconds**.
 For example, four 10-second finishes and one fall score **18 seconds**.
 Five 12-second finishes score **12 seconds** and rank higher.
 
-[Setup, export and submission →](../train-a-policy.md)
+[How the workshop works, and the shell path →](../train-a-policy.md)

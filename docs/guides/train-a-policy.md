@@ -1,45 +1,36 @@
 # Train your first policy
 
-A policy is the model that controls the robot. Train it in
-[Microduck RL](https://github.com/pollen-robotics/microduck_rl), then bring its ONNX file to the Arena.
+A policy is the model that controls the robot. You train it in simulation, publish it
+to your Hugging Face account, then enter it here. You do not need a physical robot.
 
-## Train
+## The workshop
 
-You need `uv` and a CUDA GPU. Without a GPU, use the project’s
-[cloud training instructions](https://github.com/pollen-robotics/microduck_rl/blob/develop/scripts/hf/README.md).
+Open a challenge and select **Train my robot**. You need `git`, `uv` and a Hugging Face
+account; the panel gives one line to paste in a terminal. It clones
+[microduck-challenges](https://github.com/pollen-robotics/microduck-challenges) and opens
+the workshop in your browser:
 
-```bash
-git clone https://github.com/pollen-robotics/microduck_rl
-cd microduck_rl
-uv run list-envs
-```
+1. **Preflight** checks your tools and your Hugging Face login.
+2. **Train** starts from the challenge's own recipe. Change a knob if you like, then launch.
+   With an NVIDIA GPU it trains on your machine; without one it runs on Hugging Face Jobs,
+   billed to your account, and brings the checkpoints back as they are saved.
+3. **Test** exports a checkpoint and races it with this Arena's own rules, on your machine.
+   The time is indicative: only the Arena times an entry.
+4. **Publish** puts the policy, its manifest and its recipe in your Hugging Face account,
+   then opens this page with everything filled in. Select **Publish** here to enter it.
 
-Open **Training & rules** on your chosen challenge for the task to use and what to practice.
-Replace `TASK_ID` below with that task:
+## From a shell
 
-```bash
-uv run train TASK_ID --env.scene.num-envs 4096
-```
-
-Reduce `4096` if your GPU runs out of memory.
-
-## Export
-
-Use the same task and the path to your saved checkpoint:
+Everything the workshop does is a command you can run yourself in a clone of
+microduck-challenges (the challenge's `task` is in its `challenge.toml`):
 
 ```bash
-uv run scripts/export.py TASK_ID \
-  --checkpoint-file /path/to/model.pt \
-  --onnx-file output.onnx
+uv run train Mjlab-Sprint2m-MicroDuck --env.scene.num-envs 4096 --agent.max-iterations 3000 \
+    --agent.seed 1 --agent.logger tensorboard --agent.run-name first
+# no NVIDIA GPU: add --hf-jobs --no-wandb, then bring the run back with
+# uv run hf download <the checkpoint repo it printed> --local-dir logs/rsl_rl
+uv run publish --run logs/rsl_rl/sprint_2m/<the run> --repo <you>/microduck-first --no-private
 ```
 
-Use this exporter so the model includes its learned observation normalization.
-The Arena expects 61 observations, 14 actions and a file no larger than 64 MiB.
-
-## Test and publish
-
-1. Open a challenge, sign in and choose `output.onnx`.
-2. Select **Test it** and watch the replay. Nothing is published.
-3. Select **Publish** when ready. This shares the model on Hugging Face and records your result.
-
-Change one training setting at a time, export again, and compare results.
+Then enter `<you>/microduck-first` on the challenge's page. The Arena expects 61
+observations, 14 actions and a file no larger than 64 MiB; `publish` checks all three.

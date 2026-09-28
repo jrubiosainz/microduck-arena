@@ -225,6 +225,69 @@ button.link {
 .entry__user { margin: 0; font-size: 0.82rem; color: var(--ink-70); }
 .entry__user strong { color: var(--ink); }
 
+/* The way to training, above the entry note when this round is open: the
+   same card as .entry — same padding, ink border, sticker shadow — folded
+   shut behind its own disclosure so a visitor here to race is not made to
+   read four paragraphs first. */
+.train {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--cream);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
+}
+/* The disclosure itself, styled as the entry column's own primary button —
+   the marker stripped so it reads as one rather than as a fold. */
+.train__open {
+  display: block;
+  text-align: center;
+  font: 400 0.95rem/1.15 var(--display);
+  letter-spacing: var(--type-button-label-tracking);
+  text-transform: uppercase;
+  padding: 9px 10px;
+  cursor: pointer;
+  border: 2px solid var(--ink);
+  background: var(--orange);
+  color: var(--ink);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--magenta);
+  list-style: none;
+}
+.train__open::-webkit-details-marker { display: none; }
+.train__open:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+.train[open] .train__open { margin-bottom: 4px; }
+.train__need, .train__step, .train__note { margin: 0; font-size: 0.85rem; }
+.train__note { color: var(--ink-70); }
+/* A command line that wraps rather than scrolls: the panel's width is the
+   entry column's, and a one-line launcher easily runs wider than it. */
+.train__line {
+  margin: 0;
+  padding: 7px 9px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  font: 600 0.78rem/1.4 var(--mono);
+  letter-spacing: var(--mono-tracking-min);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.train__copy {
+  align-self: flex-start;
+  font: 400 0.85rem/1.15 var(--display);
+  letter-spacing: var(--type-button-label-tracking);
+  text-transform: uppercase;
+  padding: 6px 10px;
+  cursor: pointer;
+  border: 2px solid var(--ink);
+  background: var(--yellow);
+  color: var(--ink);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--cyan);
+}
+.train__copy:active {
+  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
+  box-shadow: none;
+}
+
 /* ── stage ────────────────────────────────────────────────────────────── */
 
 /* The CRT on its trolley: deep ink behind a 5 px ink bezel, and no offset

@@ -23,6 +23,7 @@ import { renderThumbnails } from "./thumbnail.js";
 import { panelState, signInHref } from "./session.js";
 import { footer, settleIdentity, signage } from "./signage.js";
 import { insertProvisional } from "./standings.js";
+import { renderTrainPanel } from "./trainpanel.js";
 import { createViewer } from "./viewer.js";
 import { voteButton } from "./votebutton.js";
 
@@ -394,6 +395,7 @@ export async function renderRace(root, { event, state }) {
     console.error("The other-rounds strip did not load:", error);
   });
   renderVoteButton(root, event);
+  renderTrainPanel(root, event);
 
   renderEventFacts(root, event);
 
