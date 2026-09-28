@@ -46,13 +46,15 @@ class Training:
         self.root, self.name, self.ckpt_repo, self.namespace = root, name, ckpt_repo, namespace
         self.returncode: int | None = None
         self._lines = [f"$ {shlex.join(command)}"]
-        self._lock = threading.Lock()
+        self._job_id: str | None = None
+        # Reentrant: snapshot() reads job_id while already holding this lock.
+        self._lock = threading.RLock()
         self._pulling = threading.Lock()
         self._ended = threading.Event()
         self._stopped = False
         self.proc = subprocess.Popen(
             command, cwd=root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1, env=child_env(), start_new_session=True,
+            text=True, errors="replace", bufsize=1, env=child_env(), start_new_session=True,
         )
         threading.Thread(target=self._follow, daemon=True).start()
         if ckpt_repo:
@@ -61,6 +63,10 @@ class Training:
     def _say(self, line: str) -> None:
         with self._lock:
             self._lines.append(line)
+            # A resubmitted job (mjlab retries on a volume-mount failure) prints a
+            # fresh id; the last one seen is the one actually running and billed.
+            if m := _JOB_ID.match(line):
+                self._job_id = m.group(1)
 
     def _follow(self) -> None:
         for line in self.proc.stdout:
@@ -69,13 +75,14 @@ class Training:
         self._ended.set()
         if self.ckpt_repo:
             self.pull()  # whatever the job saved last
-        self.returncode = code  # read by `state`: set last, after the final pull
+        with self._lock:
+            self.returncode = code  # read by `state`; set with the log so a snapshot is never torn
 
     def _pull_while_running(self) -> None:
         while not self._ended.wait(PULL_EVERY_S):
             self.pull()
 
-    def pull(self) -> bool:
+    def pull(self) -> None:
         with self._pulling:  # the periodic pull and a button press never overlap
             done = subprocess.run(
                 uv("hf", "download", self.ckpt_repo, "--local-dir", str(LOGS), "--quiet"),
@@ -87,12 +94,11 @@ class Training:
             self._say(f"[workshop] could not fetch {self.ckpt_repo}:")
             for line in (done.stdout + done.stderr).splitlines():
                 self._say(line)
-        return done.returncode == 0
 
     @property
     def job_id(self) -> str | None:
         with self._lock:
-            return next((m.group(1) for line in self._lines if (m := _JOB_ID.match(line))), None)
+            return self._job_id
 
     @property
     def state(self) -> str:
@@ -103,21 +109,27 @@ class Training:
         return "finished" if self.returncode == 0 else "failed"
 
     def stop(self, hub) -> None:
-        """Killing `train --hf-jobs` would only detach from the job, so an HF job is cancelled first."""
+        """Cancel the HF job first — killing `train --hf-jobs` would only detach from it — then end
+        the local process. A no-op once the process has already ended: the state can still read
+        "running" while the final pull is in flight, and by then there is no job left to cancel and
+        the pid may already have been recycled (`_follow` reaps it right away).
+        """
+        if self._ended.is_set():
+            return
         if self.ckpt_repo and (job := self.job_id):
-            hub.cancel_job(job, self.namespace)
+            hub.cancel_job(job, self.namespace)  # the only call in this method the caller need worry about
             self._say(f"[workshop] cancelled job {job}")
         self._stopped = True
         try:
             os.killpg(self.proc.pid, signal.SIGTERM)
-        except ProcessLookupError:
+        except OSError:
             pass
 
     def snapshot(self, since: int = 0) -> dict:
         with self._lock:
             lines, total = self._lines[max(since, 0):], len(self._lines)
-        return {
-            "name": self.name, "mode": "hf-jobs" if self.ckpt_repo else "local", "state": self.state,
-            "returncode": self.returncode, "ckpt_repo": self.ckpt_repo, "job_id": self.job_id,
-            "log": lines, "next": total,
-        }
+            return {
+                "name": self.name, "mode": "hf-jobs" if self.ckpt_repo else "local", "state": self.state,
+                "returncode": self.returncode, "ckpt_repo": self.ckpt_repo, "job_id": self.job_id,
+                "log": lines, "next": total,
+            }

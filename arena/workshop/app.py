@@ -7,6 +7,7 @@ site and served from the same folder, so the replay uses the site's viewer.
 
 import re
 import shutil
+import threading
 import webbrowser
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -42,6 +43,10 @@ class Workshop:
     hub: Hub
     open_browser: object
     training: object = field(default=None)
+    # Serializes launch and stop: without it, two POST /train ~250ms apart could both pass
+    # `_running` before either sets `ws.training`, starting two processes (one an unreachable,
+    # still-billed HF job) and racing `write_values`/`commit_all` over the same checkout.
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 def preflight(root: Path, hub: Hub) -> dict:
@@ -92,7 +97,9 @@ def login(body: Token, request: Request) -> dict:
     return {"user": ws.hub.whoami()}
 
 
-RUN_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+IN_PROGRESS = "A launch or a stop is already in progress."
+# Also a Hub repo name: no leading, trailing or doubled dash.
+RUN_NAME = re.compile(r"^(?=.{1,40}$)[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 class Launch(BaseModel):
@@ -108,36 +115,44 @@ def _running(ws: Workshop) -> bool:
 @router.post("/train")
 def launch(body: Launch, request: Request) -> dict:
     ws = _workshop(request)
-    if _running(ws):
-        raise HTTPException(status_code=409, detail="A training is already running: stop it first.")
-    if not RUN_NAME.match(body.name):
-        raise HTTPException(status_code=400, detail="A run name is lowercase letters, digits and dashes, up to 40.")
-    taken = {r.name for r in find_runs(ws.root, ws.challenge.task)} | ({ws.training.name} if ws.training else set())
-    if body.name in taken:
-        raise HTTPException(status_code=409, detail=f"There is already a run called {body.name}.")
-    if set(body.recipe) != set(RECIPE):
-        raise HTTPException(status_code=400, detail=f"The recipe is {', '.join(RECIPE)}, all three.")
-    tools = preflight(ws.root, ws.hub)
-    hf_user = None if tools["gpu"] else tools["user"]
-    if not tools["gpu"] and not hf_user:
-        raise HTTPException(
-            status_code=400,
-            detail="Without an NVIDIA GPU, training runs on Hugging Face Jobs: log in to Hugging Face first.",
-        )
+    if not ws.lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail=IN_PROGRESS)
     try:
-        write_values(ws.challenge, body.recipe, body.params)
-        # Every run starts from a commit, so the recipe a policy is published with is what trained it.
-        commit_all(ws.root, f"{ws.challenge.event}: run {body.name}")
-    except ChallengeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ShellError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    ws.challenge = read_challenge(ws.challenge.toml)
-    ws.training = Training(
-        ws.root, body.name, train_command(ws.challenge, body.name, body.recipe, hf_user),
-        ckpt_repo=ckpt_repo(hf_user, ws.challenge, body.name) if hf_user else None, namespace=hf_user,
-    )
-    return ws.training.snapshot()
+        if _running(ws):
+            raise HTTPException(status_code=409, detail="A training is already running: stop it first.")
+        if not RUN_NAME.match(body.name):
+            raise HTTPException(
+                status_code=400,
+                detail="A run name is lowercase letters and digits, joined by single dashes, up to 40 characters.",
+            )
+        taken = {r.name for r in find_runs(ws.root, ws.challenge.task)} | ({ws.training.name} if ws.training else set())
+        if body.name in taken:
+            raise HTTPException(status_code=409, detail=f"There is already a run called {body.name}.")
+        if set(body.recipe) != set(RECIPE):
+            raise HTTPException(status_code=400, detail=f"The recipe is {', '.join(RECIPE)}, all three.")
+        tools = preflight(ws.root, ws.hub)
+        hf_user = None if tools["gpu"] else tools["user"]
+        if not tools["gpu"] and not hf_user:
+            raise HTTPException(
+                status_code=400,
+                detail="Without an NVIDIA GPU, training runs on Hugging Face Jobs: log in to Hugging Face first.",
+            )
+        try:
+            write_values(ws.challenge, body.recipe, body.params)
+            # Every run starts from a commit, so the recipe a policy is published with is what trained it.
+            commit_all(ws.root, f"{ws.challenge.event}: run {body.name}")
+        except ChallengeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except ShellError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        ws.challenge = read_challenge(ws.challenge.toml)
+        ws.training = Training(
+            ws.root, body.name, train_command(ws.challenge, body.name, body.recipe, hf_user),
+            ckpt_repo=ckpt_repo(hf_user, ws.challenge, body.name) if hf_user else None, namespace=hf_user,
+        )
+        return ws.training.snapshot()
+    finally:
+        ws.lock.release()
 
 
 @router.get("/train")
@@ -149,14 +164,20 @@ def follow_training(request: Request, since: int = 0) -> dict:
 @router.post("/train/stop")
 def stop(request: Request) -> dict:
     ws = _workshop(request)
-    if not _running(ws):
-        raise HTTPException(status_code=409, detail="No training is running.")
+    if not ws.lock.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail=IN_PROGRESS)
     try:
-        ws.training.stop(ws.hub)
-    except Exception as exc:  # noqa: BLE001
-        # The job was NOT cancelled and is still billed: say so, keep following it.
-        raise HTTPException(status_code=502, detail=f"Could not cancel the Hugging Face job: {exc}") from exc
-    return ws.training.snapshot()
+        if not _running(ws):
+            raise HTTPException(status_code=409, detail="No training is running.")
+        try:
+            # Training.stop() only lets the Hub's own cancel_job() raise past it.
+            ws.training.stop(ws.hub)
+        except Exception as exc:  # noqa: BLE001
+            # The job was NOT cancelled and is still billed: say so, keep following it.
+            raise HTTPException(status_code=502, detail=f"Could not cancel the Hugging Face job: {exc}") from exc
+        return ws.training.snapshot()
+    finally:
+        ws.lock.release()
 
 
 @router.post("/train/pull")

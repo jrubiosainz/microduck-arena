@@ -1,6 +1,8 @@
 """Launching commits the knobs and trains — here with a GPU, on HF Jobs without one — and an HF run
 is brought back into logs/ so Test and Publish find it where they find a local one."""
 
+import threading
+
 import pytest
 
 from tests.workshop.conftest import SPRINT, git, make_run, wait_for
@@ -80,7 +82,7 @@ def test_a_run_name_already_on_disk_is_refused(workshop, fakes, checkout):
     assert workshop.post("/api/workshop/train", json=LAUNCH).status_code == 409
 
 
-@pytest.mark.parametrize("name", ["", "First", "a b", "x" * 41, "-lead"])
+@pytest.mark.parametrize("name", ["", "First", "a b", "x" * 41, "-lead", "first-", "a--b"])
 def test_a_run_name_must_be_a_plain_slug(workshop, fakes, name):
     fakes.gpu()
     assert workshop.post("/api/workshop/train", json=LAUNCH | {"name": name}).status_code == 400
@@ -110,6 +112,18 @@ def test_stop_cancels_the_hf_job_it_follows(workshop, fakes, hub, monkeypatch):
     assert wait_for(lambda: _finished(workshop))["state"] == "stopped"
 
 
+def test_stop_cancels_the_resubmitted_job_not_the_dead_first_one(workshop, fakes, hub, monkeypatch):
+    """train --hf-jobs resubmits up to 3 times after a volume-mount failure, printing a fresh
+    [job] id: each time; only the last one is still alive to cancel."""
+    monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")
+    monkeypatch.setenv("FAKE_UV_RESUBMIT", "1")
+    workshop.post("/api/workshop/train", json=LAUNCH)
+    wait_for(lambda: workshop.get("/api/workshop/train?since=0").json()["job_id"] == "fakejob43")
+    workshop.post("/api/workshop/train/stop")
+    assert hub.cancelled == [("fakejob43", "alice")]
+    assert wait_for(lambda: _finished(workshop))["state"] == "stopped"
+
+
 def test_a_failed_training_says_so_with_its_code(workshop, fakes, monkeypatch):
     fakes.gpu()
     monkeypatch.setenv("FAKE_UV_TRAIN_RC", "3")
@@ -130,3 +144,54 @@ def test_the_log_is_read_from_an_offset(workshop, fakes):
 def test_nothing_launched_yet(workshop):
     assert workshop.get("/api/workshop/train?since=0").json() == {"state": None}
     assert workshop.post("/api/workshop/train/stop").status_code == 409
+
+
+def test_two_launches_close_together_only_one_wins(workshop, fakes, monkeypatch):
+    """Without a lock, both could pass `_running` before either sets ws.training: two `train`
+    processes, one of them an unreachable HF job still being billed."""
+    fakes.gpu()
+    monkeypatch.setenv("FAKE_UV_TRAIN_S", "5")
+    results: list = []
+    lock = threading.Lock()
+
+    def go():
+        result = workshop.post("/api/workshop/train", json=LAUNCH)
+        with lock:
+            results.append(result)
+
+    threads = [threading.Thread(target=go) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert sorted(r.status_code for r in results) == [200, 409]
+    wait_for(lambda: fakes.calls("train"))  # the winner's subprocess needs a moment to start and log
+    assert len(fakes.calls("train")) == 1
+    workshop.post("/api/workshop/train/stop")
+
+
+def test_a_cancel_that_fails_502s_and_keeps_following(workshop, fakes, hub, monkeypatch):
+    monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")
+    real_cancel_job = hub.cancel_job
+    attempts: list = []
+
+    def flaky_cancel(job_id, namespace):
+        attempts.append(job_id)
+        if len(attempts) == 1:
+            raise RuntimeError("Hub is down")
+        return real_cancel_job(job_id, namespace)
+
+    hub.cancel_job = flaky_cancel
+    workshop.post("/api/workshop/train", json=LAUNCH)
+    wait_for(lambda: workshop.get("/api/workshop/train?since=0").json()["job_id"])
+
+    response = workshop.post("/api/workshop/train/stop")
+    assert response.status_code == 502
+    assert "cancel" in response.json()["detail"].lower()
+    assert workshop.get("/api/workshop/train?since=0").json()["state"] == "running"
+
+    # Clean up: the Hub answers this time, so this stop actually ends the training.
+    assert workshop.post("/api/workshop/train/stop").status_code == 200
+    assert hub.cancelled == [("fakejob42", "alice")]
+    assert wait_for(lambda: _finished(workshop))["state"] == "stopped"

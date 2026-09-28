@@ -6,7 +6,9 @@ file); with --hf-jobs it prints what hf_jobs prints and writes the run into
 $FAKE_HUB/<ckpt repo>/ instead, which `hf download` copies back. `publish
 --dry-run` writes ./publish-<name>/ with $FAKE_UV_ONNX as policy.onnx; a real
 `publish` prints the commit URL the real one prints. FAKE_UV_FAIL_<COMMAND>=1
-makes that command fail; FAKE_UV_TRAIN_S keeps `train` alive that long.
+makes that command fail; FAKE_UV_TRAIN_S keeps `train` alive that long;
+FAKE_UV_RESUBMIT=1 prints a second `[job] id:` line, as `train --hf-jobs`
+does when a volume mount fails and it resubmits.
 """
 
 import json
@@ -32,6 +34,9 @@ def train(argv):
         repo = flag(argv, "--ckpt-repo")
         print(f"[ckpt] checkpoints -> https://huggingface.co/{repo}", flush=True)
         print("[job] id:  fakejob42", flush=True)
+        if os.environ.get("FAKE_UV_RESUBMIT"):
+            print("[job] volume mount failed; resubmitting", flush=True)
+            print("[job] id:  fakejob43", flush=True)
         base = Path(os.environ["FAKE_HUB"]) / repo
     else:
         base = Path("logs") / "rsl_rl"

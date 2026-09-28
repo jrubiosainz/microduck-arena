@@ -16,6 +16,13 @@ from fastapi.testclient import TestClient
 
 from arena.assets import ASSET_ROOT
 
+# Imported here, at collection time, while PATH is still whatever the developer's shell gives it:
+# arena.workshop.app pulls in mujoco, which probes `sysctl` on macOS at import time. The `fakes`
+# fixture later narrows PATH to only the fake-tool bin dir; importing this module for the first time
+# under that PATH (e.g. running tests/workshop/test_training.py alone) would make that probe fail.
+from arena.workshop.app import create_workshop_app
+from arena.workshop.challenges import open_challenges
+
 HERE = Path(__file__).resolve().parent
 PROBE = HERE.parent / "fixtures" / "workshop" / "events.out.tfevents.probe"
 REFERENCE = ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"
@@ -148,9 +155,6 @@ def hub():
 
 @pytest.fixture
 def workshop(checkout, fakes, hub):
-    from arena.workshop.app import create_workshop_app
-    from arena.workshop.challenges import open_challenges
-
     opened = []
     app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub,
                               open_browser=opened.append)
