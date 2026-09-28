@@ -232,3 +232,127 @@ html, body {
     row-gap: 4px;
   }
 }
+
+/* ── Test ───────────────────────────────────────────────────────────────── */
+
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-card-padding-min);
+  margin-bottom: var(--space-card-padding-min);
+}
+
+.run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.run .mono-label {
+  flex-basis: 100%;
+  margin: 0 0 2px;
+}
+
+.checkpoint {
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.checkpoint[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.runs__empty {
+  color: var(--ink-70);
+}
+
+.trial__status {
+  margin: var(--space-card-padding-min) 0 0;
+  color: var(--magenta);
+}
+
+.trial__score {
+  margin: var(--space-card-padding-min) 0 4px;
+  font: 700 1.5rem/1.2 var(--display);
+}
+
+.trial__seeds {
+  margin: 0 0 4px;
+}
+
+.trial__caveat {
+  margin: 0;
+  color: var(--ink-70);
+}
+
+/* ── Publish ────────────────────────────────────────────────────────────── */
+
+.code__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: var(--space-card-padding-min) 0;
+}
+
+.code__actions input[type="url"] {
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 6px 8px;
+  font-family: var(--body);
+  flex: 1 1 16rem;
+}
+
+.code__output {
+  margin: 0;
+  color: var(--magenta);
+}
+
+.publish {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-card-padding-min);
+}
+
+.publish__what {
+  margin: 0;
+}
+
+.publish__dirty {
+  margin: 0;
+  padding: var(--space-card-padding-min);
+  background: var(--warm-paper);
+  border: 1px solid var(--magenta);
+  color: var(--magenta);
+}
+
+.publish__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.publish__status {
+  margin: 0;
+}
+
+.publish__card {
+  margin: 0;
+  padding: var(--space-card-padding-min);
+  max-height: 18rem;
+  overflow: auto;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}

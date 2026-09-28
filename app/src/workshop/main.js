@@ -1,9 +1,14 @@
 // The workshop page: four zones over one challenge, fed by /api/workshop/*.
 
+import { MIN } from "../brightness.js";
+import { deckMarkup, wireDeck } from "../deck.js";
+import { createViewer } from "../viewer.js";
 import * as api from "./api.js";
 import { renderCurve } from "./curve.js";
 import { renderPreflight } from "./preflight.js";
+import { renderCode, renderPublish } from "./publish.js";
 import { appendLog, renderTrainForm, renderTraining } from "./train.js";
+import { renderResult, renderRuns } from "./trial.js";
 
 const $ = (selector) => document.querySelector(selector);
 const page = { status: null, since: 0, runs: [], selection: null, viewer: null, deck: null };
@@ -35,6 +40,63 @@ async function refreshStatus() {
 
 async function refreshRuns() {
   page.runs = await api.getRuns();
+  // A selection keeps pointing at the same run object as the list refreshes.
+  if (page.selection) {
+    const run = page.runs.find((r) => r.id === page.selection.run.id);
+    page.selection = run ? { run, checkpoint: page.selection.checkpoint } : null;
+  }
+  renderRuns($("#runs"), page.runs, page.selection, { onSelect, onTest });
+}
+
+function onSelect(selection) {
+  page.selection = selection;
+  renderRuns($("#runs"), page.runs, page.selection, { onSelect, onTest });
+  renderPublishForm();
+}
+
+async function onTest() {
+  const { run, checkpoint } = page.selection;
+  const note = $("#trial-status");
+  note.textContent = `Exporting checkpoint ${checkpoint} and racing it (a minute or so)…`;
+  try {
+    const result = await api.testCheckpoint(run.id, checkpoint);
+    note.textContent = "";
+    renderResult($("#result"), result);
+    await replay(result);
+    await refreshRuns();
+    renderPublishForm();
+  } catch (error) {
+    note.textContent = error.message;
+  }
+}
+
+async function replay(result) {
+  if (!page.viewer) {
+    $("#replay").innerHTML = deckMarkup;
+    page.viewer = await createViewer($("#stage"), { rig: page.status.event.rig });
+    page.viewer.setBrightness(MIN);
+    page.deck = wireDeck($("#replay"), page.viewer);
+  }
+  page.viewer.setLanes(
+    [{ runId: null, trace: result.trace, tier: "trial", livery: "classic", name: `checkpoint ${result.checkpoint}` }],
+    page.status.event,
+  );
+  page.deck.reset();
+}
+
+async function refreshCode() {
+  const code = await api.getCode();
+  renderCode($("#code"), code, {
+    onFork: async (url) => { await api.forkCode(url); await refreshCode(); },
+    onPush: async () => { await api.pushCode(); await refreshCode(); },
+  });
+}
+
+function renderPublishForm() {
+  renderPublish($("#publish-form"), page.selection, page.status, {
+    onPreview: (values) => api.publishRun({ ...values, dry_run: true }),
+    onPublish: (values) => api.publishRun(values),
+  });
 }
 
 async function onLaunch(body) {
@@ -79,6 +141,8 @@ async function start() {
   try {
     await refreshStatus();
     await refreshRuns();
+    await refreshCode();
+    renderPublishForm();
     await follow(); // a training launched before a reload is picked up again
   } catch (error) {
     $("main").insertAdjacentHTML("afterbegin", '<p class="failed"></p>');
