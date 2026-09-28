@@ -17,7 +17,11 @@ from arena.store import LocalStore, Withdrawal
 from arena.trace import encode as encode_trace
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
-from tests.test_routes_submit import REFERENCE, submit
+from tests.test_routes_submit import (  # noqa: F401 — hub is an autouse fixture
+    REFERENCE,
+    hub,
+    submit,
+)
 from tests.test_store import make_record
 
 

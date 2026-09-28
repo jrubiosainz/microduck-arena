@@ -90,7 +90,7 @@ def test_a_policy_for_a_machine_we_have_no_event_for_is_skipped():
 
 
 def test_the_rollers_model_string_maps_back_to_the_rollers_rig():
-    """hub_publish writes 'microduck passive rollers'; recovery must read it back."""
+    """Community publishers write 'microduck passive rollers'; recovery must read it back."""
     found = candidates(
         listing(("a/microduck-skate", "rev1")),
         manifests({"a/microduck-skate": arena_manifest(robot={"model": "microduck passive rollers"})}),
