@@ -106,13 +106,14 @@ def test_evaluate_is_deterministic():
 # sync with arena.golden.BASELINES by the cross-check test below).
 # Darwin-arm64: this Mac — 7.988 s at 0.55 m/s before training's reset and
 # fifth actuator writes joined the runner (arena/runner.py), 8.672 s at 0.50
-# since. Linux-x86_64: HF Jobs, Intel Xeon 8375C, measured before those writes
-# and awaiting re-measurement (arena/golden.py) — the Space runs x86_64. On a
-# platform with no baseline the tests that need one skip, and
+# since. Linux-x86_64: HF Jobs, Intel Xeon Platinum 8375C and AMD EPYC 7R13,
+# identical — 8.556 s at 0.50 on Intel before those writes and the libm
+# exp/pow (arena/golden.py), 9.404 s at 0.45 since — the Space runs x86_64. On
+# a platform with no baseline the tests that need one skip, and
 # arena.golden.check() refuses.
 GOLDEN_BASELINES = {
     "Darwin-arm64": (8.672, 0.50),
-    "Linux-x86_64": (8.556, 0.50),
+    "Linux-x86_64": (9.404, 0.45),
 }
 GOLDEN_SCORE_S, GOLDEN_COMMAND_VX = GOLDEN_BASELINES.get(PLATFORM, (None, None))
 needs_golden = pytest.mark.skipif(

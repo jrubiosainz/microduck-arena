@@ -25,17 +25,17 @@ servo model training uses (arena/actuator.py), run at the points training runs
 it (arena/runner.py), instead of the MJCF position servos. That also turned
 this module's single number into one per platform: the actuator's per-substep
 friction/delay model is chaotic enough that an arm64 run and an x86_64 run of
-the same policy, seed, and command diverge after 1-3 s of simulated time (v3's
-MJCF-servo Mac/x86 gap was 0.37%; v4's BAM-servo gap was 7%). The baseline
-below is therefore keyed by platform (OS and machine) rather than being one
-number: Mac development measures Darwin-arm64; the Space runs Linux-x86_64,
-measured on HF Jobs.
+the same policy, seed, and command diverge after 1-3 s of simulated time —
+8.672 s at 0.50 m/s against 9.404 s at 0.45, 8.4% apart (v3's MJCF-servo
+Mac/x86 gap was 0.37%). The baseline below is therefore keyed by platform (OS
+and machine) rather than being one number: Mac development measures
+Darwin-arm64; the Space runs Linux-x86_64, measured on HF Jobs.
 
-Nor is x86_64 one platform to this actuator. Before the friction budget's
-exp/pow moved off numpy's ufuncs (which may dispatch them to CPU-specific SIMD
-kernels), an Intel Xeon 8375C scored 8.556 s and an AMD EPYC 7R13 8.568 s,
-both at 0.50 m/s: the CPU itself, not only its architecture, reached the
-result.
+Within x86_64 the CPU does not matter: an Intel Xeon Platinum 8375C and an AMD
+EPYC 7R13 agree bit-for-bit, because the friction budget computes its Stribeck
+factor with math.exp/math.pow. numpy's exp/pow, which it used before, may
+dispatch to CPU-specific SIMD kernels, and had split the same two CPUs by
+0.14% (8.556 s against 8.568 s).
 """
 
 import platform
@@ -51,12 +51,12 @@ PLATFORM = f"{platform.system()}-{platform.machine()}"
 # by PLATFORM. Both the score and the speed, because a score can be reproduced
 # by luck from a different speed. Darwin-arm64: this Mac (7.988 s at 0.55 m/s
 # before training's reset and fifth actuator writes joined the runner).
-# Linux-x86_64: HF Jobs, Intel Xeon 8375C — the Space runs x86_64. That entry
-# predates the reset and fifth writes and has to be re-measured before this
-# ships: the Space's Docker build runs check().
+# Linux-x86_64: HF Jobs, Intel Xeon Platinum 8375C and AMD EPYC 7R13,
+# identical (8.556 s at 0.50 m/s on Intel before those writes and before the
+# libm exp/pow) — the Space runs x86_64.
 BASELINES: dict[str, tuple[float, float]] = {
     "Darwin-arm64": (8.672, 0.50),
-    "Linux-x86_64": (8.556, 0.50),
+    "Linux-x86_64": (9.404, 0.45),
 }
 # The score check only catches gross drift: the 3.13 regression above was
 # roughly a factor of two. A pin move can be far smaller and still slip past
@@ -64,8 +64,9 @@ BASELINES: dict[str, tuple[float, float]] = {
 # which is what check_mujoco_version() is for. TOLERANCE applies WITHIN one
 # platform's own baseline, not across the arm64/x86_64 split in BASELINES
 # above: v3's MJCF servos put the two platforms 0.37% apart, comfortably
-# inside 2%, but v4's BAM servos put them 7% apart, which is why the baseline
-# became per-platform instead of this number being widened to cover it.
+# inside 2%, but v4's BAM servos put them 8.4% apart, which is why the
+# baseline became per-platform instead of this number being widened to cover
+# it.
 TOLERANCE = 0.02
 
 
