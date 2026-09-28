@@ -2,11 +2,12 @@
 
 import json
 import shutil
+import struct
 from pathlib import Path
 
 import pytest
 
-from arena.workshop import tfevents
+from arena.workshop import eventfile
 from arena.workshop.runs import curve, find_run, find_runs
 
 PROBE = Path(__file__).resolve().parents[1] / "fixtures" / "workshop" / "events.out.tfevents.probe"
@@ -75,4 +76,17 @@ def test_a_record_cut_off_mid_write_is_left_for_next_time(tmp_path):
     # A next record whose length has arrived but whose bytes have not all: what a
     # pull catches while the job's writer is mid-flush.
     torn.write_bytes(whole + whole[:20])
-    assert tfevents.scalars(torn, "Train/mean_reward") == tfevents.scalars(PROBE, "Train/mean_reward")
+    assert eventfile.scalars(torn, "Train/mean_reward") == eventfile.scalars(PROBE, "Train/mean_reward")
+
+
+def test_a_record_whose_payload_ends_mid_field_is_left_for_next_time(tmp_path):
+    whole = PROBE.read_bytes()
+    # A step field (protobuf field 2, varint wire type) whose length arrived in
+    # full but whose continuation byte (0x85's high bit) never did: the length
+    # check alone would accept this record, so the field walk itself must catch it.
+    payload = bytes([16, 0x85])
+    broken = tmp_path / "events.out.tfevents.broken"
+    broken.write_bytes(
+        whole + struct.pack("<Q", len(payload)) + b"\x00\x00\x00\x00" + payload + b"\x00\x00\x00\x00"
+    )
+    assert eventfile.scalars(broken, "Train/mean_reward") == eventfile.scalars(PROBE, "Train/mean_reward")

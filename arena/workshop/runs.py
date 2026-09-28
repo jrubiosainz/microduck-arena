@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import tfevents
+from . import eventfile
 
 LOGS = Path("logs") / "rsl_rl"
 REWARD = "Train/mean_reward"
@@ -51,5 +51,5 @@ def curve(run: Run, tag: str = REWARD) -> list[tuple[int, float]]:
     """The run's `tag` over its steps, from every TensorBoard file in it."""
     points = []
     for events in sorted(run.path.glob("events.out.tfevents.*")):
-        points += tfevents.scalars(events, tag)
+        points += eventfile.scalars(events, tag)
     return sorted(points)
