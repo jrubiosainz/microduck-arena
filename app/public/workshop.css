@@ -217,6 +217,31 @@ html, body {
   gap: 10px;
 }
 
+/* Only ever why a Stop or a fetch failed. */
+.training__note {
+  margin: 8px 0 0;
+  color: var(--orange-inked);
+}
+
+/* Jobs launched before, the workshop closed since: each can still be fetched or stopped. */
+.job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: var(--space-card-padding-min);
+}
+
+.job .mono-label,
+.job__note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.job__note {
+  color: var(--ink-70);
+}
+
 .curve {
   margin: var(--space-card-padding-min) 0 0;
   padding: 0;

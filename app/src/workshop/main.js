@@ -7,12 +7,13 @@ import * as api from "./api.js";
 import { renderCurve } from "./curve.js";
 import { renderPreflight } from "./preflight.js";
 import { renderCode, renderPublish } from "./publish.js";
-import { say } from "./say.js";
-import { appendLog, renderTrainForm, renderTraining } from "./train.js";
+import { appendLog, renderJobs, renderTrainForm, renderTraining } from "./train.js";
 import { renderResult, renderRuns } from "./trial.js";
+import { say } from "./ui.js";
 
 const $ = (selector) => document.querySelector(selector);
-const page = { status: null, since: 0, runs: [], selection: null, viewer: null, deck: null, draft: null };
+// `training`: the name of the training followed, which the list of earlier jobs leaves out.
+const page = { status: null, since: 0, training: null, runs: [], selection: null, viewer: null, deck: null, draft: null };
 const FOLLOW_EVERY_MS = 3000;
 // The last training state a poll actually saw, so a poll that throws (a
 // dropped connection, a bad response) still knows whether to reschedule
@@ -125,11 +126,19 @@ function renderPublishForm() {
   });
 }
 
+async function refreshJobs() {
+  renderJobs($("#jobs"), await api.getJobs(), page.training, {
+    onPull: async (name) => { await api.pullJob(name); await refreshRuns(); },
+    onStop: api.stopJob,
+  });
+}
+
 async function onLaunch(body) {
   await api.launch(body);
   page.since = 0;
   $("#train-log").textContent = "";
   await follow();
+  await refreshJobs(); // the training followed until now, if any, joins the earlier jobs
 }
 
 /**
@@ -147,10 +156,8 @@ async function follow() {
     lastTrainingState = training.state;
     if (training.state === null) return;
     page.since = training.next;
-    renderTraining($("#training"), training, {
-      onStop: async () => { await api.stopTraining(); },
-      onPull: async () => { await api.pullCheckpoints(); },
-    });
+    page.training = training.name;
+    renderTraining($("#training"), training, { onStop: api.stopTraining, onPull: api.pullCheckpoints });
     appendLog($("#train-log"), training.log);
     setFollowStatus("");
     await refreshRuns();
@@ -170,6 +177,7 @@ async function start() {
     await refreshCode();
     renderPublishForm();
     await follow(); // a training launched before a reload is picked up again
+    await refreshJobs(); // and a job launched before the workshop was closed
   } catch (error) {
     $("main").insertAdjacentHTML("afterbegin", '<p class="failed"></p>');
     $(".failed").textContent = `The workshop's server did not answer: ${error.message}`;

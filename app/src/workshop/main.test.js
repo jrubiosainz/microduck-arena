@@ -22,6 +22,11 @@ vi.mock("./api.js", () => ({
   login: async () => { signedIn = true; },
   getRuns: async () => [run],
   getTraining: async () => ({ state: null }),
+  getJobs: async () => [
+    { name: "overnight", ckpt_repo: "alice/x-overnight", namespace: "alice", job_id: "j1", started: "2026-09-28T10:00:00+00:00" },
+  ],
+  pullJob: async () => ({}),
+  stopJob: async () => ({}),
   getCode: async () => ({
     state: "not-shared", origin: null, fork: null, changes: 0, unpushed: 0, commit: null,
     gh: true, fork_page: "https://github.com/pollen-robotics/microduck-challenges/fork", output: "",
@@ -39,6 +44,7 @@ const fixture = () => {
       <p id="follow-status"></p>
       <figure id="curve"></figure>
       <pre id="train-log"></pre>
+      <div id="jobs"></div>
       <div id="runs"></div>
       <p id="trial-status"></p>
       <div id="result"></div>
@@ -70,6 +76,17 @@ describe("signing in after a checkpoint is already chosen", () => {
   });
 });
 
+describe("reopening the workshop while a Hugging Face job still runs", () => {
+  it("lists the job in the Train zone, to fetch or stop", async () => {
+    fixture();
+    vi.resetModules();
+    await import("./main.js");
+    await settle();
+    expect(document.querySelector("#jobs .job").textContent).toContain("alice/x-overnight");
+    expect(document.querySelector("#jobs .job__stop")).not.toBeNull();
+  });
+});
+
 describe("the page's sheet", () => {
   const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../public/workshop.css"), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "");
@@ -81,7 +98,7 @@ describe("the page's sheet", () => {
       .join("");
 
   it("says what a step is doing in ink, and only what went wrong in orange", () => {
-    for (const note of [".train-form__status", ".trial__status", ".publish__status"]) {
+    for (const note of [".train-form__status", ".trial__status", ".publish__status", ".job__note"]) {
       expect(rule(note), note).toMatch(/color:\s*var\(--ink-70\)/);
     }
     expect(rule(".workshop .bad")).toMatch(/color:\s*var\(--orange-inked\)/);

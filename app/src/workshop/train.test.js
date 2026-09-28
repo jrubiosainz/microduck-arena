@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { appendLog, formValues, renderTrainForm, renderTraining, runName } from "./train.js";
+import { appendLog, formValues, renderJobs, renderTrainForm, renderTraining, runName } from "./train.js";
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -43,6 +43,9 @@ describe("the Train form", () => {
     expect(zone.querySelector("button[type=submit]").disabled).toBe(true);
     renderTrainForm(zone, status(), { onLaunch: vi.fn() });
     expect(zone.textContent).toMatch(/Hugging Face Jobs/);
+    expect(zone.textContent).toContain("Closing the workshop does not stop a Hugging Face job: reopen it to fetch or stop it.");
+    renderTrainForm(zone, status({ gpu: true }), { onLaunch: vi.fn() });
+    expect(zone.textContent).not.toMatch(/Closing the workshop/);
   });
 
   it("says it is starting in ink, and why a launch failed in orange", async () => {
@@ -90,7 +93,25 @@ describe("a training in progress", () => {
     expect(onStop).toHaveBeenCalled();
     expect(onPull).toHaveBeenCalled();
     expect(zone.textContent).toContain("alice/x-first");
+    expect(zone.querySelector(".training__stop").classList.contains("button")).toBe(true);
     expect(zone.querySelector(".training__pull").classList.contains("button")).toBe(true);
+  });
+
+  it("says why a Stop or a fetch failed, still after the next poll redraws the zone", async () => {
+    const zone = document.createElement("div");
+    const onStop = vi.fn(async () => { throw new Error("Could not cancel the Hugging Face job: Hub is down"); });
+    const onPull = vi.fn(async () => { throw new Error("could not fetch alice/x-first"); });
+    renderTraining(zone, hf, { onStop, onPull });
+    zone.querySelector(".training__stop").click();
+    await settle();
+    expect(zone.querySelector(".training__note").textContent).toMatch(/Hub is down/);
+    renderTraining(zone, hf, { onStop, onPull }); // the next poll
+    expect(zone.querySelector(".training__note").textContent).toMatch(/Hub is down/);
+    zone.querySelector(".training__pull").click();
+    await settle();
+    expect(zone.querySelector(".training__note").textContent).toBe("could not fetch alice/x-first");
+    renderTraining(zone, { ...hf, state: "finished", returncode: 0 }, { onStop, onPull });
+    expect(zone.querySelector(".training__note").textContent).toBe("");
   });
 
   it("offers neither once it is over, and says how it ended", () => {
@@ -106,5 +127,41 @@ describe("a training in progress", () => {
     appendLog(pre, ["$ uv run --no-sync train …", "Learning iteration 1/2"]);
     appendLog(pre, ["Learning iteration 2/2"]);
     expect(pre.textContent.split("\n").filter(Boolean)).toHaveLength(3);
+  });
+});
+
+describe("Hugging Face jobs launched before", () => {
+  const job = (name) => ({ name, ckpt_repo: `alice/x-${name}`, namespace: "alice", job_id: `job-${name}`, started: "2026-09-28T10:00:00+00:00" });
+  const jobs = [job("second"), job("first")];
+
+  it("lists each one but the training followed above, with Fetch and Stop", () => {
+    const zone = document.createElement("div");
+    const onPull = vi.fn(async () => {});
+    const onStop = vi.fn(async () => {});
+    renderJobs(zone, jobs, "second", { onPull, onStop });
+    expect(zone.querySelectorAll(".job")).toHaveLength(1);
+    expect(zone.textContent).toContain("alice/x-first");
+    zone.querySelector(".job__pull").click();
+    zone.querySelector(".job__stop").click();
+    expect(onPull).toHaveBeenCalledWith("first");
+    expect(onStop).toHaveBeenCalledWith("first");
+    expect(zone.querySelector(".job__stop").classList.contains("button")).toBe(true);
+    renderJobs(zone, jobs, null, { onPull, onStop });
+    expect(zone.querySelectorAll(".job")).toHaveLength(2);
+  });
+
+  it("says what a fetch did in ink, and why a Stop failed in orange", async () => {
+    const zone = document.createElement("div");
+    const onStop = vi.fn(async () => { throw new Error("Could not cancel the Hugging Face job: 404"); });
+    renderJobs(zone, [job("first")], null, { onPull: vi.fn(async () => {}), onStop });
+    const note = zone.querySelector(".job__note");
+    zone.querySelector(".job__pull").click();
+    await settle();
+    expect(note.textContent).toMatch(/Fetched alice\/x-first/);
+    expect(note.classList.contains("bad")).toBe(false);
+    zone.querySelector(".job__stop").click();
+    await settle();
+    expect(note.textContent).toMatch(/Could not cancel/);
+    expect(note.classList.contains("bad")).toBe(true);
   });
 });

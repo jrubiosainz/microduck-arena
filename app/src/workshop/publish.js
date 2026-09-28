@@ -1,7 +1,7 @@
 // Your code, then Publish. The policy goes to the user's Hugging Face account
 // through `uv run publish`, and the Arena opens with the entry filled in.
 
-import { say } from "./say.js";
+import { button, say } from "./ui.js";
 
 export function codeMessage(code) {
   if (code.state === "not-shared") {
@@ -9,14 +9,6 @@ export function codeMessage(code) {
   }
   if (code.state === "changes") return `${code.changes + code.unpushed} changes not online yet on ${code.fork}.`;
   return `Shared at github.com/${code.fork} @ ${code.commit} ✔`;
-}
-
-function button(className, text, onClick, primary = false) {
-  const b = Object.assign(document.createElement("button"), {
-    type: "button", className: `button${primary ? "" : " button-secondary"} ${className}`, textContent: text,
-  });
-  b.addEventListener("click", onClick);
-  return b;
 }
 
 export function renderCode(zone, code, { onFork, onPush }) {

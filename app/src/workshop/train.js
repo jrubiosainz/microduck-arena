@@ -2,7 +2,7 @@
 // challenge.toml, commits, and trains — on this machine's GPU, or on HF Jobs.
 
 import { canTrain } from "./preflight.js";
-import { say } from "./say.js";
+import { button, say } from "./ui.js";
 
 const RECIPE = [
   ["num_envs", "Robots trained in parallel", 1],
@@ -67,7 +67,8 @@ export function renderTrainForm(zone, status, { onLaunch }) {
   form.querySelector(".train-form__where").textContent = preflight.gpu
     ? "Trains on this machine's NVIDIA GPU."
     : `Trains on Hugging Face Jobs (one L4 GPU), billed to ${preflight.user ?? "your account"}; ` +
-      "the checkpoints come back here as they are saved.";
+      "the checkpoints come back here as they are saved. " +
+      "Closing the workshop does not stop a Hugging Face job: reopen it to fetch or stop it.";
   const button = form.querySelector("button[type=submit]");
   button.disabled = !canTrain(preflight);
   form.addEventListener("submit", async (event) => {
@@ -89,21 +90,63 @@ export function renderTrainForm(zone, status, { onLaunch }) {
 export function renderTraining(zone, training, { onStop, onPull }) {
   const where = training.mode === "hf-jobs" ? `Hugging Face Jobs → ${training.ckpt_repo}` : "this machine";
   const ended = training.state === "failed" ? `failed (exit ${training.returncode})` : training.state;
+  const running = training.state === "running";
+  // A Stop or a fetch that failed (the job not cancelled, still billed) stays
+  // said while the training runs, across the polls that redraw this zone.
+  const said = running ? zone.querySelector(".training__note")?.textContent ?? "" : "";
   zone.innerHTML = `
     <p class="training__head"><span class="mono-label"></span> <strong class="training__state"></strong></p>
-    <div class="training__actions"></div>`;
+    <div class="training__actions"></div>
+    <p class="training__note"></p>`;
   zone.querySelector(".mono-label").textContent = `${training.name} · ${where}`;
   zone.querySelector(".training__state").textContent = ended;
-  const actions = zone.querySelector(".training__actions");
-  if (training.state === "running") {
-    const stop = Object.assign(document.createElement("button"), { className: "button button-secondary training__stop", textContent: "Stop" });
-    stop.addEventListener("click", () => onStop());
-    actions.append(stop);
-    if (training.mode === "hf-jobs") {
-      const pull = Object.assign(document.createElement("button"), { className: "button button-secondary training__pull", textContent: "Fetch checkpoints now" });
-      pull.addEventListener("click", () => onPull());
-      actions.append(pull);
+  zone.querySelector(".training__note").textContent = said;
+  // The note is looked up when the answer comes: a poll may have redrawn the zone meanwhile.
+  const attempt = (action) => async () => {
+    zone.querySelector(".training__note").textContent = "";
+    try {
+      await action();
+    } catch (error) {
+      zone.querySelector(".training__note").textContent = error.message;
     }
+  };
+  const actions = zone.querySelector(".training__actions");
+  if (running) {
+    actions.append(button("training__stop", "Stop", attempt(onStop)));
+    if (training.mode === "hf-jobs") actions.append(button("training__pull", "Fetch checkpoints now", attempt(onPull)));
+  }
+}
+
+/**
+ * The Hugging Face jobs launched from this checkout, but the one `followed`
+ * above. A job outlives the workshop, so a reopened one can still fetch its
+ * checkpoints or stop it. Nothing asks the Hub how a job is doing: each one
+ * keeps both buttons.
+ */
+export function renderJobs(zone, jobs, followed, { onPull, onStop }) {
+  zone.replaceChildren();
+  for (const job of jobs.filter((j) => j.name !== followed)) {
+    const row = Object.assign(document.createElement("div"), { className: "job" });
+    const label = Object.assign(document.createElement("p"), {
+      className: "mono-label", textContent: `${job.name} · Hugging Face Jobs → ${job.ckpt_repo}`,
+    });
+    const note = Object.assign(document.createElement("p"), { className: "job__note" });
+    const attempt = (action, done) => async () => {
+      say(note, "");
+      try {
+        await action(job.name);
+        say(note, done);
+      } catch (error) {
+        say(note, error.message, true);
+      }
+    };
+    row.append(
+      label,
+      button("job__pull", "Fetch checkpoints", attempt(onPull, `Fetched ${job.ckpt_repo}: its checkpoints are in Test.`)),
+      button("job__stop", "Stop the job", attempt(onStop, `Asked Hugging Face to cancel job ${job.job_id}.`)),
+      note,
+    );
+    zone.append(row);
   }
 }
 

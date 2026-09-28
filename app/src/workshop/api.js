@@ -12,6 +12,7 @@ async function json(url, options) {
 const post = (url, body = {}) =>
   json(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const runUrl = (id) => `/api/workshop/runs/${encodeURIComponent(id)}`;
+const jobUrl = (name) => `/api/workshop/jobs/${encodeURIComponent(name)}`;
 
 export const getStatus = () => json("/api/workshop/status");
 export const login = (token) => post("/api/workshop/login", { token });
@@ -19,6 +20,9 @@ export const launch = (body) => post("/api/workshop/train", body);
 export const getTraining = (since) => json(`/api/workshop/train?since=${since}`);
 export const stopTraining = () => post("/api/workshop/train/stop");
 export const pullCheckpoints = () => post("/api/workshop/train/pull");
+export const getJobs = () => json("/api/workshop/jobs").then((body) => body.jobs);
+export const pullJob = (name) => post(`${jobUrl(name)}/pull`);
+export const stopJob = (name) => post(`${jobUrl(name)}/stop`);
 export const getRuns = () => json("/api/workshop/runs").then((body) => body.runs);
 export const getCurve = (id) => json(`${runUrl(id)}/curve`).then((body) => body.points);
 
