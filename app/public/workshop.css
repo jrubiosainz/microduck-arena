@@ -2,7 +2,9 @@
    narrow window. .flyer gives every zone its card (paper, ink border, offset
    shadow); this sheet only places things and reopens the font size and width
    a photocopy-sized flyer sets, since a zone here holds a form, not a caption.
-   Colour, type and spacing are all design/tokens.css — no raw hex. */
+   Colour, type and spacing are all design/tokens.css — no raw hex. A message
+   (a missing tool, a failed step) is orange-inked, as the race page's bad
+   status is: magenta is a signal colour, 3.2 : 1 as text on paper. */
 
 /* shell.css's two ground rules, which this page does not load: a zone's
    width includes its padding and border, or a 100%-wide card runs past a
@@ -83,6 +85,11 @@ html, body {
   gap: 8px 10px;
 }
 
+/* The label wraps beside its tick rather than dropping under it. */
+.preflight li > span {
+  flex: 1 1 0;
+}
+
 .preflight__ok::before {
   content: "✓";
   color: var(--lime-inked);
@@ -90,7 +97,7 @@ html, body {
 }
 
 .preflight__missing {
-  color: var(--magenta);
+  color: var(--orange-inked);
 }
 
 .preflight__missing code {
@@ -125,7 +132,7 @@ html, body {
 }
 
 .preflight__note {
-  color: var(--magenta);
+  color: var(--orange-inked);
   flex-basis: 100%;
 }
 
@@ -189,7 +196,7 @@ html, body {
 }
 
 .train-form__status {
-  color: var(--magenta);
+  color: var(--orange-inked);
 }
 
 .training__head {
@@ -211,7 +218,7 @@ html, body {
    empty (and so invisible) once a poll succeeds again. */
 .follow-status {
   margin: 0 0 var(--space-card-padding-min);
-  color: var(--magenta);
+  color: var(--orange-inked);
 }
 
 .curve svg {
@@ -248,7 +255,7 @@ html, body {
   margin-bottom: var(--space-gutter-max);
   background: var(--paper);
   border: 2px solid var(--magenta);
-  color: var(--magenta);
+  color: var(--orange-inked);
 }
 
 @media (max-width: 640px) {
@@ -301,7 +308,7 @@ html, body {
 
 .trial__status {
   margin: var(--space-card-padding-min) 0 0;
-  color: var(--magenta);
+  color: var(--orange-inked);
 }
 
 .trial__score {
@@ -339,7 +346,7 @@ html, body {
 
 .code__output {
   margin: 0;
-  color: var(--magenta);
+  color: var(--orange-inked);
 }
 
 .publish {
@@ -357,7 +364,7 @@ html, body {
   padding: var(--space-card-padding-min);
   background: var(--warm-paper);
   border: 1px solid var(--magenta);
-  color: var(--magenta);
+  color: var(--orange-inked);
 }
 
 .publish__actions {
