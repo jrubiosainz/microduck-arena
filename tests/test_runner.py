@@ -147,26 +147,26 @@ def test_a_longer_settle_does_not_inflate_the_time(sprint, walker):
 
     Both runs enter the clocked phase already at walking speed from their own
     start line, so the times should agree closely. If settling were timed, the
-    longer settle would add its extra 1.5 s to the clock.
+    longer settle would add its extra 1.5 s to the clock — 0.75 s below is
+    half that: loose enough for run-to-run noise, tight enough that a 1.5 s
+    leak would still fail it.
 
-    Re-measured at runner v4 (the Servos-construction-order and qpos-vs-stale-
-    actuator_length fixes): seed 1 sits on a real balance edge at sprint-2m's
-    own declared 0.25 m/s over the ~18-20 s this walker takes to cover it — of
-    ten seeds sampled after those fixes, one fell even at the default settle,
-    and three more (seed 1 among them) fell only with the settle extended.
-    That is not this test's bug: the command-delay RNG is one stream drawn
-    once per physics substep across BOTH the settle and the timed phase (kept
-    exactly as training does, globals.md), so a longer settle leaves the timed
-    phase starting from a different point in that same stream — enough to tip
-    an already-marginal seed. Seed 2 keeps a comfortable margin in both.
+    A short course (0.3 m), not the full sprint: the reference walker sits on
+    a real balance edge over the full ~18-20 s course at sprint-2m's own
+    declared 0.25 m/s (re-measured at runner v4, after the Servos-
+    construction-order and qpos-vs-stale-actuator_length fixes — 4 of 10
+    seeds sampled failed the finish/finish precondition on the full course),
+    which drowns out the property this test actually pins — that settling
+    longer adds no TIME — under whether the walker finishes at all. Measured
+    on this short course over seeds 1-10: 10/10 finish both ways, max
+    |Δt| 0.24 s.
     """
-    long_settle = dataclasses.replace(
-        sprint, start=dataclasses.replace(sprint.start, settle_s=2.0)
-    )
-    brief = run_once(sprint, walker, seed=2)
-    extended = run_once(long_settle, walker, seed=2)
+    short = dataclasses.replace(sprint, course=dataclasses.replace(sprint.course, length_m=0.3))
+    long_settle = dataclasses.replace(short, start=dataclasses.replace(short.start, settle_s=2.0))
+    brief = run_once(short, walker, seed=1)
+    extended = run_once(long_settle, walker, seed=1)
     assert brief.status == extended.status == "finish"
-    assert extended.time_s == pytest.approx(brief.time_s, rel=0.25)
+    assert abs(extended.time_s - brief.time_s) < 0.75
 
 
 def test_model_can_be_supplied_to_avoid_recompiling(sprint, walker):
