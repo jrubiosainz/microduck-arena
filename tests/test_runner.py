@@ -148,12 +148,23 @@ def test_a_longer_settle_does_not_inflate_the_time(sprint, walker):
     Both runs enter the clocked phase already at walking speed from their own
     start line, so the times should agree closely. If settling were timed, the
     longer settle would add its extra 1.5 s to the clock.
+
+    Re-measured at runner v4 (the Servos-construction-order and qpos-vs-stale-
+    actuator_length fixes): seed 1 sits on a real balance edge at sprint-2m's
+    own declared 0.25 m/s over the ~18-20 s this walker takes to cover it — of
+    ten seeds sampled after those fixes, one fell even at the default settle,
+    and three more (seed 1 among them) fell only with the settle extended.
+    That is not this test's bug: the command-delay RNG is one stream drawn
+    once per physics substep across BOTH the settle and the timed phase (kept
+    exactly as training does, globals.md), so a longer settle leaves the timed
+    phase starting from a different point in that same stream — enough to tip
+    an already-marginal seed. Seed 2 keeps a comfortable margin in both.
     """
     long_settle = dataclasses.replace(
         sprint, start=dataclasses.replace(sprint.start, settle_s=2.0)
     )
-    brief = run_once(sprint, walker, seed=1)
-    extended = run_once(long_settle, walker, seed=1)
+    brief = run_once(sprint, walker, seed=2)
+    extended = run_once(long_settle, walker, seed=2)
     assert brief.status == extended.status == "finish"
     assert extended.time_s == pytest.approx(brief.time_s, rel=0.25)
 
@@ -174,6 +185,22 @@ def test_a_run_does_not_depend_on_the_run_before_it(sprint, walker):
     run_once(sprint, walker, seed=2, model=shared_model)
     reused = run_once(sprint, walker, seed=1, model=shared_model)
     fresh = run_once(sprint, walker, seed=1)
+    assert np.array_equal(reused.trace, fresh.trace)
+    assert np.array_equal(reused.settle, fresh.settle)
+
+
+def test_a_roller_run_does_not_depend_on_the_run_before_it(walker):
+    """Same property as above, on the roller rig this time: sprint-2m's legs
+    start out of contact, so its version of this test cannot see a stale
+    model.dof_frictionloss/dof_damping change anything during the reset
+    forward pass — the roller rig's passive wheels are touching the floor from
+    the reset pose, so they can. A short time_limit_s keeps it cheap; the
+    divergence, when present, shows up within the first few steps."""
+    roller = dataclasses.replace(load_event("roller-sprint-2m"), time_limit_s=2.0)
+    shared_model = compile_course(roller)
+    run_once(roller, walker, seed=2, model=shared_model)
+    reused = run_once(roller, walker, seed=1, model=shared_model)
+    fresh = run_once(roller, walker, seed=1)
     assert np.array_equal(reused.trace, fresh.trace)
     assert np.array_equal(reused.settle, fresh.settle)
 

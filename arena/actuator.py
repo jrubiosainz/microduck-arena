@@ -103,6 +103,10 @@ class Servos:
         self.model = model
         self.dof = dof
         self.act_ids = act_ids
+        # The joints' own qpos addresses, derived from each actuator's joint
+        # transmission (actuator_trnid's first column) rather than passed in
+        # separately: one address per actuator, in act_ids order, matching dof.
+        self.qpos = model.jnt_qposadr[model.actuator_trnid[act_ids, 0]]
         self.rng = rng
         self.prev_tau = np.zeros(len(dof))
         self.targets = None  # ring of the last DELAY_STEPS[1] + 1 substep targets
@@ -119,10 +123,12 @@ class Servos:
         lag = int(self.rng.integers(DELAY_STEPS[0], DELAY_STEPS[1] + 1))
         q_target = self.targets[-1 - lag]
 
-        # The actuator's own transmission length/velocity: for a gear=[1,0,...]
-        # motor on a hinge joint this equals the joint's qpos/qvel exactly, and
-        # is addressed through act_ids rather than a separate qpos array.
-        q = data.actuator_length[act_ids]
+        # data.qpos directly, as training reads it (mjlab's actuator.py), NOT
+        # data.actuator_length: mj_step computes the transmission length during
+        # its own forward pass, BEFORE integrating qpos/qvel, so reading it once
+        # mj_step returns lags data.qpos by that step's qvel*dt — exactly the
+        # staleness this class cannot have, since it runs once per substep.
+        q = data.qpos[self.qpos]
         dq = data.qvel[dof]
         vin = max(VIN_NOMINAL - VIN_DROP_GAIN * np.abs(self.prev_tau).sum(), VIN_MIN)
         tau = control_torque(q_target, q, dq, vin)

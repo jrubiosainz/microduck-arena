@@ -148,6 +148,29 @@ def test_voltage_sags_with_load_and_floors():
     assert tau2 == pytest.approx(expected2)
 
 
+def test_drive_reads_qpos_not_the_stale_actuator_length():
+    """mj_step computes the transmission length (actuator_length) during its
+    own forward pass, BEFORE integrating qpos/qvel — so reading it right after
+    mj_step returns lags data.qpos by that step's qvel*dt. drive() is called
+    once per substep and must track the joint's real, current position, as
+    training does (data.qpos), not that stale cache."""
+    model, dof, act_ids = _tiny_servo()
+    qpos_adr = model.joint("j").qposadr[0]
+    data = mujoco.MjData(model)
+    rng = np.random.default_rng(0)
+    servos = Servos(model, dof, act_ids, rng)
+
+    data.qvel[dof] = 5.0
+    mujoco.mj_step(model, data)
+    # The scenario must actually exercise the gap this test is about.
+    assert data.qpos[qpos_adr] != pytest.approx(data.actuator_length[act_ids][0], abs=1e-6)
+
+    servos.drive(data, np.array([0.0]))
+    q = np.array([data.qpos[qpos_adr]])
+    expected = A.control_torque(np.array([0.0]), q, data.qvel[dof], A.VIN_NOMINAL)
+    assert data.ctrl[act_ids] == pytest.approx(expected)
+
+
 def test_construction_resets_the_models_friction():
     model, dof, act_ids = _tiny_servo()
     model.dof_frictionloss[dof] = 9.9

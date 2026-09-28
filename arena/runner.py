@@ -137,18 +137,24 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     data = mujoco.MjData(model)
     adr = _Addresses.of(model, manifest.start.keyframe)
 
-    mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
-    _perturb(model, data, adr, manifest, seed)
-
-    # A fresh Servos every run: the compiled model is shared across an
-    # evaluation's runs (evaluate.py compiles once), and Servos.__init__
-    # resets model.dof_frictionloss / model.dof_damping so a run never
-    # inherits the friction state left behind by the run before it. The
-    # command-delay stream is seeded per run, distinct from the perturbation
-    # stream above (a trailing 1 in the seed sequence marks it).
+    # A fresh Servos every run, constructed BEFORE the reset/perturb below: the
+    # compiled model is shared across an evaluation's runs (evaluate.py
+    # compiles once), and Servos.__init__ resets model.dof_frictionloss /
+    # model.dof_damping — so a run must never inherit the friction state left
+    # behind by the run before it. _perturb ends with its own mj_forward, which
+    # reads those fields to settle contact forces (efc_force, qfrc_constraint)
+    # on a rig where a passive part may already be touching the floor at the
+    # reset pose (the roller rig's wheels); constructing Servos first means
+    # that forward pass runs against this run's own reset friction, not
+    # whatever the previous run left on the shared model. The command-delay
+    # stream is seeded per run, distinct from the perturbation stream below (a
+    # trailing 1 in the seed sequence marks it).
     servos = Servos(
         model, adr.dof, adr.act, np.random.default_rng([zlib.crc32(manifest.id.encode()), seed, 1])
     )
+
+    mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
+    _perturb(model, data, adr, manifest, seed)
 
     # Converted once per run, not per step. The manifest holds an immutable tuple
     # so a loaded event cannot be mutated in place by anything downstream.
