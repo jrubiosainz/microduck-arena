@@ -13,6 +13,7 @@ import { boardsheetMarkup, podium, wireBoardsheet } from "./boardsheet.js";
 import { flyer } from "./flyer.js";
 import { createDropzone } from "./dropzone.js";
 import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
+import { entryFromLocation, forgetEntry } from "./entry.js";
 import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
@@ -47,7 +48,7 @@ export function arrangeLanes(board, lanes, random = Math.random) {
  * `onTry` / `onPublish` do the actual work (the API call, updating the trial,
  * repainting the board); this function only owns the form and the button state.
  */
-export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiveryChange } = {}) {
+export function renderEntryPanel(container, me, { event, entry = { repo: "", revision: "", env: "" }, onTry, onPublish, onLiveryChange } = {}) {
   const state = panelState(me);
   const help = event?.id ? `<a class="help-link" href="${eventGuideHref(event.id)}">Training & rules ?</a>` : "";
 
@@ -79,7 +80,10 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
   container.innerHTML = `
     <span class="flyer-tape"></span>
     <p class="entry__user">Racing as <strong id="entry-user"></strong></p>
-    <div id="dropzone"></div>
+    <label class="entry__name">Hugging Face repo
+      <input type="text" id="policy-repo" placeholder="you/microduck-your-policy" autocomplete="off" spellcheck="false" />
+      <span class="entry__hint" id="policy-revision"></span>
+    </label>
     ${help}
     <label class="entry__name">Name
       <input type="text" id="policy-name" placeholder="optional" />
@@ -101,9 +105,13 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
       <button id="try" class="ghost">Test it</button>
       <button id="publish">Publish</button>
     </div>
+    <details class="entry__file">
+      <summary>Test a .onnx file instead</summary>
+      <div id="dropzone"></div>
+    </details>
     <p class="entry__consent">
-      Publishing shares your <code>.onnx</code> so anyone can download it
-      and race it. Testing shares nothing.
+      Publish races the policy at this revision of its Hugging Face repo and puts
+      it on the board with a link to it. A file can be tested, not published.
     </p>
     <p class="entry__status" id="entry-status"></p>
   `;
@@ -114,6 +122,17 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
   const publishButton = container.querySelector("#publish");
   const nameInput = container.querySelector("#policy-name");
   const envInput = container.querySelector("#policy-env");
+  const repoInput = container.querySelector("#policy-repo");
+  const revisionHint = container.querySelector("#policy-revision");
+  repoInput.value = entry.repo;
+  envInput.value = entry.env;
+  // The revision belongs to the repo the workshop sent; typing another repo drops it.
+  let revision = entry.revision;
+  revisionHint.textContent = revision ? `at revision ${revision.slice(0, 7)}` : "";
+  repoInput.addEventListener("input", () => {
+    revision = "";
+    revisionHint.textContent = "";
+  });
 
   // The four colourways the real robot comes in. Picking one shows it on your
   // duck straight away, before you have raced anything.
@@ -158,8 +177,16 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
 
   async function run(kind) {
     const file = dropzone.file;
-    if (!file) {
-      status.textContent = "Choose a .onnx policy first.";
+    const repoId = repoInput.value.trim();
+    if (kind === "publish" && !repoId) {
+      status.textContent =
+        "Publishing needs a Hugging Face repo. Publish from the workshop (Train my robot) " +
+        "or with `uv run publish`, then enter it here.";
+      status.className = "entry__status bad";
+      return;
+    }
+    if (kind === "try" && !file && !repoId) {
+      status.textContent = "Enter a Hugging Face repo, or choose a .onnx file to test.";
       status.className = "entry__status bad";
       return;
     }
@@ -167,34 +194,26 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
     publishButton.disabled = true;
     status.className = "entry__status";
     // Say what is actually taking the time: a sweep is dominated by the number
-    // of speeds, a pinned run by the seeds. The picker now applies to BOTH
-    // buttons: pinning cannot inflate a published score, because the sweep
-    // already keeps the best time across every speed it tries.
+    // of speeds, a pinned run by the seeds.
     const pinned = speed.value;
     status.textContent = pinned
       ? `Racing ${event.seeds} seeds at ${pinned} m/s…`
       : `Sweeping ${event.sweep_count} speeds × ${event.seeds} seeds…`;
+    const common = { name: nameInput.value, livery, commandVx: pinned };
     try {
       if (kind === "try") {
-        await onTry({ file, name: nameInput.value, livery, commandVx: pinned });
+        // A chosen file wins for a trial: it is the one way to look at a policy before publishing it.
+        await onTry(file ? { file, ...common } : { repoId, revision, ...common });
         status.textContent = "Tested. Nothing published yet.";
       } else {
-        const published = await onPublish({
-          file,
-          // Only on publish: a trial records nothing, so a link would have
-          // nowhere to live and no row to sit on.
-          // NOT optional-chained. When the markup and this reader disagreed,
-          // `envInput?.value ?? ""` silently published every policy with no
-          // link and nothing anywhere said so.
-          envUrl: envInput.value,
-          name: nameInput.value,
-          livery,
-          commandVx: pinned,
-        });
+        // NOT optional-chained. When the markup and this reader disagreed,
+        // `envInput?.value ?? ""` silently published every policy with no
+        // link and nothing anywhere said so.
+        const published = await onPublish({ repoId, revision, envUrl: envInput.value, ...common });
         status.textContent = `Published as ${published.policy_name}.`;
       }
     } catch (error) {
-      // The server's own wording — the sentence the robot's daemon would give.
+      // The server's own wording — for a refused manifest, the field it disagrees on.
       status.textContent = error.message;
       status.className = "entry__status bad";
     } finally {
@@ -379,7 +398,7 @@ export async function renderRace(root, { event, state }) {
   renderEventFacts(root, event);
 
   const board = root.querySelector("#board");
-  const entry = root.querySelector("#entry");
+  const entryColumn = root.querySelector("#entry");
 
   const viewer = await createViewer(root.querySelector("#stage"), {
     // The event declares its rig, and the roller rig is a different kinematic
@@ -459,25 +478,29 @@ export async function renderRace(root, { event, state }) {
         await withdrawRun(runId);
         await sheet.paint();
       } catch (error) {
-        const status = entry.querySelector("#entry-status");
+        const status = entryColumn.querySelector("#entry-status");
         status.textContent = error.message;
         status.className = "entry__status bad";
       }
     },
   });
 
-  renderEntryPanel(entry, me, {
+  renderEntryPanel(entryColumn, me, {
     event,
+    entry: entryFromLocation(event.id),
     onLiveryChange: (livery) => {
       currentLivery = livery;
       race([...sheet.selection], sheet.tiers);
     },
-    onTry: async ({ file, name, livery, commandVx }) => {
-      trial = await tryPolicy(event.id, file, name, livery, commandVx);
+    onTry: async (sent) => {
+      trial = await tryPolicy(event.id, sent);
       await sheet.paint();
     },
-    onPublish: async ({ file, name, livery, commandVx, envUrl }) => {
-      const published = await submitPolicy(event.id, file, name, livery, commandVx, envUrl);
+    onPublish: async (sent) => {
+      const published = await submitPolicy(event.id, sent);
+      // Entered: the workshop's query and its kept copy have done their job.
+      forgetEntry();
+      history.replaceState(null, "", location.pathname + location.hash);
       // The result has its own page now, and the reveal plays there.
       location.hash = runHref(published.run_id);
       return published;

@@ -1,7 +1,7 @@
 // Every call the page makes. Errors surface the server's own message, which for
 // a rejected policy is the same sentence the robot's daemon would give.
 
-async function detailFrom(response) {
+export async function detailFrom(response) {
   try {
     const body = await response.json();
     if (body.detail) {
@@ -70,9 +70,14 @@ export function getSettle(runId) {
   return frames(`/api/runs/${runId}/settle`);
 }
 
-function policyForm(file, name, livery, commandVx, envUrl) {
+function policyForm({ file, repoId, revision, name, livery, commandVx, envUrl }) {
   const form = new FormData();
-  form.append("file", file);
+  // A trial's upload, or a Hub repo — the server takes exactly one of the two,
+  // and only a repo can be published.
+  if (file) form.append("file", file);
+  if (repoId) form.append("repo_id", repoId);
+  // Left off when blank: the server then reads the repo's current head.
+  if (revision) form.append("revision", revision);
   if (name) form.append("name", name);
   if (livery) form.append("livery", livery);
   // Empty means "sweep", which is the server's default too, so it is left off
@@ -84,26 +89,20 @@ function policyForm(file, name, livery, commandVx, envUrl) {
   return form;
 }
 
-/** Race it and publish it to the board. */
-export function submitPolicy(eventId, file, name, livery, commandVx, envUrl) {
-  return json(`/api/events/${eventId}/submit`, {
-    method: "POST",
-    body: policyForm(file, name, livery, commandVx, envUrl),
-  });
+/** Race a Hub repo and put it on the board. */
+export function submitPolicy(eventId, entry) {
+  return json(`/api/events/${eventId}/submit`, { method: "POST", body: policyForm(entry) });
 }
 
 /**
  * Race it and keep nothing. The trace comes back inline.
  *
- * `commandVx` pins the commanded speed; omit it to sweep. Both paths accept it:
- * the sweep already keeps the best time across the whole range, so pinning can
- * only match or lose to it.
+ * A file, or a Hub repo. `commandVx` pins the commanded speed; omit it to
+ * sweep. Both paths accept it: the sweep already keeps the best time across
+ * the whole range, so pinning can only match or lose to it.
  */
-export async function tryPolicy(eventId, file, name, livery, commandVx) {
-  const body = await json(`/api/events/${eventId}/try`, {
-    method: "POST",
-    body: policyForm(file, name, livery, commandVx),
-  });
+export async function tryPolicy(eventId, entry) {
+  const body = await json(`/api/events/${eventId}/try`, { method: "POST", body: policyForm(entry) });
   // The server sends base64 because a trial is stored nowhere to fetch from.
   const bytes = Uint8Array.from(atob(body.trace_b64), (c) => c.charCodeAt(0));
   return { ...body, trace: new Float32Array(bytes.buffer) };

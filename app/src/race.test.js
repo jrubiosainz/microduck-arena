@@ -61,7 +61,7 @@ describe("renderEntryPanel: signed-out", () => {
 });
 
 describe("renderEntryPanel: ready (signed in, can publish)", () => {
-  function render() {
+  function render(entry = { repo: "", revision: "", env: "" }) {
     const container = document.createElement("div");
     const onTry = vi.fn(async () => {});
     const onPublish = vi.fn(async () => ({ policy_name: "walker" }));
@@ -69,45 +69,76 @@ describe("renderEntryPanel: ready (signed in, can publish)", () => {
     renderEntryPanel(
       container,
       { signed_in: true, oauth_enabled: true, user: "alice" },
-      { event, onTry, onPublish, onLiveryChange },
+      { event, entry, onTry, onPublish, onLiveryChange },
     );
     return { container, onTry, onPublish, onLiveryChange };
   }
 
-  it("names the signed-in user and renders every existing control live", () => {
+  it("names the signed-in user and renders the repo field, the file picker and every control", () => {
     const { container } = render();
     expect(container.querySelector("#entry-user").textContent).toBe("alice");
+    expect(container.querySelector("#policy-repo")).not.toBeNull();
     expect(container.querySelector("#dropzone")).not.toBeNull();
     expect(container.querySelector("#policy-name")).not.toBeNull();
     expect(container.querySelectorAll("#liveries .swatch")).toHaveLength(4);
     expect(container.querySelector("#speed")).not.toBeNull();
     expect(container.querySelector("#try").disabled).toBe(false);
     expect(container.querySelector("#publish").disabled).toBe(false);
-    expect(container.querySelector("#entry-status")).not.toBeNull();
-    expect(container.textContent).toMatch(/\.onnx/); // the consent paragraph
   });
 
-  it("Test it reaches onTry once a file is chosen -- the button is wired to a live node", async () => {
-    const { container, onTry } = render();
-    chooseFile(container);
-    container.querySelector("#try").click();
+  it("shows what the workshop sent: the repo, the revision it pins, the code link", () => {
+    const { container } = render({ repo: "alice/microduck-walker", revision: "abc1234def", env: "https://github.com/alice/x/tree/abc" });
+    expect(container.querySelector("#policy-repo").value).toBe("alice/microduck-walker");
+    expect(container.querySelector("#policy-revision").textContent).toContain("abc1234");
+    expect(container.querySelector("#policy-env").value).toBe("https://github.com/alice/x/tree/abc");
+  });
+
+  it("Publish sends the repo, the revision and the link", async () => {
+    const { container, onPublish } = render({ repo: "alice/microduck-walker", revision: "abc1234", env: "https://github.com/a/b" });
+    container.querySelector("#publish").click();
     await flush();
-    expect(onTry).toHaveBeenCalledTimes(1);
-    expect(onTry.mock.calls[0][0]).toMatchObject({ livery: "classic", commandVx: "" });
+    expect(onPublish.mock.calls[0][0]).toMatchObject({ repoId: "alice/microduck-walker", revision: "abc1234", envUrl: "https://github.com/a/b" });
   });
 
-  it("Publish reaches onPublish once a file is chosen", async () => {
+  it("editing the repo drops the revision, which belonged to the other one", async () => {
+    const { container, onPublish } = render({ repo: "alice/microduck-walker", revision: "abc1234", env: "" });
+    const repo = container.querySelector("#policy-repo");
+    repo.value = "alice/microduck-other";
+    repo.dispatchEvent(new Event("input"));
+    container.querySelector("#publish").click();
+    await flush();
+    expect(onPublish.mock.calls[0][0]).toMatchObject({ repoId: "alice/microduck-other", revision: "" });
+    expect(container.querySelector("#policy-revision").textContent).toBe("");
+  });
+
+  it("Publish without a repo says how to get one, and calls nothing", () => {
     const { container, onPublish } = render();
     chooseFile(container);
     container.querySelector("#publish").click();
-    await flush();
-    expect(onPublish).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("#entry-status").textContent).toMatch(/uv run publish/);
+    expect(onPublish).not.toHaveBeenCalled();
   });
 
-  it("without a file, Test it reports it instead of silently doing nothing", () => {
+  it("Test it sends the chosen file when there is one", async () => {
+    const { container, onTry } = render({ repo: "alice/microduck-walker", revision: "", env: "" });
+    chooseFile(container);
+    container.querySelector("#try").click();
+    await flush();
+    expect(onTry.mock.calls[0][0].file).toBeInstanceOf(File);
+    expect(onTry.mock.calls[0][0].repoId).toBeUndefined();
+  });
+
+  it("Test it races the repo when no file is chosen", async () => {
+    const { container, onTry } = render({ repo: "alice/microduck-walker", revision: "abc", env: "" });
+    container.querySelector("#try").click();
+    await flush();
+    expect(onTry.mock.calls[0][0]).toMatchObject({ repoId: "alice/microduck-walker", revision: "abc" });
+  });
+
+  it("with neither, Test it says so instead of silently doing nothing", () => {
     const { container, onTry } = render();
     container.querySelector("#try").click();
-    expect(container.querySelector("#entry-status").textContent).toMatch(/choose/i);
+    expect(container.querySelector("#entry-status").textContent).toMatch(/repo|file/i);
     expect(onTry).not.toHaveBeenCalled();
   });
 
@@ -163,10 +194,9 @@ describe("the speed picker applies to publishing too", () => {
     renderEntryPanel(
       container,
       { signed_in: true, oauth_enabled: true },
-      { event, onTry: vi.fn(async () => {}), onPublish },
+      { event, entry: { repo: "alice/microduck-walker", revision: "", env: "" }, onTry: vi.fn(async () => {}), onPublish },
     );
 
-    chooseFile(container);
     container.querySelector("#speed").value = "0.35";
     container.querySelector("#publish").click();
     await flush();
@@ -216,9 +246,8 @@ describe("the training-environment field", () => {
     renderEntryPanel(
       container,
       { signed_in: true, oauth_enabled: true },
-      { event, onTry: vi.fn(), onPublish },
+      { event, entry: { repo: "alice/microduck-walker", revision: "", env: "" }, onTry: vi.fn(), onPublish },
     );
-    chooseFile(container);
     container.querySelector("#policy-env").value = "https://github.com/me/env";
     container.querySelector("#publish").click();
     await flush();
