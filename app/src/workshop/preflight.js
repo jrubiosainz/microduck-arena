@@ -28,7 +28,7 @@ export function renderPreflight(zone, status, { onLogin }) {
       <label>Or paste a Hugging Face token
         <input type="password" name="token" autocomplete="off" spellcheck="false" />
       </label>
-      <button class="button-secondary" type="submit">Log in</button>
+      <button class="button button-secondary" type="submit">Log in</button>
       <span class="preflight__note"></span>
     </form>`;
   const list = zone.querySelector(".preflight");

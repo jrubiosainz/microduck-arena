@@ -95,11 +95,11 @@ export function renderTraining(zone, training, { onStop, onPull }) {
   zone.querySelector(".training__state").textContent = ended;
   const actions = zone.querySelector(".training__actions");
   if (training.state === "running") {
-    const stop = Object.assign(document.createElement("button"), { className: "button-secondary training__stop", textContent: "Stop" });
+    const stop = Object.assign(document.createElement("button"), { className: "button button-secondary training__stop", textContent: "Stop" });
     stop.addEventListener("click", () => onStop());
     actions.append(stop);
     if (training.mode === "hf-jobs") {
-      const pull = Object.assign(document.createElement("button"), { className: "button-secondary training__pull", textContent: "Fetch checkpoints now" });
+      const pull = Object.assign(document.createElement("button"), { className: "button button-secondary training__pull", textContent: "Fetch checkpoints now" });
       pull.addEventListener("click", () => onPull());
       actions.append(pull);
     }

@@ -21,6 +21,7 @@ describe("your code", () => {
     renderCode(zone, code("not-shared"), { onFork, onPush: vi.fn() });
     zone.querySelector(".code__fork").click();
     expect(onFork).toHaveBeenCalledWith(null);
+    expect(zone.querySelector(".code__fork").classList.contains("button")).toBe(true);
   });
 
   it("without gh, links GitHub's fork page and takes the fork's address", () => {

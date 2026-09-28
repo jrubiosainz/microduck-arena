@@ -4,6 +4,13 @@
    a photocopy-sized flyer sets, since a zone here holds a form, not a caption.
    Colour, type and spacing are all design/tokens.css — no raw hex. */
 
+/* shell.css's two ground rules, which this page does not load: a zone's
+   width includes its padding and border, or a 100%-wide card runs past a
+   narrow window; and the attribute wins over any display set here, or a
+   hidden form (the token field once logged in) shows anyway. */
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   background: var(--paper);
@@ -49,6 +56,12 @@ html, body {
   padding-bottom: 10px;
   margin-bottom: var(--space-card-padding-min);
   border-bottom: 2px solid var(--ink);
+}
+
+/* On a narrow window a button's label wraps rather than running past its card. */
+.zone .button {
+  max-width: 100%;
+  white-space: normal;
 }
 
 /* ── Preflight ──────────────────────────────────────────────────────────── */
@@ -164,6 +177,12 @@ html, body {
   text-align: right;
 }
 
+/* The orange button sits at its own width, as Test's and Publish's do,
+   rather than stretched across the column. */
+.train-form > .button {
+  align-self: flex-start;
+}
+
 .train-form__where,
 .train-form__status {
   margin: 0;
@@ -179,6 +198,7 @@ html, body {
 
 .training__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -216,6 +236,11 @@ html, body {
   font-size: 0.85rem;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+/* No training yet: no empty black band. */
+.log:empty {
+  display: none;
 }
 
 .failed {
@@ -337,6 +362,7 @@ html, body {
 
 .publish__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 

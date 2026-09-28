@@ -11,7 +11,7 @@ export function codeMessage(code) {
 
 function button(className, text, onClick, primary = false) {
   const b = Object.assign(document.createElement("button"), {
-    type: "button", className: `${primary ? "button" : "button-secondary"} ${className}`, textContent: text,
+    type: "button", className: `button${primary ? "" : " button-secondary"} ${className}`, textContent: text,
   });
   b.addEventListener("click", onClick);
   return b;

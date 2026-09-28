@@ -74,6 +74,7 @@ describe("a training in progress", () => {
     expect(onStop).toHaveBeenCalled();
     expect(onPull).toHaveBeenCalled();
     expect(zone.textContent).toContain("alice/x-first");
+    expect(zone.querySelector(".training__pull").classList.contains("button")).toBe(true);
   });
 
   it("offers neither once it is over, and says how it ended", () => {

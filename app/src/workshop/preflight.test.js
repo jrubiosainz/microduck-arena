@@ -13,6 +13,8 @@ describe("preflight", () => {
     expect(missing.join(" ")).toContain("git config --global user.email");
     expect(missing.join(" ")).toContain("hf auth login");
     expect(zone.querySelector(".preflight__login").hidden).toBe(false);
+    // .button-secondary only recolours: without .button it is a bare browser button.
+    expect(zone.querySelector(".preflight__login button").className).toBe("button button-secondary");
   });
 
   it("names the Hugging Face account and hides the token field once logged in", () => {
