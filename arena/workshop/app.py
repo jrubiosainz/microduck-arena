@@ -286,7 +286,7 @@ async def publish_route(body: PublishRequest, request: Request) -> dict:
             detail="This run started from uncommitted changes, so the code it records is not what "
                    "trained it. Train again from the workshop (it commits first), or publish anyway.",
         )
-    user = ws.hub.whoami()
+    user = await run_in_threadpool(ws.hub.whoami)
     if not user:
         raise HTTPException(status_code=400, detail="Log in to Hugging Face first (Preflight).")
     event = load_event(ws.challenge.event)

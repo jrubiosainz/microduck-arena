@@ -36,8 +36,13 @@ def _fork(root: Path) -> tuple[str, str] | None:
 def code_state(root: Path) -> dict:
     fork = _fork(root)
     changes = len(git(root, "status", "--porcelain").splitlines())
-    unpushed = int(git(root, "rev-list", "--count", "HEAD", "--not", "--remotes=origin", check=False) or 0)
-    state = "not-shared" if fork is None else ("changes" if changes or unpushed else "shared")
+    # A remote named origin can exist (a rename, or a `set-url` left by a push that then failed)
+    # without a single push having landed: `--not --remotes=origin` would then exclude nothing
+    # and count the whole history as "unpushed", and the page would offer Commit-and-push for a
+    # fork it cannot yet push to. refs/remotes/origin/* appears only once a push has landed.
+    ever_pushed = fork is not None and bool(git(root, "for-each-ref", "refs/remotes/origin", check=False))
+    unpushed = int(git(root, "rev-list", "--count", "HEAD", "--not", "--remotes=origin", check=False) or 0) if ever_pushed else 0
+    state = "not-shared" if not ever_pushed else ("changes" if changes or unpushed else "shared")
     return {
         "state": state,
         "origin": _remote(root, "origin"),
@@ -57,18 +62,29 @@ def push(root: Path, message: str) -> str:
 
 def fork(root: Path, url: str | None, message: str) -> str:
     """Make origin the user's fork, then push. With gh logged in, gh makes the fork; otherwise
-    `url` is the fork the user made on GitHub's page."""
+    `url` is the fork the user made on GitHub's page.
+
+    A retry after a failed push (a typo'd URL, a fork not ready yet, no credentials) must not
+    redo what a first attempt already did: once `upstream` exists, the fork already happened —
+    gh's or the rename's — so a retry only replaces origin (`set-url`, not rename-and-add) or,
+    with no url, just pushes again.
+    """
+    already_forked = _remote(root, "upstream") is not None
     if url is None:
-        if not gh_ready(root):
-            raise ShellError("The GitHub CLI is not logged in: make your fork on GitHub's page, then paste its address.")
-        done = subprocess.run(["gh", "repo", "fork", "--remote"], cwd=root, capture_output=True, text=True)
-        if done.returncode != 0:
-            raise ShellError(f"$ gh repo fork --remote\n{done.stdout}{done.stderr}")
+        if not already_forked:
+            if not gh_ready(root):
+                raise ShellError("The GitHub CLI is not logged in: make your fork on GitHub's page, then paste its address.")
+            done = subprocess.run(["gh", "repo", "fork", "--remote"], cwd=root, capture_output=True, text=True)
+            if done.returncode != 0:
+                raise ShellError(f"$ gh repo fork --remote\n{done.stdout}{done.stderr}")
     else:
         if github_repo(url.strip()) is None:
             raise ShellError(f"{url} is not a GitHub repository address (https://github.com/<you>/<name>).")
-        git(root, "remote", "rename", "origin", "upstream")
-        git(root, "remote", "add", "origin", url.strip())
+        if already_forked:
+            git(root, "remote", "set-url", "origin", url.strip())
+        else:
+            git(root, "remote", "rename", "origin", "upstream")
+            git(root, "remote", "add", "origin", url.strip())
     return push(root, message)
 
 

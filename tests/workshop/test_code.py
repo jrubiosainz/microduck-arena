@@ -42,7 +42,7 @@ def test_an_address_that_is_not_github_is_refused(workshop, monkeypatch):
     assert response.status_code == 400
 
 
-def test_changes_not_online_are_counted_then_pushed(workshop, checkout):
+def test_changes_not_online_are_counted_then_pushed(workshop, checkout, remotes):
     workshop.post("/api/workshop/code/fork", json={})
     (checkout / "src" / "microduck_challenges" / "sprint_2m" / "rewards.py").write_text("# mine\n")
     body = _state(workshop)
@@ -50,6 +50,26 @@ def test_changes_not_online_are_counted_then_pushed(workshop, checkout):
     pushed = workshop.post("/api/workshop/code/push").json()
     assert pushed["state"] == "shared"
     assert git(checkout, "log", "-1", "--format=%s") == "sprint-2m: my changes"
+    fork = remotes / "alice" / "microduck-challenges"
+    assert git(fork, "rev-parse", "main") == git(checkout, "rev-parse", "HEAD")
+
+
+def test_a_push_that_fails_can_be_retried_with_the_right_url(workshop, checkout, remotes):
+    # No bare repo at this address yet: the push fails, exactly as a typo'd URL or a fork that
+    # is not ready yet would.
+    bad = workshop.post("/api/workshop/code/fork", json={"url": "https://github.com/alice/microduck-challenges"})
+    assert bad.status_code == 400
+    assert git(checkout, "config", "--get", "remote.upstream.url") == "https://github.com/pollen-robotics/microduck-challenges"
+    assert _state(workshop)["state"] == "not-shared"
+
+    fork = remotes / "alice" / "microduck-challenges"
+    fork.mkdir(parents=True)
+    git(fork.parent, "init", "-q", "--bare", str(fork))
+    retry = workshop.post("/api/workshop/code/fork", json={"url": "https://github.com/alice/microduck-challenges"})
+    assert retry.status_code == 200, retry.text
+    assert git(checkout, "config", "--get", "remote.origin.url") == "https://github.com/alice/microduck-challenges"
+    assert git(checkout, "config", "--get", "remote.upstream.url") == "https://github.com/pollen-robotics/microduck-challenges"
+    assert retry.json()["state"] == "shared"
 
 
 def test_the_code_link_names_the_commit_once_it_is_on_the_fork(workshop, checkout):

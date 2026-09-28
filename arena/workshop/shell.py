@@ -4,7 +4,10 @@
 launcher synced it once — so every command runs in that environment as it is.
 A sync per call costs seconds and, during development, would put the locked
 Arena wheel back over an editable install. Output is never interpreted beyond
-what a step needs; on failure it is handed back whole.
+what a step needs; on failure it is handed back whole. Every git runs with
+`GIT_TERMINAL_PROMPT=0`: without it, a push with no credentials or an
+unreachable URL blocks on a terminal prompt that never comes, instead of
+failing with output the page can show.
 """
 
 import os
@@ -23,7 +26,8 @@ def child_env() -> dict:
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:
-    done = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
+    done = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True,
+                           env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     if check and done.returncode != 0:
         raise ShellError(f"$ git {' '.join(args)}\n{done.stdout}{done.stderr}")
     return done.stdout.strip()
