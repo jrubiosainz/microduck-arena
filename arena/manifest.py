@@ -59,9 +59,9 @@ class Sweep:
     """The commanded speeds an event tries.
 
     A pinned command measures how well a policy tracks THAT speed, not how fast
-    it can go: the reference walker scores 18.46 s at 0.25 m/s and 11.70 s at
-    0.40, with a cliff just past its own optimum. Every policy has a different
-    one, so the event sweeps and keeps the best.
+    it can go: the reference walker is far slower at the sprint's declared
+    0.25 m/s than at its own optimum, with a cliff just past that optimum. Every
+    policy has a different one, so the event sweeps and keeps the best.
     """
 
     lo: float

@@ -1,10 +1,12 @@
 """Score an entry: find the speed it is best at, then prove it over every seed.
 
 Two things are being measured and they pull apart. A single pinned command
-measures how faithfully a policy tracks THAT speed — the reference walker
-scores 18.46 s commanded at 0.25 m/s and 11.70 s at 0.40, and falls over past
-0.45. Which is faster is not a question a pinned command can answer, and "which
-is faster" is the entire point of a race.
+measures how faithfully a policy tracks THAT speed — the reference walker is
+far slower commanded at the sprint's declared 0.25 m/s than at its own best
+speed, and falls over not far past that one (arena/golden.py and
+tests/test_evaluate.py hold the current numbers). Which is faster is not a
+question a pinned command can answer, and "which is faster" is the entire point
+of a race.
 
 So the event declares a wide sweep and the harness runs it, in two stages:
 

@@ -22,14 +22,18 @@ then open **Training & rules** on your chosen challenge.
 Submitted policies are evaluated **server-side** on a fixed course over five
 perturbed seeds, at every commanded speed in the event's declared sweep, and the
 best result is recorded. A time reported by a browser is a number in devtools;
-this one is reproducible, and you can download any published policy and check it
-yourself.
+this one reproduces on the Space's hardware (x86_64 Linux), and you can download
+any published policy and race it yourself. Elsewhere — a Mac, or another
+architecture — the same run gives different numbers: the servo model is chaotic
+enough that a run diverges after a few seconds of simulated time, so a local time
+is indicative, not the board's.
 
 It runs two ways, and both are first-class:
 
 - **Locally**, with no Hugging Face account, no OAuth and no network. The run log
   is a directory on your disk.
-- **As a private Space** (this repo is one). Same code path, same numbers.
+- **As a private Space** (this repo is one). Same code path; its times are the
+  board's, and a local run on other hardware gives indicative ones.
 
 ## Deploying to the Space
 

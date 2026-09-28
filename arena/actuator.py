@@ -1,11 +1,17 @@
 """The BAM XL330 servo model, as training drives it, in numpy.
 
-Derived from Rhoban/bam (better-actuator-models) at rev 62bd8ce12154340be97e06f7f41a0ca8f116d967:
-bam/params/xl330/m6.json and bam/dynamixel/actuator.py (constants), bam/actuator.py (control
-and torque, current window), bam/mjlab.py (per-substep order, voltage sag, command delay, the m6
-friction budget written to dof_frictionloss). Copyright the bam authors, Apache License 2.0 — see
-LICENSE.bam next to this file. Vendored rather than depended on: the Space image has no git and
-must not install torch, and a pinned copy keeps the math at the revision training uses.
+Copyright 2025 Marc Duclusaud & Grégoire Passault. Licensed under the Apache License, Version
+2.0 — see LICENSE.bam next to this file.
+
+Ported to numpy (modified) from Rhoban/bam (better-actuator-models) at rev
+62bd8ce12154340be97e06f7f41a0ca8f116d967: bam/params/xl330/m6.json and bam/dynamixel/actuator.py
+(constants), bam/actuator.py (control and torque, current window), bam/mjlab.py (per-substep
+order, voltage sag, the m6 friction budget written to dof_frictionloss). The command delay
+follows mjlab's utils/buffers/delay_buffer.py as mjlab's actuator/actuator.py applies it (mjlab
+1.3.0, Copyright 2025, The mjlab Developers, also under the Apache License, Version 2.0): a ring
+backfilled with its first target, a lag drawn on every update. Vendored rather than depended on:
+the Space image has no git and must not install torch, and a pinned copy keeps the math at the
+revision training uses.
 
 Every per-environment randomisation of training takes its nominal value here; the command delay
 keeps training's distribution, drawn from a stream seeded per run so a run stays reproducible.
