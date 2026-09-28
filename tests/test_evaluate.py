@@ -1,3 +1,5 @@
+import platform
+
 import numpy as np
 import pytest
 
@@ -106,13 +108,33 @@ def test_golden_run_reference_policy_holds_its_time():
     assert result.command_vx == pytest.approx(GOLDEN_COMMAND_VX)
 
 
-# Baseline, measured at RUNNER_VERSION 3 (MuJoCo 3.10.0, the version mjlab
-# trains with). At version 2 — same sweep, MuJoCo 3.12.0 — the same policy
-# scored 11.724 s at 0.40 m/s; at version 1 — one pinned command at 0.25 m/s —
-# 18.216 s. Kept as the contrast: the sweep and the physics each moved it.
-GOLDEN_SCORE_S = 11.792
-GOLDEN_COMMAND_VX = 0.40
-PINNED_SCORE_S = 18.216  # what version 1 reported, at the event's declared vx
+# Baseline, measured at RUNNER_VERSION 4 (BAM XL330 servos, arena/actuator.py,
+# on MuJoCo 3.10.0 — see arena/golden.py). At version 3 — same sweep, MJCF
+# position servos, one arm64/x86 number good to 0.37% — the same policy scored
+# 11.792 s at 0.40 m/s; at version 2 — same sweep, MuJoCo 3.12.0 — 11.724 s at
+# 0.40 m/s; at version 1 — one pinned command at 0.25 m/s — 18.216 s. Kept as
+# the contrast: the sweep, the physics, and now the actuator have each moved
+# it.
+#
+# v4's BAM servos are chaotically sensitive to arithmetic: an arm64 run and an
+# x86_64 run of the same policy/seed/command diverge after 1-3 s, so the
+# baseline is per-architecture rather than one number (own copy here, kept in
+# sync with arena.golden.BASELINES by the cross-check test below). arm64:
+# this Mac. x86_64: HF Jobs, Intel Xeon 8375C and AMD EPYC 7R13 (0.14% apart)
+# — the Space runs x86_64.
+GOLDEN_BASELINES = {
+    "arm64": (7.988, 0.55),
+    "x86_64": (8.556, 0.50),
+}
+GOLDEN_SCORE_S, GOLDEN_COMMAND_VX = GOLDEN_BASELINES[platform.machine()]
+# Re-measured at version 4, at the same command version 1 used (0.25 m/s, the
+# event's declared vx), on arm64 (this suite only runs on the Mac — this
+# number, and every other v4 pin in this test file, tests/test_routes_submit.py,
+# and tests/test_hub_fetch.py, is an arm64 measurement): 18.208 s — close to
+# version 1's 18.216 s by coincidence, not because the physics agrees; a
+# different actuator model, run at the same slow command, happens to land
+# near the same number.
+PINNED_SCORE_S = 18.208
 
 
 def _scan(*pairs):
@@ -176,11 +198,16 @@ def test_the_scan_covers_exactly_the_range_the_event_declares():
     result = evaluate(manifest, policy)
     assert tuple(p.command_vx for p in result.scan) == manifest.sweep.speeds()
     # Not just "some speeds": a range wide enough to hold a policy well faster
-    # than today's reference, whose own optimum is 0.40.
+    # than today's reference, whose own optimum is 0.55.
     assert len(result.scan) >= 20
-    # 2.5x and not 3x: 3 * 0.4 is 1.2000000000000002 in binary floating point,
-    # which is the same accumulation error Sweep.speeds() carries its epsilon for.
-    assert result.scan[-1].command_vx >= 2.5 * GOLDEN_COMMAND_VX
+    # v3: 2.5x and not 3x, because 3 * 0.4 is 1.2000000000000002 in binary
+    # floating point — the same accumulation error Sweep.speeds() carries its
+    # epsilon for — right at the declared ceiling (1.20), too close to trust.
+    # v4: the reference's own optimum moved to 0.55, so even the declared
+    # ceiling itself is only 1.2 / 0.55 ~= 2.18x it — a smaller margin than v3
+    # had at 3x. 2.0x keeps a safe distance under that boundary rather than
+    # asserting right up against it.
+    assert result.scan[-1].command_vx >= 2.0 * GOLDEN_COMMAND_VX
 
 
 def test_the_score_comes_from_a_speed_the_scan_shortlisted():
@@ -231,12 +258,13 @@ def test_the_installed_mujoco_is_the_one_the_baseline_was_measured_with():
 
 
 def test_the_golden_module_agrees_with_this_files_baseline():
-    """Two places record the same number, so they must not drift apart. The
-    Dockerfile runs arena.golden; the suite runs the assertions above."""
+    """Two places record the same numbers, so they must not drift apart. The
+    Dockerfile runs arena.golden; the suite runs the assertions above. Compares
+    the whole per-architecture mapping, not just the current machine's entry,
+    so a drift on an architecture nobody is running today still gets caught."""
     from arena import golden
 
-    assert golden.SCORE_S == GOLDEN_SCORE_S
-    assert golden.COMMAND_VX == GOLDEN_COMMAND_VX
+    assert golden.BASELINES == GOLDEN_BASELINES
     assert golden.EVENT_ID == "sprint-2m"
 
 

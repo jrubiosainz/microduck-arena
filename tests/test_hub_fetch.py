@@ -140,8 +140,17 @@ def test_a_repo_that_declines_to_report_a_size_still_downloads():
 
 @pytest.mark.network
 def test_a_real_community_policy_races_here():
-    """The premise of the whole feature, and it was measured before the design
-    existed: RemiFabre/microduck-rough-walk-e scores 27.180s over five seeds."""
+    """The premise of the whole feature: fetch a real Hub repo and race it here.
+
+    v3 (MJCF position servos): RemiFabre/microduck-rough-walk-e scored 27.180s,
+    5/5 seeds finished. v4 (BAM servos): the same policy circles left at zero
+    yaw command into the lane wall at the scan's chosen speed, finishing only
+    1 of 5 seeds, 43.104s. That is a real property of this third-party policy
+    under the corrected physics — this test's job is the fetch-and-evaluate
+    pipeline, not a quality bar for a policy the Arena does not own, so
+    seeds_finished is intentionally not asserted here.
+    """
+    from arena.constants import RUNNER_VERSION
     from arena.evaluate import evaluate
     from arena.hub_fetch import fetch_policy
     from arena.manifest import load_event
@@ -149,5 +158,6 @@ def test_a_real_community_policy_races_here():
 
     fetched = fetch_policy("RemiFabre/microduck-rough-walk-e")
     result = evaluate(load_event("sprint-2m"), load_policy(fetched.path))
-    assert result.seeds_finished == 5
-    assert result.score == pytest.approx(27.180, rel=0.05)
+    assert len(result.per_seed) == 5
+    assert result.runner_version == RUNNER_VERSION
+    assert result.score == pytest.approx(43.104, rel=0.05)

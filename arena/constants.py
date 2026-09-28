@@ -1,8 +1,13 @@
-"""Numbers that must match the sandbox exactly.
+"""The policy interface: joint order, default pose, observation/action sizes,
+and control rates — shared with training and the sandbox.
 
 Transcribed from pollen-robotics/microduck-simulator, app/src/game/constants.js.
 A mismatch here does not crash: it makes a policy behave differently than it does
 in the sandbox, which is far harder to notice. Keep this module boring.
+
+As of RUNNER_VERSION 4 the physics behind these numbers no longer matches the
+sandbox's own position servos (see the comment above RUNNER_VERSION below); the
+interface they describe still must.
 """
 
 import numpy as np
@@ -64,4 +69,10 @@ TRACE_WIDTH = 3 + 4 + NUM_JOINTS
 #    to mjlab-microduck in a challenges checkout. The reference walker was
 #    re-measured on it (arena/golden.py); v2 times were made by a different
 #    solver and are not comparable.
-RUNNER_VERSION = 3
+#
+# 4: the Arena drives the robot with the BAM XL330 servo model training uses
+#    (arena/actuator.py) — nominal values, training's per-substep command
+#    delay, and its one-control-step joint-velocity lag — instead of the MJCF
+#    position servos the sandbox uses. v3 times were made by a different
+#    actuator and are not comparable.
+RUNNER_VERSION = 4
