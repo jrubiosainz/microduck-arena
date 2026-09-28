@@ -285,7 +285,8 @@ def test_the_reset_drives_the_servos_toward_the_zero_pose_first(sprint, walker, 
     clear_state) and runs the actuator once on them before its forward pass
     (the reset's scene.write_data_to_sim()), which backfills the command-delay
     ring with zeros: the first control step's first substeps drive toward
-    0 rad, not toward the policy's target."""
+    0 rad, not toward the policy's target. That drive reads the forces of the
+    perturbed reset pose, from a forward pass run before it."""
     made = []
 
     def recording(*args):
@@ -299,8 +300,15 @@ def test_the_reset_drives_the_servos_toward_the_zero_pose_first(sprint, walker, 
     time, target, ring, bias = servos.calls[0]
     assert time == 0.0
     np.testing.assert_array_equal(target, np.zeros(NUM_JOINTS))
-    # On the perturbed pose, before any forward pass has computed a force.
-    assert not bias.any()
+    # The forces of the perturbed reset pose itself.
+    model = compile_course(sprint)
+    data = mujoco.MjData(model)
+    adr = _Addresses.of(model, sprint.start.keyframe)
+    mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
+    runner._perturb(data, adr, sprint, 1)
+    mujoco.mj_forward(model, data)
+    assert data.qfrc_bias.any()
+    np.testing.assert_array_equal(bias, data.qfrc_bias)
     # The first control step's first drive: the policy's own target goes in,
     # and every older entry — which any lag in 3..6 selects — is 0 rad.
     time, target, ring, _ = servos.calls[1]

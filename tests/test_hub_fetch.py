@@ -143,16 +143,13 @@ def test_a_real_community_policy_races_here():
     """The premise of the whole feature: fetch a real Hub repo and race it here.
 
     v3 (MJCF position servos): RemiFabre/microduck-rough-walk-e scored 27.180s,
-    5/5 seeds finished. v4 (BAM servos), before training's reset and fifth
-    actuator writes joined the runner: the same policy circled left at zero
-    yaw command into the lane wall at the scan's chosen speed, finishing only
-    1 of 5 seeds, 43.104s. Since those writes, no scanned speed finishes — up
-    to 0.70 m/s it times out short of 1.2 m, above that it falls — and all
-    five seeds fall at the scan's pick (0.85 m/s), so the score is the 50 s
-    time limit. That is a real property of this third-party policy under the
-    corrected physics — this test's job is the fetch-and-evaluate pipeline,
-    not a quality bar for a policy the Arena does not own, so seeds_finished
-    is intentionally not asserted here.
+    5/5 seeds finished. v4 (BAM servos): 0/5 — at zero yaw command it turns
+    left into the lane wall, where it stalls until the time limit at slow
+    speeds and falls at fast ones. That is a real property of this third-party
+    policy under the corrected physics. This test's job is the
+    fetch-and-evaluate pipeline, not a quality bar for a policy the Arena does
+    not own, so neither seeds_finished nor the score is asserted: a 0/5 policy
+    scores the 50 s limit, and a pin there would match any failing policy.
     """
     from arena.constants import RUNNER_VERSION
     from arena.evaluate import evaluate
@@ -164,4 +161,3 @@ def test_a_real_community_policy_races_here():
     result = evaluate(load_event("sprint-2m"), load_policy(fetched.path))
     assert len(result.per_seed) == 5
     assert result.runner_version == RUNNER_VERSION
-    assert result.score == pytest.approx(50.0, rel=0.05)

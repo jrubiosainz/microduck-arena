@@ -23,6 +23,9 @@ Two of those drives are training's own behaviour rather than an idealised loop
   runs the actuator once on them before `sim.forward()` (`reset()` and the reset
   block of `step()`), which backfills the command-delay ring with zeros: the
   first substeps of a run drive toward 0 rad, not toward the policy's target.
+  Training's reset drive reads the forces the previous episode left behind,
+  which a single run cannot copy; here a forward pass on the reset pose runs
+  first, so the drive reads that pose's own forces — a consistent state.
 """
 
 import zlib
@@ -164,11 +167,13 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
         model, adr.dof, adr.act, np.random.default_rng([zlib.crc32(manifest.id.encode()), seed, 1])
     )
 
-    # Training's reset (module docstring): the perturbed pose written with no
-    # forward pass, the servos driven once toward the cleared 0 rad targets,
-    # then the forward pass.
+    # Training's reset (module docstring): the perturbed pose, a forward pass so
+    # the reset drive reads that pose's own forces (training's would read the
+    # previous episode's), the servos driven once toward the cleared 0 rad
+    # targets, then the forward pass that picks up their torques.
     mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
     _perturb(data, adr, manifest, seed)
+    mujoco.mj_forward(model, data)
     servos.drive(data, np.zeros(NUM_JOINTS))
     mujoco.mj_forward(model, data)
 
