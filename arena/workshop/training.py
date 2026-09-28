@@ -5,6 +5,7 @@ With an NVIDIA GPU the process IS the training. Without one it is `train …
 job's uploader pushes the run to a Hub repo that mirrors logs/rsl_rl/; this
 pulls that repo back into logs/rsl_rl/ every few minutes and once more at the
 end, so Test and Publish find an HF run exactly where they find a local one.
+The job itself is written down (jobs.py): it outlives this process.
 """
 
 import os
@@ -13,16 +14,29 @@ import shlex
 import signal
 import subprocess
 import threading
+from datetime import UTC, datetime
 
+from .jobs import remember_job
 from .runs import LOGS
 from .shell import child_env, uv
 
 PULL_EVERY_S = 120.0
 _JOB_ID = re.compile(r"^\[job\] id:\s+(\S+)")
+# Every download into logs/rsl_rl/ in turn: the periodic pull, a button press, a recorded job's.
+_PULLING = threading.Lock()
 
 
 def ckpt_repo(user: str, challenge, name: str) -> str:
     return f"{user}/{challenge.task.lower()}-{name}"
+
+
+def fetch(root, repo: str) -> subprocess.CompletedProcess:
+    """Bring an HF job's checkpoint repo, a mirror of logs/rsl_rl/, back into logs/rsl_rl/."""
+    with _PULLING:
+        return subprocess.run(
+            uv("hf", "download", repo, "--local-dir", str(LOGS), "--quiet"),
+            cwd=root, capture_output=True, text=True, env=child_env(), check=False,
+        )
 
 
 def train_command(challenge, name: str, recipe: dict[str, int], hf_user: str | None) -> list[str]:
@@ -49,24 +63,29 @@ class Training:
         self._job_id: str | None = None
         # Reentrant: snapshot() reads job_id while already holding this lock.
         self._lock = threading.RLock()
-        self._pulling = threading.Lock()
         self._ended = threading.Event()
         self._stopped = False
         self.proc = subprocess.Popen(
             command, cwd=root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, errors="replace", bufsize=1, env=child_env(), start_new_session=True,
         )
+        if ckpt_repo:  # before the log is read: its job ids update this record
+            remember_job(root, name, ckpt_repo=ckpt_repo, namespace=namespace, job_id=None,
+                         started=datetime.now(UTC).isoformat(timespec="seconds"))
         threading.Thread(target=self._follow, daemon=True).start()
         if ckpt_repo:
             threading.Thread(target=self._pull_while_running, daemon=True).start()
 
     def _say(self, line: str) -> None:
+        # A resubmitted job (mjlab retries on a volume-mount failure) prints a
+        # fresh id; the last one seen is the one actually running and billed.
+        job = _JOB_ID.match(line) if self.ckpt_repo else None
         with self._lock:
             self._lines.append(line)
-            # A resubmitted job (mjlab retries on a volume-mount failure) prints a
-            # fresh id; the last one seen is the one actually running and billed.
-            if m := _JOB_ID.match(line):
-                self._job_id = m.group(1)
+            if job:
+                self._job_id = job.group(1)
+        if job:
+            remember_job(self.root, self.name, job_id=job.group(1))
 
     def _follow(self) -> None:
         for line in self.proc.stdout:
@@ -83,11 +102,7 @@ class Training:
             self.pull()
 
     def pull(self) -> None:
-        with self._pulling:  # the periodic pull and a button press never overlap
-            done = subprocess.run(
-                uv("hf", "download", self.ckpt_repo, "--local-dir", str(LOGS), "--quiet"),
-                cwd=self.root, capture_output=True, text=True, env=child_env(), check=False,
-            )
+        done = fetch(self.root, self.ckpt_repo)
         if done.returncode == 0:
             self._say(f"[workshop] fetched the checkpoints from {self.ckpt_repo}")
         else:

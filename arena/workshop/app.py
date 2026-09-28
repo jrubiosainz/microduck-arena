@@ -24,10 +24,11 @@ from ..web.routes_read import event_summary
 from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write_values
 from .code import code_state, code_url, fork, push
 from .hub import Hub
+from .jobs import find_job, recorded_jobs
 from .publishing import PublishError, arena_link, preview, publish, repo_for
 from .runs import curve, find_run, find_runs
 from .shell import ShellError, commit_all, gh_ready, git
-from .training import Training, ckpt_repo, train_command
+from .training import Training, ckpt_repo, fetch, train_command
 from .trials import TrialError, tested, trial
 
 NO_SITE = (
@@ -129,7 +130,9 @@ def launch(body: Launch, request: Request) -> dict:
                 status_code=400,
                 detail="A run name is lowercase letters and digits, joined by single dashes, up to 40 characters.",
             )
-        taken = {r.name for r in find_runs(ws.root, ws.challenge.task)} | ({ws.training.name} if ws.training else set())
+        # A recorded job's run may not be fetched yet, and its name is also its checkpoint repo's.
+        taken = ({r.name for r in find_runs(ws.root, ws.challenge.task)} | {j["name"] for j in recorded_jobs(ws.root)}
+                 | ({ws.training.name} if ws.training else set()))
         if body.name in taken:
             raise HTTPException(status_code=409, detail=f"There is already a run called {body.name}.")
         if set(body.recipe) != set(RECIPE):
@@ -191,6 +194,43 @@ async def pull(request: Request) -> dict:
         raise HTTPException(status_code=409, detail="Only a Hugging Face Jobs run has checkpoints to fetch.")
     await run_in_threadpool(ws.training.pull)
     return ws.training.snapshot()
+
+
+@router.get("/jobs")
+def jobs(request: Request) -> dict:
+    """Every HF job launched from this checkout, newest first — each still reachable after a restart."""
+    return {"jobs": recorded_jobs(_workshop(request).root)}
+
+
+def _job_or_404(ws: Workshop, name: str) -> dict:
+    job = find_job(ws.root, name)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"No Hugging Face job called {name} was launched from here.")
+    return job
+
+
+@router.post("/jobs/{name}/pull")
+async def pull_job(name: str, request: Request) -> dict:
+    ws = _workshop(request)
+    job = _job_or_404(ws, name)
+    done = await run_in_threadpool(fetch, ws.root, job["ckpt_repo"])
+    output = done.stdout + done.stderr
+    if done.returncode != 0:
+        raise HTTPException(status_code=502, detail=f"Could not fetch {job['ckpt_repo']}:\n{output}")
+    return {**job, "output": output}
+
+
+@router.post("/jobs/{name}/stop")
+def stop_job(name: str, request: Request) -> dict:
+    ws = _workshop(request)
+    job = _job_or_404(ws, name)
+    if not job["job_id"]:
+        raise HTTPException(status_code=409, detail=f"{name} never printed a job id: there is no job to stop.")
+    try:
+        ws.hub.cancel_job(job["job_id"], job["namespace"])
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not cancel the Hugging Face job: {exc}") from exc
+    return job
 
 
 def _run_summary(run) -> dict:
