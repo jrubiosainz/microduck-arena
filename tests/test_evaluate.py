@@ -104,11 +104,14 @@ def test_evaluate_is_deterministic():
 # x86_64 run of the same policy/seed/command diverge after 1-3 s, so the
 # baseline is per-platform rather than one number (own copy here, kept in
 # sync with arena.golden.BASELINES by the cross-check test below).
-# Darwin-arm64: this Mac. Linux-x86_64: HF Jobs, Intel Xeon 8375C and AMD
-# EPYC 7R13 (0.14% apart) — the Space runs x86_64. On a platform with no
-# baseline the tests that need one skip, and arena.golden.check() refuses.
+# Darwin-arm64: this Mac — 7.988 s at 0.55 m/s before training's reset and
+# fifth actuator writes joined the runner (arena/runner.py), 8.672 s at 0.50
+# since. Linux-x86_64: HF Jobs, Intel Xeon 8375C, measured before those writes
+# and awaiting re-measurement (arena/golden.py) — the Space runs x86_64. On a
+# platform with no baseline the tests that need one skip, and
+# arena.golden.check() refuses.
 GOLDEN_BASELINES = {
-    "Darwin-arm64": (7.988, 0.55),
+    "Darwin-arm64": (8.672, 0.50),
     "Linux-x86_64": (8.556, 0.50),
 }
 GOLDEN_SCORE_S, GOLDEN_COMMAND_VX = GOLDEN_BASELINES.get(PLATFORM, (None, None))
@@ -118,11 +121,12 @@ needs_golden = pytest.mark.skipif(
 # Re-measured at version 4, at the same command version 1 used (0.25 m/s, the
 # event's declared vx), on arm64 (this suite only runs on the Mac — this
 # number, and every other v4 pin in this test file, tests/test_routes_submit.py,
-# and tests/test_hub_fetch.py, is an arm64 measurement): 18.208 s — close to
-# version 1's 18.216 s by coincidence, not because the physics agrees; a
-# different actuator model, run at the same slow command, happens to land
-# near the same number.
-PINNED_SCORE_S = 18.208
+# and tests/test_hub_fetch.py, is an arm64 measurement): 24.856 s, seed 1
+# falling and counted at the 50 s limit, the other four finishing in 18.1-19.0
+# s. Before training's reset and fifth actuator writes joined the runner it was
+# 18.208 s with all five finishing — close to version 1's 18.216 s by
+# coincidence, not because the physics agreed.
+PINNED_SCORE_S = 24.856
 
 
 @needs_golden
@@ -205,15 +209,16 @@ def test_the_scan_covers_exactly_the_range_the_event_declares():
     result = evaluate(manifest, policy)
     assert tuple(p.command_vx for p in result.scan) == manifest.sweep.speeds()
     # Not just "some speeds": a range wide enough to hold a policy well faster
-    # than today's reference, whose own optimum is 0.55.
+    # than today's reference, whose own optimum is 0.50.
     assert len(result.scan) >= 20
     # v3: 2.5x and not 3x, because 3 * 0.4 is 1.2000000000000002 in binary
     # floating point — the same accumulation error Sweep.speeds() carries its
     # epsilon for — right at the declared ceiling (1.20), too close to trust.
     # v4: the reference's own optimum moved to 0.55, so even the declared
-    # ceiling itself is only 1.2 / 0.55 ~= 2.18x it — a smaller margin than v3
+    # ceiling itself was only 1.2 / 0.55 ~= 2.18x it — a smaller margin than v3
     # had at 3x. 2.0x keeps a safe distance under that boundary rather than
-    # asserting right up against it.
+    # asserting right up against it. (Since training's reset and fifth actuator
+    # writes joined the runner the optimum is 0.50, 2.4x under the ceiling.)
     assert result.scan[-1].command_vx >= 2.0 * GOLDEN_COMMAND_VX
 
 

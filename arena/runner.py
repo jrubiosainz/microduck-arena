@@ -6,8 +6,23 @@ physics change and a silently invalidated leaderboard.
 
 The loop is training's, not the sandbox's: build the 61-D observation with the
 actor's joint-velocity slot one control step old, run the policy, drive the BAM
-servos (`arena.actuator.Servos`) once per physics substep, and call
-`mj_forward` after the four substeps — mirroring mjlab's `sim.forward()`.
+servos (`arena.actuator.Servos`) once per physics substep and once more after
+the four substeps, then call `mj_forward` — mirroring mjlab's `sim.forward()`.
+
+Two of those drives are training's own behaviour rather than an idealised loop
+(mjlab 1.3.0), and every policy trained under them:
+
+- The fifth drive of a control step. After the substeps, mjlab's `step()`
+  (envs/manager_based_rl_env.py) resets the environments that ended and calls
+  `scene.write_data_to_sim()` before `sim.forward()` whenever any of them did —
+  nearly every step at training's batch size — and that write runs every
+  environment's actuator once more on the same target: one more delay-ring
+  push, lag draw, friction write, torque write and voltage-sag update.
+- The drive at reset. The reset clears the joint targets to 0 rad
+  (entity/data.py, `clear_state`), and the reset's own `scene.write_data_to_sim()`
+  runs the actuator once on them before `sim.forward()` (`reset()` and the reset
+  block of `step()`), which backfills the command-delay ring with zeros: the
+  first substeps of a run drive toward 0 rad, not toward the policy's target.
 """
 
 import zlib
@@ -79,7 +94,7 @@ def seed_rng(event_id: str, seed: int) -> np.random.Generator:
     return np.random.default_rng([zlib.crc32(event_id.encode()), seed])
 
 
-def _observe(model, data, adr, last_action, command) -> np.ndarray:
+def _observe(model, data, adr, last_action, command, joint_vel) -> np.ndarray:
     obs = np.empty(OBS_SIZE, dtype=np.float32)
     obs[0:3] = data.sensordata[adr.gyro : adr.gyro + 3]
     # Projected gravity: world -z rotated into the trunk frame. xmat is
@@ -87,19 +102,18 @@ def _observe(model, data, adr, last_action, command) -> np.ndarray:
     rotation = data.xmat[adr.trunk].reshape(3, 3)
     obs[3:6] = rotation.T @ _WORLD_DOWN
     obs[6:20] = data.qpos[adr.qpos] - DEFAULT_POSE
-    obs[20:34] = data.qvel[adr.dof]
+    obs[20:34] = joint_vel
     obs[34:48] = last_action
     obs[48:61] = command
     return obs
 
 
-def _perturb(model, data, adr, manifest, seed) -> None:
+def _perturb(data, adr, manifest, seed) -> None:
     rng = seed_rng(manifest.id, seed)
     start = manifest.start
     data.qpos[adr.qpos] += rng.uniform(-start.joint_rad, start.joint_rad, NUM_JOINTS)
     yaw = np.radians(rng.uniform(-start.yaw_deg, start.yaw_deg))
     data.qpos[3:7] = [np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)]
-    mujoco.mj_forward(model, data)
 
 
 def _record(frame: np.ndarray, data, adr) -> None:
@@ -111,7 +125,9 @@ def _record(frame: np.ndarray, data, adr) -> None:
 def _step(
     model, data, policy, adr, command, last_action, prev_qvel, servos
 ) -> tuple[np.ndarray, np.ndarray]:
-    """One control step: observe, act, drive the servos once per substep.
+    """One control step: observe, act, drive the servos once per substep and
+    once more after them (training's post-reset write, see the module
+    docstring), then the forward pass.
 
     `prev_qvel` is the joint velocity recorded one control step ago — the
     actor's observation lags the true qvel by exactly one control step,
@@ -120,14 +136,14 @@ def _step(
     qvel this call captures for the NEXT step's observation is read here,
     before any of this step's substeps run.
     """
-    obs = _observe(model, data, adr, last_action, command)
-    obs[20:34] = prev_qvel
+    obs = _observe(model, data, adr, last_action, command, prev_qvel)
     next_prev_qvel = data.qvel[adr.dof].copy()
     action = policy.act(obs)
     target = DEFAULT_POSE + action * ACTION_SCALE
     for _ in range(DECIMATION):
         servos.drive(data, target)
         mujoco.mj_step(model, data)
+    servos.drive(data, target)
     mujoco.mj_forward(model, data)
     return action, next_prev_qvel
 
@@ -137,24 +153,24 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     data = mujoco.MjData(model)
     adr = _Addresses.of(model, manifest.start.keyframe)
 
-    # A fresh Servos every run, constructed BEFORE the reset/perturb below: the
+    # A fresh Servos every run, constructed BEFORE the reset below: the
     # compiled model is shared across an evaluation's runs (evaluate.py
-    # compiles once), and Servos.__init__ resets model.dof_frictionloss /
-    # model.dof_damping — so a run must never inherit the friction state left
-    # behind by the run before it. _perturb ends with its own mj_forward, which
-    # reads those fields to settle contact forces (efc_force, qfrc_constraint)
-    # on a rig where a passive part may already be touching the floor at the
-    # reset pose (the roller rig's wheels); constructing Servos first means
-    # that forward pass runs against this run's own reset friction, not
-    # whatever the previous run left on the shared model. The command-delay
-    # stream is seeded per run, distinct from the perturbation stream below (a
-    # trailing 1 in the seed sequence marks it).
+    # compiles once), Servos writes model.dof_frictionloss / model.dof_damping,
+    # and its construction resets them — so nothing in this run sees the
+    # friction state the run before it left on the shared model. The
+    # command-delay stream is seeded per run, distinct from the perturbation
+    # stream below (a trailing 1 in the seed sequence marks it).
     servos = Servos(
         model, adr.dof, adr.act, np.random.default_rng([zlib.crc32(manifest.id.encode()), seed, 1])
     )
 
+    # Training's reset (module docstring): the perturbed pose written with no
+    # forward pass, the servos driven once toward the cleared 0 rad targets,
+    # then the forward pass.
     mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
-    _perturb(model, data, adr, manifest, seed)
+    _perturb(data, adr, manifest, seed)
+    servos.drive(data, np.zeros(NUM_JOINTS))
+    mujoco.mj_forward(model, data)
 
     # Converted once per run, not per step. The manifest holds an immutable tuple
     # so a loaded event cannot be mutated in place by anything downstream.
@@ -164,8 +180,9 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     # only gets to say how fast.
     command = np.asarray(manifest.command if command is None else command, dtype=np.float64)
     last_action = np.zeros(NUM_JOINTS, dtype=np.float32)
-    # The actor's joint-velocity observation is one control step old (training's
-    # mjlab_microduck randomisation); the first step uses the reset state's qvel.
+    # The actor's joint-velocity observation is one control step old — a fixed
+    # lag in training (delay_min_lag = delay_max_lag = 1 on its joint_vel term),
+    # not a randomisation; the first step uses the reset state's qvel.
     prev_qvel = data.qvel[adr.dof].copy()
 
     # Settle with the policy running and the clock stopped: nobody is timed on

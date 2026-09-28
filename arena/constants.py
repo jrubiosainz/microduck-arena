@@ -72,7 +72,9 @@ TRACE_WIDTH = 3 + 4 + NUM_JOINTS
 #
 # 4: the Arena drives the robot with the BAM XL330 servo model training uses
 #    (arena/actuator.py) — nominal values, training's per-substep command
-#    delay, and its one-control-step joint-velocity lag — instead of the MJCF
+#    delay, and its one-control-step joint-velocity lag — run at the points
+#    training runs it (arena/runner.py: once more after each control step's
+#    substeps, and once at reset on 0 rad targets), instead of the MJCF
 #    position servos the sandbox uses. v3 times were made by a different
 #    actuator and are not comparable.
 RUNNER_VERSION = 4

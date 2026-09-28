@@ -11,6 +11,8 @@ Every per-environment randomisation of training takes its nominal value here; th
 keeps training's distribution, drawn from a stream seeded per run so a run stays reproducible.
 """
 
+import math
+
 import mujoco
 import numpy as np
 
@@ -79,8 +81,13 @@ def friction_budget(mot: np.ndarray, ext: np.ndarray, dq: np.ndarray) -> np.ndar
     mot and ext are the motor-side and external-side torque already acting on the
     joint (the previous substep's actuator torque, and the bias/constraint torque
     net of friction); dq sets the Stribeck coefficient.
+
+    The Stribeck coefficient goes through the C library's scalar exp/pow, one
+    element at a time, not numpy's ufuncs: numpy may dispatch those to
+    CPU-specific SIMD kernels whose rounding differs between CPUs, and this
+    model is chaotic enough that one ulp here changes a run within seconds.
     """
-    s = np.exp(-np.power(np.abs(dq) / DTHETA_STRIBECK, ALPHA))
+    s = np.array([math.exp(-math.pow(abs(v) / DTHETA_STRIBECK, ALPHA)) for v in dq])
     fl = FRICTION_BASE + s * FRICTION_STRIBECK
     fl = fl + np.abs(ext * LOAD_EXTERNAL - mot * LOAD_MOTOR)
     fl = fl + s * np.abs(ext * LOAD_EXTERNAL_STRIBECK - mot * LOAD_MOTOR_STRIBECK)
@@ -92,11 +99,12 @@ def friction_budget(mot: np.ndarray, ext: np.ndarray, dq: np.ndarray) -> np.ndar
 class Servos:
     """Drives a set of BAM XL330 servos, one physics substep at a time.
 
-    Call `drive` once per substep, before `mj_step`. The compiled model is
-    shared across every run of an evaluation, and this class writes
-    `model.dof_frictionloss` / `model.dof_damping` on every substep, so
-    construction resets them: a run must never inherit the friction state left
-    behind by the run before it.
+    Call `drive` wherever training runs the actuator (arena/runner.py): before
+    each `mj_step`, once more after a control step's substeps, and once at
+    reset on the cleared 0 rad targets. The compiled model is shared across
+    every run of an evaluation, and this class writes `model.dof_frictionloss`
+    / `model.dof_damping` on every drive, so construction resets them: a run
+    must never inherit the friction state left behind by the run before it.
     """
 
     def __init__(self, model, dof: np.ndarray, act_ids: np.ndarray, rng: np.random.Generator):

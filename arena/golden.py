@@ -21,16 +21,21 @@ challenges checkout can install this package next to mjlab-microduck. The
 walker was re-measured on it; the number below is that measurement.
 
 Version 4 moved the runner itself: the robot is now driven by the BAM XL330
-servo model training uses (arena/actuator.py) instead of the MJCF position
-servos. That also turned this module's single number into two: the actuator's
-per-substep friction/delay model is chaotic enough that an arm64 run and an
-x86_64 run of the same policy, seed, and command diverge after 1-3 s of
-simulated time (v3's MJCF-servo Mac/x86 gap was 0.37%; v4's BAM-servo gap is
-7%). The baseline below is therefore keyed by platform (OS and machine) rather
-than being one number: Mac development measures Darwin-arm64; the Space runs
-Linux-x86_64, measured on HF Jobs (Intel Xeon 8375C and AMD EPYC 7R13 agree
-with each other to 0.14%, so x86_64 itself is not the source of the
-divergence — the arm64/x86_64 boundary is).
+servo model training uses (arena/actuator.py), run at the points training runs
+it (arena/runner.py), instead of the MJCF position servos. That also turned
+this module's single number into one per platform: the actuator's per-substep
+friction/delay model is chaotic enough that an arm64 run and an x86_64 run of
+the same policy, seed, and command diverge after 1-3 s of simulated time (v3's
+MJCF-servo Mac/x86 gap was 0.37%; v4's BAM-servo gap was 7%). The baseline
+below is therefore keyed by platform (OS and machine) rather than being one
+number: Mac development measures Darwin-arm64; the Space runs Linux-x86_64,
+measured on HF Jobs.
+
+Nor is x86_64 one platform to this actuator. Before the friction budget's
+exp/pow moved off numpy's ufuncs (which may dispatch them to CPU-specific SIMD
+kernels), an Intel Xeon 8375C scored 8.556 s and an AMD EPYC 7R13 8.568 s,
+both at 0.50 m/s: the CPU itself, not only its architecture, reached the
+result.
 """
 
 import platform
@@ -44,10 +49,13 @@ POLICY = "BEST_alpha_walking.onnx"
 PLATFORM = f"{platform.system()}-{platform.machine()}"
 # The full-sweep score, and the commanded speed the sweep chose for it, keyed
 # by PLATFORM. Both the score and the speed, because a score can be reproduced
-# by luck from a different speed. Darwin-arm64: this Mac. Linux-x86_64: HF Jobs
-# (Intel Xeon 8375C and AMD EPYC 7R13, 0.14% apart) — the Space runs x86_64.
+# by luck from a different speed. Darwin-arm64: this Mac (7.988 s at 0.55 m/s
+# before training's reset and fifth actuator writes joined the runner).
+# Linux-x86_64: HF Jobs, Intel Xeon 8375C — the Space runs x86_64. That entry
+# predates the reset and fifth writes and has to be re-measured before this
+# ships: the Space's Docker build runs check().
 BASELINES: dict[str, tuple[float, float]] = {
-    "Darwin-arm64": (7.988, 0.55),
+    "Darwin-arm64": (8.672, 0.50),
     "Linux-x86_64": (8.556, 0.50),
 }
 # The score check only catches gross drift: the 3.13 regression above was

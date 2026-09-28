@@ -1,3 +1,5 @@
+import math
+
 import mujoco
 import numpy as np
 import pytest
@@ -39,6 +41,29 @@ def test_friction_budget_quadratic_term_follows_the_driving_side():
     fl = A.friction_budget(mot, ext, dq)
     lin = abs(0.1 * A.LOAD_EXTERNAL - 0.5 * A.LOAD_MOTOR) + abs(0.1 * A.LOAD_EXTERNAL_STRIBECK - 0.5 * A.LOAD_MOTOR_STRIBECK)
     assert fl == pytest.approx([A.FRICTION_BASE + A.FRICTION_STRIBECK + lin + A.LOAD_EXTERNAL_QUAD * 0.1**2])
+
+
+def test_the_stribeck_factor_does_not_go_through_numpys_simd_math(monkeypatch):
+    """numpy may dispatch np.exp / np.power to CPU-specific SIMD kernels whose
+    rounding differs from one CPU to the next, and this model is chaotic
+    enough that one ulp in the friction budget changes a run within seconds.
+    The Stribeck factor goes through the C library's scalar exp/pow instead,
+    one element at a time."""
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("numpy's vectorised exp/pow reached the friction budget")
+
+    monkeypatch.setattr(np, "exp", refuse)
+    monkeypatch.setattr(np, "power", refuse)
+    dq = np.array([0.0, 0.5, -1.0, A.DTHETA_STRIBECK, -3.5, 10.0])
+    fl = A.friction_budget(np.zeros(len(dq)), np.zeros(len(dq)), dq)
+    # With no load every load term is exactly zero, leaving base + s * stribeck.
+    expected = [
+        A.FRICTION_BASE
+        + math.exp(-math.pow(abs(v) / A.DTHETA_STRIBECK, A.ALPHA)) * A.FRICTION_STRIBECK
+        for v in dq.tolist()
+    ]
+    np.testing.assert_array_equal(fl, expected)
 
 
 def test_force_limit_is_the_top_of_the_voltage_range():

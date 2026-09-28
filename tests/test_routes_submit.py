@@ -57,10 +57,11 @@ def test_the_reference_policy_scores_and_is_recorded(api):
     assert body["policy_name"] == "walker"
     assert body["seeds_finished"] == 5
     assert body["seeds_total"] == 5
-    # v3 (MJCF position servos): 11.724 s at 0.40 m/s. v4 (BAM servos): re-measured.
-    assert body["score"] == pytest.approx(7.988, rel=0.02)
+    # v3 (MJCF position servos): 11.724 s at 0.40 m/s. v4 (BAM servos): 7.988 s
+    # at 0.55 before training's reset and fifth actuator writes joined the runner; re-measured since.
+    assert body["score"] == pytest.approx(8.672, rel=0.02)
     # The submitter is told which speed set the time, not just the time.
-    assert body["command_vx"] == pytest.approx(0.55)
+    assert body["command_vx"] == pytest.approx(0.50)
     assert len(body["per_seed"]) == 5
     assert body["trace_seed"] in {s["seed"] for s in body["per_seed"]}
 
@@ -180,9 +181,10 @@ def test_a_trial_scores_the_policy_without_recording_it(api, store_dir):
 
     assert body["policy_name"] == "trial"
     assert body["seeds_finished"] == 5
-    # v3 (MJCF position servos): 11.724 s at 0.40 m/s. v4 (BAM servos): re-measured.
-    assert body["score"] == pytest.approx(7.988, rel=0.02)
-    assert body["command_vx"] == pytest.approx(0.55)
+    # v3 (MJCF position servos): 11.724 s at 0.40 m/s. v4 (BAM servos): 7.988 s
+    # at 0.55 before training's reset and fifth actuator writes joined the runner; re-measured since.
+    assert body["score"] == pytest.approx(8.672, rel=0.02)
+    assert body["command_vx"] == pytest.approx(0.50)
 
     # Nothing on the board, and nothing on disk.
     assert api.get("/api/events/sprint-2m/leaderboard").json()["rows"] == []
@@ -201,10 +203,11 @@ def test_a_trial_returns_a_watchable_trace_inline(api):
     assert len(raw) % (TRACE_WIDTH * 4) == 0
     frames = len(raw) // (TRACE_WIDTH * 4)
     # v3 (MJCF position servos): ~11.7 s at 50 Hz, ~585 frames. v4 (BAM
-    # servos): ~8.0 s, ~399 frames. Bounded on both sides against the event's
-    # own limits and not the fixture default: below the finish time it would
-    # not be a finish, and 50 s at 50 Hz is the hard ceiling.
-    assert 350 < frames < 450
+    # servos): ~8.0 s, 399 frames before training's reset and fifth actuator writes joined the runner; 8.66 s, 433 frames since. Bounded on
+    # both sides against the event's own limits and not the fixture default:
+    # below the finish time it would not be a finish, and 50 s at 50 Hz is the
+    # hard ceiling.
+    assert 380 < frames < 480
 
 
 def test_a_trial_and_a_submission_give_the_same_time(api):
@@ -283,10 +286,11 @@ def test_a_trial_can_pin_one_speed_instead_of_sweeping(api):
     """What the sidebar's speed picker asks for: try this policy at this speed."""
     body = try_it(api, command_vx="0.30").json()
     assert body["command_vx"] == pytest.approx(0.30)
-    # 0.30 is a real, slower result for this walker, not the sweep's 0.55 answer
+    # 0.30 is a real, slower result for this walker, not the sweep's 0.50 answer
     # — so this proves the pin took effect rather than being ignored.
-    # v3 (MJCF position servos): 15.2 s. v4 (BAM servos): re-measured.
-    assert body["score"] == pytest.approx(14.136, rel=0.05)
+    # v3 (MJCF position servos): 15.2 s. v4 (BAM servos): 14.136 s before training's reset and fifth actuator writes joined the runner;
+    # re-measured since.
+    assert body["score"] == pytest.approx(14.280, rel=0.05)
     assert body["seeds_finished"] == 5
 
 
@@ -328,8 +332,8 @@ def test_an_unparseable_speed_falls_back_to_the_sweep(api):
     body = try_it(api, command_vx="fast please").json()
     # The sweep's own answer for this policy, which is what "I don't know what
     # you asked for" should give you. v3 (MJCF position servos): 0.40. v4 (BAM
-    # servos): re-measured.
-    assert body["command_vx"] == pytest.approx(0.55)
+    # servos): 0.55 before training's reset and fifth actuator writes joined the runner; re-measured since.
+    assert body["command_vx"] == pytest.approx(0.50)
 
 
 def test_publishing_honours_a_pinned_speed(api):
@@ -340,12 +344,12 @@ def test_publishing_honours_a_pinned_speed(api):
     The arithmetic does not support that fear: the sweep already keeps the BEST
     time across every speed in the range, including the one you would have
     pinned, so pinning can only match or lose to sweeping. It is self-penalising.
-    Here, 0.25 m/s scores ~18.2 s where the sweep finds ~8.0 s at 0.55 — the
-    submitter is recorded slower for having pinned, which is the whole point.
+    Here, 0.25 m/s scores ~24.9 s (one seed of five falls and counts at the
+    time limit) where the sweep finds ~8.7 s at 0.50 — the submitter is
+    recorded slower for having pinned, which is the whole point.
 
     v3 (MJCF position servos): 18.216 s pinned, 11.724 s swept. v4 (BAM
-    servos): re-measured; 0.25 m/s still lands near 18.2 s by coincidence, not
-    because the physics agrees (arena/golden.py, arena/evaluate.py).
+    servos) before training's reset and fifth actuator writes joined the runner: 18.208 s pinned, all five finishing, 7.988 s swept at 0.55.
     """
     with open(REFERENCE, "rb") as fh:
         response = api.post(
@@ -356,8 +360,8 @@ def test_publishing_honours_a_pinned_speed(api):
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["command_vx"] == pytest.approx(0.25)
-    assert body["score"] == pytest.approx(18.208, rel=0.02)
-    assert body["score"] > 7.988, "pinning must not be able to beat the sweep here"
+    assert body["score"] == pytest.approx(24.856, rel=0.02)
+    assert body["score"] > 8.672, "pinning must not be able to beat the sweep here"
 
 
 def test_publishing_without_a_speed_still_sweeps(api):
@@ -365,9 +369,10 @@ def test_publishing_without_a_speed_still_sweeps(api):
     response = submit(api, name="swept")
     assert response.status_code == 200, response.text
     body = response.json()
-    # v3 (MJCF position servos): 0.40 m/s, 11.724 s. v4 (BAM servos): re-measured.
-    assert body["command_vx"] == pytest.approx(0.55)
-    assert body["score"] == pytest.approx(7.988, rel=0.02)
+    # v3 (MJCF position servos): 0.40 m/s, 11.724 s. v4 (BAM servos): 0.55 m/s,
+    # 7.988 s before training's reset and fifth actuator writes joined the runner; re-measured since.
+    assert body["command_vx"] == pytest.approx(0.50)
+    assert body["score"] == pytest.approx(8.672, rel=0.02)
 
 
 def test_testing_a_policy_signed_out_is_refused(spaced_api):
@@ -487,8 +492,9 @@ def test_a_repo_id_races_without_uploading_anything(api, store_dir, monkeypatch)
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    # v3 (MJCF position servos): 11.724. v4 (BAM servos): re-measured.
-    assert body["score"] == pytest.approx(7.988, rel=0.02)
+    # v3 (MJCF position servos): 11.724. v4 (BAM servos): 7.988 before training's reset and fifth actuator writes joined the runner;
+    # re-measured since.
+    assert body["score"] == pytest.approx(8.672, rel=0.02)
     assert body["model_stored"] is False
     assert body["offers_download"] is True
     assert body["policy_url"] == fetched.url
@@ -513,8 +519,9 @@ def test_a_trial_can_race_a_repo_id_too(api, monkeypatch):
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    # v3 (MJCF position servos): 11.724. v4 (BAM servos): re-measured.
-    assert body["score"] == pytest.approx(7.988, rel=0.02)
+    # v3 (MJCF position servos): 11.724. v4 (BAM servos): 7.988 before training's reset and fifth actuator writes joined the runner;
+    # re-measured since.
+    assert body["score"] == pytest.approx(8.672, rel=0.02)
     # A trial keeps nothing regardless of where the policy came from.
     assert body["policy_name"] == "policy"
 

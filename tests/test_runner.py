@@ -4,14 +4,22 @@ import mujoco
 import numpy as np
 import pytest
 
+from arena import runner
+from arena.actuator import Servos
 from arena.assets import ASSET_ROOT
-from arena.constants import CTRL_DT, NUM_JOINTS, TRACE_WIDTH
+from arena.constants import CTRL_DT, DECIMATION, NUM_JOINTS, TIMESTEP, TRACE_WIDTH
 from arena.course import compile_course, ramp_dir
 from arena.manifest import load_event
 from arena.policy import load_policy
 from arena.runner import _Addresses, _step, run_once, seed_rng
 
 REFERENCE = ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"
+# A command the reference walker finishes the sprint at on every seed: at 0.30
+# m/s it finishes each of seeds 1-10 in 14.1-14.9 s. At the event's declared
+# 0.25 m/s it sits on a balance edge — since training's reset and fifth
+# actuator writes joined the runner it falls on seeds 1, 6 and 10 of them —
+# so a test that needs a finish does not run on that edge.
+STEADY_VX = 0.30
 
 
 @pytest.fixture(scope="module")
@@ -40,17 +48,18 @@ def test_seed_rng_differs_by_seed_and_by_event():
 
 
 def test_reference_policy_finishes_the_sprint(sprint, walker):
-    outcome = run_once(sprint, walker, seed=1)
+    outcome = run_once(sprint, walker, seed=1, command=sprint.command_at(STEADY_VX))
     assert outcome.status == "finish", f"walker did not finish: {outcome.status}"
     assert outcome.time_s is not None
-    # The reference walker tracks about 44% of its commanded 0.25 m/s, so 2 m
-    # takes it roughly 18.5 s. The band is wide enough not to be brittle and
-    # tight enough that a broken observation layout cannot pass it.
+    # The reference walker tracks about half of its commanded 0.30 m/s, so 2 m
+    # takes it roughly 14.5 s (at the declared 0.25 m/s, which this test used
+    # before, about 44% — roughly 18.5 s). The band is wide enough not to be
+    # brittle and tight enough that a broken observation layout cannot pass it.
     assert 10.0 < outcome.time_s < 30.0
 
 
 def test_trace_shape_matches_the_clock(sprint, walker):
-    outcome = run_once(sprint, walker, seed=1)
+    outcome = run_once(sprint, walker, seed=1, command=sprint.command_at(STEADY_VX))
     assert outcome.trace.ndim == 2
     assert outcome.trace.shape[1] == TRACE_WIDTH
     assert outcome.trace.shape[0] == pytest.approx(outcome.time_s / CTRL_DT, abs=1)
@@ -159,7 +168,8 @@ def test_a_longer_settle_does_not_inflate_the_time(sprint, walker):
     which drowns out the property this test actually pins — that settling
     longer adds no TIME — under whether the walker finishes at all. Measured
     on this short course over seeds 1-10: 10/10 finish both ways, max
-    |Δt| 0.24 s.
+    |Δt| 0.42 s (0.24 s before training's reset and fifth actuator writes
+    joined the runner).
     """
     short = dataclasses.replace(sprint, course=dataclasses.replace(sprint.course, length_m=0.3))
     long_settle = dataclasses.replace(short, start=dataclasses.replace(short.start, settle_s=2.0))
@@ -171,8 +181,10 @@ def test_a_longer_settle_does_not_inflate_the_time(sprint, walker):
 
 def test_model_can_be_supplied_to_avoid_recompiling(sprint, walker):
     model = compile_course(sprint)
-    a = run_once(sprint, walker, seed=1, model=model)
-    b = run_once(sprint, walker, seed=1)
+    steady = sprint.command_at(STEADY_VX)
+    a = run_once(sprint, walker, seed=1, model=model, command=steady)
+    b = run_once(sprint, walker, seed=1, command=steady)
+    assert a.time_s is not None
     assert a.time_s == b.time_s
 
 
@@ -232,9 +244,78 @@ def test_the_actor_sees_joint_velocity_one_step_old(sprint):
     np.testing.assert_array_equal(policy.observed[1][20:34], qvel_before_first_substeps)
 
 
+def test_a_control_step_drives_the_servos_a_fifth_time_before_its_forward_pass(sprint):
+    """Training runs the actuator once per substep and then once more: after
+    the substeps, mjlab's step() calls scene.write_data_to_sim() whenever any
+    environment reset (nearly every step at training's batch size), then
+    sim.forward(). So five drives per control step, the fifth after the last
+    mj_step, and the forward pass after the fifth."""
+    model = compile_course(sprint)
+    data = mujoco.MjData(model)
+    adr = _Addresses.of(model, sprint.start.keyframe)
+    mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
+    mujoco.mj_forward(model, data)
+    servos = _RecordingServos(model, adr.dof, adr.act, np.random.default_rng(0))
+    command = np.asarray(sprint.command, dtype=np.float64)
+
+    _step(
+        model, data, _RecordingPolicy(), adr, command,
+        np.zeros(NUM_JOINTS, dtype=np.float32), data.qvel[adr.dof].copy(), servos,
+    )
+
+    times = [time for time, _, _, _ in servos.calls]
+    assert times == pytest.approx([k * TIMESTEP for k in range(DECIMATION + 1)])
+    # The forward pass ran after the fifth write: the actuator force MuJoCo
+    # holds is the torque that write left in ctrl (gear 1).
+    np.testing.assert_allclose(data.qfrc_actuator[adr.dof], data.ctrl[adr.act], rtol=0, atol=1e-12)
+
+
+def test_the_reset_drives_the_servos_toward_the_zero_pose_first(sprint, walker, monkeypatch):
+    """Training's reset clears the joint targets to 0 rad (mjlab entity/data.py
+    clear_state) and runs the actuator once on them before its forward pass
+    (the reset's scene.write_data_to_sim()), which backfills the command-delay
+    ring with zeros: the first control step's first substeps drive toward
+    0 rad, not toward the policy's target."""
+    made = []
+
+    def recording(*args):
+        made.append(_RecordingServos(*args))
+        return made[-1]
+
+    monkeypatch.setattr(runner, "Servos", recording)
+    run_once(dataclasses.replace(sprint, time_limit_s=0.1), walker, seed=1)
+
+    (servos,) = made
+    time, target, ring, bias = servos.calls[0]
+    assert time == 0.0
+    np.testing.assert_array_equal(target, np.zeros(NUM_JOINTS))
+    # On the perturbed pose, before any forward pass has computed a force.
+    assert not bias.any()
+    # The first control step's first drive: the policy's own target goes in,
+    # and every older entry — which any lag in 3..6 selects — is 0 rad.
+    time, target, ring, _ = servos.calls[1]
+    assert time == 0.0
+    assert target.any()
+    assert all(not entry.any() for entry in ring)
+
+
 class _ZeroPolicy:
     def act(self, obs):
         return np.zeros(14, dtype=np.float32)
+
+
+class _RecordingServos(Servos):
+    """Records, per drive: the simulation time, the target passed in, the
+    command-delay ring before it goes in, and the bias force MuJoCo holds."""
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.calls = []
+
+    def drive(self, data, target):
+        ring = [] if self.targets is None else [entry.copy() for entry in self.targets]
+        self.calls.append((data.time, target.copy(), ring, data.qfrc_bias.copy()))
+        super().drive(data, target)
 
 
 class _RecordingPolicy:
