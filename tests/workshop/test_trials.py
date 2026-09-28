@@ -1,6 +1,7 @@
 """Test: the checkpoint is exported exactly as `publish` would, then raced by the Arena's own evaluator."""
 
 import json
+import threading
 
 from arena.constants import TRACE_WIDTH
 from tests.workshop.conftest import make_run
@@ -69,3 +70,50 @@ def test_the_runs_listing_shows_what_was_tested(workshop, fakes, checkout):
     assert set(listed["trials"]) == {"1"}
     assert listed["trials"]["1"]["score"] == score and listed["trials"]["1"]["seeds_finished"] == 5
     assert "trace_b64" not in listed["trials"]["1"]
+
+
+def test_a_corrupt_cache_does_not_break_the_listing_and_is_measured_again(workshop, fakes, checkout):
+    run = make_run(checkout, "first")
+    cache_dir = run / "workshop"
+    cache_dir.mkdir()
+    (cache_dir / "model_1.json").write_text("{not json")
+    listing = workshop.get("/api/workshop/runs")
+    assert listing.status_code == 200
+    (listed,) = listing.json()["runs"]
+    assert listed["trials"] == {}
+    assert _trial(workshop, run).status_code == 200
+    assert len(fakes.calls("publish")) == 1
+
+
+def test_two_concurrent_trials_of_the_same_checkpoint_export_only_once(workshop, fakes, checkout):
+    run = make_run(checkout, "first")
+    results = []
+
+    def go():
+        results.append(_trial(workshop, run).json())
+
+    threads = [threading.Thread(target=go) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(results) == 2
+    assert results[0]["score"] == results[1]["score"]
+    assert len(fakes.calls("publish")) == 1
+
+
+def test_a_stale_staging_dir_is_not_reused(workshop, fakes, checkout, monkeypatch):
+    run = make_run(checkout, "first")
+    stale = checkout / "publish-workshop-trial"
+    stale.mkdir()
+    (stale / "policy.onnx").write_bytes(b"not a real model")
+    # This trial's own export fails; the stale directory from before it must not survive
+    # that failure, or a later successful export could be mistaken for it.
+    monkeypatch.setenv("FAKE_UV_FAIL_PUBLISH", "1")
+    assert _trial(workshop, run).status_code == 400
+    assert not stale.exists()
+    monkeypatch.delenv("FAKE_UV_FAIL_PUBLISH")
+    response = _trial(workshop, run)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["seeds_total"], body["seeds_finished"]) == (5, 5)
