@@ -4,6 +4,9 @@
 // the whole page end to end against a fixture shaped like workshop.html's
 // body, the way home.page.test.js does for the front page.
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 let signedIn = false;
@@ -64,5 +67,27 @@ describe("signing in after a checkpoint is already chosen", () => {
     await settle();
 
     expect(go().disabled).toBe(false); // signed in now: the same selection is publishable
+  });
+});
+
+describe("the page's sheet", () => {
+  const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../public/workshop.css"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  // The declarations of every rule whose selector list holds exactly `selector`.
+  const rule = (selector) =>
+    [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .filter(([, list]) => list.split(",").map((s) => s.trim()).includes(selector))
+      .map(([, , body]) => body)
+      .join("");
+
+  it("says what a step is doing in ink, and only what went wrong in orange", () => {
+    for (const note of [".train-form__status", ".trial__status", ".publish__status"]) {
+      expect(rule(note), note).toMatch(/color:\s*var\(--ink-70\)/);
+    }
+    expect(rule(".workshop .bad")).toMatch(/color:\s*var\(--orange-inked\)/);
+  });
+
+  it("writes in its inputs at the size of the labels around them", () => {
+    expect(rule(".workshop input")).toMatch(/font:\s*inherit/);
   });
 });

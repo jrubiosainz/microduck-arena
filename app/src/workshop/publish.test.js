@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { codeMessage, defaultName, publishValues, renderCode, renderPublish } from "./publish.js";
 
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const code = (state, extra = {}) => ({
   state, fork: state === "not-shared" ? null : "alice/microduck-challenges", changes: 0, unpushed: 0,
   commit: "abc123456", gh: true, fork_page: "https://github.com/pollen-robotics/microduck-challenges/fork", ...extra,
@@ -70,6 +72,21 @@ describe("publishing", () => {
     expect(onPublish.mock.calls[0][0]).toEqual({
       run: run.id, checkpoint: 1000, name: "sprint-2m-first", description: "", allow_dirty: false,
     });
+  });
+
+  it("says it is uploading in ink, and why a publish failed in orange", async () => {
+    const zone = document.createElement("div");
+    let fail;
+    const onPublish = () => new Promise((_, reject) => { fail = reject; });
+    renderPublish(zone, { run, checkpoint: 1000 }, status, { onPreview: vi.fn(), onPublish });
+    zone.querySelector(".publish__go").click();
+    const note = zone.querySelector(".publish__status");
+    expect(note.textContent).toMatch(/uploading/);
+    expect(note.classList.contains("bad")).toBe(false);
+    fail(new Error("publish: boom"));
+    await settle();
+    expect(note.textContent).toBe("publish: boom");
+    expect(note.classList.contains("bad")).toBe(true);
   });
 
   it("holds back a dirty run until 'publish anyway' is ticked", () => {

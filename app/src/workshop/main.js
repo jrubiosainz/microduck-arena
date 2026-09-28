@@ -7,6 +7,7 @@ import * as api from "./api.js";
 import { renderCurve } from "./curve.js";
 import { renderPreflight } from "./preflight.js";
 import { renderCode, renderPublish } from "./publish.js";
+import { say } from "./say.js";
 import { appendLog, renderTrainForm, renderTraining } from "./train.js";
 import { renderResult, renderRuns } from "./trial.js";
 
@@ -63,10 +64,10 @@ function onSelect(selection) {
 async function onTest() {
   const { run, checkpoint } = page.selection;
   const note = $("#trial-status");
-  note.textContent = `Exporting checkpoint ${checkpoint} and racing it (a minute or so)…`;
+  say(note, `Exporting checkpoint ${checkpoint} and racing it (a minute or so)…`);
   try {
     const result = await api.testCheckpoint(run.id, checkpoint);
-    note.textContent = "";
+    say(note, "");
     renderResult($("#result"), result);
     await replay(result);
     await refreshRuns();
@@ -76,7 +77,7 @@ async function onTest() {
     captureDraft();
     renderPublishForm();
   } catch (error) {
-    note.textContent = error.message;
+    say(note, error.message, true);
   }
 }
 

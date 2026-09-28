@@ -2,6 +2,7 @@
 // challenge.toml, commits, and trains — on this machine's GPU, or on HF Jobs.
 
 import { canTrain } from "./preflight.js";
+import { say } from "./say.js";
 
 const RECIPE = [
   ["num_envs", "Robots trained in parallel", 1],
@@ -72,13 +73,13 @@ export function renderTrainForm(zone, status, { onLaunch }) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const note = form.querySelector(".train-form__status");
-    note.textContent = "Committing the recipe and starting…";
+    say(note, "Committing the recipe and starting…");
     button.disabled = true;
     try {
       await onLaunch(formValues(form, challenge));
-      note.textContent = "";
+      say(note, "");
     } catch (error) {
-      note.textContent = error.message;
+      say(note, error.message, true);
     } finally {
       button.disabled = !canTrain(preflight);
     }

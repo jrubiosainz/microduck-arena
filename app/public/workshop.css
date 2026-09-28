@@ -2,9 +2,10 @@
    narrow window. .flyer gives every zone its card (paper, ink border, offset
    shadow); this sheet only places things and reopens the font size and width
    a photocopy-sized flyer sets, since a zone here holds a form, not a caption.
-   Colour, type and spacing are all design/tokens.css — no raw hex. A message
-   (a missing tool, a failed step) is orange-inked, as the race page's bad
-   status is: magenta is a signal colour, 3.2 : 1 as text on paper. */
+   Colour, type and spacing are all design/tokens.css — no raw hex. A note on
+   what a step is doing is ink; one on what went wrong (a missing tool, a
+   failed step: `.bad`) is orange-inked, as the race page's bad status is:
+   magenta is a signal colour, 3.2 : 1 as text on paper. */
 
 /* shell.css's two ground rules, which this page does not load: a zone's
    width includes its padding and border, or a 100%-wide card runs past a
@@ -18,6 +19,15 @@ html, body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--body);
+}
+
+/* The browser's own 13 px, under 17 px labels, otherwise. */
+.workshop input {
+  font: inherit;
+}
+
+.workshop .bad {
+  color: var(--orange-inked);
 }
 
 .workshop {
@@ -128,7 +138,6 @@ html, body {
   background: var(--paper);
   color: var(--ink);
   padding: 6px 8px;
-  font-family: var(--mono);
 }
 
 .preflight__note {
@@ -161,7 +170,6 @@ html, body {
   background: var(--paper);
   color: var(--ink);
   padding: 6px 8px;
-  font-family: var(--body);
 }
 
 .knobs,
@@ -196,7 +204,7 @@ html, body {
 }
 
 .train-form__status {
-  color: var(--orange-inked);
+  color: var(--ink-70);
 }
 
 .training__head {
@@ -308,7 +316,7 @@ html, body {
 
 .trial__status {
   margin: var(--space-card-padding-min) 0 0;
-  color: var(--orange-inked);
+  color: var(--ink-70);
 }
 
 .trial__score {
@@ -340,7 +348,6 @@ html, body {
   background: var(--paper);
   color: var(--ink);
   padding: 6px 8px;
-  font-family: var(--body);
   flex: 1 1 16rem;
 }
 
@@ -375,6 +382,7 @@ html, body {
 
 .publish__status {
   margin: 0;
+  color: var(--ink-70);
 }
 
 .publish__card {

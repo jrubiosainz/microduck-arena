@@ -1,6 +1,8 @@
 // Your code, then Publish. The policy goes to the user's Hugging Face account
 // through `uv run publish`, and the Arena opens with the entry filled in.
 
+import { say } from "./say.js";
+
 export function codeMessage(code) {
   if (code.state === "not-shared") {
     return "Your code is not shared yet: people who open your entry will not see how it was trained.";
@@ -94,14 +96,14 @@ export function renderPublish(zone, selection, status, { onPreview, onPublish, d
   if (applied?.anyway) form.elements.namedItem("anyway").checked = true;
   const go = button("publish__go", "Publish", async () => {
     const note = zone.querySelector(".publish__status");
-    note.textContent = "Exporting and uploading…";
+    say(note, "Exporting and uploading…");
     try {
       const done = await onPublish(publishValues(form, selection));
-      note.innerHTML = "";
+      say(note, "");
       note.append(`Published ${done.repo} @ ${done.revision.slice(0, 7)}. The Arena opened in your browser: `,
         Object.assign(document.createElement("a"), { href: done.arena_url, target: "_blank", textContent: "enter it there" }), ".");
     } catch (error) {
-      note.textContent = error.message;
+      say(note, error.message, true);
     }
   }, true);
   const preview = button("publish__preview", "Preview the Hub card", async () => {
@@ -111,7 +113,7 @@ export function renderPublish(zone, selection, status, { onPreview, onPublish, d
       card.hidden = false;
       card.textContent = `${done.repo}\n\n${done.readme}`;
     } catch (error) {
-      zone.querySelector(".publish__status").textContent = error.message;
+      say(zone.querySelector(".publish__status"), error.message, true);
     }
   });
   zone.querySelector(".publish__actions").append(preview, go);

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { appendLog, formValues, renderTrainForm, renderTraining, runName } from "./train.js";
 
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 const status = (preflight = {}) => ({
   preflight: { git: true, identity: true, uv: true, gpu: false, gh: true, user: "alice", ...preflight },
   challenge: {
@@ -41,6 +43,20 @@ describe("the Train form", () => {
     expect(zone.querySelector("button[type=submit]").disabled).toBe(true);
     renderTrainForm(zone, status(), { onLaunch: vi.fn() });
     expect(zone.textContent).toMatch(/Hugging Face Jobs/);
+  });
+
+  it("says it is starting in ink, and why a launch failed in orange", async () => {
+    const zone = document.createElement("div");
+    let fail;
+    renderTrainForm(zone, status(), { onLaunch: () => new Promise((_, reject) => { fail = reject; }) });
+    zone.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }));
+    const note = zone.querySelector(".train-form__status");
+    expect(note.textContent).toMatch(/starting/);
+    expect(note.classList.contains("bad")).toBe(false);
+    fail(new Error("A training is already running: stop it first."));
+    await settle();
+    expect(note.textContent).toMatch(/already running/);
+    expect(note.classList.contains("bad")).toBe(true);
   });
 
   it("names a run after the minute it was started", () => {
