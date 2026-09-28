@@ -11,7 +11,7 @@ import { appendLog, renderTrainForm, renderTraining } from "./train.js";
 import { renderResult, renderRuns } from "./trial.js";
 
 const $ = (selector) => document.querySelector(selector);
-const page = { status: null, since: 0, runs: [], selection: null, viewer: null, deck: null };
+const page = { status: null, since: 0, runs: [], selection: null, viewer: null, deck: null, draft: null };
 const FOLLOW_EVERY_MS = 3000;
 // The last training state a poll actually saw, so a poll that throws (a
 // dropped connection, a bad response) still knows whether to reschedule
@@ -33,6 +33,11 @@ async function refreshStatus() {
     onLogin: async (token) => {
       await api.login(token);
       await refreshStatus();
+      // Publish's own "signed in" gate reads status.preflight.user, so a
+      // login that happened after a checkpoint was already chosen must
+      // redraw it too, or the button stays disabled until something else
+      // re-renders it.
+      renderPublishForm();
     },
   });
   renderTrainForm($("#train-form"), page.status, { onLaunch });
@@ -49,6 +54,7 @@ async function refreshRuns() {
 }
 
 function onSelect(selection) {
+  captureDraft();
   page.selection = selection;
   renderRuns($("#runs"), page.runs, page.selection, { onSelect, onTest });
   renderPublishForm();
@@ -64,10 +70,28 @@ async function onTest() {
     renderResult($("#result"), result);
     await replay(result);
     await refreshRuns();
+    // The test can take a minute; the Name/Description the user typed while
+    // it ran must survive the Publish form's re-render, not be wiped back to
+    // the defaults.
+    captureDraft();
     renderPublishForm();
   } catch (error) {
     note.textContent = error.message;
   }
+}
+
+/** What the Publish form currently holds, for the run it is about — so the
+ * next render of the SAME run can restore it instead of resetting to
+ * defaultName() and an empty description. */
+function captureDraft() {
+  const form = $("#publish-form form");
+  if (!form || !page.selection) return;
+  page.draft = {
+    runId: page.selection.run.id,
+    name: form.elements.namedItem("policy").value,
+    description: form.elements.namedItem("description").value,
+    anyway: Boolean(form.elements.namedItem("anyway")?.checked),
+  };
 }
 
 async function replay(result) {
@@ -94,6 +118,7 @@ async function refreshCode() {
 
 function renderPublishForm() {
   renderPublish($("#publish-form"), page.selection, page.status, {
+    draft: page.draft,
     onPreview: (values) => api.publishRun({ ...values, dry_run: true }),
     onPublish: (values) => api.publishRun(values),
   });

@@ -60,12 +60,20 @@ export function publishValues(form, selection) {
   };
 }
 
-export function renderPublish(zone, selection, status, { onPreview, onPublish }) {
+/**
+ * `draft`, when it names the same run, is what the user had typed the last
+ * time this zone was rendered — a re-render (a test finishing, a fresh
+ * status after signing in) must not throw that away under them. A draft for
+ * a different run is stale and ignored: a new run starts from its own
+ * default name and a blank description.
+ */
+export function renderPublish(zone, selection, status, { onPreview, onPublish, draft }) {
   if (!selection) {
     zone.innerHTML = '<p class="publish__empty">Choose a checkpoint in Test first.</p>';
     return;
   }
   const { run, checkpoint } = selection;
+  const applied = draft && draft.runId === run.id ? draft : null;
   zone.innerHTML = `
     <form class="publish">
       <p class="mono-label publish__what"></p>
@@ -80,8 +88,10 @@ export function renderPublish(zone, selection, status, { onPreview, onPublish })
   const form = zone.querySelector("form");
   zone.querySelector(".publish__what").textContent =
     `${run.name}, checkpoint ${checkpoint}${run.trials?.[checkpoint] ? "" : " — not tested yet"}`;
-  form.elements.namedItem("policy").value = defaultName(status, run);
+  form.elements.namedItem("policy").value = applied ? applied.name : defaultName(status, run);
+  form.elements.namedItem("description").value = applied ? applied.description : "";
   form.elements.namedItem("description").placeholder = status.event.title;
+  if (applied?.anyway) form.elements.namedItem("anyway").checked = true;
   const go = button("publish__go", "Publish", async () => {
     const note = zone.querySelector(".publish__status");
     note.textContent = "Exporting and uploading…";

@@ -83,4 +83,25 @@ describe("publishing", () => {
     expect(go.disabled).toBe(false);
     expect(publishValues(zone.querySelector("form"), { run, checkpoint: 1000 }).allow_dirty).toBe(true);
   });
+
+  it("keeps what was typed across a re-render for the same run", () => {
+    const zone = document.createElement("div");
+    renderPublish(zone, { run, checkpoint: 1000 }, status, { onPreview: vi.fn(), onPublish: vi.fn() });
+    const form = zone.querySelector("form");
+    form.elements.namedItem("policy").value = "my-policy";
+    form.elements.namedItem("description").value = "trained overnight";
+    const draft = { runId: run.id, name: "my-policy", description: "trained overnight", anyway: false };
+    renderPublish(zone, { run, checkpoint: 1000 }, status, { onPreview: vi.fn(), onPublish: vi.fn(), draft });
+    expect(zone.querySelector("input[name=policy]").value).toBe("my-policy");
+    expect(zone.querySelector("input[name=description]").value).toBe("trained overnight");
+  });
+
+  it("starts fresh for a different run, even with a draft on hand", () => {
+    const zone = document.createElement("div");
+    const other = { ...run, id: "2026-09-28_11-00-00_second", name: "second" };
+    const draft = { runId: run.id, name: "my-policy", description: "trained overnight", anyway: false };
+    renderPublish(zone, { run: other, checkpoint: 1000 }, status, { onPreview: vi.fn(), onPublish: vi.fn(), draft });
+    expect(zone.querySelector("input[name=policy]").value).toBe(defaultName(status, other));
+    expect(zone.querySelector("input[name=description]").value).toBe("");
+  });
 });
