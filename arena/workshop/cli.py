@@ -8,6 +8,7 @@ The one line on a challenge's page runs the second form for you.
 
 import argparse
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -25,6 +26,17 @@ def _checkout() -> Path | None:
         return None
     found = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=False)
     return Path(found.stdout.strip()) if found.returncode == 0 else None
+
+
+def _port_free(port: int) -> bool:
+    """Bound as uvicorn binds (SO_REUSEADDR): refused exactly when uvicorn would be."""
+    with socket.socket() as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
 
 
 def main(argv=None) -> int:
@@ -49,6 +61,11 @@ def main(argv=None) -> int:
             print(f"  uv run --group workshop workshop {c.event}")
         return 2 if args.challenge else 0
 
+    # Before the browser opens: a second workshop on a busy port would open the first one's page.
+    if not _port_free(args.port):
+        print(f"Port {args.port} is busy — is a workshop already open? Try --port", file=sys.stderr)
+        return 2
+
     import uvicorn
 
     from ..web.config import default_frontend
@@ -60,7 +77,7 @@ def main(argv=None) -> int:
         root, chosen, args.arena.rstrip("/"), Hub(), args.port, site if (site / "workshop.html").is_file() else None
     )
     url = f"http://127.0.0.1:{args.port}/"
-    print(f"{chosen.event} workshop: {url}  (Ctrl-C to close it)")
+    print(f"{chosen.event} workshop: {url}  (Ctrl-C to close it)", flush=True)  # piped, it would wait for exit
     if not args.no_browser:
         threading.Timer(1.0, webbrowser.open, [url]).start()
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
