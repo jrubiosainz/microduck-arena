@@ -13,6 +13,7 @@ from arena.evaluate import (
     mean_finish_time,
     pick_trace_seed,
 )
+from arena.golden import PLATFORM
 from arena.manifest import load_event
 from arena.policy import load_policy
 from arena.runner import run_once
@@ -91,6 +92,40 @@ def test_evaluate_is_deterministic():
     np.testing.assert_array_equal(first.trace, second.trace)
 
 
+# Baseline, measured at RUNNER_VERSION 4 (BAM XL330 servos, arena/actuator.py,
+# on MuJoCo 3.10.0 — see arena/golden.py). At version 3 — same sweep, MJCF
+# position servos, one arm64/x86 number good to 0.37% — the same policy scored
+# 11.792 s at 0.40 m/s; at version 2 — same sweep, MuJoCo 3.12.0 — 11.724 s at
+# 0.40 m/s; at version 1 — one pinned command at 0.25 m/s — 18.216 s. Kept as
+# the contrast: the sweep, the physics, and now the actuator have each moved
+# it.
+#
+# v4's BAM servos are chaotically sensitive to arithmetic: an arm64 run and an
+# x86_64 run of the same policy/seed/command diverge after 1-3 s, so the
+# baseline is per-platform rather than one number (own copy here, kept in
+# sync with arena.golden.BASELINES by the cross-check test below).
+# Darwin-arm64: this Mac. Linux-x86_64: HF Jobs, Intel Xeon 8375C and AMD
+# EPYC 7R13 (0.14% apart) — the Space runs x86_64. On a platform with no
+# baseline the tests that need one skip, and arena.golden.check() refuses.
+GOLDEN_BASELINES = {
+    "Darwin-arm64": (7.988, 0.55),
+    "Linux-x86_64": (8.556, 0.50),
+}
+GOLDEN_SCORE_S, GOLDEN_COMMAND_VX = GOLDEN_BASELINES.get(PLATFORM, (None, None))
+needs_golden = pytest.mark.skipif(
+    GOLDEN_SCORE_S is None, reason=f"no golden baseline measured on {PLATFORM}"
+)
+# Re-measured at version 4, at the same command version 1 used (0.25 m/s, the
+# event's declared vx), on arm64 (this suite only runs on the Mac — this
+# number, and every other v4 pin in this test file, tests/test_routes_submit.py,
+# and tests/test_hub_fetch.py, is an arm64 measurement): 18.208 s — close to
+# version 1's 18.216 s by coincidence, not because the physics agrees; a
+# different actuator model, run at the same slow command, happens to land
+# near the same number.
+PINNED_SCORE_S = 18.208
+
+
+@needs_golden
 def test_golden_run_reference_policy_holds_its_time():
     """Guards against a physics or harness change silently invalidating the board.
 
@@ -106,35 +141,6 @@ def test_golden_run_reference_policy_holds_its_time():
     # The winning command is pinned too. A score can be reproduced by accident
     # from a different speed; both together cannot.
     assert result.command_vx == pytest.approx(GOLDEN_COMMAND_VX)
-
-
-# Baseline, measured at RUNNER_VERSION 4 (BAM XL330 servos, arena/actuator.py,
-# on MuJoCo 3.10.0 — see arena/golden.py). At version 3 — same sweep, MJCF
-# position servos, one arm64/x86 number good to 0.37% — the same policy scored
-# 11.792 s at 0.40 m/s; at version 2 — same sweep, MuJoCo 3.12.0 — 11.724 s at
-# 0.40 m/s; at version 1 — one pinned command at 0.25 m/s — 18.216 s. Kept as
-# the contrast: the sweep, the physics, and now the actuator have each moved
-# it.
-#
-# v4's BAM servos are chaotically sensitive to arithmetic: an arm64 run and an
-# x86_64 run of the same policy/seed/command diverge after 1-3 s, so the
-# baseline is per-architecture rather than one number (own copy here, kept in
-# sync with arena.golden.BASELINES by the cross-check test below). arm64:
-# this Mac. x86_64: HF Jobs, Intel Xeon 8375C and AMD EPYC 7R13 (0.14% apart)
-# — the Space runs x86_64.
-GOLDEN_BASELINES = {
-    "arm64": (7.988, 0.55),
-    "x86_64": (8.556, 0.50),
-}
-GOLDEN_SCORE_S, GOLDEN_COMMAND_VX = GOLDEN_BASELINES[platform.machine()]
-# Re-measured at version 4, at the same command version 1 used (0.25 m/s, the
-# event's declared vx), on arm64 (this suite only runs on the Mac — this
-# number, and every other v4 pin in this test file, tests/test_routes_submit.py,
-# and tests/test_hub_fetch.py, is an arm64 measurement): 18.208 s — close to
-# version 1's 18.216 s by coincidence, not because the physics agrees; a
-# different actuator model, run at the same slow command, happens to land
-# near the same number.
-PINNED_SCORE_S = 18.208
 
 
 def _scan(*pairs):
@@ -192,6 +198,7 @@ def test_a_progress_tie_goes_to_the_lower_command():
     assert finalists(scan, 1) == [0.3]
 
 
+@needs_golden
 def test_the_scan_covers_exactly_the_range_the_event_declares():
     manifest = load_event("sprint-2m")
     policy = load_policy(ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx")
@@ -210,6 +217,7 @@ def test_the_scan_covers_exactly_the_range_the_event_declares():
     assert result.scan[-1].command_vx >= 2.0 * GOLDEN_COMMAND_VX
 
 
+@needs_golden
 def test_the_score_comes_from_a_speed_the_scan_shortlisted():
     manifest = load_event("sprint-2m")
     policy = load_policy(ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx")
@@ -260,14 +268,15 @@ def test_the_installed_mujoco_is_the_one_the_baseline_was_measured_with():
 def test_the_golden_module_agrees_with_this_files_baseline():
     """Two places record the same numbers, so they must not drift apart. The
     Dockerfile runs arena.golden; the suite runs the assertions above. Compares
-    the whole per-architecture mapping, not just the current machine's entry,
-    so a drift on an architecture nobody is running today still gets caught."""
+    the whole per-platform mapping, not just the current platform's entry,
+    so a drift on a platform nobody is running today still gets caught."""
     from arena import golden
 
     assert golden.BASELINES == GOLDEN_BASELINES
     assert golden.EVENT_ID == "sprint-2m"
 
 
+@needs_golden
 def test_the_golden_check_passes_and_returns_the_measured_score():
     from arena import golden
 
@@ -289,3 +298,25 @@ def test_a_wrong_mujoco_version_is_a_readable_refusal_not_a_bare_assert():
     assert "cannot be compared" in message
     assert "RUNNER_VERSION" in message
     assert "pyproject.toml" in message
+
+
+def test_the_baseline_key_names_the_os_and_the_machine():
+    """"Darwin-arm64" and "Linux-x86_64", not the machine alone: the same CPU
+    architecture under another OS runs another C library, so it is another
+    platform with its own baseline."""
+    from arena import golden
+
+    assert golden.PLATFORM == f"{platform.system()}-{platform.machine()}"
+
+
+def test_an_unmeasured_platform_is_a_readable_refusal(monkeypatch):
+    """No baseline is never a pass: the message names the platform and says
+    what to do."""
+    from arena import golden
+
+    monkeypatch.setattr(golden, "PLATFORM", "Plan9-mips")
+    with pytest.raises(AssertionError) as caught:
+        golden.check()
+    message = str(caught.value)
+    assert "'Plan9-mips'" in message
+    assert "BASELINES" in message
