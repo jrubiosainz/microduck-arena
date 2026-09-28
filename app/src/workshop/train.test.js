@@ -46,6 +46,19 @@ describe("the Train form", () => {
   it("names a run after the minute it was started", () => {
     expect(runName(new Date(2026, 8, 28, 14, 2))).toBe("run-0928-1402");
   });
+
+  it("agrees with the server's run-name rule", () => {
+    const zone = document.createElement("div");
+    renderTrainForm(zone, status(), { onLaunch: vi.fn() });
+    const input = zone.querySelector("input[name=run]");
+    const validity = (value) => {
+      input.value = value;
+      return input.checkValidity();
+    };
+    expect(validity("a--b")).toBe(false);
+    expect(validity("run-")).toBe(false);
+    expect(validity("run-0928-1402")).toBe(true);
+  });
 });
 
 describe("a training in progress", () => {

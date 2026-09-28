@@ -11,6 +11,12 @@ describe("the reward curve", () => {
     expect(curvePath([[0, 2], [5, 2]], 100, 50)).not.toMatch(/NaN/);
   });
 
+  it("does not throw on a full-size TensorBoard run", () => {
+    const points = Array.from({ length: 200000 }, (_, i) => [i, Math.sin(i)]);
+    const path = curvePath(points, 400, 120);
+    expect(path.startsWith("M")).toBe(true);
+  });
+
   it("says why there is no curve yet", () => {
     const figure = document.createElement("figure");
     renderCurve(figure, []);

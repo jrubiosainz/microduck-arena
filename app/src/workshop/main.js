@@ -8,6 +8,15 @@ import { appendLog, renderTrainForm, renderTraining } from "./train.js";
 const $ = (selector) => document.querySelector(selector);
 const page = { status: null, since: 0, runs: [], selection: null, viewer: null, deck: null };
 const FOLLOW_EVERY_MS = 3000;
+// The last training state a poll actually saw, so a poll that throws (a
+// dropped connection, a bad response) still knows whether to reschedule
+// itself rather than freezing the log and buttons silently.
+let lastTrainingState = null;
+
+function setFollowStatus(message) {
+  const status = $("#follow-status");
+  if (status) status.textContent = message;
+}
 
 async function refreshStatus() {
   page.status = await api.getStatus();
@@ -35,19 +44,35 @@ async function onLaunch(body) {
   await follow();
 }
 
+/**
+ * One poll. Any failure here — the network, a bad response, a rendering bug
+ * on an unusually large curve — is caught rather than left to escape: an
+ * uncaught throw would skip the reschedule below and stop the polling for
+ * good, with the log frozen and Stop/Pull stuck on a run that is still
+ * going. `lastTrainingState` remembers what the last successful poll saw, so
+ * a poll that fails mid-way still reschedules itself while training was
+ * last known to be running.
+ */
 async function follow() {
-  const training = await api.getTraining(page.since);
-  if (training.state === null) return;
-  page.since = training.next;
-  renderTraining($("#training"), training, {
-    onStop: async () => { await api.stopTraining(); },
-    onPull: async () => { await api.pullCheckpoints(); },
-  });
-  appendLog($("#train-log"), training.log);
-  await refreshRuns();
-  const run = page.runs.find((r) => r.name === training.name);
-  renderCurve($("#curve"), run ? await api.getCurve(run.id) : []);
-  if (training.state === "running") setTimeout(follow, FOLLOW_EVERY_MS);
+  try {
+    const training = await api.getTraining(page.since);
+    lastTrainingState = training.state;
+    if (training.state === null) return;
+    page.since = training.next;
+    renderTraining($("#training"), training, {
+      onStop: async () => { await api.stopTraining(); },
+      onPull: async () => { await api.pullCheckpoints(); },
+    });
+    appendLog($("#train-log"), training.log);
+    setFollowStatus("");
+    await refreshRuns();
+    const run = page.runs.find((r) => r.name === training.name);
+    renderCurve($("#curve"), run ? await api.getCurve(run.id) : []);
+  } catch (error) {
+    setFollowStatus(`Lost touch with the training: ${error.message}`);
+  } finally {
+    if (lastTrainingState === "running") setTimeout(follow, FOLLOW_EVERY_MS);
+  }
 }
 
 async function start() {

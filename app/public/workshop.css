@@ -187,6 +187,13 @@ html, body {
   padding: 0;
 }
 
+/* A poll that failed to reach the server: shown under the training header,
+   empty (and so invisible) once a poll succeeds again. */
+.follow-status {
+  margin: 0 0 var(--space-card-padding-min);
+  color: var(--magenta);
+}
+
 .curve svg {
   display: block;
   width: 100%;

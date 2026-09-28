@@ -28,7 +28,7 @@ export function renderTrainForm(zone, status, { onLaunch }) {
   zone.innerHTML = `
     <form class="train-form">
       <label class="field">Run name
-        <input name="run" required pattern="[a-z0-9][a-z0-9\\-]{0,39}" spellcheck="false" />
+        <input name="run" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="40" spellcheck="false" />
       </label>
       <fieldset class="knobs"><legend class="mono-label">Knobs</legend></fieldset>
       <fieldset class="recipe"><legend class="mono-label">Recipe</legend></fieldset>
