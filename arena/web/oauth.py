@@ -5,8 +5,9 @@ callable that performs the request, so the whole exchange is testable without a
 network and without mocking a client library's internals.
 
 Scopes are whatever HF says they are. `OAUTH_SCOPES` is injected by the Space
-from the README's `hf_oauth_scopes`, so this file does not hard-code
-`contribute-repos` — the README is the single place that decides it.
+from the README's `hf_oauth_scopes`, which the Arena leaves out: it writes into
+no one's namespace, so it asks only to know who is signing in (`openid
+profile`, also the default here). The README is the single place that decides.
 """
 
 import base64

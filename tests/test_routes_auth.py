@@ -104,7 +104,7 @@ def test_a_successful_callback_signs_you_in_under_your_hub_name(spaced, monkeypa
 
 
 def test_the_oauth_token_never_reaches_the_browser(spaced, monkeypatch):
-    """It grants contribute-repos on someone's account. It stays server-side."""
+    """It speaks for someone's Hugging Face account. It stays server-side."""
     api, _ = spaced
     monkeypatch.setattr(
         "arena.web.routes_auth._exchange", lambda settings, code: "hf_SECRETTOKEN"
