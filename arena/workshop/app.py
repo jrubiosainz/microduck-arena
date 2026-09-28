@@ -176,7 +176,7 @@ def stop(request: Request) -> dict:
         try:
             # Training.stop() only lets the Hub's own cancel_job() raise past it.
             ws.training.stop(ws.hub)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # The job was NOT cancelled and is still billed: say so, keep following it.
             raise HTTPException(status_code=502, detail=f"Could not cancel the Hugging Face job: {exc}") from exc
         return ws.training.snapshot()

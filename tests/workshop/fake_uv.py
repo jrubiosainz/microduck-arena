@@ -27,7 +27,7 @@ def flag(argv, name, default=None):
 
 def train(argv):
     name = flag(argv, "--agent.run-name")
-    commit = subprocess.run(["git", "rev-parse", "--short=9", "HEAD"], capture_output=True, text=True).stdout.strip()
+    commit = subprocess.run(["git", "rev-parse", "--short=9", "HEAD"], capture_output=True, text=True, check=False).stdout.strip()
     record = {"command": ["train", *argv], "task": argv[0], "seed": int(flag(argv, "--agent.seed", 42)),
               "commit": commit, "branch": "main", "dirty": False, "started": "2026-09-28T10:00:00Z"}
     if "--hf-jobs" in argv:
@@ -40,7 +40,7 @@ def train(argv):
         base = Path(os.environ["FAKE_HUB"]) / repo
     else:
         base = Path("logs") / "rsl_rl"
-    run = base / "sprint_2m" / f"{datetime.now():%Y-%m-%d_%H-%M-%S}_{name}"
+    run = base / "sprint_2m" / f"{datetime.now().astimezone():%Y-%m-%d_%H-%M-%S}_{name}"
     run.mkdir(parents=True)
     (run / "provenance.json").write_text(json.dumps(record))
     shutil.copy(os.environ["FAKE_UV_TFEVENTS"], run / "events.out.tfevents.1.fake")

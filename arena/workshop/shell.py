@@ -26,7 +26,7 @@ def child_env() -> dict:
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:
-    done = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True,
+    done = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=False,
                            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     if check and done.returncode != 0:
         raise ShellError(f"$ git {' '.join(args)}\n{done.stdout}{done.stderr}")
@@ -46,7 +46,7 @@ def gh_ready(root: Path) -> bool:
     """The GitHub CLI is installed and logged in, so the workshop can fork for the user."""
     if shutil.which("gh") is None:
         return False
-    return subprocess.run(["gh", "auth", "status"], cwd=root, capture_output=True).returncode == 0
+    return subprocess.run(["gh", "auth", "status"], cwd=root, capture_output=True, check=False).returncode == 0
 
 
 def uv(*args: str) -> list[str]:
@@ -54,4 +54,4 @@ def uv(*args: str) -> list[str]:
 
 
 def uv_run(root: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(uv(*args), cwd=root, capture_output=True, text=True, env=child_env())
+    return subprocess.run(uv(*args), cwd=root, capture_output=True, text=True, env=child_env(), check=False)

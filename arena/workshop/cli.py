@@ -23,7 +23,7 @@ CHALLENGES = "https://github.com/pollen-robotics/microduck-challenges"
 def _checkout() -> Path | None:
     if shutil.which("git") is None:
         return None
-    found = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    found = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=False)
     return Path(found.stdout.strip()) if found.returncode == 0 else None
 
 

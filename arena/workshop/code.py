@@ -74,7 +74,7 @@ def fork(root: Path, url: str | None, message: str) -> str:
         if not already_forked:
             if not gh_ready(root):
                 raise ShellError("The GitHub CLI is not logged in: make your fork on GitHub's page, then paste its address.")
-            done = subprocess.run(["gh", "repo", "fork", "--remote"], cwd=root, capture_output=True, text=True)
+            done = subprocess.run(["gh", "repo", "fork", "--remote"], cwd=root, capture_output=True, text=True, check=False)
             if done.returncode != 0:
                 raise ShellError(f"$ gh repo fork --remote\n{done.stdout}{done.stderr}")
     else:

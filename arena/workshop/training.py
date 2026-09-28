@@ -86,7 +86,7 @@ class Training:
         with self._pulling:  # the periodic pull and a button press never overlap
             done = subprocess.run(
                 uv("hf", "download", self.ckpt_repo, "--local-dir", str(LOGS), "--quiet"),
-                cwd=self.root, capture_output=True, text=True, env=child_env(),
+                cwd=self.root, capture_output=True, text=True, env=child_env(), check=False,
             )
         if done.returncode == 0:
             self._say(f"[workshop] fetched the checkpoints from {self.ckpt_repo}")
