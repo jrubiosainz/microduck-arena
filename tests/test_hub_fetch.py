@@ -43,7 +43,7 @@ def test_it_prefers_policy_onnx_at_the_root():
     listing = ["README.md", "legacy/policy.onnx", "policy.onnx"]
     result = fetch_policy(
         "alice/walker",
-        info=lambda repo_id: (listing, "rev1", {}),
+        info=lambda repo_id, revision: (listing, "rev1", {}),
         download=lambda repo_id, filename, revision: "/tmp/x.onnx",
     )
     assert result.filename == "policy.onnx"
@@ -54,7 +54,7 @@ def test_it_falls_back_to_the_only_onnx_when_the_name_differs():
     """q2p/microduck-beak-throw ships beak_throw.onnx, not policy.onnx."""
     result = fetch_policy(
         "alice/walker",
-        info=lambda repo_id: (["README.md", "beak_throw.onnx"], "rev1", {}),
+        info=lambda repo_id, revision: (["README.md", "beak_throw.onnx"], "rev1", {}),
         download=lambda repo_id, filename, revision: "/tmp/x.onnx",
     )
     assert result.filename == "beak_throw.onnx"
@@ -66,7 +66,7 @@ def test_several_candidate_onnx_files_must_be_named_explicitly():
     with pytest.raises(FetchError, match="which"):
         fetch_policy(
             "alice/walker",
-            info=lambda repo_id: (["alpha_stand.onnx", "beak_throw.onnx"], "rev1", {}),
+            info=lambda repo_id, revision: (["alpha_stand.onnx", "beak_throw.onnx"], "rev1", {}),
             download=lambda repo_id, filename, revision: "/tmp/x.onnx",
         )
 
@@ -74,7 +74,7 @@ def test_several_candidate_onnx_files_must_be_named_explicitly():
 def test_an_explicit_filename_is_honoured_even_when_ambiguous():
     result = fetch_policy(
         "alice/walker:beak_throw.onnx",
-        info=lambda repo_id: (["alpha_stand.onnx", "beak_throw.onnx"], "rev1", {}),
+        info=lambda repo_id, revision: (["alpha_stand.onnx", "beak_throw.onnx"], "rev1", {}),
         download=lambda repo_id, filename, revision: "/tmp/x.onnx",
     )
     assert result.filename == "beak_throw.onnx"
@@ -84,7 +84,7 @@ def test_a_repo_with_no_onnx_says_so():
     with pytest.raises(FetchError, match="no .onnx"):
         fetch_policy(
             "alice/walker",
-            info=lambda repo_id: (["README.md", "model.pt"], "rev1", {}),
+            info=lambda repo_id, revision: (["README.md", "model.pt"], "rev1", {}),
             download=lambda repo_id, filename, revision: "/tmp/x.onnx",
         )
 
@@ -93,13 +93,13 @@ def test_a_named_file_that_is_absent_says_so():
     with pytest.raises(FetchError, match="nope.onnx"):
         fetch_policy(
             "alice/walker:nope.onnx",
-            info=lambda repo_id: (["policy.onnx"], "rev1", {}),
+            info=lambda repo_id, revision: (["policy.onnx"], "rev1", {}),
             download=lambda repo_id, filename, revision: "/tmp/x.onnx",
         )
 
 
 def test_a_private_or_missing_repo_is_a_readable_refusal():
-    def boom(repo_id):
+    def boom(repo_id, revision):
         raise RuntimeError("401 Client Error")
 
     with pytest.raises(FetchError, match="401"):
@@ -115,7 +115,7 @@ def test_a_declared_oversize_file_is_refused_without_downloading():
     with pytest.raises(FetchError, match="larger than"):
         fetch_policy(
             "alice/walker",
-            info=lambda repo_id: (
+            info=lambda repo_id, revision: (
                 ["policy.onnx"],
                 "rev1",
                 {"policy.onnx": MAX_MODEL_BYTES + 1},
@@ -131,7 +131,7 @@ def test_a_repo_that_declines_to_report_a_size_still_downloads():
     calls = []
     result = fetch_policy(
         "alice/walker",
-        info=lambda repo_id: (["policy.onnx"], "rev1", {"policy.onnx": None}),
+        info=lambda repo_id, revision: (["policy.onnx"], "rev1", {"policy.onnx": None}),
         download=lambda repo_id, filename, revision: calls.append(filename) or "/tmp/x.onnx",
     )
     assert result.filename == "policy.onnx"
@@ -161,3 +161,102 @@ def test_a_real_community_policy_races_here():
     result = evaluate(load_event("sprint-2m"), load_policy(fetched.path))
     assert len(result.per_seed) == 5
     assert result.runner_version == RUNNER_VERSION
+
+
+import json
+
+from arena.hub_fetch import check_manifest, rig_of
+from arena.manifest import load_event
+
+GOOD_MANIFEST = {
+    "obs_len": 61,
+    "action_len": 14,
+    "kind": "perpetual",
+    "name": "walker",
+    "robot": {"model": "microduck", "accessories": []},
+}
+
+
+def _fetch(tmp_path, manifest, event_id="sprint-2m", revision=None, downloads=None):
+    """fetch_policy against a fake Hub holding policy.onnx and, unless None, this manifest."""
+    files = ["README.md", "policy.onnx"] + ([] if manifest is None else ["manifest.json"])
+    manifest_path = tmp_path / "manifest.json"
+    if manifest is not None:
+        manifest_path.write_text(manifest if isinstance(manifest, str) else json.dumps(manifest))
+    seen = [] if downloads is None else downloads
+
+    def download(repo_id, filename, rev):
+        seen.append((filename, rev))
+        return str(manifest_path) if filename == "manifest.json" else "/tmp/x.onnx"
+
+    return fetch_policy(
+        "alice/walker",
+        revision=revision,
+        event=load_event(event_id),
+        info=lambda repo_id, rev: (files, f"sha-of-{rev or 'main'}", {}),
+        download=download,
+    )
+
+
+def test_a_matching_manifest_is_read_and_kept(tmp_path):
+    assert _fetch(tmp_path, GOOD_MANIFEST).manifest == GOOD_MANIFEST
+
+
+def test_a_repo_without_a_manifest_is_still_accepted(tmp_path):
+    """Not every community repo has one; the ONNX is validated regardless."""
+    assert _fetch(tmp_path, None).manifest is None
+
+
+def test_a_revision_pins_every_file_and_the_link(tmp_path):
+    downloads = []
+    fetched = _fetch(tmp_path, GOOD_MANIFEST, revision="abc123", downloads=downloads)
+    assert fetched.revision == "sha-of-abc123"
+    assert downloads == [("manifest.json", "sha-of-abc123"), ("policy.onnx", "sha-of-abc123")]
+    assert fetched.url.endswith("/resolve/sha-of-abc123/policy.onnx")
+
+
+@pytest.mark.parametrize(
+    "change,field",
+    [
+        ({"obs_len": 48}, "obs_len"),
+        ({"action_len": 12}, "action_len"),
+        ({"kind": "episodic"}, "kind"),
+        ({"robot": {"model": "microduck", "accessories": ["rollers"]}}, "robot"),
+        ({"robot": {"model": "flyduck"}}, "robot"),
+    ],
+)
+def test_a_manifest_that_disagrees_with_the_event_is_refused_by_field(tmp_path, change, field):
+    downloads = []
+    with pytest.raises(FetchError, match=field):
+        _fetch(tmp_path, GOOD_MANIFEST | change, downloads=downloads)
+    assert [name for name, _ in downloads] == ["manifest.json"], "refused before the ONNX is fetched"
+
+
+def test_a_roller_manifest_enters_the_roller_sprint(tmp_path):
+    rollers = GOOD_MANIFEST | {"robot": {"model": "microduck", "accessories": ["rollers"]}}
+    assert _fetch(tmp_path, rollers, event_id="roller-sprint-2m").manifest == rollers
+
+
+def test_a_manifest_that_is_not_json_is_refused(tmp_path):
+    with pytest.raises(FetchError, match="not valid JSON"):
+        _fetch(tmp_path, "{nope")
+
+
+@pytest.mark.parametrize(
+    "robot,rig",
+    [
+        ({"model": "microduck", "accessories": []}, "legs"),
+        ({"model": "microduck"}, "legs"),
+        ({"model": "microduck", "accessories": ["rollers"]}, "rollers"),
+        # What this Arena's own publisher wrote before `uv run publish` took over.
+        ({"model": "microduck passive rollers"}, "rollers"),
+        ({"model": "flyduck"}, None),
+        ({}, None),
+    ],
+)
+def test_the_rig_is_read_from_both_vocabularies(robot, rig):
+    assert rig_of({"robot": robot}) == rig
+
+
+def test_check_manifest_is_silent_when_everything_agrees():
+    check_manifest(GOOD_MANIFEST, load_event("sprint-2m"))

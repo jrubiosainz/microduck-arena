@@ -17,14 +17,25 @@ repo that declines to report a size (`None`) is not refused on that account —
 an unknown size is not evidence of a large file — and `load_policy` remains
 the backstop that catches an oversized file downstream if the declared size
 was ever missing or wrong.
+
+A repo's `manifest.json`, when it has one, is read at the same pinned revision
+and, when the caller names the event, checked against it before the ONNX is
+downloaded: the observation and action sizes, the robot the event races, the
+kind of policy it takes. A repo without one is accepted as before.
 """
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from .constants import NUM_JOINTS, OBS_SIZE
 from .policy import MAX_MODEL_BYTES
 
 PREFERRED = "policy.onnx"
+MANIFEST = "manifest.json"
+# What this Arena's own publisher (removed) wrote for the roller rig, before
+# `uv run publish` described rollers as an accessory of the one microduck.
+LEGACY_ROLLERS_MODEL = "microduck passive rollers"
 
 
 class FetchError(Exception):
@@ -38,6 +49,8 @@ class FetchedPolicy:
     revision: str
     path: Path
     url: str
+    # The repo's manifest.json, parsed, or None when it has none.
+    manifest: dict | None = None
 
 
 def parse_repo_ref(text: str) -> tuple[str, str | None]:
@@ -71,13 +84,13 @@ def parse_repo_ref(text: str) -> tuple[str, str | None]:
     return "/".join(parts), ((filename or "").strip() or None)
 
 
-def _default_info(repo_id: str):
+def _default_info(repo_id: str, revision: str | None):
     from huggingface_hub import HfApi
 
     # files_metadata=True is what makes each sibling carry `.size` — without
     # it the Hub returns the file list alone, and there is nothing to check
     # the cap against before downloading.
-    info = HfApi().model_info(repo_id, files_metadata=True)
+    info = HfApi().model_info(repo_id, revision=revision, files_metadata=True)
     siblings = info.siblings or []
     files = [s.rfilename for s in siblings]
     sizes = {s.rfilename: s.size for s in siblings}
@@ -109,16 +122,70 @@ def _pick(files: list[str], wanted: str | None, repo_id: str) -> str:
     )
 
 
+def rig_of(manifest: dict) -> str | None:
+    """The Arena rig a policy manifest describes, or None for a machine no event races."""
+    robot = manifest.get("robot") or {}
+    model = robot.get("model")
+    if model == LEGACY_ROLLERS_MODEL:
+        return "rollers"
+    if model != "microduck":
+        return None
+    return "rollers" if "rollers" in (robot.get("accessories") or []) else "legs"
+
+
+def check_manifest(manifest: dict, event) -> None:
+    """Refuse a policy whose manifest.json disagrees with `event`, naming the field."""
+    if manifest.get("obs_len") != OBS_SIZE:
+        raise FetchError(
+            f"{MANIFEST}: obs_len is {manifest.get('obs_len')!r}; the Arena feeds {OBS_SIZE} observations"
+        )
+    if manifest.get("action_len") != NUM_JOINTS:
+        raise FetchError(
+            f"{MANIFEST}: action_len is {manifest.get('action_len')!r}; the Arena drives {NUM_JOINTS} joints"
+        )
+    if rig_of(manifest) != event.rig:
+        robot = manifest.get("robot") or {}
+        raise FetchError(
+            f"{MANIFEST}: robot {robot.get('model')!r} with accessories {robot.get('accessories') or []} "
+            f"is not the {event.rig} robot {event.title} races"
+        )
+    if manifest.get("kind") != event.kind:
+        raise FetchError(
+            f"{MANIFEST}: kind is {manifest.get('kind')!r}; {event.title} takes {event.kind} policies"
+        )
+
+
+def _read_manifest(repo_id: str, revision: str, download) -> dict:
+    try:
+        path = Path(download(repo_id, MANIFEST, revision))
+    except Exception as exc:
+        raise FetchError(f"could not download {repo_id}/{MANIFEST}: {exc}") from exc
+    try:
+        manifest = json.loads(path.read_text())
+    except ValueError as exc:
+        raise FetchError(f"{repo_id}/{MANIFEST} is not valid JSON: {exc}") from exc
+    if not isinstance(manifest, dict):
+        raise FetchError(f"{repo_id}/{MANIFEST} is not a JSON object")
+    return manifest
+
+
 def fetch_policy(
-    repo_ref: str, download=_default_download, info=_default_info
+    repo_ref: str,
+    revision: str | None = None,
+    event=None,
+    download=_default_download,
+    info=_default_info,
 ) -> FetchedPolicy:
     repo_id, wanted = parse_repo_ref(repo_ref)
     try:
-        files, revision, sizes = info(repo_id)
+        files, sha, sizes = info(repo_id, revision)
     except FetchError:
         raise
     except Exception as exc:
         raise FetchError(f"could not read {repo_id}: {exc}") from exc
+    # Every file is read at the commit the listing came from, so the manifest
+    # checked and the weights raced are one publication, not two.
+    pinned = sha or revision or "main"
 
     filename = _pick(list(files), wanted, repo_id)
 
@@ -133,15 +200,20 @@ def fetch_policy(
             f"{MAX_MODEL_BYTES} byte limit"
         )
 
+    manifest = _read_manifest(repo_id, pinned, download) if MANIFEST in files else None
+    if manifest is not None and event is not None:
+        check_manifest(manifest, event)  # before the weights: a refusal costs one small file
+
     try:
-        path = Path(download(repo_id, filename, revision))
+        path = Path(download(repo_id, filename, pinned))
     except Exception as exc:
         raise FetchError(f"could not download {repo_id}/{filename}: {exc}") from exc
 
     return FetchedPolicy(
         repo_id=repo_id,
         filename=filename,
-        revision=revision or "main",
+        revision=pinned,
         path=path,
-        url=f"https://huggingface.co/{repo_id}/resolve/{revision or 'main'}/{filename}",
+        url=f"https://huggingface.co/{repo_id}/resolve/{pinned}/{filename}",
+        manifest=manifest,
     )

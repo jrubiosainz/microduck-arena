@@ -178,3 +178,10 @@ def test_a_partly_lost_store_plans_only_what_is_missing():
     stored = {"sprint-2m": [hub_run("a/b", "rev1")], "hill-climb-1m5": []}
     work = plan(found, EVENTS, lambda e: stored.get(e, []))
     assert [ev.id for _, ev in work] == ["hill-climb-1m5"]
+
+
+def test_a_manifest_written_by_publish_maps_its_accessories_to_the_rig():
+    """`uv run publish` says rollers as an accessory of the one "microduck" robot."""
+    manifest = {"name": "skater", "robot": {"model": "microduck", "accessories": ["rollers"]}}
+    found = candidates(lambda: [("alice/microduck-skater", "rev1")], lambda repo_id: manifest, all_tagged=True)
+    assert [c.rig for c in found] == ["rollers"]

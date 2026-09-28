@@ -24,12 +24,11 @@ Hub access is injected, so the planning logic is testable with no network.
 from dataclasses import dataclass
 
 from .constants import RUNNER_VERSION
-from .hub_publish import RIG_MODEL, TAGS
+from .hub_fetch import rig_of
 
-TAG = TAGS[0]  # "microduck-policy"
+# The tag the ecosystem searches policies by.
+TAG = "microduck-policy"
 PUBLISHER = "microduck-arena"
-# manifest robot.model -> our rig name. The inverse of hub_publish.RIG_MODEL.
-_RIG_BY_MODEL = {model: rig for rig, model in RIG_MODEL.items()}
 
 
 @dataclass(frozen=True)
@@ -48,8 +47,7 @@ class Candidate:
 
 
 def _candidate(repo_id: str, revision: str, manifest: dict) -> Candidate | None:
-    robot = (manifest or {}).get("robot") or {}
-    rig = _RIG_BY_MODEL.get(robot.get("model"))
+    rig = rig_of(manifest or {})
     if rig is None:
         return None  # a policy for a machine this Arena has no event for
     user, _, slug = repo_id.partition("/")
