@@ -31,6 +31,17 @@ describe("the entry the workshop sends back", () => {
     expect(entryFromLocation("roller-sprint-2m", "", storage)).toEqual({ repo: "", revision: "", env: "" });
   });
 
+  it("takes the query once, so it cannot follow the visitor to another challenge", () => {
+    history.replaceState(null, "", `/${query}#/e/sprint-2m`);
+    const storage = memory();
+    expect(entryFromLocation("sprint-2m", location.search, storage).repo).toBe("alice/microduck-walker");
+    expect(location.search).toBe("");
+    expect(location.pathname + location.hash).toBe("/#/e/sprint-2m");
+    // On to another challenge's page, then back: the kept copy stays with the one it was sent to.
+    expect(entryFromLocation("roller-sprint-2m", location.search, storage).repo).toBe("");
+    expect(entryFromLocation("sprint-2m", location.search, storage).repo).toBe("alice/microduck-walker");
+  });
+
   it("forgets it once published", () => {
     const storage = memory();
     entryFromLocation("sprint-2m", query, storage);

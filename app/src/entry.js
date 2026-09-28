@@ -1,7 +1,9 @@
 // What the workshop sends a novice back with: the Hub repo it just published,
 // the revision to pin and the code's address, as ?repo=&revision=&env= ahead of
-// the hash. Kept in sessionStorage as well, because signing in leaves the page
-// for huggingface.co and comes back to "/#<route>" with no query at all.
+// the hash. Taken once, for the challenge in the hash, and kept in
+// sessionStorage for it: signing in leaves the page for huggingface.co and comes
+// back to "/#<route>" with no query at all. Left in the address, the query would
+// follow the visitor to every other challenge's page.
 
 const KEY = "arena.entry";
 const EMPTY = { repo: "", revision: "", env: "" };
@@ -23,6 +25,7 @@ export function entryFromLocation(eventId, search = location.search, storage = s
     } catch {
       // A private window may refuse; the query in hand is still the answer.
     }
+    history.replaceState(null, "", location.pathname + location.hash);
     return sent;
   }
   try {

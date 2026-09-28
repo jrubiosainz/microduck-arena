@@ -500,9 +500,8 @@ export async function renderRace(root, { event, state }) {
     },
     onPublish: async (sent) => {
       const published = await submitPolicy(event.id, sent);
-      // Entered: the workshop's query and its kept copy have done their job.
+      // Entered: the workshop's kept copy has done its job.
       forgetEntry();
-      history.replaceState(null, "", location.pathname + location.hash);
       // The result has its own page now, and the reveal plays there.
       location.hash = runHref(published.run_id);
       return published;
