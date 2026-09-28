@@ -1,10 +1,8 @@
 """Signing in, and who the server thinks you are.
 
 Two identity paths, and the split is the original spec's requirement: with OAuth
-configured the session names a real Hugging Face user and carries their token;
-with no OAuth at all — every local run — `ARENA_DEV_USER` is treated as
-permanently signed in and there is no token, so nothing can be written to
-anyone's Hub namespace.
+configured the session names a real Hugging Face user; with no OAuth at all —
+every local run — `ARENA_DEV_USER` is treated as permanently signed in.
 
 `current_user` is the one place either path is resolved, so no route has to know
 which world it is in.
@@ -103,8 +101,8 @@ def current_user(request: Request) -> Session | None:
     """The signed-in user, or None. The only resolver either path goes through."""
     config = request.app.state.config
     if not config.oauth_enabled:
-        # Local: ARENA_DEV_USER is always signed in, and has no token.
-        return Session(username=config.dev_user, token=None, expires_at=float("inf"))
+        # Local: ARENA_DEV_USER is always signed in.
+        return Session(username=config.dev_user, expires_at=float("inf"))
     raw = request.cookies.get(COOKIE_NAME)
     if not raw:
         return None
@@ -124,9 +122,6 @@ def me(request: Request, response: Response) -> dict:
     body = {
         "signed_in": session is not None,
         "user": session.username if session else None,
-        # Publishing to the author's own repo needs their OAuth token. The local
-        # path has none, so it publishes to the local store instead.
-        "can_publish_to_hub": bool(session and session.token),
         "oauth_enabled": config.oauth_enabled,
     }
     if session:
@@ -202,7 +197,7 @@ def callback(request: Request, code: str = "", state: str = "") -> RedirectRespo
     except OAuthError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    sid = request.app.state.sessions.create(username, token, config.session_ttl_s)
+    sid = request.app.state.sessions.create(username, config.session_ttl_s)
     # Unsigned first: an unsigned or tampered cookie is not a destination, it is
     # someone editing their own cookie, and the answer to that is the menu.
     wanted = unsign(request.cookies.get(RETURN_COOKIE, ""), config.session_secret)

@@ -1,3 +1,5 @@
+import dataclasses
+
 from arena.web.session import Sessions, sign, unsign
 
 
@@ -31,30 +33,35 @@ def test_comparison_is_constant_time():
 
 def test_a_session_is_retrievable_by_its_id():
     sessions = Sessions()
-    sid = sessions.create("alice", "hf_tok", ttl_s=60)
+    sid = sessions.create("alice", ttl_s=60)
     found = sessions.get(sid)
     assert found.username == "alice"
-    assert found.token == "hf_tok"
+
+
+def test_a_session_holds_no_token():
+    from arena.web.session import Session
+
+    assert [f.name for f in dataclasses.fields(Session)] == ["username", "expires_at"]
 
 
 def test_session_ids_are_unguessable_and_unique():
     sessions = Sessions()
-    ids = {sessions.create("alice", None, ttl_s=60) for _ in range(50)}
+    ids = {sessions.create("alice", ttl_s=60) for _ in range(50)}
     assert len(ids) == 50
     assert all(len(i) >= 32 for i in ids)
 
 
 def test_an_expired_session_is_gone_not_merely_stale():
     sessions = Sessions()
-    sid = sessions.create("alice", "hf_tok", ttl_s=-1)
+    sid = sessions.create("alice", ttl_s=-1)
     assert sessions.get(sid) is None
     # And it is evicted, so a long-lived process does not accumulate them.
     assert sid not in sessions._by_id
 
 
-def test_dropping_a_session_forgets_the_token():
+def test_dropping_a_session_forgets_it():
     sessions = Sessions()
-    sid = sessions.create("alice", "hf_tok", ttl_s=60)
+    sid = sessions.create("alice", ttl_s=60)
     sessions.drop(sid)
     assert sessions.get(sid) is None
 

@@ -8,8 +8,6 @@ app_port: 7860
 pinned: false
 short_description: Race Microduck policies on a clock you can trust
 hf_oauth: true
-hf_oauth_scopes:
-  - contribute-repos
 ---
 
 # microduck-arena

@@ -34,7 +34,7 @@ def test_with_no_oauth_the_dev_user_is_always_signed_in(local):
     assert body["user"] == "coralie"
     assert body["oauth_enabled"] is False
     # No token, so nothing can be written to anyone's Hub namespace.
-    assert body["can_publish_to_hub"] is False
+    assert "can_publish_to_hub" not in body
 
 
 def test_me_is_never_cached_because_its_body_is_per_user(local):
@@ -100,7 +100,7 @@ def test_a_successful_callback_signs_you_in_under_your_hub_name(spaced, monkeypa
     body = api.get("/api/me").json()
     assert body["signed_in"] is True
     assert body["user"] == "alice"
-    assert body["can_publish_to_hub"] is True
+    assert "can_publish_to_hub" not in body
 
 
 def test_the_oauth_token_never_reaches_the_browser(spaced, monkeypatch):
@@ -290,6 +290,14 @@ def test_a_forged_return_cookie_lands_on_the_menu(spaced, monkeypatch, forged):
     api.cookies.set("arena_oauth_return", sign(forged, "csecret"))
     response = api.get("/login/callback?code=c&state=st4te", follow_redirects=False)
     assert response.headers["location"] == "/"
+
+
+def test_the_space_asks_for_no_write_scope():
+    """It writes into no one's namespace any more, so it must not ask for the right to."""
+    from pathlib import Path
+
+    front_matter = (Path(__file__).resolve().parents[1] / "README.md").read_text().split("---")[1]
+    assert "hf_oauth_scopes" not in front_matter and "contribute-repos" not in front_matter
 
 
 def test_an_unsigned_return_cookie_is_ignored(spaced, monkeypatch):

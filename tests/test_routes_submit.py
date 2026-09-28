@@ -67,12 +67,12 @@ def spaced_api(store_dir, monkeypatch):
     return TestClient(create_app(config), base_url="https://testserver")
 
 
-def sign_in(api, username="alice", token=None):
+def sign_in(api, username="alice"):
     """Put a real session in the app's table and hand the client its cookie."""
     from arena.web.session import COOKIE_NAME, sign
 
     app = api.app
-    sid = app.state.sessions.create(username, token, 3600)
+    sid = app.state.sessions.create(username, 3600)
     api.cookies.set(COOKIE_NAME, sign(sid, app.state.config.session_secret))
 
 

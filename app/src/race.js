@@ -99,16 +99,8 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
     </label>
     <div class="entry__actions">
       <button id="try" class="ghost">Test it</button>
-      <button id="publish" ${state === "no-hub" ? "disabled" : ""}>Publish</button>
+      <button id="publish">Publish</button>
     </div>
-    ${
-      state === "no-hub"
-        ? `<p class="entry__nohub">
-             Publish is off: this session has no Hub write access, so an
-             entry can't be uploaded. Testing still works.
-           </p>`
-        : ""
-    }
     <p class="entry__consent">
       Publishing shares your <code>.onnx</code> so anyone can download it
       and race it. Testing shares nothing.
@@ -165,9 +157,6 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
   });
 
   async function run(kind) {
-    // Belt and braces: the button is already disabled and unwired in the
-    // no-hub state, but a publish must never fire even if that ever drifts.
-    if (kind === "publish" && state === "no-hub") return;
     const file = dropzone.file;
     if (!file) {
       status.textContent = "Choose a .onnx policy first.";
@@ -210,8 +199,7 @@ export function renderEntryPanel(container, me, { event, onTry, onPublish, onLiv
       status.className = "entry__status bad";
     } finally {
       tryButton.disabled = false;
-      // A no-hub session never regains publish rights mid-page, so leave it off.
-      publishButton.disabled = state === "no-hub";
+      publishButton.disabled = false;
     }
   }
 

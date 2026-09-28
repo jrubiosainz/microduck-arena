@@ -68,7 +68,7 @@ describe("renderEntryPanel: ready (signed in, can publish)", () => {
     const onLiveryChange = vi.fn();
     renderEntryPanel(
       container,
-      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true, user: "alice" },
+      { signed_in: true, oauth_enabled: true, user: "alice" },
       { event, onTry, onPublish, onLiveryChange },
     );
     return { container, onTry, onPublish, onLiveryChange };
@@ -118,56 +118,6 @@ describe("renderEntryPanel: ready (signed in, can publish)", () => {
   });
 });
 
-describe("renderEntryPanel: no-hub (signed in on a Space, no Hub token)", () => {
-  function render() {
-    const container = document.createElement("div");
-    const onTry = vi.fn(async () => {});
-    const onPublish = vi.fn(async () => ({ policy_name: "walker" }));
-    renderEntryPanel(
-      container,
-      { signed_in: true, oauth_enabled: true, can_publish_to_hub: false, user: "bob" },
-      { event, onTry, onPublish },
-    );
-    return { container, onTry, onPublish };
-  }
-
-  it("keeps every control, names the user, but disables Publish with a reason", () => {
-    const { container } = render();
-    expect(container.querySelector("#entry-user").textContent).toBe("bob");
-    expect(container.querySelector("#dropzone")).not.toBeNull();
-    expect(container.querySelector("#publish").disabled).toBe(true);
-    expect(container.querySelector(".entry__nohub")).not.toBeNull();
-  });
-
-  it("Test it still works, and Publish does not re-enable itself afterwards", async () => {
-    const { container, onTry } = render();
-    chooseFile(container);
-    container.querySelector("#try").click();
-    await flush();
-    expect(onTry).toHaveBeenCalledTimes(1);
-    // A completed trial re-enables Test it, but must not undo the no-hub
-    // block on Publish -- a real bug caught while writing this test.
-    expect(container.querySelector("#try").disabled).toBe(false);
-    expect(container.querySelector("#publish").disabled).toBe(true);
-  });
-
-  it("Publish never fires, even if something dispatches a click at the disabled button", async () => {
-    const { container, onPublish } = render();
-    chooseFile(container);
-    // jsdom (correctly) never dispatches a click's handler on a disabled
-    // button, so that alone would pass this test whether or not the code's
-    // own "no-hub" guard exists -- it would only be proving jsdom's behaviour.
-    // Re-enabling the button before dispatching forces the click through to
-    // the handler, so what is actually under test is the `run()` guard
-    // itself: `if (kind === "publish" && state === "no-hub") return;`.
-    const publishButton = container.querySelector("#publish");
-    publishButton.disabled = false;
-    publishButton.click();
-    await flush();
-    expect(onPublish).not.toHaveBeenCalled();
-  });
-});
-
 describe("renderEventFacts: the caveat under the facts", () => {
   function render() {
     const root = document.createElement("div");
@@ -212,7 +162,7 @@ describe("the speed picker applies to publishing too", () => {
     const container = document.createElement("div");
     renderEntryPanel(
       container,
-      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true },
+      { signed_in: true, oauth_enabled: true },
       { event, onTry: vi.fn(async () => {}), onPublish },
     );
 
@@ -230,7 +180,7 @@ describe("the speed picker applies to publishing too", () => {
     const container = document.createElement("div");
     renderEntryPanel(
       container,
-      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true },
+      { signed_in: true, oauth_enabled: true },
       { event, onTry: vi.fn(), onPublish: vi.fn() },
     );
     expect(container.querySelector("#speed").value).toBe("");
@@ -242,7 +192,7 @@ describe("the training-environment field", () => {
     const container = document.createElement("div");
     renderEntryPanel(
       container,
-      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true },
+      { signed_in: true, oauth_enabled: true },
       { event, onTry: vi.fn(), onPublish: vi.fn() },
     );
     return container;
@@ -265,7 +215,7 @@ describe("the training-environment field", () => {
     const container = document.createElement("div");
     renderEntryPanel(
       container,
-      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true },
+      { signed_in: true, oauth_enabled: true },
       { event, onTry: vi.fn(), onPublish },
     );
     chooseFile(container);
@@ -280,7 +230,7 @@ describe("the training-environment field", () => {
     const container = document.createElement("div");
     renderEntryPanel(
       container,
-      { signed_in: true, oauth_enabled: true, can_publish_to_hub: true },
+      { signed_in: true, oauth_enabled: true },
       { event, onTry, onPublish: vi.fn() },
     );
     chooseFile(container);

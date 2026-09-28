@@ -128,7 +128,7 @@ def spaced(tmp_path, monkeypatch):
 
 
 def sign_in(api, app, username):
-    sid = app.state.sessions.create(username, None, 3600)
+    sid = app.state.sessions.create(username, 3600)
     api.cookies.set(COOKIE_NAME, sign(sid, app.state.config.session_secret))
 
 

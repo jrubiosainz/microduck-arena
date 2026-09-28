@@ -220,14 +220,6 @@ button.link {
 .entry__user { margin: 0; font-size: 0.82rem; color: var(--ink-70); }
 .entry__user strong { color: var(--ink); }
 
-/* The no-hub state: Publish is disabled above this, so say why right here. */
-.entry__nohub {
-  margin: 0;
-  font-size: 0.78rem;
-  line-height: 1.45;
-  color: var(--ink-70);
-}
-
 /* ── stage ────────────────────────────────────────────────────────────── */
 
 /* The CRT on its trolley: deep ink behind a 5 px ink bezel, and no offset

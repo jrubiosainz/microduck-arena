@@ -1,12 +1,12 @@
 """Sessions, and the cookie that names one.
 
-The cookie carries an OPAQUE session id, never the OAuth token. The token grants
-`contribute-repos` on someone's Hugging Face account, so it stays in this
-process's memory and is never serialised to a browser or to disk.
+The cookie carries an OPAQUE session id, and the session holds a name and an
+expiry — nothing else. The Space reads a visitor's identity at sign-in and
+writes into no one's Hub namespace, so it keeps no token of theirs at all.
 
 The table is in memory on purpose. It costs a restart logging everyone out,
 which for an 8-hour session on a Space that sleeps anyway is not worth a
-database — and it means a leaked token has the lifetime of a process.
+database.
 """
 
 import base64
@@ -44,7 +44,6 @@ def unsign(signed: str, secret: str) -> str | None:
 @dataclass(frozen=True)
 class Session:
     username: str
-    token: str | None
     expires_at: float
 
 
@@ -53,10 +52,10 @@ class Sessions:
         self._by_id: dict[str, Session] = {}
         self._lock = threading.Lock()
 
-    def create(self, username: str, token: str | None, ttl_s: float) -> str:
+    def create(self, username: str, ttl_s: float) -> str:
         sid = secrets.token_urlsafe(32)
         with self._lock:
-            self._by_id[sid] = Session(username, token, time.time() + ttl_s)
+            self._by_id[sid] = Session(username, time.time() + ttl_s)
         return sid
 
     def get(self, sid: str) -> Session | None:
@@ -66,7 +65,7 @@ class Sessions:
                 return None
             if found.expires_at <= time.time():
                 # Evicted, not just reported stale, so a long-lived process
-                # does not accumulate dead sessions holding dead tokens.
+                # does not accumulate dead sessions.
                 del self._by_id[sid]
                 return None
             return found
