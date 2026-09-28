@@ -85,12 +85,12 @@ publishing author's own Hub repo, not on the Space. `GET /api/health` reports
 `"durable": true` once it is configured, and the startup log says `EPHEMERAL`
 in capitals when it is not.
 
-The Space signs users in with Hugging Face OAuth, scoped to `contribute-repos`
-— just enough to create and write to a repo it did not previously own, nothing
-wider. Publishing a policy creates (or reuses) `<your-user>/microduck-<slug>`
-under the signer's own account, public, and the board's `.onnx` link resolves
-straight to the Hub. A signed-in user whose token lacks Hub write access can
-still race and watch replays; only Publish is disabled for them.
+The Space signs users in with Hugging Face OAuth to know who is racing —
+nothing wider: it asks for no Hub scope and keeps no token. Entering the board
+takes a Hugging Face repo the author published themselves (the workshop, or
+`uv run publish`), raced at a pinned revision, and the board's `.onnx` link
+resolves straight to that repo. A file dropped in the browser can be tested,
+never published.
 
 ## Social clips
 

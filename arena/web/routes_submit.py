@@ -374,9 +374,8 @@ def withdraw(run_id: str, request: Request) -> dict:
     re-race it.
 
     The policy repo itself is untouched. It belongs to its author, who can
-    delete it on the Hub if they want to — this Space asks only for
-    `contribute-repos`, and widening that to `manage-repos` for every visitor
-    would be a large permission to charge for a delete button.
+    delete it on the Hub if they want to — the Space asks for no Hub scope at
+    all, so it holds no permission on anyone's repo to begin with.
     """
     from datetime import UTC, datetime
 
