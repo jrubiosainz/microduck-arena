@@ -16,13 +16,18 @@ export function renderCode(zone, code, { onFork, onPush }) {
   zone.querySelector(".code__state").textContent = codeMessage(code);
   const actions = zone.querySelector(".code__actions");
   // git's or gh's own words when a step fails: a rejected push, a fork the org forbids.
+  // Its buttons are held meanwhile: a fork and a push take seconds, and a second click is a second push.
   const attempt = (action) => async () => {
     const output = zone.querySelector(".code__output");
+    const buttons = [...actions.querySelectorAll("button")];
     output.textContent = "";
+    for (const b of buttons) b.disabled = true;
     try {
       await action();
     } catch (error) {
       output.textContent = error.message;
+    } finally {
+      for (const b of buttons) b.disabled = false;
     }
   };
   if (code.state === "not-shared" && code.gh) {
@@ -86,7 +91,19 @@ export function renderPublish(zone, selection, status, { onPreview, onPublish, d
   form.elements.namedItem("description").value = applied ? applied.description : "";
   form.elements.namedItem("description").placeholder = status.event.title;
   if (applied?.anyway) form.elements.namedItem("anyway").checked = true;
-  const go = button("publish__go", "Publish", async () => {
+  // Both buttons are held while either call is out: an export and an upload take a minute.
+  let pending = false;
+  const held = (call) => async () => {
+    pending = true;
+    gate();
+    try {
+      await call();
+    } finally {
+      pending = false;
+      gate();
+    }
+  };
+  const go = button("publish__go", "Publish", held(async () => {
     const note = zone.querySelector(".publish__status");
     say(note, "Exporting and uploading…");
     try {
@@ -97,8 +114,8 @@ export function renderPublish(zone, selection, status, { onPreview, onPublish, d
     } catch (error) {
       say(note, error.message, true);
     }
-  }, true);
-  const preview = button("publish__preview", "Preview the Hub card", async () => {
+  }), true);
+  const preview = button("publish__preview", "Preview the Hub card", held(async () => {
     const card = zone.querySelector(".publish__card");
     try {
       const done = await onPreview(publishValues(form, selection));
@@ -107,12 +124,16 @@ export function renderPublish(zone, selection, status, { onPreview, onPublish, d
     } catch (error) {
       say(zone.querySelector(".publish__status"), error.message, true);
     }
-  });
+  }));
   zone.querySelector(".publish__actions").append(preview, go);
   const dirty = zone.querySelector(".publish__dirty");
   const allowed = () => !run.dirty || form.elements.namedItem("anyway").checked;
   const signedIn = Boolean(status.preflight.user);
+  function gate() {
+    preview.disabled = pending;
+    go.disabled = pending || !allowed() || !signedIn;
+  }
   dirty.hidden = !run.dirty;
-  go.disabled = !allowed() || !signedIn;
-  form.elements.namedItem("anyway").addEventListener("change", () => { go.disabled = !allowed() || !signedIn; });
+  gate();
+  form.elements.namedItem("anyway").addEventListener("change", gate);
 }

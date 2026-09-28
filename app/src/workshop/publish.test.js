@@ -46,6 +46,31 @@ describe("your code", () => {
     expect(zone.querySelectorAll("button")).toHaveLength(0);
   });
 
+  it("holds the fork and push buttons while git works, and gives them back", async () => {
+    const zone = document.createElement("div");
+    let finish;
+    const onPush = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    renderCode(zone, code("changes", { changes: 1 }), { onFork: vi.fn(), onPush });
+    const push = zone.querySelector(".code__push");
+    push.click();
+    expect(push.disabled).toBe(true);
+    push.click();
+    expect(onPush).toHaveBeenCalledTimes(1);
+    finish();
+    await settle();
+    expect(push.disabled).toBe(false);
+
+    let fail;
+    const onFork = vi.fn(() => new Promise((_, reject) => { fail = reject; }));
+    renderCode(zone, code("not-shared", { gh: false }), { onFork, onPush });
+    const use = zone.querySelector(".code__use");
+    use.click();
+    expect(use.disabled).toBe(true);
+    fail(new Error("not a GitHub repository address"));
+    await settle();
+    expect(use.disabled).toBe(false);
+  });
+
   it("shows why a fork or a push failed, in git's words", async () => {
     const zone = document.createElement("div");
     const onPush = vi.fn(async () => { throw new Error("! [rejected] main -> main (non-fast-forward)"); });
@@ -87,6 +112,41 @@ describe("publishing", () => {
     await settle();
     expect(note.textContent).toBe("publish: boom");
     expect(note.classList.contains("bad")).toBe(true);
+  });
+
+  it("holds Publish and Preview while either call is out, then gives them back", async () => {
+    const zone = document.createElement("div");
+    let finish;
+    const onPublish = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    renderPublish(zone, { run, checkpoint: 1000 }, status, { onPreview: vi.fn(), onPublish });
+    const go = zone.querySelector(".publish__go");
+    const preview = zone.querySelector(".publish__preview");
+    go.click();
+    expect([go.disabled, preview.disabled]).toEqual([true, true]);
+    go.click();
+    expect(onPublish).toHaveBeenCalledTimes(1);
+    finish({ repo: "alice/microduck-x", revision: "a".repeat(40), arena_url: "http://arena.test/" });
+    await settle();
+    expect([go.disabled, preview.disabled]).toEqual([false, false]);
+  });
+
+  it("gives them back after a failed preview, Publish still held for a dirty run", async () => {
+    const zone = document.createElement("div");
+    let fail;
+    const onPreview = vi.fn(() => new Promise((_, reject) => { fail = reject; }));
+    renderPublish(zone, { run: { ...run, dirty: true }, checkpoint: 1000 }, status, { onPreview, onPublish: vi.fn() });
+    const go = zone.querySelector(".publish__go");
+    const preview = zone.querySelector(".publish__preview");
+    preview.click();
+    const anyway = zone.querySelector("input[name=anyway]");
+    anyway.checked = true;
+    anyway.dispatchEvent(new Event("change"));
+    expect([go.disabled, preview.disabled]).toEqual([true, true]); // ticking cannot free Publish mid-call
+    anyway.checked = false;
+    anyway.dispatchEvent(new Event("change"));
+    fail(new Error("publish: boom"));
+    await settle();
+    expect([go.disabled, preview.disabled]).toEqual([true, false]);
   });
 
   it("holds back a dirty run until 'publish anyway' is ticked", () => {

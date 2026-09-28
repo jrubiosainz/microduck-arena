@@ -70,6 +70,21 @@ def test_a_failed_publish_shows_its_whole_output(workshop, fakes, checkout, monk
     assert workshop.opened == []
 
 
+def test_a_publish_while_another_runs_is_refused(workshop, fakes, checkout):
+    """Two uploads of one name would race over ./publish-<name>/ and over the Hub repo."""
+    run = make_run(checkout, "first")
+    publishing = workshop.app.state.workshop.publishing
+    publishing.acquire()  # a publish in flight
+    try:
+        for fields in ({}, {"dry_run": True}):
+            response = _publish(workshop, run, **fields)
+            assert response.status_code == 409 and response.json()["detail"] == "A publish is already running."
+    finally:
+        publishing.release()
+    assert fakes.calls("publish") == []
+    assert _publish(workshop, run).status_code == 200
+
+
 def test_no_speed_order_for_an_event_that_does_not_sweep(checkout):
     from arena.workshop.runs import find_runs
 

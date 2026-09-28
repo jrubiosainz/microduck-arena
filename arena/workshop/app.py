@@ -52,6 +52,8 @@ class Workshop:
     # `_running` before either sets `ws.training`, starting two processes (one an unreachable,
     # still-billed HF job) and racing `write_values`/`commit_all` over the same checkout.
     lock: threading.Lock = field(default_factory=threading.Lock)
+    # One publish or preview at a time: two of one name race over ./publish-<name>/ and the Hub repo.
+    publishing: threading.Lock = field(default_factory=threading.Lock)
 
 
 def preflight(root: Path, hub: Hub) -> dict:
@@ -333,12 +335,16 @@ async def publish_route(body: PublishRequest, request: Request) -> dict:
     repo = repo_for(user, body.name)
     args = (ws.root, run, body.checkpoint, repo, body.name, body.description.strip() or event.title,
             ws.challenge.event, body.allow_dirty)
+    if not ws.publishing.acquire(blocking=False):
+        raise HTTPException(status_code=409, detail="A publish is already running.")
     try:
         if body.dry_run:
             return {"repo": repo, **await run_in_threadpool(preview, *args)}
         published = await run_in_threadpool(publish, *args)
     except PublishError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        ws.publishing.release()
     env = code_url(ws.root, run.provenance.get("commit"))
     link = arena_link(ws.arena, ws.challenge.event, repo, published["revision"], env)
     ws.open_browser(link)  # the Arena's page, pre-filled: the user clicks Publish there
