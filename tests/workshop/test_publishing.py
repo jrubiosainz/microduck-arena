@@ -31,7 +31,7 @@ def test_publishing_is_public_pins_the_commit_and_opens_the_arena(workshop, fake
     assert call[3:7] == ["--run", str(run), "--checkpoint", "1"]
     assert {"--no-private", "--force"} <= set(call)
     assert call[call.index("--repo") + 1] == "alice/microduck-my-walker"
-    assert call[call.index("--description") + 1] == "2 m Sprint"
+    assert "--description=2 m Sprint" in call and "--name=my-walker" in call
     assert call[call.index("--twist-help") + 1] == SPEED_TWIST
     assert body["revision"] == AAA and body["env"] is None
     link = urlsplit(body["arena_url"])
@@ -94,6 +94,14 @@ def test_no_speed_order_for_an_event_that_does_not_sweep(checkout):
     assert "--twist-help" not in swag
     sprint = publish_args(run, 1, "alice/microduck-x", "x", "d", load_event("sprint-2m"), False)
     assert "--twist-help" in sprint
+
+
+def test_a_description_that_starts_with_a_dash_is_not_taken_for_an_option(workshop, fakes, checkout):
+    """`--description -fast` reads as a flag of its own to publish's parser; `--description=-fast` cannot."""
+    run = make_run(checkout, "first")
+    assert _publish(workshop, run, description="- fast and low").status_code == 200
+    (call,) = fakes.calls("publish")
+    assert "--description=- fast and low" in call
 
 
 def test_slugs_are_what_a_hub_repo_name_accepts():

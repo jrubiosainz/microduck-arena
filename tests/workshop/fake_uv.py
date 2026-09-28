@@ -22,7 +22,13 @@ from pathlib import Path
 
 
 def flag(argv, name, default=None):
-    return argv[argv.index(name) + 1] if name in argv else default
+    """`name value` or `name=value`, as an argparse-style parser reads either."""
+    for i, arg in enumerate(argv):
+        if arg == name:
+            return argv[i + 1]
+        if arg.startswith(f"{name}="):
+            return arg.removeprefix(f"{name}=")
+    return default
 
 
 def train(argv):
