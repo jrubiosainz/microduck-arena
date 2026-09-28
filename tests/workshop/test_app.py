@@ -1,6 +1,7 @@
 """The page's server: what it says about the checkout and the machine, before anything runs."""
 
 from arena.workshop.app import create_workshop_app
+from tests.workshop.conftest import ADDRESS, PORT, git
 
 
 def test_status_names_the_challenge_its_recipe_knobs_and_event(workshop):
@@ -44,8 +45,6 @@ def test_a_refused_token_says_why(workshop, hub):
 
 
 def test_git_without_a_name_on_commits_is_flagged(workshop, checkout, monkeypatch, tmp_path):
-    from tests.workshop.conftest import git
-
     git(checkout, "config", "--unset", "user.email")
     monkeypatch.setenv("HOME", str(tmp_path))  # no global identity either
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
@@ -60,8 +59,8 @@ def test_the_page_is_served_from_the_built_site(checkout, fakes, hub, tmp_path):
     site = tmp_path / "site"
     site.mkdir()
     (site / "workshop.html").write_text("<html>workshop</html>")
-    app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub, frontend_dir=site)
-    assert TestClient(app).get("/").text == "<html>workshop</html>"
+    app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub, PORT, frontend_dir=site)
+    assert TestClient(app, base_url=ADDRESS).get("/").text == "<html>workshop</html>"
 
 
 def test_the_api_wins_over_the_static_mount(checkout, fakes, hub, tmp_path):
@@ -72,11 +71,37 @@ def test_the_api_wins_over_the_static_mount(checkout, fakes, hub, tmp_path):
     site = tmp_path / "site"
     site.mkdir()
     (site / "workshop.html").write_text("<html>workshop</html>")
-    app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub, frontend_dir=site)
-    assert TestClient(app).get("/api/workshop/status").status_code == 200
+    app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub, PORT, frontend_dir=site)
+    assert TestClient(app, base_url=ADDRESS).get("/api/workshop/status").status_code == 200
 
 
 def test_without_a_built_site_the_page_says_how_to_build_it(workshop):
     response = workshop.get("/")
     assert response.status_code == 503
     assert "npm run build" in response.text
+
+
+def test_a_request_under_another_hosts_name_is_refused(workshop):
+    """A DNS-rebinding page re-points its own name at 127.0.0.1: the Host header still says its name."""
+    for host in ("attacker.example", "attacker.example:8765", "127.0.0.1:9999"):
+        assert workshop.get("/api/workshop/status", headers={"Host": host}).status_code == 403
+
+
+def test_the_workshop_answers_to_both_names_of_its_own_address(workshop):
+    for host in ("127.0.0.1:8765", "localhost:8765"):
+        assert workshop.get("/api/workshop/status", headers={"Host": host}).status_code == 200
+
+
+def test_a_post_from_another_site_is_refused(workshop, checkout):
+    """Any page the user visits can POST here without a CORS preflight (no body, or a text/plain
+    one); the browser names the page it came from in Origin."""
+    (checkout / "mine.py").write_text("# mine\n")
+    for origin in ("https://evil.example", "null", "http://127.0.0.1:9999"):
+        assert workshop.post("/api/workshop/code/push", headers={"Origin": origin}).status_code == 403
+    assert git(checkout, "log", "-1", "--format=%s") == "the challenges"  # nothing committed, nothing pushed
+
+
+def test_a_post_from_the_page_itself_or_from_no_page_goes_through(workshop):
+    # 409: nothing is running — the guard let it reach the route.
+    for headers in ({"Origin": "http://127.0.0.1:8765"}, {"Origin": "http://localhost:8765"}, {}):
+        assert workshop.post("/api/workshop/train/stop", headers=headers).status_code == 409

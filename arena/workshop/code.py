@@ -28,9 +28,13 @@ def _remote(root: Path, name: str) -> str | None:
     return git(root, "config", "--get", f"remote.{name}.url", check=False) or None
 
 
+def _pollens(repo: tuple[str, str] | None) -> bool:
+    return repo is not None and repo[0].lower() == UPSTREAM_OWNER  # GitHub owners ignore case
+
+
 def _fork(root: Path) -> tuple[str, str] | None:
     repo = github_repo(_remote(root, "origin"))
-    return repo if repo and repo[0] != UPSTREAM_OWNER else None
+    return repo if repo and not _pollens(repo) else None
 
 
 def code_state(root: Path) -> dict:
@@ -56,6 +60,8 @@ def code_state(root: Path) -> dict:
 
 
 def push(root: Path, message: str) -> str:
+    if _pollens(github_repo(_remote(root, "origin"))):
+        raise ShellError("Fork first: your code goes to your fork, not Pollen's repo.")
     commit_all(root, message)
     return git(root, "push", "-u", "origin", "HEAD")
 
@@ -78,8 +84,11 @@ def fork(root: Path, url: str | None, message: str) -> str:
             if done.returncode != 0:
                 raise ShellError(f"$ gh repo fork --remote\n{done.stdout}{done.stderr}")
     else:
-        if github_repo(url.strip()) is None:
+        repo = github_repo(url.strip())
+        if repo is None:
             raise ShellError(f"{url} is not a GitHub repository address (https://github.com/<you>/<name>).")
+        if _pollens(repo):
+            raise ShellError(f"{url} is Pollen's repository: paste the address of your fork (https://github.com/<you>/<name>).")
         if already_forked:
             git(root, "remote", "set-url", "origin", url.strip())
         else:

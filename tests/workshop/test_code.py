@@ -2,7 +2,7 @@
 
 import pytest
 
-from tests.workshop.conftest import git
+from tests.workshop.conftest import UPSTREAM, git
 
 
 def _state(workshop):
@@ -40,6 +40,28 @@ def test_an_address_that_is_not_github_is_refused(workshop, monkeypatch):
     monkeypatch.setenv("FAKE_GH_LOGGED_OUT", "1")
     response = workshop.post("/api/workshop/code/fork", json={"url": "https://evil.example/alice/x"})
     assert response.status_code == 400
+
+
+def test_nothing_is_pushed_to_pollens_repo(workshop, checkout, remotes):
+    """Before a fork, origin is still Pollen's: a push (the page never offers one then, but the
+    API can be called) must not commit and push the user's work there."""
+    (checkout / "src" / "microduck_challenges" / "sprint_2m" / "rewards.py").write_text("# mine\n")
+    upstream = remotes / "pollen-robotics" / "microduck-challenges"
+    before = git(upstream, "rev-parse", "main")
+    response = workshop.post("/api/workshop/code/push")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Fork first: your code goes to your fork, not Pollen's repo."
+    assert git(upstream, "rev-parse", "main") == before
+    assert git(checkout, "status", "--porcelain")  # not even committed
+
+
+@pytest.mark.parametrize("url", [UPSTREAM, "https://github.com/Pollen-Robotics/microduck-challenges.git"])
+def test_pollens_own_address_is_not_taken_for_a_fork(workshop, checkout, monkeypatch, url):
+    monkeypatch.setenv("FAKE_GH_LOGGED_OUT", "1")
+    response = workshop.post("/api/workshop/code/fork", json={"url": url})
+    assert response.status_code == 400 and "your fork" in response.json()["detail"]
+    assert git(checkout, "config", "--get", "remote.origin.url") == UPSTREAM
+    assert git(checkout, "remote") == "origin"  # no upstream: nothing renamed
 
 
 def test_changes_not_online_are_counted_then_pushed(workshop, checkout, remotes):

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -305,16 +305,41 @@ async def publish_route(body: PublishRequest, request: Request) -> dict:
     return {**published, "env": env, "arena_url": link}
 
 
+def _only_its_own_page(app: FastAPI, port: int) -> None:
+    """Every request must come to this workshop, by its own address, and every write from its own page.
+
+    Listening on 127.0.0.1 keeps other machines out, not the pages this machine's browser has open.
+    A page re-pointing its own name at 127.0.0.1 (DNS rebinding) could read and write the API as
+    same-origin, but its requests carry its name in Host. Any page can POST here across origins
+    without a CORS preflight (no body, or a text/plain one) — a git push, a stop — but the browser
+    names that page in Origin.
+    """
+    hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    origins = {f"http://{host}" for host in hosts}
+
+    @app.middleware("http")
+    async def refuse_other_pages(request: Request, call_next):
+        if request.headers.get("host") not in hosts:
+            return JSONResponse({"detail": f"The workshop answers only at http://127.0.0.1:{port}/."}, status_code=403)
+        origin = request.headers.get("origin")
+        if request.method not in ("GET", "HEAD") and origin is not None and origin not in origins:
+            return JSONResponse({"detail": "Only the workshop's own page can change anything here."}, status_code=403)
+        return await call_next(request)
+
+
 def create_workshop_app(
     root: Path,
     challenge: Challenge,
     arena: str,
     hub: Hub,
+    port: int,
     frontend_dir: Path | None = None,
     open_browser=webbrowser.open,
 ) -> FastAPI:
+    """`port` is the one the workshop serves on, on 127.0.0.1: requests must name it."""
     app = FastAPI(title="Microduck workshop", docs_url=None, redoc_url=None)
     app.state.workshop = Workshop(root, challenge, arena, hub, open_browser)
+    _only_its_own_page(app, port)
     app.include_router(router)
 
     if frontend_dir is None:

@@ -27,6 +27,8 @@ HERE = Path(__file__).resolve().parent
 PROBE = HERE.parent / "fixtures" / "workshop" / "events.out.tfevents.probe"
 REFERENCE = ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"
 UPSTREAM = "https://github.com/pollen-robotics/microduck-challenges"
+PORT = 8765
+ADDRESS = f"http://127.0.0.1:{PORT}"  # where the workshop serves, as its page's requests name it
 
 SPRINT = """\
 # The 2 m Sprint.
@@ -156,8 +158,8 @@ def hub():
 @pytest.fixture
 def workshop(checkout, fakes, hub):
     opened = []
-    app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub,
+    app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub, PORT,
                               open_browser=opened.append)
-    client = TestClient(app)
+    client = TestClient(app, base_url=ADDRESS)
     client.opened = opened
     return client

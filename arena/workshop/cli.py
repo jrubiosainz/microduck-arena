@@ -57,7 +57,7 @@ def main(argv=None) -> int:
 
     site = default_frontend(Path(__file__).resolve().parents[1])
     app = create_workshop_app(
-        root, chosen, args.arena.rstrip("/"), Hub(), site if (site / "workshop.html").is_file() else None
+        root, chosen, args.arena.rstrip("/"), Hub(), args.port, site if (site / "workshop.html").is_file() else None
     )
     url = f"http://127.0.0.1:{args.port}/"
     print(f"{chosen.event} workshop: {url}  (Ctrl-C to close it)")
