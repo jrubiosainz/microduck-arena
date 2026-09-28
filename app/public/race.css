@@ -255,7 +255,6 @@ button.link {
   list-style: none;
 }
 .train__open::-webkit-details-marker { display: none; }
-.train__open:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
 .train[open] .train__open { margin-bottom: 4px; }
 .train__need, .train__step, .train__note { margin: 0; font-size: 0.85rem; }
 .train__note { color: var(--ink-70); }
@@ -727,6 +726,8 @@ table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 .entry__actions button:focus-visible,
 .entry__signin:focus-visible,
 .entry__speed select:focus-visible,
+.train__open:focus-visible,
+.train__copy:focus-visible,
 table.board .grab a:focus-visible,
 table.board .env a:focus-visible,
 table.board .withdraw:focus-visible,
