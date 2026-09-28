@@ -34,3 +34,15 @@ uv run publish --run logs/rsl_rl/sprint_2m/<the run> --repo <you>/microduck-firs
 
 Then enter `<you>/microduck-first` on the challenge's page. The Arena expects 61
 observations, 14 actions and a file no larger than 64 MiB; `publish` checks all three.
+
+## Already have an `.onnx`
+
+A file alone can only be tested on a challenge's page. To enter it, publish it to a
+Hugging Face model repo, then enter that repo on the challenge's page:
+
+```bash
+uv run publish --onnx policy.onnx --repo <you>/microduck-<name> --kind perpetual --no-private
+```
+
+For a roller challenge, add `--accessories rollers`. Any public model repo holding the
+file works too.

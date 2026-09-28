@@ -20,6 +20,14 @@ describe("public guides", () => {
     expect(root.querySelector('a[href*="roller-sprint"]')).toBeNull();
   });
 
+  it("tells someone who already has an .onnx how to enter it", () => {
+    const root = show("train-a-policy");
+    const commands = [...root.querySelectorAll("pre code")].map(node => node.textContent).join("\n");
+    expect(commands).toContain(
+      "uv run publish --onnx policy.onnx --repo <you>/microduck-<name> --kind perpetual --no-private");
+    expect(root.textContent).toMatch(/A file alone can only be tested/);
+  });
+
   it("gives general help no navigation of its own: the strip's mark is the way back", () => {
     for (const id of ["index", "train-a-policy", "points"]) {
       const root = show(id);
