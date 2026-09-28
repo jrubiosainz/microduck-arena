@@ -18,6 +18,7 @@ from ..live import Programme, pool
 from ..manifest import all_events
 from .config import ArenaConfig
 from .routes_auth import router as auth_router
+from .routes_launcher import router as launcher_router
 from .routes_live import now_ms
 from .routes_live import router as live_router
 from .routes_read import router as read_router
@@ -164,6 +165,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.include_router(vote_router)
     app.include_router(unfurl_router)
     app.include_router(live_router)
+    app.include_router(launcher_router)
 
     if config.frontend_dir is None:
         @app.get("/")
