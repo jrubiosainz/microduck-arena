@@ -5,6 +5,7 @@ import mujoco
 import numpy as np
 import pytest
 
+from arena.actuator import ARMATURE, FORCE_LIMIT, SOLIMP_FRICTION, SOLREF_FRICTION
 from arena.constants import DEFAULT_POSE, JOINT_NAMES, TIMESTEP
 from arena.course import (
     SPAWN_HEIGHT_M,
@@ -120,6 +121,60 @@ def test_a_sloped_course_is_tilted_by_the_angle_it_declares():
     # surface, not buried in it.
     normal = rotation @ np.array([0.0, 0.0, 1.0])
     assert float(normal @ data.qpos[0:3]) == pytest.approx(SPAWN_HEIGHT_M, abs=1e-6)
+
+
+def test_the_fourteen_servos_are_torque_motors():
+    for event_id in ("sprint-2m", "roller-sprint-2m"):
+        model = compile_course(load_event(event_id))
+        for name in JOINT_NAMES:
+            act = model.actuator(name)
+            assert model.actuator_gaintype[act.id] == mujoco.mjtGain.mjGAIN_FIXED, event_id
+            assert model.actuator_gainprm[act.id][0] == pytest.approx(1.0), event_id
+            assert model.actuator_biastype[act.id] == mujoco.mjtBias.mjBIAS_NONE, event_id
+            assert model.actuator_forcerange[act.id] == pytest.approx(
+                (-FORCE_LIMIT, FORCE_LIMIT)
+            ), event_id
+            assert model.actuator_ctrllimited[act.id] == 0, event_id
+
+
+def test_the_fourteen_joints_carry_bams_parameters():
+    model = compile_course(load_event("sprint-2m"))
+    for name in JOINT_NAMES:
+        dof = int(model.joint(name).dofadr[0])
+        assert model.dof_armature[dof] == pytest.approx(ARMATURE), name
+        assert model.dof_damping[dof] == pytest.approx(0.0), name
+        assert model.dof_frictionloss[dof] == pytest.approx(0.0), name
+        assert model.dof_solref[dof] == pytest.approx(SOLREF_FRICTION), name
+        assert model.dof_solimp[dof] == pytest.approx(SOLIMP_FRICTION), name
+
+
+def test_passive_wheels_are_untouched():
+    m = dataclasses.replace(load_event("roller-sprint-2m"), id="roller-probe")
+    model = compile_course(m)
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("STAND").id)
+    for name in ("passive_LF_wheel", "passive_LR_wheel", "passive_RF_wheel", "passive_RR_wheel"):
+        joint = model.joint(name)
+        dof = int(joint.dofadr[0])
+        assert model.dof_damping[dof] == pytest.approx(0.0), name
+        assert model.dof_frictionloss[dof] == pytest.approx(0.0), name
+        assert model.dof_armature[dof] == pytest.approx(1e-4), name
+        with pytest.raises(KeyError):
+            model.actuator(name)
+        assert data.qpos[int(joint.qposadr[0])] == pytest.approx(0.0), name
+
+
+def test_the_keyframe_holds_no_control():
+    model = compile_course(load_event("sprint-2m"))
+    key = model.key("STAND")
+    np.testing.assert_allclose(model.key_ctrl[key.id], np.zeros(14))
+
+
+def test_the_solver_is_trainings():
+    model = compile_course(load_event("sprint-2m"))
+    assert model.opt.integrator == mujoco.mjtIntegrator.mjINT_IMPLICITFAST
+    assert model.opt.iterations == 10
+    assert model.opt.ls_iterations == 20
 
 
 def test_the_served_walls_are_the_walls_the_physics_compiles():

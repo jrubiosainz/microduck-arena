@@ -4,7 +4,10 @@ Mirrors buildPhysicsXml() in the sandbox's app/src/game/game.js: strip visual
 geoms, prune the meshes they were the only user of, pin the timestep, inject a
 floor and a STAND keyframe. Differences, all deliberate: a lane instead of a
 square arena, and no ball, props or terrain — nothing in an official run may
-depend on scenery.
+depend on scenery. The vendored MJCF still describes the sandbox's
+position-servo robot; `compile_course` converts the 14 actuated joints to the
+torque motors `arena.actuator` drives, so the built XML and the compiled
+model disagree on purpose.
 """
 
 import math
@@ -13,6 +16,7 @@ import xml.etree.ElementTree as ET
 import mujoco
 import numpy as np
 
+from .actuator import ARMATURE, FORCE_LIMIT, SOLIMP_FRICTION, SOLREF_FRICTION
 from .assets import ASSET_ROOT
 from .constants import DEFAULT_POSE, JOINT_NAMES, TIMESTEP
 from .manifest import Manifest
@@ -119,7 +123,9 @@ def _inject_keyframe(root: ET.Element, manifest: Manifest) -> None:
     qpos must cover every joint in document order: the 14 actuated hinges take
     DEFAULT_POSE by name, anything else (the roller rig's four passive wheels)
     starts at zero. Matching by name rather than position is what makes one
-    keyframe builder work for both rigs.
+    keyframe builder work for both rigs. The 14 servos are torque motors
+    driven by `arena.actuator`, so the keyframe holds no command: ctrl is
+    zeros.
     """
     slope = manifest.course.slope_deg
     spawn = ramp_normal(slope) * SPAWN_HEIGHT_M
@@ -135,7 +141,7 @@ def _inject_keyframe(root: ET.Element, manifest: Manifest) -> None:
         "key",
         name=manifest.start.keyframe,
         qpos=free + " " + " ".join(str(v) for v in joints),
-        ctrl=" ".join(str(v) for v in DEFAULT_POSE),
+        ctrl=" ".join("0.0" for _ in JOINT_NAMES),
     )
 
 
@@ -162,5 +168,30 @@ def build_course_xml(manifest: Manifest) -> tuple[str, dict[str, bytes]]:
 
 
 def compile_course(manifest: Manifest) -> mujoco.MjModel:
+    """Compile the event's model with the 14 servos as BAM torque motors.
+
+    The vendored MJCF (`build_course_xml`) still describes MuJoCo position
+    servos; converting to motors here, as training's `bam.mjlab.BamActuator.
+    edit_spec` does, is what lets `arena.actuator.Servos` drive them with real
+    torque instead of the sandbox's position gain.
+    """
     xml, assets = build_course_xml(manifest)
-    return mujoco.MjModel.from_xml_string(xml, assets)
+    spec = mujoco.MjSpec.from_string(xml, assets=assets)
+    for act in spec.actuators:
+        act.set_to_motor()
+        act.forcelimited = True
+        act.forcerange = (-FORCE_LIMIT, FORCE_LIMIT)
+        act.ctrllimited = False
+        act.gear = [1.0, 0, 0, 0, 0, 0]
+    for joint in spec.joints:
+        if joint.name in JOINT_NAMES:
+            joint.armature = ARMATURE
+            joint.damping = np.zeros((3, 1))
+            joint.frictionloss = 0.0
+            joint.solref_friction = SOLREF_FRICTION
+            joint.solimp_friction = SOLIMP_FRICTION
+    model = spec.compile()
+    model.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
+    model.opt.iterations = 10
+    model.opt.ls_iterations = 20
+    return model
