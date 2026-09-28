@@ -1,9 +1,9 @@
 """The workshop's world, played locally: a microduck-challenges checkout in a temp dir, GitHub as
 bare repos (https://github.com/<owner>/<name> is rewritten to them with url.insteadOf), and fake
-`uv` and `gh` first on PATH. The real git runs everything git."""
+`uv` and `gh` on a PATH that holds nothing else — a symlink stands in for the real git, so a
+machine's other neighbours of git (an nvidia-smi on a training box, say) are never picked up."""
 
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -101,8 +101,8 @@ def fakes(tmp_path, monkeypatch, remotes):
         target = bin_dir / tool
         target.write_text(f"#!{sys.executable}\n" + (HERE / source).read_text())
         target.chmod(0o755)
-    real_git = Path(shutil.which("git")).parent
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{real_git}")
+    (bin_dir / "git").symlink_to(shutil.which("git"))
+    monkeypatch.setenv("PATH", str(bin_dir))
     log = tmp_path / "uv-calls.jsonl"
     monkeypatch.setenv("FAKE_UV_LOG", str(log))
     monkeypatch.setenv("FAKE_HUB", str(tmp_path / "hub"))

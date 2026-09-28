@@ -83,7 +83,7 @@ def login(body: Token, request: Request) -> dict:
     ws = _workshop(request)
     try:
         ws.hub.login(body.token.strip())
-    except Exception as exc:  # noqa: BLE001 — the Hub's own sentence is the useful part
+    except Exception as exc:  # the Hub's own sentence is the useful part
         raise HTTPException(status_code=400, detail=f"Hugging Face refused this token: {exc}") from exc
     return {"user": ws.hub.whoami()}
 

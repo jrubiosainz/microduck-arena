@@ -64,6 +64,18 @@ def test_the_page_is_served_from_the_built_site(checkout, fakes, hub, tmp_path):
     assert TestClient(app).get("/").text == "<html>workshop</html>"
 
 
+def test_the_api_wins_over_the_static_mount(checkout, fakes, hub, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from arena.workshop.challenges import open_challenges
+
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "workshop.html").write_text("<html>workshop</html>")
+    app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub, frontend_dir=site)
+    assert TestClient(app).get("/api/workshop/status").status_code == 200
+
+
 def test_without_a_built_site_the_page_says_how_to_build_it(workshop):
     response = workshop.get("/")
     assert response.status_code == 503
