@@ -22,7 +22,9 @@ from ..manifest import load_event
 from ..policy import PolicyError
 from ..web.routes_read import event_summary
 from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write_values
+from .code import code_state, code_url, fork, push
 from .hub import Hub
+from .publishing import PublishError, arena_link, preview, publish, repo_for
 from .runs import curve, find_run, find_runs
 from .shell import ShellError, commit_all, gh_ready, git
 from .training import Training, ckpt_repo, train_command
@@ -230,6 +232,77 @@ async def run_trial(run_id: str, body: TrialRequest, request: Request) -> dict:
         return await run_in_threadpool(trial, ws.root, run, body.checkpoint, ws.challenge.event)
     except (TrialError, PolicyError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class ForkRequest(BaseModel):
+    url: str | None = None
+
+
+def _code(ws: Workshop, output: str = "") -> dict:
+    return {**code_state(ws.root), "output": output}
+
+
+@router.get("/code")
+def code(request: Request) -> dict:
+    return _code(_workshop(request))
+
+
+@router.post("/code/fork")
+def code_fork(body: ForkRequest, request: Request) -> dict:
+    ws = _workshop(request)
+    try:
+        return _code(ws, fork(ws.root, body.url, f"{ws.challenge.event}: my changes"))
+    except ShellError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/code/push")
+def code_push(request: Request) -> dict:
+    ws = _workshop(request)
+    try:
+        return _code(ws, push(ws.root, f"{ws.challenge.event}: my changes"))
+    except ShellError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class PublishRequest(BaseModel):
+    run: str
+    checkpoint: int
+    name: str
+    description: str = ""
+    allow_dirty: bool = False
+    dry_run: bool = False
+
+
+@router.post("/publish")
+async def publish_route(body: PublishRequest, request: Request) -> dict:
+    ws = _workshop(request)
+    run = _run_or_404(ws, body.run)
+    if body.checkpoint not in run.checkpoints:
+        raise HTTPException(status_code=400, detail=f"{run.id} has no model_{body.checkpoint}.pt")
+    if run.provenance.get("dirty") and not body.allow_dirty:
+        raise HTTPException(
+            status_code=400,
+            detail="This run started from uncommitted changes, so the code it records is not what "
+                   "trained it. Train again from the workshop (it commits first), or publish anyway.",
+        )
+    user = ws.hub.whoami()
+    if not user:
+        raise HTTPException(status_code=400, detail="Log in to Hugging Face first (Preflight).")
+    event = load_event(ws.challenge.event)
+    repo = repo_for(user, body.name)
+    args = (ws.root, run, body.checkpoint, repo, body.name, body.description.strip() or event.title,
+            ws.challenge.event, body.allow_dirty)
+    try:
+        if body.dry_run:
+            return {"repo": repo, **await run_in_threadpool(preview, *args)}
+        published = await run_in_threadpool(publish, *args)
+    except PublishError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    env = code_url(ws.root, run.provenance.get("commit"))
+    link = arena_link(ws.arena, ws.challenge.event, repo, published["revision"], env)
+    ws.open_browser(link)  # the Arena's page, pre-filled: the user clicks Publish there
+    return {**published, "env": env, "arena_url": link}
 
 
 def create_workshop_app(
