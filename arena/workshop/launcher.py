@@ -51,7 +51,9 @@ def hf_token() -> str | None:
 
 def main() -> None:
     root = checkout(Path.cwd())
-    env = dict(os.environ)
+    # uv runs this script in a throwaway environment and says so in VIRTUAL_ENV; left there,
+    # the `uv run` below warns that it does not match the checkout's .venv.
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     if token := hf_token():
         env["HF_TOKEN"] = token
     os.chdir(root)

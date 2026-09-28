@@ -46,7 +46,8 @@ import json, os, sys
 from pathlib import Path
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps({{"tool": "{tool}", "argv": sys.argv[1:], "cwd": os.getcwd(),
-                          "hf_token": os.environ.get("HF_TOKEN")}}) + "\n")
+                          "hf_token": os.environ.get("HF_TOKEN"),
+                          "virtual_env": os.environ.get("VIRTUAL_ENV")}}) + "\n")
 if "{tool}" == "git" and sys.argv[1] == "clone":
     (Path(sys.argv[3]) / "src" / "microduck_challenges").mkdir(parents=True)
 '''
@@ -102,3 +103,12 @@ def test_the_saved_hub_token_reaches_uv(tmp_path):
     (clone / "src" / "microduck_challenges").mkdir(parents=True)
     (uv,) = _launch(tmp_path, clone, "sprint-2m", env={"HF_HOME": str(hf_home)})
     assert uv["hf_token"] == "hf_saved"
+
+
+def test_uv_does_not_inherit_the_scripts_throwaway_environment(tmp_path):
+    """`uv run <url>` sets VIRTUAL_ENV to the script's own environment; passed on, the `uv run`
+    in the checkout warns that it does not match .venv — the first thing a novice would read."""
+    clone = tmp_path / "clone"
+    (clone / "src" / "microduck_challenges").mkdir(parents=True)
+    (uv,) = _launch(tmp_path, clone, "sprint-2m", env={"VIRTUAL_ENV": str(tmp_path / "throwaway")})
+    assert uv["virtual_env"] is None
