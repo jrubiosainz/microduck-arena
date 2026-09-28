@@ -238,10 +238,20 @@ def test_the_actor_sees_joint_velocity_one_step_old(sprint):
     last_action, prev_qvel = _step(
         model, data, policy, adr, command, last_action, prev_qvel, servos
     )
+    qvel_before_second_substeps = data.qvel[adr.dof].copy()
+    last_action, prev_qvel = _step(
+        model, data, policy, adr, command, last_action, prev_qvel, servos
+    )
     _step(model, data, policy, adr, command, last_action, prev_qvel, servos)
 
-    assert len(policy.observed) == 2
+    assert len(policy.observed) == 3
     np.testing.assert_array_equal(policy.observed[1][20:34], qvel_before_first_substeps)
+    # The reset qvel above is zero, so step 1 alone cannot tell "one step old"
+    # from "never updated"; step 2 sees a joint velocity that is not zero.
+    assert qvel_before_second_substeps.any()
+    np.testing.assert_array_equal(
+        policy.observed[2][20:34], qvel_before_second_substeps.astype(np.float32)
+    )
 
 
 def test_a_control_step_drives_the_servos_a_fifth_time_before_its_forward_pass(sprint):

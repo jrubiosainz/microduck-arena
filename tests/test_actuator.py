@@ -70,28 +70,21 @@ def test_force_limit_is_the_top_of_the_voltage_range():
     assert A.FORCE_LIMIT == pytest.approx(8.2 * A.KT / A.R)
 
 
-# --- Servos: a tiny one-hinge, one-motor MuJoCo model built in the test ---
-
-_TINY_XML = """
-<mujoco>
-  <worldbody>
-    <body>
-      <joint name="j" type="hinge" axis="0 0 1"/>
-      <geom type="sphere" size="0.01"/>
-    </body>
-  </worldbody>
-  <actuator>
-    <motor name="j" joint="j" gear="1 0 0 0 0 0"/>
-  </actuator>
-</mujoco>
-"""
+# --- Servos: a tiny model built in the test, one free hinge and one motor per joint ---
 
 
-def _tiny_servo():
-    spec = mujoco.MjSpec.from_string(_TINY_XML)
+def _tiny_servo(joints=1):
+    bodies = "".join(
+        f'<body><joint name="j{i}" type="hinge" axis="0 0 1"/><geom type="sphere" size="0.01"/></body>'
+        for i in range(joints)
+    )
+    motors = "".join(f'<motor name="j{i}" joint="j{i}" gear="1 0 0 0 0 0"/>' for i in range(joints))
+    spec = mujoco.MjSpec.from_string(
+        f"<mujoco><worldbody>{bodies}</worldbody><actuator>{motors}</actuator></mujoco>"
+    )
     model = spec.compile()
-    dof = np.array([model.joint("j").dofadr[0]])
-    act_ids = np.array([model.actuator("j").id])
+    dof = np.array([model.joint(f"j{i}").dofadr[0] for i in range(joints)])
+    act_ids = np.array([model.actuator(f"j{i}").id for i in range(joints)])
     return model, dof, act_ids
 
 
@@ -150,27 +143,46 @@ def test_lag_stays_within_three_to_six():
         prev_tau = expected
 
 
-def test_voltage_sags_with_load_and_floors():
+def test_voltage_sags_with_load():
     model, dof, act_ids = _tiny_servo()
     data = mujoco.MjData(model)
     rng = np.random.default_rng(0)
     servos = Servos(model, dof, act_ids, rng)
 
-    # A huge target saturates the current limiter (q=dq=0 throughout, since
-    # mj_step is never called), so the ring being uniform means the applied
-    # target is the same regardless of the drawn lag, and tau1 is pinned to
-    # KT*MAX_CURRENT independently of vin.
-    big_target = np.array([5.0])
-    servos.drive(data, big_target)
+    # 1 rad of error stays inside the current window at any voltage in range
+    # (duty ~0.58, window >= 0.82), so the torque is proportional to vin and
+    # shows the sag; a saturating target would not — the limiter pins it at
+    # KT*MAX_CURRENT whatever the voltage. q=dq=0 throughout (mj_step is never
+    # called), and the ring is uniform, so the drawn lag does not matter.
+    target, still = np.array([1.0]), np.zeros(1)
+    servos.drive(data, target)
     tau1 = data.ctrl[act_ids].copy()
-    assert tau1 == pytest.approx([A.KT * A.MAX_CURRENT])
+    assert tau1 == pytest.approx(A.control_torque(target, still, still, A.VIN_NOMINAL))
 
-    servos.drive(data, big_target)
-    tau2 = data.ctrl[act_ids].copy()
+    servos.drive(data, target)
+    vin2 = A.VIN_NOMINAL - A.VIN_DROP_GAIN * abs(tau1[0])
+    assert data.ctrl[act_ids] == pytest.approx(A.control_torque(target, still, still, vin2))
+    assert data.ctrl[act_ids][0] < tau1[0]
 
-    vin2 = max(A.VIN_NOMINAL - A.VIN_DROP_GAIN * np.abs(tau1).sum(), A.VIN_MIN)
-    expected2 = A.control_torque(big_target, np.zeros(1), np.zeros(1), vin2)
-    assert tau2 == pytest.approx(expected2)
+
+def test_voltage_floors_at_six_volts():
+    """Thirty joints each drawing ~0.55 N·m would sag the supply to ~5.7 V;
+    it stops at the 6.0 V floor."""
+    model, dof, act_ids = _tiny_servo(joints=30)
+    data = mujoco.MjData(model)
+    rng = np.random.default_rng(0)
+    servos = Servos(model, dof, act_ids, rng)
+
+    target, still = np.full(30, 1.0), np.zeros(30)
+    servos.drive(data, target)
+    tau1 = data.ctrl[act_ids].copy()
+    assert A.VIN_NOMINAL - A.VIN_DROP_GAIN * np.abs(tau1).sum() < 6.0
+
+    servos.drive(data, target)
+    assert A.VIN_MIN == 6.0
+    np.testing.assert_allclose(
+        data.ctrl[act_ids], A.control_torque(target, still, still, 6.0), rtol=1e-12
+    )
 
 
 def test_drive_reads_qpos_not_the_stale_actuator_length():
@@ -180,7 +192,7 @@ def test_drive_reads_qpos_not_the_stale_actuator_length():
     once per substep and must track the joint's real, current position, as
     training does (data.qpos), not that stale cache."""
     model, dof, act_ids = _tiny_servo()
-    qpos_adr = model.joint("j").qposadr[0]
+    qpos_adr = model.joint("j0").qposadr[0]
     data = mujoco.MjData(model)
     rng = np.random.default_rng(0)
     servos = Servos(model, dof, act_ids, rng)
