@@ -2,6 +2,7 @@ id           = "swag-contest"
 order        = 15
 title        = "MicroDuck Got a Talent"
 category     = "showcase"
+kind         = "perpetual"
 rig          = "legs"
 time_limit_s = 50.0
 metric       = "votes"

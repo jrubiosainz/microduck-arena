@@ -2,6 +2,7 @@ id           = "sprint-2m"
 order        = 10
 title        = "2 m Sprint"
 category     = "race"
+kind         = "perpetual"
 rig          = "legs"
 time_limit_s = 50.0
 metric       = "mean_finish_time"

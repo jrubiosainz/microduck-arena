@@ -19,6 +19,13 @@ RIGS = ("legs", "rollers")
 # a course, a showcase is judged by vote rather than measured at all.
 CATEGORIES = {"race", "showcase"}
 METRICS = ("mean_finish_time", "votes")
+
+# What an entry must be, in the policy manifest's own words
+# (mjlab_microduck.publish.manifest.KINDS): `perpetual` runs until told
+# otherwise, `episodic` ends itself. The Space refuses a policy whose
+# manifest.json names another kind than its event's (arena/hub_fetch.py).
+KINDS = ("episodic", "perpetual")
+
 COURSE_KINDS = ("lane",)
 
 # The voting page has exactly this many colours to hand a lane: LANE_CSS (and
@@ -158,6 +165,9 @@ class Manifest:
     # "race" or "showcase". Presentation only: the front page
     # labels and colours a flyer by it. Nothing that scores a run may read it.
     category: str
+    # "perpetual" or "episodic": the kind of policy this event races. Checked
+    # against an entry's manifest.json; a policy's own contract, not a score input.
+    kind: str
     # Where this sits on the programme. Declared rather than derived, because
     # neither alphabetical nor filesystem order is the order a person wants to
     # read a race card in. Lower is earlier; ties fall back to the title.
@@ -268,6 +278,9 @@ def load_manifest(path: Path) -> Manifest:
         raise ManifestError(
             f"{path}: unknown category {category!r}, expected one of {CATEGORIES}"
         )
+    policy_kind = _require(raw, "kind", str(path))
+    if policy_kind not in KINDS:
+        raise ManifestError(f"{path}: unknown kind {policy_kind!r}, expected one of {KINDS}")
     rig = _require(raw, "rig", str(path))
     if rig not in RIGS:
         raise ManifestError(f"{path}: unknown rig {rig!r}, expected one of {RIGS}")
@@ -337,6 +350,7 @@ def load_manifest(path: Path) -> Manifest:
         title=_require(raw, "title", str(path)),
         rig=rig,
         category=category,
+        kind=policy_kind,
         order=order,
         time_limit_s=float(_require(raw, "time_limit_s", str(path))),
         metric=metric,

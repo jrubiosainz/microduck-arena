@@ -10,6 +10,7 @@ from arena.manifest import EVENTS_DIR, ManifestError, all_events, load_event, lo
 GOOD = {
     "root": 'id="probe"\ntitle="Probe"\nrig="legs"\ncategory="race"\n'
             'time_limit_s=10.0\nmetric="mean_finish_time"\nseeds=[1]\n',
+    "kind": 'kind="perpetual"\n',
     "course": '[course]\nkind="lane"\nlength_m=1.0\nwidth_m=0.8\n'
               'wall_height_m=0.15\nslope_deg=0.0\n',
     "command": '[command]\nvel=[0.25,0,0]\nhead=[0,0,0,0]\nbody=[0,0,0,0,0,0]\n',
@@ -411,3 +412,20 @@ def test_a_clip_section_pins_the_tape_a_fixed_camera_and_the_sounds(tmp_path):
 def test_a_malformed_clip_section_is_refused(tmp_path, section, said):
     with pytest.raises(ManifestError, match=said):
         load_manifest(write_manifest(tmp_path, clip=section))
+
+
+def test_every_shipped_event_takes_perpetual_policies():
+    """What `publish` writes for a gait, and what the Space checks a manifest's `kind` against."""
+    assert {e.id: e.kind for e in all_events()} == {e.id: "perpetual" for e in all_events()}
+
+
+def test_an_unknown_kind_is_refused(tmp_path):
+    with pytest.raises(ManifestError, match="unknown kind"):
+        load_manifest(write_manifest(tmp_path, kind='kind="forever"\n'))
+
+
+def test_a_missing_kind_is_refused(tmp_path):
+    """No default: an entry's manifest is checked against it, and a guessed kind would
+    admit or refuse the wrong policies without anyone having decided which."""
+    with pytest.raises(ManifestError, match="missing 'kind'"):
+        load_manifest(write_manifest(tmp_path, kind=""))
