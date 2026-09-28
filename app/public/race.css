@@ -259,7 +259,8 @@ button.link {
 .train__need, .train__step, .train__note { margin: 0; font-size: 0.85rem; }
 .train__note { color: var(--ink-70); }
 /* A command line that wraps rather than scrolls: the panel's width is the
-   entry column's, and a one-line launcher easily runs wider than it. */
+   entry column's, and a one-line launcher easily runs wider than it. It breaks
+   at its spaces first, so `uv run` and the challenge's id stay whole. */
 .train__line {
   margin: 0;
   padding: 7px 9px;
@@ -268,7 +269,7 @@ button.link {
   font: 600 0.78rem/1.4 var(--mono);
   letter-spacing: var(--mono-tracking-min);
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 .train__copy {
   align-self: flex-start;
