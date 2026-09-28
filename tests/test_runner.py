@@ -1,14 +1,15 @@
 import dataclasses
 
+import mujoco
 import numpy as np
 import pytest
 
 from arena.assets import ASSET_ROOT
-from arena.constants import CTRL_DT, TRACE_WIDTH
+from arena.constants import CTRL_DT, NUM_JOINTS, TRACE_WIDTH
 from arena.course import compile_course, ramp_dir
 from arena.manifest import load_event
 from arena.policy import load_policy
-from arena.runner import run_once, seed_rng
+from arena.runner import _Addresses, _step, run_once, seed_rng
 
 REFERENCE = ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"
 
@@ -164,6 +165,55 @@ def test_model_can_be_supplied_to_avoid_recompiling(sprint, walker):
     assert a.time_s == b.time_s
 
 
+def test_a_run_does_not_depend_on_the_run_before_it(sprint, walker):
+    """The compiled model is shared across an evaluation's runs, and the BAM
+    servos write model.dof_frictionloss / model.dof_damping every substep —
+    so a run sharing that model must start exactly as fresh as one that
+    doesn't, whatever ran on it before."""
+    shared_model = compile_course(sprint)
+    run_once(sprint, walker, seed=2, model=shared_model)
+    reused = run_once(sprint, walker, seed=1, model=shared_model)
+    fresh = run_once(sprint, walker, seed=1)
+    assert np.array_equal(reused.trace, fresh.trace)
+    assert np.array_equal(reused.settle, fresh.settle)
+
+
+def test_the_actor_sees_joint_velocity_one_step_old(sprint):
+    """obs[20:34] at control step k must be the qvel recorded before step
+    k-1's substeps, not the qvel current at step k. Exercised directly on
+    `_step` rather than through run_once, so the property is checked without
+    depending on the settle/clock machinery around it."""
+    from arena.actuator import Servos
+
+    model = compile_course(sprint)
+    data = mujoco.MjData(model)
+    adr = _Addresses.of(model, sprint.start.keyframe)
+    mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
+    servos = Servos(model, adr.dof, adr.act, np.random.default_rng(0))
+    command = np.asarray(sprint.command, dtype=np.float64)
+    last_action = np.zeros(NUM_JOINTS, dtype=np.float32)
+    prev_qvel = data.qvel[adr.dof].copy()
+
+    policy = _RecordingPolicy()
+    qvel_before_first_substeps = data.qvel[adr.dof].copy()
+    last_action, prev_qvel = _step(
+        model, data, policy, adr, command, last_action, prev_qvel, servos
+    )
+    _step(model, data, policy, adr, command, last_action, prev_qvel, servos)
+
+    assert len(policy.observed) == 2
+    np.testing.assert_array_equal(policy.observed[1][20:34], qvel_before_first_substeps)
+
+
 class _ZeroPolicy:
     def act(self, obs):
         return np.zeros(14, dtype=np.float32)
+
+
+class _RecordingPolicy:
+    def __init__(self):
+        self.observed = []
+
+    def act(self, obs):
+        self.observed.append(obs.copy())
+        return np.zeros(NUM_JOINTS, dtype=np.float32)

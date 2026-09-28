@@ -4,9 +4,10 @@ No queue, no storage, no HTTP: this narrowness is what makes the determinism and
 golden-run tests possible, and those tests are the only thing standing between a
 physics change and a silently invalidated leaderboard.
 
-The loop is the sandbox's controlStep(), verbatim in effect: build the 61-D
-observation, run the policy, write ctrl = DEFAULT_POSE + action, step physics
-four times.
+The loop is training's, not the sandbox's: build the 61-D observation with the
+actor's joint-velocity slot one control step old, run the policy, drive the BAM
+servos (`arena.actuator.Servos`) once per physics substep, and call
+`mj_forward` after the four substeps — mirroring mjlab's `sim.forward()`.
 """
 
 import zlib
@@ -15,6 +16,7 @@ from dataclasses import dataclass
 import mujoco
 import numpy as np
 
+from .actuator import Servos
 from .constants import (
     ACTION_SCALE,
     CTRL_DT,
@@ -50,6 +52,7 @@ class RunOutcome:
 class _Addresses:
     qpos: np.ndarray
     dof: np.ndarray
+    act: np.ndarray
     gyro: int
     trunk: int
     stand_key: int
@@ -59,6 +62,7 @@ class _Addresses:
         return cls(
             qpos=np.array([int(model.joint(n).qposadr[0]) for n in JOINT_NAMES]),
             dof=np.array([int(model.joint(n).dofadr[0]) for n in JOINT_NAMES]),
+            act=np.array([int(model.actuator(n).id) for n in JOINT_NAMES]),
             gyro=int(model.sensor("imu_ang_vel").adr[0]),
             trunk=int(model.body("trunk_base").id),
             stand_key=int(model.key(keyframe).id),
@@ -104,13 +108,28 @@ def _record(frame: np.ndarray, data, adr) -> None:
     frame[7:TRACE_WIDTH] = data.qpos[adr.qpos]
 
 
-def _step(model, data, policy, adr, command, last_action) -> np.ndarray:
+def _step(
+    model, data, policy, adr, command, last_action, prev_qvel, servos
+) -> tuple[np.ndarray, np.ndarray]:
+    """One control step: observe, act, drive the servos once per substep.
+
+    `prev_qvel` is the joint velocity recorded one control step ago — the
+    actor's observation lags the true qvel by exactly one control step,
+    matching training (mjlab resamples the observation before the servo
+    updates its own delayed target, so the two delays are independent). The
+    qvel this call captures for the NEXT step's observation is read here,
+    before any of this step's substeps run.
+    """
     obs = _observe(model, data, adr, last_action, command)
+    obs[20:34] = prev_qvel
+    next_prev_qvel = data.qvel[adr.dof].copy()
     action = policy.act(obs)
-    data.ctrl[:] = DEFAULT_POSE + action * ACTION_SCALE
+    target = DEFAULT_POSE + action * ACTION_SCALE
     for _ in range(DECIMATION):
+        servos.drive(data, target)
         mujoco.mj_step(model, data)
-    return action
+    mujoco.mj_forward(model, data)
+    return action, next_prev_qvel
 
 
 def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) -> RunOutcome:
@@ -121,6 +140,16 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
     _perturb(model, data, adr, manifest, seed)
 
+    # A fresh Servos every run: the compiled model is shared across an
+    # evaluation's runs (evaluate.py compiles once), and Servos.__init__
+    # resets model.dof_frictionloss / model.dof_damping so a run never
+    # inherits the friction state left behind by the run before it. The
+    # command-delay stream is seeded per run, distinct from the perturbation
+    # stream above (a trailing 1 in the seed sequence marks it).
+    servos = Servos(
+        model, adr.dof, adr.act, np.random.default_rng([zlib.crc32(manifest.id.encode()), seed, 1])
+    )
+
     # Converted once per run, not per step. The manifest holds an immutable tuple
     # so a loaded event cannot be mutated in place by anything downstream.
     #
@@ -129,6 +158,9 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     # only gets to say how fast.
     command = np.asarray(manifest.command if command is None else command, dtype=np.float64)
     last_action = np.zeros(NUM_JOINTS, dtype=np.float32)
+    # The actor's joint-velocity observation is one control step old (training's
+    # mjlab_microduck randomisation); the first step uses the reset state's qvel.
+    prev_qvel = data.qvel[adr.dof].copy()
 
     # Settle with the policy running and the clock stopped: nobody is timed on
     # standing up.
@@ -136,7 +168,9 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     settle = np.empty((settle_steps + 1, TRACE_WIDTH), dtype=np.float32)
     _record(settle[0], data, adr)
     for step in range(settle_steps):
-        last_action = _step(model, data, policy, adr, command, last_action)
+        last_action, prev_qvel = _step(
+            model, data, policy, adr, command, last_action, prev_qvel, servos
+        )
         _record(settle[step + 1], data, adr)
 
     direction = ramp_dir(manifest.course.slope_deg)
@@ -152,7 +186,9 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     written = 0
 
     for step in range(max_steps):
-        last_action = _step(model, data, policy, adr, command, last_action)
+        last_action, prev_qvel = _step(
+            model, data, policy, adr, command, last_action, prev_qvel, servos
+        )
 
         _record(frames[written], data, adr)
         written += 1
