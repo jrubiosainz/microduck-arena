@@ -96,7 +96,8 @@ Order of work in `run()`:
    or absent) and `env_url` (the code URL, or absent). Header `Authorization: Bearer <token>`.
    The timeout is generous: the Space races a whole sweep.
 4. Print
-   `[publish] entered on <event>: <score> s (<finished>/<total> seeds) at <vx> m/s → <arena>/#/r/<run_id>`.
+   `[publish] entered on <event>: <score> s (<finished>/<total> seeds) at <vx> m/s → <page_url>`,
+   where `page_url` is the one the Space answers with (below).
    On a refusal, print
    `[publish] uploaded <url>, but the Arena did not enter it: <the Space's detail>` and exit 3.
 
@@ -124,6 +125,13 @@ new commit; either way, the Space's idempotence (below) keeps the board free of 
   not whether it was swept, and a pinned speed can only match or lose to the sweep, which
   already keeps the best one.
 - **Only a repo.** The `file` field goes from `submit`: `repo_id` is required.
+- **Where to look.** The answer carries `page_url`, the entry's result page as a browser can
+  open it. On Hugging Face (the config reads `SPACE_ID`), that is
+  `https://huggingface.co/spaces/<SPACE_ID>#/r/<run_id>`. That page opens a private Space
+  with the visitor's huggingface.co login, and it hands the `#` to the Space's iframe
+  (probed 2026-09-29 on the public Policy Playground: the iframe's src is
+  `…hf.space/?__theme=system#/r/abc`). Elsewhere (a local `arena serve`) it is the
+  request's own origin with `/#/r/<run_id>`.
 - **`try` goes**, with its route, tests and the front end's `tryPolicy`.
 
 ### The workshop's Publish zone
@@ -143,7 +151,7 @@ new commit; either way, the Space's idempotence (below) keeps the board free of 
 - **Flow.** `POST /api/workshop/publish` gains `livery` and `speed`. It runs
   `uv run publish --run … --no-private --force --enter --arena <the workshop's arena>
   --livery … [--speed …] [--code-url …]`. It reads the `entered` line for the score and the
-  run page, and opens `<arena>/#/r/<run_id>` in the browser. The zone shows "Exporting,
+  `page_url`, and opens that page in the browser. The zone shows "Exporting,
   uploading and racing on the Arena (a minute or two)…", then the official time with the
   link.
 - **Failure.** Exit 3 means published but not entered. The zone shows the whole output, and
@@ -202,10 +210,6 @@ new commit; either way, the Space's idempotence (below) keeps the board free of 
 - **Does hf.space pass `Authorization` through to the container?** Probe it on the private
   Space as it is now, and again once it is public. If it strips the header, the token goes in a
   `hf_token` form field instead, with the same guarantees.
-- **The result page while the Space is private.** A top-level `…hf.space/#/r/<id>` is a 404
-  without the Space's auth. Probe whether `huggingface.co/spaces/pollen-robotics/microduck-arena`
-  hands the `#` to its iframe. If not, while the Space is private the workshop shows the link
-  without opening it.
 - **Order of release.** microduck_rl's `publish --enter` first (PR #57's branch), then the
   Space (merge into main deploys it), then a new Arena wheel and the challenges relock, whose
   `mjlab-microduck` pin must carry `--enter`.
