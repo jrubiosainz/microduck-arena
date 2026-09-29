@@ -36,14 +36,14 @@ def _fetch_from_hub(repo_id: str, revision: str | None, event) -> FetchedPolicy:
 
 
 def _require_session(request: Request) -> Session:
-    """Racing costs CPU and publishing writes to a namespace. Both need a name.
+    """Withdrawing an entry and marking it seen are its author's alone: both need a signed-in name.
 
     Watching does not: the board, the replays and the downloads are open to
     anyone who can open the page.
     """
     session = current_user(request)
     if session is None:
-        raise HTTPException(status_code=401, detail="Please sign in to race a policy.")
+        raise HTTPException(status_code=401, detail="Please sign in with Hugging Face.")
     return session
 
 
@@ -346,8 +346,9 @@ def withdraw(run_id: str, request: Request) -> dict:
     re-race it.
 
     The policy repo itself is untouched. It belongs to its author, who can
-    delete it on the Hub if they want to — the Space asks for no Hub scope at
-    all, so it holds no permission on anyone's repo to begin with.
+    delete it on the Hub if they want to. The Space holds no permission on
+    anyone's repo: the sign-in behind a withdrawal asks for no Hub scope, and
+    the token an entry arrives with goes to whoami-v2 once and is dropped.
     """
     from datetime import UTC, datetime
 

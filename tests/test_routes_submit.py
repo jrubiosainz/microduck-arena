@@ -405,26 +405,13 @@ def test_publishing_without_a_speed_still_sweeps(api):
     assert body["score"] == pytest.approx(8.672, rel=0.02)
 
 
-def test_publishing_signed_out_is_refused(spaced_api, hub_users):
-    response = enter(spaced_api, token=None)
-    assert response.status_code == 401
-
-
 def test_a_signed_out_publish_is_refused_and_records_nothing(spaced_api, hub_users, store_dir):
-    """`try` never persists anything either way, so it can't tell this test
-    apart from a gate that was never wired in. `submit` does persist, so this
-    has to go through `submit` to be a claim that can actually fail."""
+    """A 401 alone would pass a gate that raced and recorded first and refused after: the store
+    must be as empty as before."""
     response = enter(spaced_api, token=None)
     assert response.status_code == 401
     assert list(store_dir.rglob("*.json")) == []
     assert list(store_dir.rglob("*.npz")) == []
-
-
-def test_a_signed_in_run_is_recorded_under_the_hub_username(spaced_api, hub_users):
-    sign_in(spaced_api, username="alice")
-    body = enter(spaced_api, name="walker").json()
-    # Not "guest", and not anything the browser supplied.
-    assert body["user"] == "alice"
 
 
 def test_the_local_path_still_needs_no_session_at_all(api):

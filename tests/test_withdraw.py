@@ -164,7 +164,9 @@ def test_you_cannot_withdraw_someone_elses(spaced):
 def test_withdrawing_signed_out_is_refused(spaced):
     api, app = spaced
     record = record_run(app, user="alice")
-    assert api.post(f"/api/runs/{record.run_id}/withdraw").status_code == 401
+    response = api.post(f"/api/runs/{record.run_id}/withdraw")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Please sign in with Hugging Face."
     assert len(api.get("/api/events/sprint-2m/leaderboard").json()["rows"]) == 1
 
 

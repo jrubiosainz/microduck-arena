@@ -85,11 +85,14 @@ publishing author's own Hub repo, not on the Space. `GET /api/health` reports
 `"durable": true` once it is configured, and the startup log says `EPHEMERAL`
 in capitals when it is not.
 
-The Space signs users in with Hugging Face OAuth to know who is racing —
-nothing wider: it asks for no Hub scope and keeps no token. Entering the board
-takes a Hugging Face repo the author published themselves (the workshop, or
-`uv run publish`), raced at a pinned revision, and the board's `.onnx` link
-resolves straight to that repo. A `.onnx` in hand is raced locally with
+An entry arrives from `uv run publish --enter`, from the workshop or a shell,
+with the entrant's Hugging Face token (in practice a write token, the one
+`publish` uploads with). The Space asks the Hub's whoami-v2 whose token it is,
+then drops it: it never stores or logs it. The site keeps Hugging Face OAuth,
+scope `openid profile`, for signing in, votes and withdrawing one's own
+entries. Entering the board takes a Hugging Face repo the
+author published themselves, raced at a pinned revision, and the board's
+`.onnx` link resolves straight to that repo. A `.onnx` in hand is raced locally with
 `arena score <onnx> --event <id>` and entered with
 `uv run publish --onnx … --enter --event <id>`; the site itself has no entry form.
 
