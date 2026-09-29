@@ -56,6 +56,22 @@ def test_beating_your_own_best_pays_once_per_event_on_the_first_improvement():
     assert [(r.source_id, r.points) for r in own] == [(better.run_id, SCHEDULE["own_best"])]
 
 
+def test_a_voted_event_pays_no_own_best():
+    """A voted event's score measures nothing to beat (a stage's is the performance's length),
+    so a shorter performance is no personal best; the same pair of runs on a timed event pays one."""
+    from arena.manifest import Vote
+
+    rules = {"swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
+    long = make_record(user="alice", event_id="swag-contest", score=20.0,
+                       submitted_at="2026-09-03T09:00:00Z")
+    short = make_record(user="alice", event_id="swag-contest", score=12.0,
+                        submitted_at="2026-09-03T10:00:00Z")
+    assert acts(receipts([long, short], frozenset(), voted=rules), "own_best") == []
+    timed = [make_record(user="alice", event_id="sprint-2m", score=s, submitted_at=r.submitted_at)
+             for s, r in ((20.0, long), (12.0, short))]
+    assert len(acts(receipts(timed, frozenset(), voted=rules), "own_best")) == 1
+
+
 def test_a_single_run_never_pays_own_best():
     only = make_record(user="alice")
     assert acts(receipts([only], frozenset()), "own_best") == []

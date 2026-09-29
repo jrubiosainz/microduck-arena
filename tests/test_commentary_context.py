@@ -40,7 +40,8 @@ def test_nature_reads_the_manifest():
     assert nature(load_event("sprint-2m")) == ("a 2 m sprint on foot", ("sprint",))
     assert nature(load_event("hill-climb-1m5")) == ("a 1.5 m climb up an 8 degree slope", ("hill",))
     assert nature(load_event("roller-sprint-2m")) == ("a 2 m race on roller skates", ("rollers",))
-    assert nature(load_event("got-a-talent")) == ("a contest decided by the public's votes", ("vote",))
+    assert nature(load_event("got-a-talent")) == (
+        "a performance on a stage decided by the public's votes", ("vote",))
 
 
 def test_a_clean_run_states_event_participant_time_rank_gap_and_points():
@@ -137,3 +138,38 @@ def test_no_note_when_the_words_are_missing_or_machine_shaped(description):
     manifest = load_event("sprint-2m")
     mine = run("alice", 12.40, "2026-09-11T10:00:00Z", run_id="R1", description=description)
     assert not [f for f in result_facts(mine, manifest, [mine], []) if f.ref == "run#/note"]
+
+
+def stage_run(finished=True):
+    """A MicroDuck Got a Talent record: one performance, its score its length."""
+    return make_record(
+        user="eve", event_id="got-a-talent", policy_name="eve-v1", score=20.0,
+        seeds_finished=1 if finished else 0, submitted_at="2026-09-11T10:00:00Z",
+        per_seed=(SeedResult(seed=1, status="finish" if finished else "fall",
+                             time_s=20.0 if finished else None),),
+    )
+
+
+def test_a_performance_is_told_as_one_its_length_the_only_time():
+    """No clock, no seeds, no line, no limit: the booth hears a performance and how long it lasts."""
+    record = stage_run()
+    facts = result_facts(record, load_event("got-a-talent"), [record], [])
+    by_ref = {f.ref: f for f in facts}
+    assert by_ref["run#/event"].text == (
+        "The event is the MicroDuck Got a Talent, a performance on a stage decided by the public's votes.")
+    assert by_ref["run#/participant"].text == "The participant is @eve, performing a policy named eve-v1."
+    result = by_ref["run#/result"]
+    assert result.text == "The performance lasts 20.00 s."
+    assert result.tags == ("performance",) and result.outcome is None
+    assert "run#/board" not in by_ref
+    spoken = " ".join(f.text for f in facts).lower()
+    for word in ("seed", "finish", "limit", "mean", "racing", "line"):
+        assert word not in spoken, word
+
+
+def test_a_performance_cut_short_says_so_without_a_time_or_a_fall():
+    """A stage ends early only when the simulation breaks down: that is not a fall."""
+    record = stage_run(finished=False)
+    result = {f.ref: f for f in result_facts(record, load_event("got-a-talent"), [record], [])}["run#/result"]
+    assert result.text == "The performance was cut short."
+    assert result.outcome is None and result.tags == ("performance",)

@@ -152,6 +152,16 @@ def test_the_prompt_no_longer_hands_out_the_word_debut():
     assert "then puts a fact on the table" not in LORE.characters["ray"]["sheet"]
 
 
+def test_the_booth_knows_a_performance_is_not_a_race():
+    """Seeds, a finish and a mean time belong to races; a performance's length is its only
+    time. "Show" stays the broadcast's word ("do not describe the show"), so the stage's
+    turn is a performance."""
+    assert "A race is a handful of attempts, called seeds" in BOOTH_CONTEXT
+    assert "A run is a handful of attempts" not in BOOTH_CONTEXT
+    assert "or performing on a stage" in BOOTH_CONTEXT
+    assert "A performance on the stage is a single turn the public votes on: never timed" in BOOTH_CONTEXT
+
+
 def test_the_callback_is_a_coin_that_avoids_nothing():
     recent = [{**direction(random.Random(0), [], LORE.scenes), "callback": CALLBACK}] * LOOKBACK
     called = sum(direction(random.Random(seed), recent, LORE.scenes)["callback"] == CALLBACK

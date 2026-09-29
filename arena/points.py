@@ -152,7 +152,9 @@ def receipts(
             out.append(_receipt(run, "run", SCHEDULE["run"]))
         previous = best.get(key)
         if previous is not None and sort_key(run) < sort_key(previous):
-            if key not in improved:
+            # A voted event's score is nothing to beat (a stage's is the
+            # performance's length), so it pays no personal best.
+            if key not in improved and run.event_id not in voted:
                 improved.add(key)
                 out.append(_receipt(run, "own_best", SCHEDULE["own_best"]))
             best[key] = run

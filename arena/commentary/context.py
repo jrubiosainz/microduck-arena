@@ -54,8 +54,8 @@ def label(value, limit: int = 80) -> bool:
 
 def nature(manifest: Manifest) -> tuple[str, tuple[str, ...]]:
     """What kind of contest this is, in words and in tags the bible matches on."""
-    if manifest.metric == "votes":
-        return "a contest decided by the public's votes", ("vote",)
+    if manifest.course.kind == "stage":
+        return "a performance on a stage decided by the public's votes", ("vote",)
     length = f"{manifest.course.length_m:g} m"
     if manifest.course.slope_deg > 0:
         return f"a {length} climb up an {manifest.course.slope_deg:g} degree slope", ("hill",)
@@ -74,6 +74,12 @@ ACT_TAGS = {"first_event": "first-run", "own_best": "pb", "podium": "podium"}
 
 
 def _result(record: RunRecord, manifest: Manifest) -> Fact:
+    if manifest.course.kind == "stage":
+        # A performance is not a race: its length is the only time it has, and
+        # it ends early only when the simulation breaks down, which is no fall.
+        text = (f"The performance lasts {record.score:.2f} s." if record.seeds_finished
+                else "The performance was cut short.")
+        return Fact("run#/result", text, "result", ("performance",))
     who = f"@{record.user}"
     total = len(record.per_seed)
     falls = sum(1 for s in record.per_seed if s.status == "fall")
@@ -156,18 +162,20 @@ def _note(record: RunRecord) -> Fact | None:
 
 
 def result_facts(record: RunRecord, manifest: Manifest, event_runs, receipts) -> tuple[Fact, ...]:
-    """The run itself: the event, who ran, what the clock says, where it stands
-    and what it earned. `event_runs` are the counting runs of the event as they
-    stood when this one was published, this one included; a voted event's board
-    is not a clock, so it gets no board fact."""
+    """The run itself: the event, who ran, what the clock says (on a stage, how
+    long the performance lasts), where it stands and what it earned. `event_runs`
+    are the counting runs of the event as they stood when this one was published,
+    this one included; a voted event's board is not a clock, so it gets no board
+    fact."""
     what, tags = nature(manifest)
     who = f"@{record.user}"
     policy = record.policy_name if label(record.policy_name) else None
     note = _note(record)
+    doing = "performing" if manifest.course.kind == "stage" else "racing"
     facts = [
         Fact("run#/event", f"The event is the {manifest.title}, {what}.", "result", tags),
         Fact("run#/participant",
-             f"The participant is {who}, racing a policy named {policy}." if policy
+             f"The participant is {who}, {doing} a policy named {policy}." if policy
              else f"The participant is {who}.",
              "result", ("participant",), identities=(record.user,)),
         _result(record, manifest),

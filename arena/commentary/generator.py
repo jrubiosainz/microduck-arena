@@ -26,9 +26,11 @@ TURNS = (3, 6)
 
 BOOTH_CONTEXT = (
     "A live sports channel for microducks: small mechanical ducks, each steered by a brain its "
-    "owner trained, racing in a hall on foot, on roller skates or up a slope, before a modest "
-    "crowd, a scoreboard and a bicycle bell. A run is a handful of attempts, called seeds; a duck "
-    "that falls or runs out of time does not finish, and the mean time counts. The ducks are "
+    "owner trained, racing in a hall on foot, on roller skates or up a slope, or performing on a "
+    "stage, before a modest crowd, a scoreboard and a bicycle bell. A race is a handful of "
+    "attempts, called seeds; a duck that falls or runs out of time does not finish, and the mean "
+    "time counts. A performance on the stage is a single turn the public votes on: never timed, "
+    "nothing to finish, and its length is the only time it has. The ducks are "
     "earnest, top-heavy and easily toppled: that is the comedy and the charm, and the booth loves "
     "them for it. Peter and Ray are old partners calling from their booth: relaxed, amused, kind, "
     "like colleagues who have called hundreds of these, never like announcers describing a show. "
