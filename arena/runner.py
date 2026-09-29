@@ -47,6 +47,7 @@ from .constants import (
 )
 from .course import compile_course, ramp_dir
 from .manifest import Manifest
+from .timeline import Timeline
 
 _WORLD_DOWN = np.array([0.0, 0.0, -1.0])
 
@@ -151,7 +152,32 @@ def _step(
     return action, next_prev_qvel
 
 
-def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) -> RunOutcome:
+class _Sim:
+    """One run's simulation between control steps: the physics, and the two
+    things the next observation carries over from this step."""
+
+    def __init__(self, model, data, adr, servos, policy):
+        self.model, self.data, self.adr, self.servos, self.policy = model, data, adr, servos, policy
+        self.last_action = np.zeros(NUM_JOINTS, dtype=np.float32)
+        # The actor's joint-velocity observation is one control step old — a fixed
+        # lag in training (delay_min_lag = delay_max_lag = 1 on its joint_vel term),
+        # not a randomisation; the first step uses the reset state's qvel.
+        self.prev_qvel = data.qvel[adr.dof].copy()
+
+    def step(self, command: np.ndarray) -> None:
+        self.last_action, self.prev_qvel = _step(
+            self.model, self.data, self.policy, self.adr, command,
+            self.last_action, self.prev_qvel, self.servos,
+        )
+
+    def record(self, frame: np.ndarray) -> None:
+        _record(frame, self.data, self.adr)
+
+
+def _start(manifest: Manifest, policy, seed: int, model, command: np.ndarray) -> tuple[_Sim, np.ndarray]:
+    """Every run's opening, lane or stage: training's reset, then the untimed
+    settle on `command`. Returns the simulation where the clock starts, and the
+    settle's frames."""
     model = model if model is not None else compile_course(manifest)
     data = mujoco.MjData(model)
     adr = _Addresses.of(model, manifest.start.keyframe)
@@ -177,6 +203,19 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     servos.drive(data, np.zeros(NUM_JOINTS))
     mujoco.mj_forward(model, data)
 
+    sim = _Sim(model, data, adr, servos, policy)
+    # Settle with the policy running and the clock stopped: nobody is timed on
+    # standing up.
+    settle_steps = round(manifest.start.settle_s / CTRL_DT)
+    settle = np.empty((settle_steps + 1, TRACE_WIDTH), dtype=np.float32)
+    sim.record(settle[0])
+    for step in range(settle_steps):
+        sim.step(command)
+        sim.record(settle[step + 1])
+    return sim, settle
+
+
+def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) -> RunOutcome:
     # Converted once per run, not per step. The manifest holds an immutable tuple
     # so a loaded event cannot be mutated in place by anything downstream.
     #
@@ -184,22 +223,8 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     # (see evaluate.py). The event still owns the shape of the command; a caller
     # only gets to say how fast.
     command = np.asarray(manifest.command if command is None else command, dtype=np.float64)
-    last_action = np.zeros(NUM_JOINTS, dtype=np.float32)
-    # The actor's joint-velocity observation is one control step old — a fixed
-    # lag in training (delay_min_lag = delay_max_lag = 1 on its joint_vel term),
-    # not a randomisation; the first step uses the reset state's qvel.
-    prev_qvel = data.qvel[adr.dof].copy()
-
-    # Settle with the policy running and the clock stopped: nobody is timed on
-    # standing up.
-    settle_steps = round(manifest.start.settle_s / CTRL_DT)
-    settle = np.empty((settle_steps + 1, TRACE_WIDTH), dtype=np.float32)
-    _record(settle[0], data, adr)
-    for step in range(settle_steps):
-        last_action, prev_qvel = _step(
-            model, data, policy, adr, command, last_action, prev_qvel, servos
-        )
-        _record(settle[step + 1], data, adr)
+    sim, settle = _start(manifest, policy, seed, model, command)
+    data, adr = sim.data, sim.adr
 
     direction = ramp_dir(manifest.course.slope_deg)
     start_progress = float(direction @ data.qpos[0:3])
@@ -214,11 +239,8 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     written = 0
 
     for step in range(max_steps):
-        last_action, prev_qvel = _step(
-            model, data, policy, adr, command, last_action, prev_qvel, servos
-        )
-
-        _record(frames[written], data, adr)
+        sim.step(command)
+        sim.record(frames[written])
         written += 1
 
         if not np.all(np.isfinite(data.qpos)):
@@ -251,6 +273,35 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
         time_s=time_s,
         progress_m=progress,
         start_progress_m=start_progress,
+        trace=frames[:written].copy(),
+        settle=settle,
+    )
+
+
+def run_stage(manifest: Manifest, policy, timeline: Timeline, seed: int, model=None) -> RunOutcome:
+    """Play a timeline on a stage: no line to cross, and no fall stops the show.
+
+    The settle plays the first keyframe; timed step k plays the command at
+    k * CTRL_DT. Only a non-finite state ends a performance early — a solver
+    explosion is not a performance, and a trace cannot hold one.
+    """
+    sim, settle = _start(manifest, policy, seed, model, np.asarray(timeline.command_at(0.0), dtype=np.float64))
+    steps = round(timeline.duration_s / CTRL_DT)
+    frames = np.empty((steps, TRACE_WIDTH), dtype=np.float32)
+    status, time_s, written = "finish", steps * CTRL_DT, 0
+    for step in range(steps):
+        sim.step(np.asarray(timeline.command_at(step * CTRL_DT), dtype=np.float64))
+        sim.record(frames[written])
+        written += 1
+        if not np.all(np.isfinite(sim.data.qpos)):
+            status, time_s = "fall", None
+            break
+    return RunOutcome(
+        seed=seed,
+        status=status,
+        time_s=time_s,
+        progress_m=0.0,
+        start_progress_m=0.0,  # a stage has no line
         trace=frames[:written].copy(),
         settle=settle,
     )
