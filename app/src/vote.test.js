@@ -77,9 +77,9 @@ describe("the voting panel", () => {
 
   it("shows the way in when signed out", () => {
     const panel = votePanel({ state: "signed-out" });
-    expect(panel.querySelector("a.entry__signin").textContent.trim()).toBe(
-      "Sign in with Hugging Face",
-    );
+    const link = panel.querySelector("a");
+    expect(link.textContent.trim()).toBe("Sign in with Hugging Face");
+    expect(link.classList.contains("signin-button")).toBe(true);
   });
 
   it("never leaks a handle, a policy name or a run id, even if the ballot carried one", () => {

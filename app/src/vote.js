@@ -144,7 +144,7 @@ export function votePanel(ballot, onPick, initialStatus) {
   const panel = el("div", "vote-panel");
 
   if (ballot.state === "signed-out") {
-    const link = el("a", "entry__signin", "Sign in with Hugging Face");
+    const link = el("a", "signin-button", "Sign in with Hugging Face");
     link.href = signInHref();
     panel.append(link);
     return panel;

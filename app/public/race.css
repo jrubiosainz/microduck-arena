@@ -576,6 +576,7 @@ table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 .pickall-box:focus-visible,
 .train__open:focus-visible,
 .train__copy:focus-visible,
+.signin-button:focus-visible,
 table.board .grab a:focus-visible,
 table.board .env a:focus-visible,
 table.board .withdraw:focus-visible,
@@ -621,6 +622,25 @@ table.board .withdraw:focus-visible,
 }
 
 .vote-lead { margin: 0; font-size: 1.05rem; }
+
+/* The signed-out booth: one link, nothing to fill with. */
+.signin-button {
+  display: block;
+  text-align: center;
+  font: 400 0.95rem/1.15 var(--display);
+  letter-spacing: var(--type-button-label-tracking);
+  text-transform: uppercase;
+  padding: 9px 10px;
+  border: 2px solid var(--ink);
+  background: var(--orange);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--magenta);
+}
+.signin-button:active {
+  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
+  box-shadow: none;
+}
 
 /* The speaker toggle for sound.js's three cues. Quiet, like the back link up
    in .votehead: this row is the ballot, not the sound. */
