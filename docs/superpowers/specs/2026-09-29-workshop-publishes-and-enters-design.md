@@ -88,8 +88,8 @@ Order of work in `run()`:
    - no event is known (neither the challenge's nor `--event`);
    - the Arena URL is neither `https://` nor loopback `http://`;
    - no token is found;
-   - after `create_repo`, the repo is private ("the Arena reads public repos only: pass
-     `--no-private`, or make the repo public").
+   - a new repo would be created private (no `--no-private`), or an existing one is private
+     (checked after `create_repo`).
 2. Upload, as today.
 3. `POST {arena}/api/events/{event}/submit`, multipart form, with the fields `repo_id`,
    `revision` (the commit's oid), `name` (the manifest's), `livery`, `command_vx` (the speed,
