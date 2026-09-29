@@ -303,7 +303,7 @@ def test_complete_posts_the_routers_contract_and_retries_a_transport_error_once(
     assert answer == {"content": "[]", "finish_reason": "stop", "model": "served/model",
                       "prompt_tokens": 7, "completion_tokens": 9}
     assert posts[0] == {
-        "url": ROUTER, "headers": {"Authorization": "Bearer t"}, "timeout": 15.0,
+        "url": ROUTER, "headers": {"Authorization": "Bearer t"}, "timeout": 60.0,
         "body": {"model": "a/model", "messages": messages, "max_tokens": WRITE_LIMIT,
                  "temperature": 0.3, "reasoning_effort": "none"},
     }

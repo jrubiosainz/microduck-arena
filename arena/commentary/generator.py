@@ -171,8 +171,9 @@ class Rejected(Exception):
 
 
 def complete(messages: list[dict], max_tokens: int, *, model: str, token: str,
-             timeout: float = 15.0) -> dict:
+             timeout: float = 60.0) -> dict:
     """One request to the router, retried once on a transport error, no failover."""
+    # The router returns the whole dialogue at once; real briefs take 24–30 s.
     body = {"model": model, "messages": messages, "max_tokens": max_tokens,
             "temperature": 0.3, "reasoning_effort": "none"}
     headers = {"Authorization": f"Bearer {token}"}
