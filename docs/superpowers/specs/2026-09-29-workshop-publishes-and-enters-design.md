@@ -143,7 +143,8 @@ new commit; either way, the Space's idempotence (below) keeps the board free of 
   - **Colour**: the four swatches of `liveries.js`'s `VARIANT_SWATCH_HEX`;
   - **Speed**: `format.js`'s `speedChoices(event)`, "Sweep" first and by default; hidden
     for an event without a sweep;
-  - **Code**: the *Your code* zone, unchanged, and the link it will send, or "none".
+  - **Code**: the *Your code* zone, unchanged; the entry carries the code's link once
+    it is shared.
 - **Buttons:**
   - "Preview the Hub card", unchanged;
   - **"Publish and enter"**, the primary button, enabled once a checkpoint is chosen and a
