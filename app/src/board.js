@@ -107,7 +107,7 @@ export function renderBoard(
   if (built.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty";
-    empty.textContent = `No runs yet on ${event.title}. Submit a policy to open the board.`;
+    empty.textContent = `No runs yet on ${event.title}. Train your own robot to open the board.`;
     container.append(empty);
     return;
   }

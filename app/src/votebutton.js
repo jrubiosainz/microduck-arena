@@ -1,6 +1,6 @@
 // The one way into a voting booth, wherever it appears.
 //
-// The flyer's corner sticker and the race page's panel above the entry form
+// The flyer's corner sticker and the race page's panel atop the entry column
 // used to be two separate bits of markup. One component now, so the two
 // placements cannot drift into looking like different features.
 
@@ -27,7 +27,7 @@ const ICON_SIZE = { sticker: 22, panel: 30 };
  * Two variants, because the two placements differ in everything but the
  * destination: `"sticker"` is the small, tilted badge tucked into a flyer's
  * corner; `"panel"` is the larger, upright one that sits in normal flow
- * above the race page's entry form.
+ * atop the race page's entry column, above Train my own robot.
  */
 export function voteButton(event, { variant }) {
   const link = document.createElement("a");

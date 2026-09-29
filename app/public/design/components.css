@@ -444,7 +444,7 @@
 /* ── Vote button — a ballot box you can press ───────────────────────────────── */
 
 /* The one way into a voting booth (see votebutton.js): a flyer's corner
-   sticker, or the panel above a race's entry form. Pressable like the
+   sticker, or the panel atop a race's entry column. Pressable like the
    sticker above it — a real shadow, a lift on hover, a press that flattens
    it onto the shadow — because the old VOTE badge did not read as a button
    at all. Shared here, not in club.css or race.css, because those two
@@ -491,7 +491,8 @@
   padding: 5px 9px;
 }
 
-/* Upright, in normal flow, above the race page's entry form. */
+/* Upright, in normal flow, atop the race page's entry column, above Train my
+   own robot. */
 .vote-button--panel { font-size: 0.78rem; }
 
 /* Once every 3 s, not continuously: the ballot twitches for the first ~12%

@@ -126,7 +126,9 @@ describe("renderBoard", () => {
   it("says why an empty board is empty, naming the event", () => {
     const container = render([]);
     expect(container.querySelector("table")).toBeNull();
-    expect(container.querySelector(".empty").textContent).toContain("2 m Sprint");
+    expect(container.querySelector(".empty").textContent).toBe(
+      "No runs yet on 2 m Sprint. Train your own robot to open the board.",
+    );
   });
 
   it("reports the ticked run ids when a lane box is toggled", () => {
