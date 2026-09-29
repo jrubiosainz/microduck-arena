@@ -32,10 +32,11 @@ from fastapi.concurrency import run_in_threadpool
 from .. import trace as trace_codec
 from ..envlink import EnvLinkError, normalise_env_url
 from ..evaluate import evaluate, evaluate_at
-from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy
+from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy, parse_repo_ref
 from ..manifest import ManifestError, load_event
 from ..policy import MAX_MODEL_BYTES, PolicyError, load_policy
 from ..store import RunRecord, Withdrawal, new_id
+from .hub_identity import HubUnreachable, TokenRefused, whoami
 from .routes_auth import current_user
 from .session import Session
 
@@ -63,6 +64,61 @@ def _require_session(request: Request) -> Session:
     if session is None:
         raise HTTPException(status_code=401, detail="Please sign in to race a policy.")
     return session
+
+
+ENTER_WITH_PUBLISH = (
+    "Enter from the workshop, or with `uv run publish … --enter`: it sends your Hugging Face "
+    "token, which says who you are."
+)
+
+
+def _whoami(token: str):
+    """Wrapped so tests replace one function rather than the Hub."""
+    return whoami(token)
+
+
+async def _entrant(request: Request) -> tuple[str, frozenset[str] | None]:
+    """Who is entering, and the organisations whose repos they may enter too.
+
+    On the Space: the Hugging Face token `publish --enter` sends, checked with the Hub and then
+    dropped. The session cookie does not enter: the site has no entry form. A local Arena has no
+    identity to check: its dev user enters, from any namespace (None).
+    """
+    config = request.app.state.config
+    if not config.oauth_enabled:
+        return config.dev_user, None
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=401, detail=ENTER_WITH_PUBLISH)
+    try:
+        user = await run_in_threadpool(_whoami, token.strip())
+    except TokenRefused:
+        raise HTTPException(status_code=401, detail="Hugging Face refused this token.") from None
+    except HubUnreachable as exc:
+        raise HTTPException(
+            status_code=503, detail=f"The Arena could not ask Hugging Face who you are ({exc}). Try again."
+        ) from None
+    if user.kind != "user":
+        raise HTTPException(
+            status_code=403,
+            detail="An entry is credited to a person: enter with your own token, not an organisation's.",
+        )
+    return user.name, user.orgs
+
+
+def _require_own_repo(repo_id: str, user: str, orgs: frozenset[str] | None) -> None:
+    """Credit goes to whoever enters: a repo in someone else's namespace is theirs to enter."""
+    if orgs is None:
+        return
+    try:
+        owner = parse_repo_ref(repo_id)[0].split("/")[0].casefold()
+    except FetchError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if owner != user.casefold() and owner not in {org.casefold() for org in orgs}:
+        raise HTTPException(
+            status_code=403,
+            detail=f"{repo_id} is not yours to enter: its namespace is neither {user} nor one of your organisations.",
+        )
 
 
 def _load_and_evaluate(path: Path, manifest, command_vx: float | None = None):
@@ -271,94 +327,98 @@ async def submit(
     env_url: str | None = Form(default=None),
     revision: str | None = Form(default=None),
 ) -> dict:
-    # Gated before any of the expensive work: validating and racing a policy for
-    # someone who is not signed in would burn CPU on a shared Space for a
-    # request that cannot be recorded.
-    session = _require_session(request)
+    # Who, before any of the expensive work: an entry nobody can be credited with is not worth
+    # thirty seconds of a shared CPU.
+    user, orgs = await _entrant(request)
     if file is not None or not repo_id:
         raise HTTPException(status_code=400, detail=PUBLISH_A_REPO)
-    # Checked before racing: a link this server will refuse should cost nobody
-    # thirty seconds of simulation first.
+    _require_own_repo(repo_id, user, orgs)
     link = _env_url(env_url)
+    racing = request.app.state.racing
+    if user in racing:
+        raise HTTPException(status_code=409, detail="Your previous entry is still racing: wait for its result.")
+    racing.add(user)
+    try:
+        # `command_vx` pins the commanded speed for this entry; omit it for the full
+        # sweep, which stays the default.
+        #
+        # An earlier version refused it here, on the reasoning that a board where
+        # entrants choose their own speed ranks whoever guessed best. That objection
+        # does not survive the arithmetic: the sweep already keeps the BEST time
+        # across every speed in the range, including whichever one you would have
+        # pinned. Pinning can therefore only match or lose to sweeping — it is
+        # self-penalising, not exploitable.
+        #
+        # One honest caveat. The sweep's shortlist is chosen from a ONE-SEED scan, so
+        # it can miss a speed that would have won over five. A pinned entry can
+        # occasionally beat the sweep's answer for the same policy by a hair. The
+        # board shows each row's commanded speed, so this is visible rather than
+        # hidden.
+        manifest, policy, result, _payload, fetched = await _race(
+            event_id, None, repo_id, command_vx, revision
+        )
 
-    # `command_vx` pins the commanded speed for this entry; omit it for the full
-    # sweep, which stays the default.
-    #
-    # An earlier version refused it here, on the reasoning that a board where
-    # entrants choose their own speed ranks whoever guessed best. That objection
-    # does not survive the arithmetic: the sweep already keeps the BEST time
-    # across every speed in the range, including whichever one you would have
-    # pinned. Pinning can therefore only match or lose to sweeping — it is
-    # self-penalising, not exploitable.
-    #
-    # One honest caveat. The sweep's shortlist is chosen from a ONE-SEED scan, so
-    # it can miss a speed that would have won over five. A pinned entry can
-    # occasionally beat the sweep's answer for the same policy by a hair. The
-    # board shows each row's commanded speed, so this is visible rather than
-    # hidden.
-    manifest, policy, result, _payload, fetched = await _race(
-        event_id, None, repo_id, command_vx, revision
-    )
+        store = request.app.state.store
+        record = RunRecord(
+            run_id=new_id(),
+            event_id=manifest.id,
+            # Zero-padded ISO-8601 ending in Z. arena/index.py breaks a full tie by
+            # comparing this as a STRING, so an isoformat() offset would misorder it.
+            submitted_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            user=user,
+            policy_name=_label(name, _hub_name(fetched)),
+            source={
+                "kind": "hub",
+                "repo_id": fetched.repo_id,
+                "filename": fetched.filename,
+                "revision": fetched.revision,
+                "url": fetched.url,
+            },
+            model_sha256=policy.sha256,
+            score=result.score,
+            command_vx=result.command_vx,
+            seeds_finished=result.seeds_finished,
+            per_seed=result.per_seed,
+            trace_seed=result.trace_seed,
+            runner_version=result.runner_version,
+            # The weights live in the author's own repo, at this revision; the
+            # Space keeps none, and anyone can download and race them from there.
+            model_stored=False,
+            env_url=link,
+            livery=_livery(livery),
+        )
+        store.append(record, trace_codec.encode(result.trace, result.settle))
 
-    store = request.app.state.store
-    record = RunRecord(
-        run_id=new_id(),
-        event_id=manifest.id,
-        # Zero-padded ISO-8601 ending in Z. arena/index.py breaks a full tie by
-        # comparing this as a STRING, so an isoformat() offset would misorder it.
-        submitted_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        user=session.username,
-        policy_name=_label(name, _hub_name(fetched)),
-        source={
-            "kind": "hub",
-            "repo_id": fetched.repo_id,
-            "filename": fetched.filename,
-            "revision": fetched.revision,
-            "url": fetched.url,
-        },
-        model_sha256=policy.sha256,
-        score=result.score,
-        command_vx=result.command_vx,
-        seeds_finished=result.seeds_finished,
-        per_seed=result.per_seed,
-        trace_seed=result.trace_seed,
-        runner_version=result.runner_version,
-        # The weights live in the author's own repo, at this revision; the
-        # Space keeps none, and anyone can download and race them from there.
-        model_stored=False,
-        env_url=link,
-        livery=_livery(livery),
-    )
-    store.append(record, trace_codec.encode(result.trace, result.settle))
+        clips = request.app.state.clips
+        if clips.available:
+            # Owed now, rendered later: the response does not wait for a video.
+            # The run is already on the board at this point, so a marker that
+            # fails to write must not turn a successful publish into a 500.
+            try:
+                store.mark_clip_pending(
+                    record.run_id, record.user, record.event_id, record.submitted_at
+                )
+                clips.enqueue(record.run_id)
+            except Exception as exc:  # noqa: BLE001 — see above
+                print(f"clip: {record.run_id} not queued ({type(exc).__name__}: {exc})")
 
-    clips = request.app.state.clips
-    if clips.available:
-        # Owed now, rendered later: the response does not wait for a video.
-        # The run is already on the board at this point, so a marker that
-        # fails to write must not turn a successful publish into a 500.
-        try:
-            store.mark_clip_pending(
-                record.run_id, record.user, record.event_id, record.submitted_at
-            )
-            clips.enqueue(record.run_id)
-        except Exception as exc:  # noqa: BLE001 — see above
-            print(f"clip: {record.run_id} not queued ({type(exc).__name__}: {exc})")
-
-    return {
-        "run_id": record.run_id,
-        "user": record.user,
-        "policy_name": record.policy_name,
-        "livery": record.livery,
-        "score": record.score,
-        "command_vx": record.command_vx,
-        "model_stored": record.model_stored,
-        "offers_download": record.offers_download,
-        "policy_url": (record.source or {}).get("url"),
-        "seeds_finished": record.seeds_finished,
-        "seeds_total": len(record.per_seed),
-        "per_seed": _seed_rows(result),
-        "trace_seed": record.trace_seed,
-    }
+        return {
+            "run_id": record.run_id,
+            "user": record.user,
+            "policy_name": record.policy_name,
+            "livery": record.livery,
+            "score": record.score,
+            "command_vx": record.command_vx,
+            "model_stored": record.model_stored,
+            "offers_download": record.offers_download,
+            "policy_url": (record.source or {}).get("url"),
+            "seeds_finished": record.seeds_finished,
+            "seeds_total": len(record.per_seed),
+            "per_seed": _seed_rows(result),
+            "trace_seed": record.trace_seed,
+        }
+    finally:
+        racing.discard(user)
 
 
 @router.post("/runs/{run_id}/withdraw")

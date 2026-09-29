@@ -85,6 +85,117 @@ def submit(api, path=REFERENCE, event="sprint-2m", name="walker", **fields):
     return api.post(f"/api/events/{event}/submit", data=data)
 
 
+import logging
+
+from arena.web.hub_identity import HubUnreachable, HubUser, TokenRefused
+
+TOKENS = {
+    "hf_alice": HubUser("alice", "user", frozenset({"duck-lab"})),
+    "hf_org": HubUser("duck-lab", "org", frozenset()),
+}
+
+
+@pytest.fixture
+def hub_users(monkeypatch):
+    """Stands in for the Hub's whoami-v2. Records the tokens it was asked about."""
+    asked = []
+
+    def whoami(token):
+        asked.append(token)
+        if token == "hf_down":
+            raise HubUnreachable("huggingface.co did not answer")
+        if token not in TOKENS:
+            raise TokenRefused
+        return TOKENS[token]
+
+    monkeypatch.setattr("arena.web.routes_submit._whoami", whoami)
+    return asked
+
+
+def enter(api, token="hf_alice", repo_id="alice/walker", path=REFERENCE, event="sprint-2m", **fields):
+    """What `publish --enter` sends: a repo, and the token in Authorization."""
+    _HUB[repo_id] = Path(path)
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    return api.post(f"/api/events/{event}/submit", data={"repo_id": repo_id, **fields}, headers=headers)
+
+
+def test_an_entry_is_credited_to_the_tokens_owner(spaced_api, hub_users):
+    response = enter(spaced_api)
+    assert response.status_code == 200, response.text
+    assert response.json()["user"] == "alice"
+    assert hub_users == ["hf_alice"]
+
+
+def test_without_a_token_it_says_how_to_enter(spaced_api, hub, hub_users):
+    response = enter(spaced_api, token=None)
+    assert response.status_code == 401
+    assert "uv run publish" in response.json()["detail"] and "--enter" in response.json()["detail"]
+    assert hub == [], "nothing fetched for an entry nobody can be credited with"
+
+
+def test_a_session_cookie_does_not_enter(spaced_api, hub_users):
+    sign_in(spaced_api, username="alice")
+    assert enter(spaced_api, token=None).status_code == 401
+
+
+def test_a_refused_token_is_401(spaced_api, hub_users):
+    response = enter(spaced_api, token="hf_nobody")
+    assert response.status_code == 401 and response.json()["detail"] == "Hugging Face refused this token."
+
+
+def test_an_unreachable_hub_is_503(spaced_api, hub_users):
+    assert enter(spaced_api, token="hf_down").status_code == 503
+
+
+def test_an_organisations_token_is_refused(spaced_api, hub_users):
+    response = enter(spaced_api, token="hf_org", repo_id="duck-lab/walker")
+    assert response.status_code == 403 and "person" in response.json()["detail"]
+
+
+def test_a_repo_outside_your_namespace_is_refused(spaced_api, hub, hub_users):
+    response = enter(spaced_api, repo_id="bob/walker")
+    assert response.status_code == 403 and "bob/walker" in response.json()["detail"]
+    assert hub == []
+
+
+def test_a_repo_of_one_of_your_orgs_is_yours(spaced_api, hub_users):
+    assert enter(spaced_api, repo_id="duck-lab/walker").status_code == 200
+
+
+def test_the_namespace_ignores_case(spaced_api, hub_users):
+    assert enter(spaced_api, repo_id="Alice/walker").status_code == 200
+
+
+def test_one_entry_races_at_a_time(spaced_api, hub, hub_users):
+    spaced_api.app.state.racing.add("alice")  # as while an earlier entry of hers is being raced
+    response = enter(spaced_api)
+    assert response.status_code == 409 and "still racing" in response.json()["detail"]
+    assert hub == []
+
+
+def test_the_racing_mark_goes_whatever_the_outcome(spaced_api, hub_users, tmp_path):
+    junk = tmp_path / "junk.onnx"
+    junk.write_bytes(b"not a model")
+    assert enter(spaced_api, path=junk).status_code == 400
+    assert spaced_api.app.state.racing == set()
+
+
+def test_the_token_is_never_logged_nor_repeated(spaced_api, hub_users, caplog):
+    caplog.set_level(logging.DEBUG)
+    answers = [enter(spaced_api, token=t, repo_id=r)
+               for t, r in [("hf_alice", "alice/walker"), ("hf_nobody", "alice/walker"),
+                            ("hf_alice", "bob/walker"), ("hf_org", "duck-lab/walker"), ("hf_down", "alice/walker")]]
+    for token in ("hf_alice", "hf_nobody", "hf_org", "hf_down"):
+        assert token not in caplog.text
+        assert all(token not in a.text for a in answers)
+
+
+def test_a_local_arena_needs_no_token_and_checks_no_namespace(api, hub_users):
+    response = enter(api, token=None, repo_id="bob/walker")
+    assert response.status_code == 200 and response.json()["user"] == "coralie"
+    assert hub_users == []
+
+
 def test_the_reference_policy_scores_and_is_recorded(api):
     response = submit(api)
     assert response.status_code == 200, response.text
@@ -386,24 +497,24 @@ def test_testing_a_policy_signed_out_is_refused(spaced_api):
     assert "sign in" in response.json()["detail"].lower()
 
 
-def test_publishing_signed_out_is_refused(spaced_api):
-    response = submit(spaced_api)
+def test_publishing_signed_out_is_refused(spaced_api, hub_users):
+    response = enter(spaced_api, token=None)
     assert response.status_code == 401
 
 
-def test_a_signed_out_publish_is_refused_and_records_nothing(spaced_api, store_dir):
+def test_a_signed_out_publish_is_refused_and_records_nothing(spaced_api, hub_users, store_dir):
     """`try` never persists anything either way, so it can't tell this test
     apart from a gate that was never wired in. `submit` does persist, so this
     has to go through `submit` to be a claim that can actually fail."""
-    response = submit(spaced_api)
+    response = enter(spaced_api, token=None)
     assert response.status_code == 401
     assert list(store_dir.rglob("*.json")) == []
     assert list(store_dir.rglob("*.npz")) == []
 
 
-def test_a_signed_in_run_is_recorded_under_the_hub_username(spaced_api):
+def test_a_signed_in_run_is_recorded_under_the_hub_username(spaced_api, hub_users):
     sign_in(spaced_api, username="alice")
-    body = submit(spaced_api, name="walker").json()
+    body = enter(spaced_api, name="walker").json()
     # Not "guest", and not anything the browser supplied.
     assert body["user"] == "alice"
 

@@ -42,6 +42,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.state.ballots = config.build_ballots()
     app.state.ballot_book = BallotBook()
     app.state.sessions = Sessions()
+    app.state.racing = set()  # users whose entry is being raced: one at a time each
 
     # Broadcasts live in their own directory, not the store: each is consumed
     # once and forgotten twenty airings later, and on the Space every store
