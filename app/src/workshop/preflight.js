@@ -13,12 +13,24 @@ export const ITEMS = [
     fix: 'git config --global user.name "Your Name" && git config --global user.email you@example.com',
   },
   { key: "uv", label: "uv", fix: "curl -LsSf https://astral.sh/uv/install.sh | sh" },
-  { key: "user", label: "Logged in to Hugging Face", fix: "hf auth login" },
+  { key: "user", label: "Logged in to Hugging Face" },
 ];
 
 /** git, a name on commits and uv — and, without an NVIDIA GPU, a Hugging Face login for HF Jobs. */
 export function canTrain(preflight) {
   return Boolean(preflight.git && preflight.identity && preflight.uv && (preflight.gpu || preflight.user));
+}
+
+const link = (href, text) => Object.assign(document.createElement("a"), { href, target: "_blank", rel: "noopener", textContent: text });
+
+/** No login yet: where to get an account and the token the field below takes. */
+function hubHelp() {
+  const help = document.createElement("p");
+  help.className = "preflight__help";
+  help.append("No account yet? ", link("https://huggingface.co/join", "Create one"), ", then ",
+    link("https://huggingface.co/settings/tokens/new?tokenType=write", "create a token with write access"),
+    " and paste it below.");
+  return help;
 }
 
 /** The Hugging Face line before the Hub has named anyone: still asking, or no answer at all. */
@@ -64,9 +76,13 @@ export function renderPreflight(zone, status, { onLogin, onRetry }) {
     label.textContent = ok && item.key === "user" ? `${item.label} as ${p.user}` : item.label;
     row.append(label);
     if (!ok) {
-      const fix = document.createElement("code");
-      fix.textContent = item.fix;
-      row.append(fix);
+      if (item.fix) {
+        const fix = document.createElement("code");
+        fix.textContent = item.fix;
+        row.append(fix);
+      } else {
+        row.append(hubHelp());
+      }
     }
     list.append(row);
   }

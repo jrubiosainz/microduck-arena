@@ -150,6 +150,8 @@ html, body {
   flex-basis: 100%;
 }
 
+.preflight__help { flex-basis: 100%; margin: 0; color: var(--ink); }
+
 /* ── Train ──────────────────────────────────────────────────────────────── */
 
 .train-form {
@@ -395,6 +397,9 @@ html, body {
 .publish__what {
   margin: 0;
 }
+
+.publish .livery { margin: 0 0 var(--space-2, 8px); }
+.publish__speed select { font: inherit; }
 
 .publish__dirty {
   margin: 0;

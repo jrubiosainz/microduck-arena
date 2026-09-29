@@ -1,6 +1,8 @@
 // Your code, then Publish. The policy goes to the user's Hugging Face account
-// through `uv run publish`, and the Arena opens with the entry filled in.
+// through `uv run publish`, and `uv run publish --enter` enters it on the Arena.
 
+import { speedChoices } from "../format.js";
+import { VARIANT_SWATCH_HEX } from "../liveries.js";
 import { button, say } from "./ui.js";
 
 export function codeMessage(code) {
@@ -50,11 +52,15 @@ export function defaultName(status, run) {
 }
 
 export function publishValues(form, selection) {
+  const speed = form.elements.namedItem("speed").value;
   return {
     run: selection.run.id,
     checkpoint: selection.checkpoint,
     name: form.elements.namedItem("policy").value.trim(),
     description: form.elements.namedItem("description").value.trim(),
+    livery: form.elements.namedItem("livery").value,
+    // Empty is the sweep, the Arena's default: every speed of the event tried, the best kept.
+    speed: speed === "" ? null : Number(speed),
     allow_dirty: Boolean(form.elements.namedItem("anyway")?.checked),
   };
 }
@@ -78,6 +84,12 @@ export function renderPublish(zone, selection, status, { onPreview, onPublish, d
       <p class="mono-label publish__what"></p>
       <label class="field">Name <input name="policy" spellcheck="false" /></label>
       <label class="field">Description <input name="description" /></label>
+      <fieldset class="livery">
+        <legend class="mono-label">Colour on the Arena</legend>
+        <div class="livery__swatches"></div>
+        <input type="hidden" name="livery" />
+      </fieldset>
+      <label class="field publish__speed">Speed <select name="speed"></select></label>
       <p class="publish__dirty" hidden>This run started from uncommitted changes: the code it records is not
         what trained it. <label><input type="checkbox" name="anyway" /> Publish anyway</label></p>
       <div class="publish__actions"></div>
@@ -91,6 +103,26 @@ export function renderPublish(zone, selection, status, { onPreview, onPublish, d
   form.elements.namedItem("description").value = applied ? applied.description : "";
   form.elements.namedItem("description").placeholder = status.event.title;
   if (applied?.anyway) form.elements.namedItem("anyway").checked = true;
+  const livery = form.elements.namedItem("livery");
+  livery.value = applied?.livery ?? "classic";
+  const swatches = zone.querySelector(".livery__swatches");
+  for (const [name, hex] of Object.entries(VARIANT_SWATCH_HEX)) {
+    const swatch = Object.assign(document.createElement("button"), { type: "button", className: "swatch", title: name });
+    swatch.dataset.livery = name;
+    swatch.style.setProperty("--swatch", hex);
+    swatch.setAttribute("aria-label", name);
+    swatch.setAttribute("aria-pressed", String(name === livery.value));
+    swatch.addEventListener("click", () => {
+      livery.value = name;
+      for (const other of swatches.children) other.setAttribute("aria-pressed", String(other.dataset.livery === name));
+    });
+    swatches.append(swatch);
+  }
+  const speed = form.elements.namedItem("speed");
+  for (const choice of speedChoices(status.event)) speed.append(new Option(choice.label, choice.value));
+  speed.value = applied?.speed ?? "";
+  // An event timed at one speed has nothing to choose.
+  zone.querySelector(".publish__speed").hidden = !(status.event.sweep_lo < status.event.sweep_hi);
   // Both buttons are held while either call is out: an export and an upload take a minute.
   let pending = false;
   const held = (call) => async () => {
@@ -103,14 +135,15 @@ export function renderPublish(zone, selection, status, { onPreview, onPublish, d
       gate();
     }
   };
-  const go = button("publish__go", "Publish", held(async () => {
+  const go = button("publish__go", "Publish and enter", held(async () => {
     const note = zone.querySelector(".publish__status");
-    say(note, "Exporting and uploading…");
+    say(note, "Exporting, uploading and racing on the Arena (a minute or two)…");
     try {
       const done = await onPublish(publishValues(form, selection));
-      say(note, "");
-      note.append(`Published ${done.repo} @ ${done.revision.slice(0, 7)}. The Arena opened in your browser: `,
-        Object.assign(document.createElement("a"), { href: done.arena_url, target: "_blank", textContent: "enter it there" }), ".");
+      say(note, `Published ${done.repo} @ ${done.revision.slice(0, 7)} and ${done.entered}. `);
+      note.append(Object.assign(document.createElement("a"), {
+        href: done.page_url, target: "_blank", rel: "noopener", textContent: "See it on the Arena",
+      }), " (opened in your browser).");
     } catch (error) {
       say(note, error.message, true);
     }

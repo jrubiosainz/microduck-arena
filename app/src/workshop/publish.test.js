@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { VARIANT_SWATCH_HEX } from "../liveries.js";
 import { codeMessage, defaultName, publishValues, renderCode, renderPublish } from "./publish.js";
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -7,8 +8,14 @@ const code = (state, extra = {}) => ({
   state, fork: state === "not-shared" ? null : "alice/microduck-challenges", changes: 0, unpushed: 0,
   commit: "abc123456", gh: true, fork_page: "https://github.com/pollen-robotics/microduck-challenges/fork", ...extra,
 });
-const status = { challenge: { folder: "sprint_2m" }, event: { title: "2 m Sprint" }, preflight: { user: "alice" } };
+const status = {
+  challenge: { folder: "sprint_2m" },
+  event: { title: "2 m Sprint", sweep_lo: 0.2, sweep_hi: 0.3, sweep_step: 0.05, sweep_count: 3 },
+  preflight: { user: "alice" },
+};
 const run = { id: "2026-09-28_10-00-00_first", name: "first", dirty: false, checkpoints: [1000], trials: {} };
+const selection = { run, checkpoint: 1000 };
+const handlers = (overrides = {}) => ({ onPreview: vi.fn(), onPublish: vi.fn(), draft: null, ...overrides });
 
 describe("your code", () => {
   it("says where it stands", () => {
@@ -95,7 +102,7 @@ describe("publishing", () => {
     renderPublish(zone, { run, checkpoint: 1000 }, status, { onPreview: vi.fn(), onPublish });
     zone.querySelector(".publish__go").click();
     expect(onPublish.mock.calls[0][0]).toEqual({
-      run: run.id, checkpoint: 1000, name: "sprint-2m-first", description: "", allow_dirty: false,
+      run: run.id, checkpoint: 1000, name: "sprint-2m-first", description: "", livery: "classic", speed: null, allow_dirty: false,
     });
   });
 
@@ -125,7 +132,10 @@ describe("publishing", () => {
     expect([go.disabled, preview.disabled]).toEqual([true, true]);
     go.click();
     expect(onPublish).toHaveBeenCalledTimes(1);
-    finish({ repo: "alice/microduck-x", revision: "a".repeat(40), arena_url: "http://arena.test/" });
+    finish({
+      repo: "alice/microduck-x", revision: "a".repeat(40),
+      entered: "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s", page_url: "http://arena.test/#/r/x",
+    });
     await settle();
     expect([go.disabled, preview.disabled]).toEqual([false, false]);
   });
@@ -168,10 +178,17 @@ describe("publishing", () => {
     const form = zone.querySelector("form");
     form.elements.namedItem("policy").value = "my-policy";
     form.elements.namedItem("description").value = "trained overnight";
-    const draft = { runId: run.id, name: "my-policy", description: "trained overnight", anyway: false };
+    zone.querySelectorAll(".swatch")[1].click();
+    form.elements.namedItem("speed").value = "0.25";
+    const draft = {
+      runId: run.id, name: "my-policy", description: "trained overnight", anyway: false,
+      livery: zone.querySelectorAll(".swatch")[1].dataset.livery, speed: "0.25",
+    };
     renderPublish(zone, { run, checkpoint: 1000 }, status, { onPreview: vi.fn(), onPublish: vi.fn(), draft });
     expect(zone.querySelector("input[name=policy]").value).toBe("my-policy");
     expect(zone.querySelector("input[name=description]").value).toBe("trained overnight");
+    expect(zone.querySelector("input[name=livery]").value).toBe(draft.livery);
+    expect(zone.querySelector("select[name=speed]").value).toBe("0.25");
   });
 
   it("starts fresh for a different run, even with a draft on hand", () => {
@@ -181,5 +198,52 @@ describe("publishing", () => {
     renderPublish(zone, { run: other, checkpoint: 1000 }, status, { onPreview: vi.fn(), onPublish: vi.fn(), draft });
     expect(zone.querySelector("input[name=policy]").value).toBe(defaultName(status, other));
     expect(zone.querySelector("input[name=description]").value).toBe("");
+  });
+
+  it("offers the Arena's four colours, classic first, and sends the one picked", () => {
+    const zone = document.createElement("div");
+    renderPublish(zone, selection, status, handlers());
+    const swatches = [...zone.querySelectorAll(".swatch")];
+    expect(swatches.map((s) => s.dataset.livery)).toEqual(Object.keys(VARIANT_SWATCH_HEX));
+    expect(publishValues(zone.querySelector("form"), selection).livery).toBe("classic");
+    swatches[1].click();
+    expect(swatches[1].getAttribute("aria-pressed")).toBe("true");
+    expect(publishValues(zone.querySelector("form"), selection).livery).toBe(swatches[1].dataset.livery);
+  });
+
+  it("sweeps unless a speed is chosen, and sends a chosen one as a number", () => {
+    const zone = document.createElement("div");
+    renderPublish(zone, selection, status, handlers());
+    const speed = zone.querySelector("select[name=speed]");
+    expect([...speed.options].map((o) => o.value)).toEqual(["", "0.20", "0.25", "0.30"]);
+    expect(publishValues(zone.querySelector("form"), selection).speed).toBeNull();
+    speed.value = "0.25";
+    expect(publishValues(zone.querySelector("form"), selection).speed).toBe(0.25);
+  });
+
+  it("asks no speed of an event timed at one speed", () => {
+    const zone = document.createElement("div");
+    const single = { ...status, event: { ...status.event, sweep_lo: 0.25, sweep_hi: 0.25, sweep_count: 1 } };
+    renderPublish(zone, selection, single, handlers());
+    expect(zone.querySelector(".publish__speed").hidden).toBe(true);
+  });
+
+  it("publishes and enters in one button, then says the time and links the entry's page", async () => {
+    const zone = document.createElement("div");
+    const onPublish = vi.fn(async () => ({
+      repo: "alice/microduck-x", revision: "a".repeat(40),
+      entered: "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s",
+      page_url: "https://huggingface.co/spaces/pollen-robotics/microduck-arena#/r/run42",
+    }));
+    renderPublish(zone, selection, status, handlers({ onPublish }));
+    const go = zone.querySelector(".publish__go");
+    expect(go.textContent).toBe("Publish and enter");
+    go.click();
+    expect(zone.querySelector(".publish__status").textContent)
+      .toBe("Exporting, uploading and racing on the Arena (a minute or two)…");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const status_ = zone.querySelector(".publish__status");
+    expect(status_.textContent).toContain("Published alice/microduck-x @ aaaaaaa and entered on sprint-2m: 4.892 s");
+    expect(status_.querySelector("a").href).toBe("https://huggingface.co/spaces/pollen-robotics/microduck-arena#/r/run42");
   });
 });

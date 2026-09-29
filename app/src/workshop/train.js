@@ -86,7 +86,8 @@ export function renderTrainForm(zone, status, { onLaunch }) {
 export function showTrainAccess(zone, preflight) {
   zone.querySelector(".train-form__where").textContent = preflight.gpu
     ? "Trains on this machine's NVIDIA GPU."
-    : `Trains on Hugging Face Jobs (one L4 GPU), billed to ${preflight.user ?? "your account"}; ` +
+    : `Trains on Hugging Face Jobs (one L4 GPU), billed to ${preflight.user ?? "your account"}, ` +
+      "which needs a payment method (huggingface.co/settings/billing); " +
       "the checkpoints come back here as they are saved. " +
       "Closing the workshop does not stop a Hugging Face job: reopen it to fetch or stop it.";
   zone.querySelector(".train-form button[type=submit]").disabled = !canTrain(preflight);

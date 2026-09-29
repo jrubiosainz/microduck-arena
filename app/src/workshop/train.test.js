@@ -48,6 +48,13 @@ describe("the Train form", () => {
     expect(zone.textContent).not.toMatch(/Closing the workshop/);
   });
 
+  it("says that Hugging Face Jobs need a payment method on the account", () => {
+    const zone = document.createElement("div");
+    renderTrainForm(zone, status(), { onLaunch: vi.fn() });
+    expect(zone.querySelector(".train-form__where").textContent)
+      .toContain("billed to alice, which needs a payment method (huggingface.co/settings/billing)");
+  });
+
   it("says it is starting in ink, and why a launch failed in orange", async () => {
     const zone = document.createElement("div");
     let fail;

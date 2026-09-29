@@ -11,7 +11,10 @@ describe("preflight", () => {
     const missing = [...zone.querySelectorAll(".preflight__missing")].map((li) => li.textContent);
     expect(missing).toHaveLength(2);
     expect(missing.join(" ")).toContain("git config --global user.email");
-    expect(missing.join(" ")).toContain("hf auth login");
+    const help = zone.querySelector(".preflight__missing .preflight__help");
+    expect(help.textContent).toBe("No account yet? Create one, then create a token with write access and paste it below.");
+    expect([...help.querySelectorAll("a")].map((a) => a.href)).toEqual([
+      "https://huggingface.co/join", "https://huggingface.co/settings/tokens/new?tokenType=write"]);
     expect(zone.querySelector(".preflight__login").hidden).toBe(false);
     // .button-secondary only recolours: without .button it is a bare browser button.
     expect(zone.querySelector(".preflight__login button").className).toBe("button button-secondary");

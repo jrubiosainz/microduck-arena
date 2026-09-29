@@ -106,6 +106,8 @@ function captureDraft() {
     runId: page.selection.run.id,
     name: form.elements.namedItem("policy").value,
     description: form.elements.namedItem("description").value,
+    livery: form.elements.namedItem("livery").value,
+    speed: form.elements.namedItem("speed").value,
     anyway: Boolean(form.elements.namedItem("anyway")?.checked),
   };
 }
