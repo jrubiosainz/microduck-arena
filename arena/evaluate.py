@@ -20,6 +20,11 @@ So the event declares a wide sweep and the harness runs it, in two stages:
 A DNF still counts at the full time limit, which makes flakiness cost
 proportionally instead of hiding behind a best-of: a policy that is brilliant
 four times and falls once ranks below a steady one.
+
+A stage is not a race and none of this applies to it: it plays the entry's
+command timeline once, on one seed, and every performance that plays to the
+end goes to the voters. Its score is the duration played, and only informs:
+a stage's board ranks on votes.
 """
 
 import statistics
@@ -30,7 +35,8 @@ import numpy as np
 from .constants import RUNNER_VERSION
 from .course import compile_course
 from .manifest import Manifest
-from .runner import run_once
+from .runner import run_once, run_stage
+from .timeline import Timeline, constant_timeline
 
 
 @dataclass(frozen=True)
@@ -179,7 +185,11 @@ def evaluate_at(manifest: Manifest, policy, command_vx: float) -> Evaluation:
     )
 
 
-def evaluate(manifest: Manifest, policy) -> Evaluation:
+def evaluate(manifest: Manifest, policy, timeline: Timeline | None = None) -> Evaluation:
+    if manifest.course.kind == "stage":
+        return _evaluate_stage(manifest, policy, timeline)
+    if timeline is not None:
+        raise ValueError(f"{manifest.id} is a race: it plays the event's command, not a timeline")
     model = compile_course(manifest)  # compiled once, reused for every run
     sweep = manifest.sweep
 
@@ -236,5 +246,26 @@ def evaluate(manifest: Manifest, policy) -> Evaluation:
         trace=outcomes[(command_vx, trace_seed)].trace,
         settle=outcomes[(command_vx, trace_seed)].settle,
         trace_seed=trace_seed,
+        runner_version=RUNNER_VERSION,
+    )
+
+
+def _evaluate_stage(manifest: Manifest, policy, timeline: Timeline | None) -> Evaluation:
+    """One performance: the entry's timeline, or the event's command for the whole time limit."""
+    if timeline is None:
+        timeline = constant_timeline(manifest.command, manifest.time_limit_s)
+    seed = manifest.seeds[0]
+    outcome = run_stage(manifest, policy, timeline, seed)
+    per_seed = (SeedResult(seed=seed, status=outcome.status, time_s=outcome.time_s),)
+    return Evaluation(
+        event_id=manifest.id,
+        score=METRICS[manifest.metric](per_seed, manifest.time_limit_s),
+        command_vx=0.0,
+        seeds_finished=1 if outcome.status == "finish" else 0,
+        per_seed=per_seed,
+        scan=(),
+        trace=outcome.trace,
+        settle=outcome.settle,
+        trace_seed=seed,
         runner_version=RUNNER_VERSION,
     )
