@@ -195,6 +195,9 @@ REF=arena/assets/policies/BEST_alpha_walking.onnx
 uv run arena score $REF --event sprint-2m
 uv run arena score $REF --event sprint-2m --user me --name reference --store ~/arena-board
 uv run arena board --event sprint-2m --store ~/arena-board
+
+# A stage event plays a command timeline (arena/timeline.py) instead of racing:
+uv run arena score $REF --event swag-contest --timeline timeline.json
 ```
 
 ## What a policy has to be

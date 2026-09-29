@@ -1,3 +1,4 @@
+import json
 import re
 
 from arena.assets import ASSET_ROOT
@@ -143,3 +144,53 @@ def test_commentary_without_a_token_says_so(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr("arena.commentary.hub_token", lambda config: None)
     assert main(["commentary", "R1", "--store", str(tmp_path), "--dry-run"]) == 1
     assert "token" in capsys.readouterr().err
+
+
+def _timeline(tmp_path):
+    path = tmp_path / "timeline.json"
+    path.write_text(json.dumps({
+        "timeline_version": 1, "duration_s": 2.0,
+        "keyframes": [{"t": 0.0}, {"t": 1.0, "twist": [1, 0, 0]}],
+    }))
+    return path
+
+
+def test_score_on_a_stage_summarises_the_performance(tmp_path, capsys):
+    assert main(["score", REFERENCE, "--event", "swag-contest", "--timeline", str(_timeline(tmp_path))]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "stage: 2.00 s played, timeline.json (2 keyframes)"
+    assert re.fullmatch(r"fell: (no|at \d+\.\d\d s)", lines[1])
+    assert re.fullmatch(r"seated \d+\.\d s · standing \d+\.\d s", lines[2])
+
+
+def test_score_on_a_stage_without_a_timeline_plays_the_events_command(capsys):
+    assert main(["score", REFERENCE, "--event", "swag-contest"]) == 0
+    assert capsys.readouterr().out.splitlines()[0] == "stage: 20.00 s played, the event's default command"
+
+
+def test_a_timeline_on_a_race_is_refused(tmp_path, capsys):
+    assert main(["score", REFERENCE, "--event", "sprint-2m", "--timeline", str(_timeline(tmp_path))]) == 1
+    assert "--timeline is for stage events" in capsys.readouterr().err
+
+
+def test_a_malformed_timeline_exits_1_with_where(tmp_path, capsys):
+    path = tmp_path / "timeline.json"
+    path.write_text('{"timeline_version": 1, "duration_s": 2.0, "keyframes": [{"t": 0.5}]}')
+    assert main(["score", REFERENCE, "--event", "swag-contest", "--timeline", str(path)]) == 1
+    assert "keyframes[0].t" in capsys.readouterr().err
+
+
+def test_a_timeline_that_is_not_json_exits_1(tmp_path, capsys):
+    path = tmp_path / "timeline.json"
+    path.write_text("{nope")
+    assert main(["score", REFERENCE, "--event", "swag-contest", "--timeline", str(path)]) == 1
+    assert "not a JSON file" in capsys.readouterr().err
+
+
+def test_a_stage_run_is_recorded_and_boarded(tmp_path, capsys):
+    store = str(tmp_path / "store")
+    assert main(["score", REFERENCE, "--event", "swag-contest", "--timeline", str(_timeline(tmp_path)),
+                 "--user", "alice", "--store", store]) == 0
+    capsys.readouterr()
+    assert main(["board", "--event", "swag-contest", "--store", store]) == 0
+    assert re.search(r"^\s*1\s+alice\b.*2\.000s", capsys.readouterr().out, re.MULTILINE)

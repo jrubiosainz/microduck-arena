@@ -11,12 +11,15 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from . import stage
 from . import trace as trace_codec
+from .constants import CTRL_DT
 from .evaluate import evaluate
 from .index import ENTRANTS, leaderboard
 from .manifest import ManifestError, all_events, load_event
 from .policy import PolicyError, load_policy
 from .store import LocalStore, RunRecord, new_id
+from .timeline import TimelineError, load_timeline
 
 
 def _cmd_events(args) -> int:
@@ -26,11 +29,7 @@ def _cmd_events(args) -> int:
     return 0
 
 
-def _cmd_score(args) -> int:
-    manifest = load_event(args.event)
-    policy = load_policy(Path(args.onnx))
-    result = evaluate(manifest, policy)
-
+def _print_sweep(result) -> None:
     print(f"sweep {len(result.scan)} commanded speeds "
           f"{result.scan[0].command_vx:.2f}–{result.scan[-1].command_vx:.2f} m/s")
     for point in result.scan:
@@ -44,6 +43,34 @@ def _cmd_score(args) -> int:
         print(f"seed {seed_result.seed}: {seed_result.status:<8} {timing}")
     print(f"\nscore {result.score:.3f}s · {result.seeds_finished}/"
           f"{len(result.per_seed)} finished · replay from seed {result.trace_seed}")
+
+
+def _print_stage(manifest, result, timeline, name: str | None) -> None:
+    played = result.trace.shape[0] * CTRL_DT
+    what = f"{name} ({len(timeline.times)} keyframes)" if timeline else "the event's default command"
+    if result.seeds_finished:
+        print(f"stage: {played:.2f} s played, {what}")
+    else:
+        print(f"stage: stopped at {played:.2f} s, the simulation diverged; {what}")
+    fell = stage.fell_at(result.trace, manifest.termination)
+    print("fell: no" if fell is None else f"fell: at {fell:.2f} s")
+    print(f"seated {stage.seated(result.trace).sum() * CTRL_DT:.1f} s · "
+          f"standing {stage.standing(result.trace).sum() * CTRL_DT:.1f} s")
+
+
+def _cmd_score(args) -> int:
+    manifest = load_event(args.event)
+    policy = load_policy(Path(args.onnx))
+    if manifest.course.kind == "stage":
+        timeline = load_timeline(Path(args.timeline), manifest.time_limit_s) if args.timeline else None
+        result = evaluate(manifest, policy, timeline)
+        _print_stage(manifest, result, timeline, Path(args.timeline).name if args.timeline else None)
+    elif args.timeline:
+        print(f"{manifest.id} is a race: --timeline is for stage events", file=sys.stderr)
+        return 1
+    else:
+        result = evaluate(manifest, policy)
+        _print_sweep(result)
 
     if args.store:
         record = RunRecord(
@@ -301,6 +328,8 @@ def main(argv=None) -> int:
     score.add_argument("--user", default="local")
     score.add_argument("--name", default=None)
     score.add_argument("--store", default=None, help="record the run into this directory")
+    score.add_argument("--timeline", default=None,
+                       help="a stage event's timeline.json (default: the event's own command)")
     score.add_argument(
         "--livery", default="classic", help="which colourway to race in"
     )
@@ -354,7 +383,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (ManifestError, PolicyError) as exc:
+    except (ManifestError, PolicyError, TimelineError) as exc:
         print(f"{exc}", file=sys.stderr)
         return 1
 
