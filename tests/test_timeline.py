@@ -1,0 +1,133 @@
+import json
+from pathlib import Path
+
+import pytest
+
+from arena.constants import CTRL_DT
+from arena.timeline import Timeline, TimelineError, constant_timeline, load_timeline
+
+LIMIT_S = 20.0
+
+
+def write(tmp_path, content) -> Path:
+    path = tmp_path / "timeline.json"
+    path.write_text(content if isinstance(content, str) else json.dumps(content))
+    return path
+
+
+def good(**overrides) -> dict:
+    raw = {
+        "timeline_version": 1,
+        "duration_s": 10.0,
+        "keyframes": [
+            {"t": 0.0, "twist": [0, 0, 0]},
+            {"t": 2.0, "twist": [1, 0, 0], "head": [0, 0, 0.5, 0]},
+            {"t": 4.5, "body": [0, 0, 0, 0, 0, 0.25]},
+        ],
+    }
+    return raw | overrides
+
+
+def test_a_good_timeline_loads(tmp_path):
+    timeline = load_timeline(write(tmp_path, good()), LIMIT_S)
+    assert timeline.duration_s == 10.0
+    assert timeline.times == (0.0, 2.0, 4.5)
+    assert timeline.commands[1] == (1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0) + (0.0,) * 6
+
+
+def test_a_missing_group_is_zeros_not_the_previous_keyframes(tmp_path):
+    """keyframes[2] names only body: its twist and head are zeros, although
+    keyframes[1] sat and looked left. Every keyframe is the whole command."""
+    timeline = load_timeline(write(tmp_path, good()), LIMIT_S)
+    assert timeline.commands[2] == (0.0,) * 12 + (0.25,)
+
+
+def test_the_command_is_the_last_keyframe_at_or_before_t(tmp_path):
+    timeline = load_timeline(write(tmp_path, good()), LIMIT_S)
+    assert timeline.command_at(0.0) == timeline.commands[0]
+    assert timeline.command_at(1.98) == timeline.commands[0]
+    assert timeline.command_at(2.0) == timeline.commands[1]
+    assert timeline.command_at(4.49) == timeline.commands[1]
+    assert timeline.command_at(9.99) == timeline.commands[2]
+
+
+@pytest.mark.parametrize("t", [0.3, 4.5, 7.0, 13.46])
+def test_a_keyframe_on_the_control_grid_starts_at_its_own_step(tmp_path, t):
+    """k * CTRL_DT is not exactly t in binary floating point (15 * 0.02 against
+    0.3); the keyframe must still take effect at step round(t / CTRL_DT)."""
+    raw = good(duration_s=20.0, keyframes=[{"t": 0.0}, {"t": t, "twist": [1, 0, 0]}])
+    timeline = load_timeline(write(tmp_path, raw), LIMIT_S)
+    k = round(t / CTRL_DT)
+    assert timeline.command_at(k * CTRL_DT)[0] == 1.0
+    assert timeline.command_at((k - 1) * CTRL_DT)[0] == 0.0
+
+
+def test_constant_timeline_holds_one_command():
+    command = (0.25,) + (0.0,) * 12
+    timeline = constant_timeline(command, 20.0)
+    assert timeline == Timeline(20.0, (0.0,), (command,))
+    assert timeline.command_at(19.99) == command
+
+
+@pytest.mark.parametrize(
+    "raw, said",
+    [
+        (good(extra=1), r"unknown keys \['extra'\]"),
+        ({k: v for k, v in good().items() if k != "keyframes"}, "missing 'keyframes'"),
+        (good(timeline_version=2), "timeline_version: this Arena plays version 1"),
+        (good(timeline_version=True), "timeline_version: this Arena plays version 1"),
+        (good(duration_s=0.0), "duration_s: must be at least one control step"),
+        (good(duration_s=0.01), "duration_s: must be at least one control step"),
+        (good(duration_s=20.5), "duration_s: 20.5 s is longer than this event's 20 s"),
+        (good(duration_s="10"), "duration_s: expected a number"),
+        (good(keyframes=[]), "keyframes: expected 1 to 1000"),
+        (good(keyframes=[{"t": 0.01 * i} for i in range(1001)]), "keyframes: expected 1 to 1000"),
+        (good(keyframes={"t": 0.0}), "keyframes: expected 1 to 1000"),
+        (good(keyframes=[{"t": 0.5}]), r"keyframes\[0\]\.t: the first keyframe starts at 0.0"),
+        (good(keyframes=[{"t": 0.0}, {"t": 0.0}]), r"keyframes\[1\]\.t: 0.0 does not come after 0.0"),
+        (good(keyframes=[{"t": 0.0}, {"t": 3.0}, {"t": 2.0}]), r"keyframes\[2\]\.t"),
+        (good(keyframes=[{"t": 0.0}, {"t": 10.0}]), r"keyframes\[1\]\.t: 10.0 is not before the end"),
+        (good(keyframes=[{"twist": [0, 0, 0]}]), r"keyframes\[0\]: missing 't'"),
+        (good(keyframes=[{"t": 0.0, "arms": [1]}]), r"keyframes\[0\]: unknown keys \['arms'\]"),
+        (good(keyframes=[[0.0, 1, 0, 0]]), r"keyframes\[0\]: expected an object"),
+        (good(keyframes=[{"t": 0.0, "twist": [0, 0]}]), r"keyframes\[0\]\.twist: expected 3 numbers"),
+        (good(keyframes=[{"t": 0.0, "head": 0.5}]), r"keyframes\[0\]\.head: expected 4 numbers"),
+        (good(keyframes=[{"t": 0.0, "twist": ["1", 0, 0]}]), r"keyframes\[0\]\.twist\[0\]: expected a number"),
+        (good(keyframes=[{"t": 0.0, "twist": [True, 0, 0]}]), r"keyframes\[0\]\.twist\[0\]: expected a number"),
+        (good(keyframes=[{"t": 0.0, "body": [0, 0, 0, 0, 0, 10.5]}]), r"keyframes\[0\]\.body\[5\]: 10.5 is outside ±10"),
+    ],
+)
+def test_a_malformed_timeline_is_refused_with_where(tmp_path, raw, said):
+    with pytest.raises(TimelineError, match=said):
+        load_timeline(write(tmp_path, raw), LIMIT_S)
+
+
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
+def test_jsons_non_finite_literals_are_refused(tmp_path, literal):
+    """Python's json module reads NaN and Infinity as floats; a command must not hold one."""
+    text = ('{"timeline_version": 1, "duration_s": 5.0, '
+            '"keyframes": [{"t": 0.0, "head": [0, 0, %s, 0]}]}' % literal)
+    with pytest.raises(TimelineError, match=r"keyframes\[0\]\.head\[2\]: must be finite"):
+        load_timeline(write(tmp_path, text), LIMIT_S)
+
+
+def test_a_file_that_is_not_json_is_refused(tmp_path):
+    with pytest.raises(TimelineError, match="timeline.json: not a JSON file"):
+        load_timeline(write(tmp_path, "{nope"), LIMIT_S)
+
+
+def test_a_file_that_is_not_utf8_is_refused(tmp_path):
+    path = tmp_path / "timeline.json"
+    path.write_bytes(b"\xff\xfe{}")
+    with pytest.raises(TimelineError, match="timeline.json: not a JSON file"):
+        load_timeline(path, LIMIT_S)
+
+
+def test_a_top_level_that_is_not_an_object_is_refused(tmp_path):
+    with pytest.raises(TimelineError, match="timeline.json: expected a JSON object, got list"):
+        load_timeline(write(tmp_path, "[]"), LIMIT_S)
+
+
+def test_a_missing_file_is_refused(tmp_path):
+    with pytest.raises(TimelineError, match="missing.json"):
+        load_timeline(tmp_path / "missing.json", LIMIT_S)
