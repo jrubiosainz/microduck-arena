@@ -165,4 +165,10 @@ def workshop(checkout, fakes, hub, monkeypatch):
                               open_browser=opened.append)
     client = TestClient(app, base_url=ADDRESS)
     client.opened = opened
-    return client
+    yield client
+    # A training still followed pulls one last time as it ends: after this test, PATH is the
+    # developer's again, and that pull would be the real uv's `hf download`, on the real Hub.
+    training = app.state.workshop.training
+    if training:
+        training.stop(hub)
+        wait_for(lambda: training.returncode is not None)
