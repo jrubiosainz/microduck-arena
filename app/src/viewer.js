@@ -10,12 +10,16 @@
 
 import {
   ACESFilmicToneMapping,
-  AmbientLight,
   Box3,
+  CanvasTexture,
+  Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
   HemisphereLight,
   Color,
   DirectionalLight,
   PerspectiveCamera,
+  PCFSoftShadowMap,
   PMREMGenerator,
   Scene,
   Vector3,
@@ -42,30 +46,14 @@ import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
 
-// ── Lighting ──────────────────────────────────────────────────────────
-//
-// These numbers were retuned DOWNWARD once the robot could be lit at all.
-//
-// Every value here was originally raised to rescue a robot that rendered as a
-// flat black silhouette. That turned out to have nothing to do with lighting:
-// the vendored GLB ships without vertex normals, so no lamp, no ambient and no
-// environment map could touch it (see creasedGeometries in rig.js). Cranking
-// these only lit the floor — a big flat plane facing straight up takes the full
-// value of anything sky-like — until the robots were silhouettes against their
-// own blown-out track, which is precisely what the screenshots showed.
-//
-// With normals rebuilt, the scene needs ordinary lighting. AMBIENT and HEMI are
-// still the FLOOR's dials; KEY, FILL and RIM are the robot's. The environment
-// stays, because the mech parts are genuinely metallic (metalness 0.3-0.35) and
-// metal with nothing to reflect really does read black — that hazard is real,
-// it just was not this bug.
-const EXPOSURE = 1.0;
-const ENV_INTENSITY = 0.35;
-const AMBIENT = 0.18;
-const KEY = 1.7;
-const FILL = 0.55;
-const RIM = 0.5;
-const HEMI = 0.12;
+// Directional daylight supplies shape; the room supplies broad, soft reflections.
+// Keep indirect light modest so pale shells and parquet retain their colours.
+const EXPOSURE = 0.9;
+const ENV_INTENSITY = 0.6;
+const KEY = 2.2;
+const FILL = 0.3;
+const RIM = 0.65;
+const HEMI = 0.25;
 const GHOST_OPACITY = 0.5;
 
 /**
@@ -270,16 +258,37 @@ export async function createViewer(
   // The liveries' colours are linear and deliberately oversaturated because the
   // simulator tone-maps with ACES; without this every robot reads too hot.
   renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false;
   let brightness = readBrightness();
 
   // A procedural room, generated once — no asset, no network. This is what
   // gives the metallic parts something to reflect; without it they are black.
   const pmrem = new PMREMGenerator(renderer);
-  const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const room = new RoomEnvironment();
+  const environment = pmrem.fromScene(room, 0.02);
+  room.dispose();
   pmrem.dispose();
 
+  // A shared contact shadow grounds racers without another scene render.
+  const shadowCanvas = document.createElement("canvas");
+  shadowCanvas.width = shadowCanvas.height = 64;
+  const shadowContext = shadowCanvas.getContext("2d");
+  const gradient = shadowContext.createRadialGradient(32, 32, 3, 32, 32, 32);
+  gradient.addColorStop(0, "rgba(0,0,0,0.3)");
+  gradient.addColorStop(0.45, "rgba(0,0,0,0.16)");
+  gradient.addColorStop(1, "rgba(0,0,0,0)");
+  shadowContext.fillStyle = gradient;
+  shadowContext.fillRect(0, 0, 64, 64);
+  const shadowMap = new CanvasTexture(shadowCanvas);
+  const shadowMaterial = new MeshBasicMaterial({
+    map: shadowMap, transparent: true, depthWrite: false, toneMapped: false,
+  });
+  const shadowGeometry = new PlaneGeometry(0.26, 0.18);
+
   const scene = new Scene();
-  scene.environment = environment;
+  scene.environment = environment.texture;
 
   // Keep reflected light fixed: scaling it with exposure washes out pale surfaces.
   function setBrightness(value) {
@@ -290,23 +299,22 @@ export async function createViewer(
   }
   scene.background = new Color(0xb8dce7);
 
-  // Four lights, because ACES tone mapping pulls mid-tones DOWN and the first
-  // attempt at this left the robots as dark blobs. Ambient sets the floor, the
-  // key gives form, the fill opens the shadow side, and the hemisphere lifts
-  // undersides — a duck is mostly overhangs, and without bounce its legs and
-  // the underside of its shell go to black.
-  scene.add(new AmbientLight(0xffffff, AMBIENT));
-  const key = new DirectionalLight(0xffffff, KEY);
-  key.position.set(1.4, 2.6, 1.8);
-  scene.add(key);
+  // A warm window key, a quiet fill and a cool back light. Static scenery
+  // shadows are refreshed only when the course is rebuilt.
+  const key = new DirectionalLight(0xfff1dc, KEY);
+  key.position.set(-1.5, 2.8, 1.5);
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.normalBias = 0.003;
+  key.shadow.bias = -0.0001;
+  scene.add(key, key.target);
   const fill = new DirectionalLight(0xbfd2ff, FILL);
-  fill.position.set(-1.6, 1.1, -1.3);
+  fill.position.set(1.8, 1.0, 1.0);
   scene.add(fill);
-  const rim = new DirectionalLight(0xffd9b0, RIM);
-  rim.position.set(-0.6, 0.9, 2.2);
+  const rim = new DirectionalLight(0xdceaff, RIM);
+  rim.position.set(0.8, 1.8, -2.2);
   scene.add(rim);
   // Sky above, ground bounce below.
-  scene.add(new HemisphereLight(0xcfe0ff, 0x2b2b30, HEMI));
+  scene.add(new HemisphereLight(0xcfe0ff, 0x70604c, HEMI));
 
   const camera = new PerspectiveCamera(spec?.fov ?? 42, 1, 0.02, 100);
   camera.position.set(-0.35, 0.34, 1.15);
@@ -403,6 +411,29 @@ export async function createViewer(
         ground.material = gym.floorMaterial(width, height);
       }
     }
+    key.castShadow = Boolean(gym);
+    if (gym) {
+      // Cast only fixed scenery: animated spectators and judges must not leave
+      // frozen silhouettes in the cached map. Room walls/roof stay out too.
+      audience?.group.traverse(node => {
+        if (node.isMesh && !node.isInstancedMesh) node.castShadow = true;
+      });
+      for (const root of [course, gym.group]) root.traverse(node => {
+        if (node.isMesh) node.receiveShadow = true;
+      });
+      const bounds = new Box3().setFromObject(course);
+      bounds.union(new Box3().setFromObject(judges.group));
+      const centre = bounds.getCenter(new Vector3());
+      const radius = bounds.getSize(new Vector3()).length() / 2 + 0.5;
+      key.target.position.copy(centre);
+      key.position.set(-1.5, 2.8, 1.5).normalize().multiplyScalar(radius * 2).add(centre);
+      Object.assign(key.shadow.camera, {
+        left: -radius, right: radius, top: radius, bottom: -radius,
+        near: 0.1, far: radius * 4,
+      });
+      key.shadow.camera.updateProjectionMatrix();
+      renderer.shadowMap.needsUpdate = true;
+    }
     lanes = entries.map((entry, i) => {
       const tier = entry.tier ?? "ghost";
       const rig = buildRigTree(kinematics);
@@ -419,11 +450,15 @@ export async function createViewer(
       // The same spacing buildCourse used: the ducks must stand between their
       // own walls, not between someone else's.
       const z = laneOffsetZ(i, entries.length, spacing);
+      rig.placer.traverse(node => { if (node.isMesh) node.receiveShadow = true; });
       placeLane(rig, z);
       scene.add(rig.placer);
 
       // The follow-spot, on the course so it climbs a slope with it (placeMarker).
       const marker = buildMarker(tier, entry.colour ?? null);
+      const shadow = new Mesh(shadowGeometry, shadowMaterial);
+      shadow.position.z = -0.001; // Below the ring, above the course, including slopes.
+      marker.add(shadow);
 
       // The duck's name, hung over its head in its lane's colour: the clip
       // has four ducks and no legend, so the name rides the duck.
@@ -611,6 +646,10 @@ export async function createViewer(
       controls?.dispose();
       clearScene();
       environment.dispose();
+      key.shadow.dispose();
+      shadowMap.dispose();
+      shadowMaterial.dispose();
+      shadowGeometry.dispose();
       renderer.dispose();
     },
   };

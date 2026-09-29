@@ -55,6 +55,20 @@ describe("official Reachy Mini asset", () => {
     expect(head.getObjectByName("antenna_right")).toBeTruthy();
     expect(head.getObjectByName("antenna_left")).toBeTruthy();
   });
+  it("casts cached furniture shadows without freezing the animated judges", () => {
+    const panel = buildJudges(model, 2, 0.425, []);
+    const furniture = panel.group.children.filter(node => node.isMesh);
+    expect(furniture.length).toBeGreaterThan(0);
+    expect(furniture.every(node => node.castShadow && node.receiveShadow)).toBe(true);
+    for (const robot of panel.group.children.filter(node => node.name.startsWith("judge-"))) {
+      robot.traverse(node => {
+        if (!node.isMesh) return;
+        expect(node.castShadow).toBe(false);
+        expect(node.receiveShadow).toBe(true);
+      });
+    }
+    panel.dispose();
+  });
   it("seats three full-scale judges symmetrically for the roller arena", () => {
     const panel = buildJudges(model, 2, 0.425, [], 3);
     const robots = panel.group.children.filter(child => child.name.startsWith("judge-"));

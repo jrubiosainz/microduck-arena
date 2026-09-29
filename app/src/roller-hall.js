@@ -14,7 +14,7 @@ import {
   WebGLRenderTarget,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { parquet } from "./gym.js";
+import { parquet, parquetRoughness } from "./gym.js";
 import { sponsorTexture } from "./gym-branding.js";
 import { crowd } from "./stadium.js";
 
@@ -54,12 +54,12 @@ export function buildRollerHall(length, span, branding, spectators) {
     materials.add(m);
     return m;
   };
-  const wood = paint(0xa46d36),
+  const wood = paint(0xa46d36, 0.58),
     dark = paint(0x252a30),
     seatPaint = paint(0x46505a);
   const plaster = paint(0xccc5b5),
-    metal = paint(0x343e49),
-    trim = paint(0xd6b472);
+    metal = paint(0x343e49, 0.38),
+    trim = paint(0xd6b472, 0.42);
   const white = new MeshBasicMaterial({ color: 0xf5eedc });
   materials.add(white);
   function fixed(geometry, material, x, y, z, yaw = 0) {
@@ -75,15 +75,22 @@ export function buildRollerHall(length, span, branding, spectators) {
     fixed(new BoxGeometry(w, h, d), m, x, y, z, yaw);
   const woodMap = parquet();
   textures.add(woodMap);
+  const varnish = parquetRoughness();
+  textures.add(varnish);
   function floorMaterial(w, d) {
     const map = woodMap.clone();
     map.repeat.set(w / 4, d / 4);
     map.offset.set((centre - w / 2) / 4, -d / 8);
     textures.add(map);
+    const roughnessMap = varnish.clone();
+    roughnessMap.repeat.copy(map.repeat);
+    roughnessMap.offset.copy(map.offset);
+    textures.add(roughnessMap);
     const m = new MeshStandardMaterial({
       map,
+      roughnessMap,
       roughness: 0.58,
-      envMapIntensity: 0.3,
+      envMapIntensity: 0.85,
     });
     materials.add(m);
     return m;

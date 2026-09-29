@@ -115,15 +115,12 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   const span = Math.max(width_m, lanes * spacing);
   const ground = new Mesh(
     new PlaneGeometry(length_m + OVERRUN * 2, span),
-    // Back to dark, and fully rough so the scene environment barely touches
-    // it. Lightening the floor to help the robots read did the opposite: a
-    // flat plane facing up takes all of the sky, and the robots ended up as
-    // silhouettes against their own track.
+    // Rubber track stays matte; the painted ramp has a broad satin highlight.
     new MeshStandardMaterial({
       color: slope_deg ? 0x456d7b : 0x22242a,
-      roughness: 1,
+      roughness: slope_deg ? 0.72 : 1,
       metalness: 0,
-      envMapIntensity: 0.15,
+      envMapIntensity: slope_deg ? 0.45 : 0.15,
     }),
   );
   // PlaneGeometry is built in XY; lay it flat. Not a coordinate-frame fix.

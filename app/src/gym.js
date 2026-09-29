@@ -1,7 +1,7 @@
 // A daylight gym around the miniature arena. World-space architecture stays
 // level when the event's course climbs; all surfaces belong to this room.
 import {
-  BoxGeometry, CanvasTexture, Group, Mesh,
+  BoxGeometry, CanvasTexture, DataTexture, Group, LinearFilter, LinearMipmapLinearFilter, Mesh,
   MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, RepeatWrapping,
   RingGeometry, SphereGeometry, SRGBColorSpace,
 } from "three";
@@ -40,6 +40,34 @@ export function parquet() {
   return texture;
 }
 
+// One 256² linear-data map: varnish varies gently across boards, while
+// joints remain matte. The layout matches parquet(), at a quarter resolution.
+export function parquetRoughness() {
+  const size = 256;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    const row = Math.floor(y / 8);
+    for (let x = 0; x < size; x++) {
+      const shifted = (x - (row % 4) * 16 + size) % size;
+      const board = Math.floor(shifted / 64);
+      const joint = y % 8 === 0 || shifted % 64 === 0;
+      const value = joint ? 255 : 170 + ((row * 13 + board * 17) % 35) + (y % 3) * 2;
+      const pixel = (y * size + x) * 4;
+      data[pixel] = data[pixel + 1] = data[pixel + 2] = value;
+      data[pixel + 3] = 255;
+    }
+  }
+  const texture = new DataTexture(data, size, size);
+  texture.flipY = true;
+  texture.magFilter = LinearFilter;
+  texture.minFilter = LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = 4;
+  texture.wrapS = texture.wrapT = RepeatWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 // A knee brace runs from the wall post up to the roof beam, toward the room.
 export function buildRoofBrace(x, wallZ, side, material) {
   const reach = 0.9;
@@ -67,8 +95,8 @@ export function buildGym(length, minZ, maxZ, branding, trackSpan) {
   const material = (color, roughness = 0.85) => new MeshStandardMaterial({ color, roughness });
   const plaster = material(0xeee8d6);
   const teal = material(0x287775);
-  const timber = material(0xb48049);
-  const frame = material(0x477274);
+  const timber = material(0xb48049, 0.58);
+  const frame = material(0x477274, 0.42);
   const white = material(0xf4f0dc);
   const dark = material(0x213d43);
   const sky = new MeshBasicMaterial({ color: 0xb8dce7, toneMapped: false });
@@ -76,6 +104,8 @@ export function buildGym(length, minZ, maxZ, branding, trackSpan) {
   const lamp = new MeshBasicMaterial({ color: 0xfff7d4 });
   const wood = parquet();
   textures.add(wood);
+  const varnish = parquetRoughness();
+  textures.add(varnish);
   const floors = [];
 
   function floorMaterial(w, d, z = 0) {
@@ -83,7 +113,11 @@ export function buildGym(length, minZ, maxZ, branding, trackSpan) {
     map.repeat.set(w / 4, d / 4);
     map.offset.set((centre - w / 2) / 4, (-z - d / 2) / 4);
     textures.add(map);
-    const made = new MeshStandardMaterial({ map, roughness: 0.62, metalness: 0, envMapIntensity: 0.3 });
+    const roughnessMap = varnish.clone();
+    roughnessMap.repeat.copy(map.repeat);
+    roughnessMap.offset.copy(map.offset);
+    textures.add(roughnessMap);
+    const made = new MeshStandardMaterial({ map, roughnessMap, roughness: 0.58, metalness: 0, envMapIntensity: 0.85 });
     floors.push(made);
     return made;
   }
