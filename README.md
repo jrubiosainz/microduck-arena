@@ -89,8 +89,9 @@ The Space signs users in with Hugging Face OAuth to know who is racing —
 nothing wider: it asks for no Hub scope and keeps no token. Entering the board
 takes a Hugging Face repo the author published themselves (the workshop, or
 `uv run publish`), raced at a pinned revision, and the board's `.onnx` link
-resolves straight to that repo. A file dropped in the browser can be tested,
-never published.
+resolves straight to that repo. A `.onnx` in hand is raced locally with
+`arena score <onnx> --event <id>` and entered with
+`uv run publish --onnx … --enter --event <id>`; the site itself has no entry form.
 
 ## Social clips
 

@@ -32,7 +32,7 @@ uv run train Mjlab-Sprint2m-MicroDuck --env.scene.num-envs 4096 --agent.max-iter
 uv run publish --run logs/rsl_rl/sprint_2m/<the run> --repo <you>/microduck-first --no-private --enter
 ```
 
-`--enter` races it here and prints its time and its page. Add `--livery yellow` for a
+`--enter` races it here and prints its time and its page. Add `--livery purple` for a
 colour, and `--speed 0.6` to be timed at one speed instead of the sweep. The Arena expects 61
 observations, 14 actions and a file no larger than 64 MiB; `publish` checks all three.
 
