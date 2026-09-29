@@ -7,6 +7,7 @@ The one line on a challenge's page runs the second form for you.
 """
 
 import argparse
+import os
 import shutil
 import socket
 import subprocess
@@ -39,6 +40,28 @@ def _port_free(port: int) -> bool:
     return True
 
 
+CLOSE_WITHIN_S = 1.0
+
+
+def serve(app, port: int) -> None:
+    import uvicorn
+
+    class Server(uvicorn.Server):
+        def handle_exit(self, sig, frame):
+            super().handle_exit(sig, frame)
+            # uvicorn then waits, without limit, for the requests still running — one stuck on an
+            # unreachable Hub or GitHub — and Python then for their threads: past a second, leave them.
+            # Not at once: uv, which runs the workshop, fails to find a child already gone on Ctrl-C.
+            leave = threading.Timer(CLOSE_WITHIN_S, os._exit, [128 + sig])
+            leave.daemon = True
+            leave.start()
+
+    try:
+        Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")).run()
+    except KeyboardInterrupt:  # raised again once uvicorn has stopped; uvicorn.run swallows it too
+        pass
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="workshop", description=__doc__.splitlines()[0])
     parser.add_argument("challenge", nargs="?", help="the Arena event, e.g. sprint-2m")
@@ -66,8 +89,6 @@ def main(argv=None) -> int:
         print(f"Port {args.port} is busy — is a workshop already open? Try --port", file=sys.stderr)
         return 2
 
-    import uvicorn
-
     from ..web.config import default_frontend
     from .app import create_workshop_app
     from .hub import Hub
@@ -80,5 +101,5 @@ def main(argv=None) -> int:
     print(f"{chosen.event} workshop: {url}  (Ctrl-C to close it)", flush=True)  # piped, it would wait for exit
     if not args.no_browser:
         threading.Timer(1.0, webbrowser.open, [url]).start()
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    serve(app, args.port)
     return 0
