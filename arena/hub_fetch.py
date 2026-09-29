@@ -166,7 +166,7 @@ def _read_manifest(repo_id: str, revision: str, download) -> dict:
         raise FetchError(f"could not download {repo_id}/{MANIFEST}: {exc}") from exc
     try:
         text = path.read_text()
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise FetchError(f"could not read {repo_id}/{MANIFEST}: {exc}") from exc
     try:
         manifest = json.loads(text)

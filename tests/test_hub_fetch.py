@@ -267,6 +267,17 @@ def test_a_manifest_that_cannot_be_read_is_refused(tmp_path):
                      info=lambda repo_id, rev: (["policy.onnx", "manifest.json"], "sha", {}))
 
 
+def test_a_manifest_that_is_not_utf8_is_refused(tmp_path):
+    def download(repo_id, filename, rev):
+        path = tmp_path / "manifest.json"
+        path.write_bytes(b'{"kind": "\xff"}')
+        return str(path)
+
+    with pytest.raises(FetchError, match="could not read alice/walker/manifest.json"):
+        fetch_policy("alice/walker", event=load_event("sprint-2m"), download=download,
+                     info=lambda repo_id, rev: (["policy.onnx", "manifest.json"], "sha", {}))
+
+
 def test_a_roller_manifest_enters_the_roller_sprint(tmp_path):
     rollers = GOOD_MANIFEST | {"robot": {"model": "microduck", "accessories": ["rollers"]}}
     assert _fetch(tmp_path, rollers, event_id="roller-sprint-2m").manifest == rollers
