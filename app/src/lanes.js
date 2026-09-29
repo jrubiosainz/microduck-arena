@@ -26,9 +26,7 @@ export function colourLanes(board, lanes) {
   const byId = new Map(lanes.map((lane) => [lane.runId, lane]));
   let colourIndex = 0;
   for (const row of board.querySelectorAll("tbody tr")) {
-    const id = row.classList.contains("provisional")
-      ? null
-      : row.querySelector("input[data-run-id]")?.dataset.runId;
+    const id = row.querySelector("input[data-run-id]")?.dataset.runId;
     const lane = byId.get(id);
     const tab = row.querySelector(".tab");
     if (lane) {

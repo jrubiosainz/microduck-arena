@@ -11,8 +11,6 @@ import {
   getStandings,
   getSettle,
   getTrace,
-  submitPolicy,
-  tryPolicy,
 } from "./api.js";
 
 function respondWith({ ok = true, status = 200, statusText = "OK", body, bytes }) {
@@ -171,28 +169,5 @@ describe("the channel", () => {
     expect(clipUrl("01ABC", "clip.mp4", "20260922T151828Z")).toBe(
       "/api/runs/01ABC/clip/clip.mp4?v=20260922T151828Z",
     );
-  });
-});
-
-describe("entering a policy", () => {
-  function sentForm() {
-    return Object.fromEntries(globalThis.fetch.mock.calls[0][1].body.entries());
-  }
-
-  it("publishes a Hub repo at a revision, with its code link", async () => {
-    respondWith({ body: { run_id: "r1" } });
-    await submitPolicy("sprint-2m", {
-      repoId: "alice/microduck-walker", revision: "abc1234", envUrl: "https://github.com/a/b", name: "", livery: "classic", commandVx: "",
-    });
-    expect(globalThis.fetch.mock.calls[0][0]).toBe("/api/events/sprint-2m/submit");
-    expect(sentForm()).toEqual({
-      repo_id: "alice/microduck-walker", revision: "abc1234", env_url: "https://github.com/a/b", livery: "classic",
-    });
-  });
-
-  it("tests a file when given one", async () => {
-    respondWith({ body: { trace_b64: "" } });
-    await tryPolicy("sprint-2m", { file: new File(["x"], "p.onnx"), livery: "classic" });
-    expect(Object.keys(sentForm())).toEqual(["file", "livery"]);
   });
 });

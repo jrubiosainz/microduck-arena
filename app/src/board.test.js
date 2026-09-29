@@ -111,11 +111,6 @@ describe("renderBoard", () => {
     expect(watch.getAttribute("aria-label")).toBe("Watch alice's run with walker");
   });
 
-  it("leaves the record cell empty for a trial, which has no run to watch", () => {
-    const container = render([{ ...row({ run_id: null }), provisional: true }]);
-    expect(container.querySelector("td.record").children).toHaveLength(0);
-  });
-
   it("stops making the whole row the way to the run", () => {
     // A row that navigates on any click sends you off the board when you reach
     // for the lane box or the download arrow and miss, and nothing on it says
@@ -197,27 +192,12 @@ describe("lane colours tie a row to its stripe on the stage", () => {
 });
 
 describe("telling your run apart from the rest", () => {
-  it("marks a tested run as the trial", () => {
-    const rows = buildRows([{ ...row(), provisional: true }]);
-    expect(rows[0].tier).toBe(TIERS.TRIAL);
-  });
-
   it("marks the best published finisher as the leader", () => {
     const rows = buildRows([
       row({ rank: 1, run_id: "a", score: 18 }),
       row({ rank: 2, run_id: "b", score: 22 }),
     ]);
     expect(rows.map((r) => r.tier)).toEqual([TIERS.LEADER, TIERS.GHOST]);
-  });
-
-  it("keeps the leader the best PUBLISHED run even when a trial beats it", () => {
-    // You still want to see what you are chasing, not lose it among the ghosts.
-    const rows = buildRows([
-      { ...row({ run_id: null, score: 15 }), provisional: true },
-      row({ run_id: "a", score: 18 }),
-      row({ run_id: "b", score: 22 }),
-    ]);
-    expect(rows.map((r) => r.tier)).toEqual([TIERS.TRIAL, TIERS.LEADER, TIERS.GHOST]);
   });
 
   it("does not make a DNF the leader", () => {
@@ -252,13 +232,6 @@ describe("policy downloads", () => {
     // The log is append-only, so those files are never coming back. A link
     // here would 404.
     const [built] = buildRows([row({ offers_download: false })]);
-    expect(built.policyUrl).toBeNull();
-  });
-
-  it("offers nothing for a trial, which is stored nowhere at all", () => {
-    const [built] = buildRows([
-      row({ provisional: true, offers_download: true, run_id: null }),
-    ]);
     expect(built.policyUrl).toBeNull();
   });
 
@@ -309,13 +282,6 @@ describe("policy downloads across both hosting paths", () => {
   it("offers nothing when the server says there is nothing", () => {
     // The rule lives in arena/store.py; the frontend must not re-derive it.
     const [built] = buildRows([row({ offers_download: false })]);
-    expect(built.policyUrl).toBeNull();
-  });
-
-  it("offers nothing for a trial, which is stored nowhere at all", () => {
-    const [built] = buildRows([
-      row({ provisional: true, offers_download: true, run_id: null }),
-    ]);
     expect(built.policyUrl).toBeNull();
   });
 });
@@ -379,14 +345,6 @@ describe("taking your own entry off the board", () => {
     expect(c.querySelector("button.withdraw")).toBeNull();
   });
 
-  it("does not offer it on a trial, which is on no board to leave", () => {
-    const c = rendered(
-      { user: "alice", provisional: true, run_id: null },
-      { me: "alice", onWithdraw: () => {} },
-    );
-    expect(c.querySelector("button.withdraw")).toBeNull();
-  });
-
   it("hands the run id to the handler when clicked", () => {
     const calls = [];
     const c = rendered({ user: "alice" }, { me: "alice", onWithdraw: (id) => calls.push(id) });
@@ -413,13 +371,6 @@ describe("a voted board shows votes, not a time", () => {
   it("shows the vote count, even when it is zero", () => {
     const container = render([row({ votes: 0 })]);
     expect(container.querySelector("td.votes").textContent).toBe("0");
-  });
-
-  it("says so for a provisional row, which has no votes by definition", () => {
-    const container = render([
-      { ...row(), provisional: true, run_id: null, votes: undefined },
-    ]);
-    expect(container.querySelector("td.votes").textContent).toBe("—");
   });
 
   it("never shows a finish time on a voted board -- that is the owner's explicit choice", () => {

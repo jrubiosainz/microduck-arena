@@ -1,28 +1,21 @@
-// One race: the stage, the file column beside it, the standing beneath.
+// One race: the stage, the entry column beside it, the standing beneath.
 
 import {
   getEvents,
   getLeaderboard,
   getMe,
   getTrace,
-  submitPolicy,
-  tryPolicy,
   withdrawRun,
 } from "./api.js";
 import { boardsheetMarkup, podium, wireBoardsheet } from "./boardsheet.js";
 import { flyer } from "./flyer.js";
-import { createDropzone } from "./dropzone.js";
 import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
-import { entryFromLocation, forgetEntry } from "./entry.js";
-import { VARIANT_SWATCH_HEX } from "./liveries.js";
 import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
-import { formatEventFacts, speedChoices } from "./format.js";
-import { dress, eventGuideHref, menuHref, runHref } from "./router.js";
+import { formatEventFacts } from "./format.js";
+import { dress, eventGuideHref, menuHref } from "./router.js";
 import { renderThumbnails } from "./thumbnail.js";
-import { panelState, signInHref } from "./session.js";
 import { footer, settleIdentity, signage } from "./signage.js";
-import { insertProvisional } from "./standings.js";
 import { renderTrainPanel } from "./trainpanel.js";
 import { createViewer } from "./viewer.js";
 import { voteButton } from "./votebutton.js";
@@ -35,196 +28,6 @@ export function arrangeLanes(board, lanes, random = Math.random) {
     [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
   }
   return lanes;
-}
-
-/**
- * The entry column: a sign-in prompt, or the racing/publishing controls.
- *
- * Kept as its own function, and NOT wired into the stage or the board, so it
- * can be rendered and exercised in a test without a WebGL viewer or a leaderboard
- * fetch. All of its element references are captured here, after `innerHTML` is
- * set — never before, and never by the caller — so a re-render can never leave a
- * handler pointing at a detached node.
- *
- * `onTry` / `onPublish` do the actual work (the API call, updating the trial,
- * repainting the board); this function only owns the form and the button state.
- */
-export function renderEntryPanel(container, me, { event, entry = { repo: "", revision: "", env: "" }, onTry, onPublish, onLiveryChange } = {}) {
-  const state = panelState(me);
-  const help = event?.id ? `<a class="help-link" href="${eventGuideHref(event.id)}">Training & rules ?</a>` : "";
-
-  if (state === "signed-out") {
-    // NO target="_blank", though Hugging Face's own docs suggest one for the
-    // iframe/cookie reason. That advice assumes a PUBLIC Space. This one is
-    // private, so the Hub gateway 404s any request to <space>.hf.space that
-    // does not carry its auth — and a fresh top-level tab carries none of it,
-    // because huggingface.co and hf.space are separate domains that share no
-    // cookies. Opening the link in a new tab produced a Hugging Face 404 and
-    // nothing else. Navigating the iframe itself keeps the auth it already
-    // has; the cookies are set SameSite=None so they survive that third-party
-    // context (see arena/web/routes_auth.py).
-    container.innerHTML = `
-      <span class="flyer-tape"></span>
-      ${help}
-      <p class="entry__lead">Sign in to race a policy.</p>
-      <a class="entry__signin" href="${signInHref()}">
-        Sign in with Hugging Face
-      </a>
-      <p class="entry__consent">
-        Watching costs nothing — the board, the replays and the downloads are
-        open. Signing in is only needed to test or publish.
-      </p>
-    `;
-    return;
-  }
-
-  container.innerHTML = `
-    <span class="flyer-tape"></span>
-    <p class="entry__user">Racing as <strong id="entry-user"></strong></p>
-    <label class="entry__name">Hugging Face repo
-      <input type="text" id="policy-repo" placeholder="you/microduck-your-policy" autocomplete="off" spellcheck="false" />
-      <span class="entry__hint" id="policy-revision"></span>
-    </label>
-    ${help}
-    <label class="entry__name">Name
-      <input type="text" id="policy-name" placeholder="optional" />
-    </label>
-    <label class="entry__name">Training environment
-      <input type="url" id="policy-env"
-             placeholder="optional — github.com, gitlab.com or huggingface.co" />
-      <span class="entry__hint">A link to how this policy was trained. Shown on your row.</span>
-    </label>
-    <fieldset class="livery">
-      <legend>Colour</legend>
-      <div class="livery__swatches" id="liveries"></div>
-    </fieldset>
-    <label class="entry__speed">Speed
-      <select id="speed"></select>
-      <span class="entry__hint">Sweeping tries every speed and keeps your best.</span>
-    </label>
-    <div class="entry__actions">
-      <button id="try" class="ghost">Test it</button>
-      <button id="publish">Publish</button>
-    </div>
-    <details class="entry__file">
-      <summary>Test a .onnx file instead</summary>
-      <div id="dropzone"></div>
-    </details>
-    <p class="entry__consent">
-      Publish races the policy at this revision of its Hugging Face repo and puts
-      it on the board with a link to it. A file can be tested, not published.
-    </p>
-    <p class="entry__status" id="entry-status"></p>
-  `;
-  container.querySelector("#entry-user").textContent = me.user;
-
-  const status = container.querySelector("#entry-status");
-  const tryButton = container.querySelector("#try");
-  const publishButton = container.querySelector("#publish");
-  const nameInput = container.querySelector("#policy-name");
-  const envInput = container.querySelector("#policy-env");
-  const repoInput = container.querySelector("#policy-repo");
-  const revisionHint = container.querySelector("#policy-revision");
-  repoInput.value = entry.repo;
-  envInput.value = entry.env;
-  // The revision belongs to the repo the workshop sent; typing another repo drops it.
-  let revision = entry.revision;
-  revisionHint.textContent = revision ? `at revision ${revision.slice(0, 7)}` : "";
-  repoInput.addEventListener("input", () => {
-    revision = "";
-    revisionHint.textContent = "";
-  });
-
-  // The four colourways the real robot comes in. Picking one shows it on your
-  // duck straight away, before you have raced anything.
-  let livery = "classic";
-  const swatches = container.querySelector("#liveries");
-  for (const [name, hex] of Object.entries(VARIANT_SWATCH_HEX)) {
-    const swatch = document.createElement("button");
-    swatch.type = "button";
-    swatch.className = "swatch";
-    swatch.dataset.livery = name;
-    swatch.style.setProperty("--swatch", hex);
-    swatch.title = name;
-    swatch.setAttribute("aria-label", name);
-    swatch.setAttribute("aria-pressed", String(name === livery));
-    swatch.addEventListener("click", () => {
-      livery = name;
-      for (const other of swatches.children) {
-        other.setAttribute("aria-pressed", String(other.dataset.livery === livery));
-      }
-      onLiveryChange?.(livery);
-    });
-    swatches.append(swatch);
-  }
-
-  // The trial speed picker, built from the event's own sweep. Default is the
-  // sweep itself: the trial should measure the same thing the board does unless
-  // you deliberately ask for one speed.
-  const speed = container.querySelector("#speed");
-  for (const choice of speedChoices(event)) {
-    const option = document.createElement("option");
-    option.value = choice.value;
-    option.textContent = choice.label;
-    speed.append(option);
-  }
-
-  const dropzone = createDropzone(container.querySelector("#dropzone"), {
-    onFile: () => {
-      status.textContent = "";
-      status.className = "entry__status";
-    },
-  });
-
-  async function run(kind) {
-    const file = dropzone.file;
-    const repoId = repoInput.value.trim();
-    if (kind === "publish" && !repoId) {
-      status.textContent =
-        "Publishing needs a Hugging Face repo. Publish from the workshop (Train my robot) " +
-        "or with `uv run publish`, then enter it here.";
-      status.className = "entry__status bad";
-      return;
-    }
-    if (kind === "try" && !file && !repoId) {
-      status.textContent = "Enter a Hugging Face repo, or choose a .onnx file to test.";
-      status.className = "entry__status bad";
-      return;
-    }
-    tryButton.disabled = true;
-    publishButton.disabled = true;
-    status.className = "entry__status";
-    // Say what is actually taking the time: a sweep is dominated by the number
-    // of speeds, a pinned run by the seeds.
-    const pinned = speed.value;
-    status.textContent = pinned
-      ? `Racing ${event.seeds} seeds at ${pinned} m/s…`
-      : `Sweeping ${event.sweep_count} speeds × ${event.seeds} seeds…`;
-    const common = { name: nameInput.value, livery, commandVx: pinned };
-    try {
-      if (kind === "try") {
-        // A chosen file wins for a trial: it is the one way to look at a policy before publishing it.
-        await onTry(file ? { file, ...common } : { repoId, revision, ...common });
-        status.textContent = "Tested. Nothing published yet.";
-      } else {
-        // NOT optional-chained. When the markup and this reader disagreed,
-        // `envInput?.value ?? ""` silently published every policy with no
-        // link and nothing anywhere said so.
-        const published = await onPublish({ repoId, revision, envUrl: envInput.value, ...common });
-        status.textContent = `Published as ${published.policy_name}.`;
-      }
-    } catch (error) {
-      // The server's own wording — for a refused manifest, the field it disagrees on.
-      status.textContent = error.message;
-      status.className = "entry__status bad";
-    } finally {
-      tryButton.disabled = false;
-      publishButton.disabled = false;
-    }
-  }
-
-  tryButton.addEventListener("click", () => run("try"));
-  publishButton.addEventListener("click", () => run("publish"));
 }
 
 /**
@@ -264,15 +67,16 @@ export function renderEventFacts(root, event) {
 /**
  * The way into the booth, when this event takes votes.
  *
- * Placed above the entry form, not beside the title -- "détaché et plus
+ * At the top of the entry column, not beside the title -- "détaché et plus
  * visible" was the owner's ask, and a button sharing a line with a heading
  * reads as a menu item, not a call to action. Its own function so the
  * placement is testable without a WebGL viewer or a leaderboard fetch: give
- * it a root with an `#entry` node and an event, and check what lands before it.
+ * it a root with an `.entry-col` node and an event, and check what lands
+ * first in it.
  */
 export function renderVoteButton(root, event) {
   if (!event.vote) return;
-  root.querySelector("#entry").before(voteButton(event, { variant: "panel" }));
+  root.querySelector(".entry-col").prepend(voteButton(event, { variant: "panel" }));
 }
 
 /**
@@ -281,7 +85,7 @@ export function renderVoteButton(root, event) {
  * Its own function for the reason `renderVoteButton` is: everything below
  * needs a WebGL viewer and a leaderboard fetch, so the layout could only be
  * read as code rather than exercised as DOM. The structure matters — the
- * entry panel sits level with the title because the title is INSIDE the
+ * entry column starts level with the title because the title is INSIDE the
  * stage's column, and nothing but a test keeps it there.
  */
 export function raceHall(event) {
@@ -297,10 +101,11 @@ export function raceHall(event) {
         ${deckMarkup}
       </div>
       <div class="entry-col">
-        <aside class="entry" id="entry"></aside>
+        <a class="help-link" href="${eventGuideHref(event.id)}">Training & rules ?</a>
       </div>
     </div>
     ${boardsheetMarkup}
+    <p class="board-note" id="board-note" role="status"></p>
   `;
   return hall;
 }
@@ -400,7 +205,6 @@ export async function renderRace(root, { event, state }) {
   renderEventFacts(root, event);
 
   const board = root.querySelector("#board");
-  const entryColumn = root.querySelector("#entry");
 
   const viewer = await createViewer(root.querySelector("#stage"), {
     // The event declares its rig, and the roller rig is a different kinematic
@@ -417,8 +221,6 @@ export async function renderRace(root, { event, state }) {
   // outside cost three rounds. MIN is 0.5 against a 1.25 default.
   viewer.setBrightness(MIN);
 
-  let trial = null; // the unpublished run, if one has been tested
-  let currentLivery = "classic"; // mirrors the entry panel's swatch pick
   const traces = new Map();
   const liveries = new Map(); // run id -> the colourway it raced in
   const names = new Map(); // run id -> whose run it is, for the plate over its duck
@@ -440,22 +242,14 @@ export async function renderRace(root, { event, state }) {
       // below decides whether it is shown.
       name: names.get(runId),
     }));
-    // The trial wears whatever is selected right now, so changing the swatch
-    // repaints it immediately.
-    if (trial) {
-      lanes.unshift({
-        runId: null, trace: trial.trace, tier: "trial", livery: currentLivery, name: "your test",
-      });
-    }
     viewer.setLanes(arrangeLanes(board, event.id === "swag-contest" ? lanes.slice(0, 1) : lanes), event);
     deck.reset();
     root.querySelector("#stage-hint").textContent = lanes.length
       ? ""
-      : "Tick a lane below, or test a policy, to watch a replay.";
+      : "Tick a lane below to watch a replay.";
   }
 
-  // The sheet keeps the lanes and the filters; the page says what the rows
-  // are — the server's, a trial in its place — and races what is ticked.
+  // The sheet keeps the lanes and the filters; the page races what is ticked.
   const sheet = wireBoardsheet(hall, {
     event,
     me: me?.user ?? null,
@@ -465,7 +259,7 @@ export async function renderRace(root, { event, state }) {
         liveries.set(row.run_id, row.livery ?? "classic");
         names.set(row.run_id, row.user);
       }
-      return insertProvisional(rows, trial);
+      return rows;
     },
     opening: podium,
     onRace: race,
@@ -477,34 +271,12 @@ export async function renderRace(root, { event, state }) {
         return;
       }
       try {
+        hall.querySelector("#board-note").textContent = "";
         await withdrawRun(runId);
         await sheet.paint();
       } catch (error) {
-        const status = entryColumn.querySelector("#entry-status");
-        status.textContent = error.message;
-        status.className = "entry__status bad";
+        hall.querySelector("#board-note").textContent = error.message;
       }
-    },
-  });
-
-  renderEntryPanel(entryColumn, me, {
-    event,
-    entry: entryFromLocation(event.id),
-    onLiveryChange: (livery) => {
-      currentLivery = livery;
-      race([...sheet.selection], sheet.tiers);
-    },
-    onTry: async (sent) => {
-      trial = await tryPolicy(event.id, sent);
-      await sheet.paint();
-    },
-    onPublish: async (sent) => {
-      const published = await submitPolicy(event.id, sent);
-      // Entered: the workshop's kept copy has done its job.
-      forgetEntry();
-      // The result has its own page now, and the reveal plays there.
-      location.hash = runHref(published.run_id);
-      return published;
     },
   });
 

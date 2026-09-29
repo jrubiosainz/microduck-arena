@@ -1,29 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { panelState, signInHref } from "./session.js";
-
-describe("panelState", () => {
-  it("asks for a sign-in when OAuth is on and nobody is signed in", () => {
-    expect(panelState({ signed_in: false, oauth_enabled: true })).toBe("signed-out");
-  });
-
-  it("is ready when signed in", () => {
-    expect(panelState({ signed_in: true, oauth_enabled: true })).toBe("ready");
-  });
-
-  it("is ready locally, where there is no OAuth at all", () => {
-    // The local run: ARENA_DEV_USER is signed in and publishes to the local
-    // store. A sign-in button here would be a dead end.
-    expect(
-      panelState({ signed_in: true, oauth_enabled: false, user: "coralie" }),
-    ).toBe("ready");
-  });
-
-  it("treats a missing or failed /api/me as signed out rather than crashing", () => {
-    expect(panelState(null)).toBe("signed-out");
-    expect(panelState(undefined)).toBe("signed-out");
-    expect(panelState({})).toBe("signed-out");
-  });
-});
+import { signInHref } from "./session.js";
 
 describe("signInHref", () => {
   it("carries the race route so signing in comes back to it", () => {

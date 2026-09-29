@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { renderGuides } from "./guides.js";
-import { renderEntryPanel } from "./race.js";
+import { raceHall } from "./race.js";
 
 afterEach(() => document.body.replaceChildren());
 
@@ -73,11 +73,10 @@ describe("public guides", () => {
     expect(root.querySelector("table").parentElement.getAttribute("role")).toBe("region");
   });
 
-  it("lets signed-out entrants learn before signing in", () => {
-    const root = document.createElement("div");
-    renderEntryPanel(root, { signed_in: false }, { event: { id: "sprint-2m" } });
-    expect(root.querySelector('a[href="#/e/sprint-2m/guide"]')).not.toBeNull();
-    expect(root.querySelector("#publish")).toBeNull();
+  it("lets anyone learn the rules from the race page, signed in or not", () => {
+    const hall = raceHall({ id: "sprint-2m", title: "2 m Sprint" });
+    expect(hall.querySelector('.entry-col a.help-link[href="#/e/sprint-2m/guide"]')).not.toBeNull();
+    expect(hall.querySelector("#publish, #try, #dropzone")).toBeNull();
   });
 
   it("sends a stale link to a removed challenge's guide back to the rounds", () => {

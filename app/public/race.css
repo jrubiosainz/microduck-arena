@@ -80,8 +80,8 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
    as part of what the board is rather than a caution stapled onto it. */
 .racecaveat { color: var(--ink-70); font-size: 0.82rem; max-width: 60ch; margin: 0 0 18px; }
 
-/* The entry column sits further off the stage than it did: at 18px the drop
-   zone read as an edge of the picture rather than as its own panel. */
+/* The entry column sits further off the stage than it did: at 18px it read
+   as an edge of the picture rather than as its own panel. */
 .racegrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 17rem;
@@ -99,49 +99,9 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 .entry-col { display: flex; flex-direction: column; gap: 14px; }
 .entry-col .vote-button--panel { align-self: flex-end; }
 
-/* A note taped to the wall, the way an event is on the front: cream in a 2 px
-   ink border, its own ink shadow, a strip of tape across the top and the
-   charter's smallest lean. The tape is components.css's .flyer-tape, put there
-   by renderEntryPanel — it is absolutely positioned, so it takes no slot in
-   this column and no gap with it. */
-.entry {
-  position: relative;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  background: var(--cream);
-  border: 2px solid var(--ink);
-  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
-  rotate: var(--rotate-1-0);
-}
-.drop {
-  border: 2px dashed var(--ink);
-  padding: 22px 14px;
-  text-align: center;
-  cursor: pointer;
-  background: var(--paper);
-}
-.drop:hover, .drop:focus-visible { border-color: var(--orange-inked); outline: none; }
-.drop--over { border-color: var(--orange-inked); background: rgba(255, 122, 47, 0.14); }
-.drop__line { margin: 0 0 4px; font-size: 0.92rem; overflow-wrap: anywhere; }
-.drop__or { margin: 0; color: var(--ink-70); font-size: 0.85rem; }
-.drop code { font-family: var(--mono); color: var(--sky-inked); }
-
-button.link {
-  font: inherit;
-  color: var(--orange-inked);
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-/* Every label in this column is an eyebrow, as the section heads are on the
-   front. The control under it resets the face, or it would inherit the
-   eyebrow's capitals and its tracking. */
-.entry__name, .livery legend, .entry__speed {
+/* Every label styled here is an eyebrow, as the section heads are on the
+   front: the workshop's own livery picker shares this column's type. */
+.livery legend {
   color: var(--orange-inked);
   font-family: var(--type-eyebrow-family);
   font-weight: var(--type-eyebrow-weight);
@@ -150,85 +110,10 @@ button.link {
   text-transform: uppercase;
 }
 
-.entry__name { display: flex; flex-direction: column; gap: 5px; }
-/* Folded away by default: the file picker is the exception now, not the way
-   in — most entrants type a Hub repo, and a drop zone open by default read as
-   the main event for one novice who is not it. */
-.entry__file summary { cursor: pointer; }
-.entry__file[open] summary { margin-bottom: var(--space-2, 8px); }
-.entry__name input {
-  font: 400 0.92rem/1.3 var(--body);
-  letter-spacing: 0;
-  text-transform: none;
-  padding: 7px 9px;
-  color: var(--ink);
-  background: var(--paper);
-  border: 2px solid var(--ink);
-}
-.entry__name input:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
-
-/* The cabinet's two buttons, side by side: the action in orange on the hot
-   shadow, the quieter one in yellow on the cold one. The offset is the
-   sticker's, not the card's, so the left button's shadow lands in the gap
-   rather than under the button beside it. */
-.entry__actions { display: flex; gap: 8px; }
-.entry__actions button {
-  flex: 1;
-  font: 400 0.95rem/1.15 var(--display);
-  letter-spacing: var(--type-button-label-tracking);
-  text-transform: uppercase;
-  padding: 9px 10px;
-  cursor: pointer;
-  border: 2px solid var(--ink);
-  background: var(--orange);
-  color: var(--ink);
-  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--magenta);
-}
-.entry__actions button.ghost {
-  background: var(--yellow);
-  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--cyan);
-}
-.entry__actions button:active {
-  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
-  box-shadow: none;
-}
-.entry__actions button:disabled {
-  background: var(--warm-paper);
-  color: var(--ink-70);
-  box-shadow: none;
-  cursor: progress;
-}
-.entry__status { margin: 0; color: var(--ink-70); font-size: 0.85rem; min-height: 1.2em; }
-.entry__status.bad { color: var(--orange-inked); font-weight: 600; }
-
-/* The signed-out panel: a lead line and one link, nothing to fill with. */
-.entry__lead { margin: 0; font-size: 0.92rem; }
-.entry__signin {
-  display: block;
-  text-align: center;
-  font: 400 0.95rem/1.15 var(--display);
-  letter-spacing: var(--type-button-label-tracking);
-  text-transform: uppercase;
-  padding: 9px 10px;
-  border: 2px solid var(--ink);
-  background: var(--orange);
-  color: var(--ink);
-  text-decoration: none;
-  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--magenta);
-}
-.entry__signin:active {
-  translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
-  box-shadow: none;
-}
-
-/* Whose entry this is, once signed in. */
-.entry__user { margin: 0; font-size: 0.82rem; color: var(--ink-70); }
-.entry__user strong { color: var(--ink); }
-
-/* The way to training, above the entry note when this round is open: the
-   same card as .entry — same padding, ink border, sticker shadow — folded
-   shut behind its own disclosure so a visitor here to race is not made to
-   read four paragraphs first. */
+/* The way to training: the page's one call to action now that there is no
+   entry form, open by default and sitting above the guide link in the entry
+   column. Same padding, ink border and sticker shadow as anything else taped
+   to the wall. */
 .train {
   padding: 16px;
   display: flex;
@@ -256,8 +141,8 @@ button.link {
 }
 .train__open::-webkit-details-marker { display: none; }
 .train[open] .train__open { margin-bottom: 4px; }
-.train__need, .train__step, .train__note { margin: 0; font-size: 0.85rem; }
-.train__note { color: var(--ink-70); }
+.train__uv, .train__step, .train__note { margin: 0; font-size: 0.85rem; }
+.train__note, .train__uv { color: var(--ink-70); }
 /* A command line that wraps rather than scrolls: the panel's width is the
    entry column's, and a one-line launcher easily runs wider than it. It breaks
    at its spaces first, so `uv run` and the challenge's id stay whole. */
@@ -498,9 +383,6 @@ table.board tbody tr:first-child .time { color: var(--orange-inked); }
 table.board tr.dnf .time { font-size: 1.05rem; color: var(--orange-inked); }
 table.board tr.dnf { color: var(--ink-70); }
 
-table.board tr.provisional td.tab { border-left-style: dashed; }
-table.board tr.provisional .time { color: var(--ink); }
-
 /* A voted board's one loud column, in the exact slot .time takes on a timed
    one -- the two never appear together, so they share the same weight. */
 table.board .votes {
@@ -511,18 +393,15 @@ table.board .votes {
   letter-spacing: 0.01em;
 }
 table.board tbody tr:first-child .votes { color: var(--orange-inked); }
-table.board tr.provisional .votes { color: var(--ink); }
-.unpublished {
-  display: block;
-  color: var(--lavender-inked);
-  font-size: 0.72rem;
-  margin-top: 1px;
-}
 
 .empty { color: var(--ink-70); margin-top: 22px; }
 /* Inside the frame it has no margin to sit on: the sheet's own padding is
    what keeps it off the border. */
 .boardsheet .empty { margin: 0; padding: 18px var(--space-card-padding-min); }
+
+/* A failed withdrawal, said under the board it was asked from. */
+.board-note { margin: 8px 0 0; color: var(--orange-inked); font-weight: 600; }
+.board-note:empty { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -553,25 +432,6 @@ table.board tr.tier-ghost .votes { color: var(--ink-70); }
 }
 .swatch[aria-pressed="true"] { outline: 3px solid var(--orange-inked); outline-offset: 2px; }
 
-/* Trial speed picker. Sits with the entry controls, and says plainly that it
-   does not affect a publish — otherwise it reads as a way to game the board. */
-.entry__speed { display: flex; flex-direction: column; gap: 6px; }
-.entry__speed select {
-  padding: 9px 10px;
-  background: var(--paper);
-  border: 2px solid var(--ink);
-  color: var(--ink);
-  font: 400 0.9rem/1.2 var(--body);
-  letter-spacing: 0;
-  text-transform: none;
-}
-.entry__hint {
-  font: 400 0.72rem/1.4 var(--body);
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--ink-70);
-}
-
 /* Download column. Quiet by default and orange on hover: it is an offer, not
    the point of the row. */
 /* The three icons at the end are one row of buttons, so they keep one
@@ -599,15 +459,6 @@ table.board .grab a {
 }
 table.board .grab a:hover,
 table.board .grab a:focus-visible { color: var(--ink); background: var(--yellow); }
-
-/* What Publish costs you, said next to the button rather than buried. */
-.entry__consent {
-  margin: 2px 0 0;
-  font-size: 0.72rem;
-  line-height: 1.45;
-  color: var(--ink-70);
-}
-.entry__consent code { font-family: var(--mono); color: var(--sky-inked); }
 
 /* Take-off-the-board control. Only ever rendered on your own rows.
    It WAS transparent until the row was hovered, on the theory that a rare
@@ -719,14 +570,10 @@ table.board .env a:hover,
 table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 
 /* The focus ring is cyan, on everything that takes focus — the club's rule. */
-.drop:focus-visible,
 .swatch:focus-visible,
 .controls button:focus-visible,
 .modes button:focus-visible,
 .pickall-box:focus-visible,
-.entry__actions button:focus-visible,
-.entry__signin:focus-visible,
-.entry__speed select:focus-visible,
 .train__open:focus-visible,
 .train__copy:focus-visible,
 table.board .grab a:focus-visible,

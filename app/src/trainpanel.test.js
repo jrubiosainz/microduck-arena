@@ -5,19 +5,26 @@ const sprint = { id: "sprint-2m", status: "open" };
 
 afterEach(() => vi.restoreAllMocks());
 
-describe("Train my robot", () => {
-  it("gives the one line for this challenge, on this Arena", () => {
+describe("Train my own robot", () => {
+  it("gives the one line for this challenge, on this Arena, and uv's install as the answer to its absence", () => {
     expect(oneLine(sprint, "http://127.0.0.1:8000")).toBe("uv run http://127.0.0.1:8000/workshop.py sprint-2m");
     const panel = trainPanel(sprint, "https://arena.example");
-    const lines = [...panel.querySelectorAll(".train__line code")].map((node) => node.textContent);
-    expect(lines).toContain("uv run https://arena.example/workshop.py sprint-2m");
-    expect(lines).toContain("curl -LsSf https://astral.sh/uv/install.sh | sh");
+    expect(panel.querySelector(".train__open").textContent).toBe("Train my own robot");
+    const [line, install] = [...panel.querySelectorAll(".train__line code")].map((node) => node.textContent);
+    expect(line).toBe("uv run https://arena.example/workshop.py sprint-2m");
+    expect(install).toBe("curl -LsSf https://astral.sh/uv/install.sh | sh");
+    expect(panel.querySelector(".train__uv").textContent).toBe(
+      "uv: command not found? Install uv, open a new terminal, and paste the line again:");
   });
 
-  it("says what is needed, GPU or Hugging Face Jobs", () => {
+  it("leaves what else it takes to the launcher and the workshop, when each is needed", () => {
     const text = trainPanel(sprint, "https://arena.example").textContent;
-    expect(text).toMatch(/NVIDIA GPU/);
-    expect(text).toMatch(/Hugging Face Jobs/);
+    expect(text).not.toMatch(/You need/);
+    expect(text).not.toMatch(/NVIDIA GPU/);
+  });
+
+  it("is open: it is the page's call to action", () => {
+    expect(trainPanel(sprint, "https://arena.example").open).toBe(true);
   });
 
   it("copies the line", async () => {
@@ -29,12 +36,12 @@ describe("Train my robot", () => {
     expect(writeText).toHaveBeenCalledWith("uv run https://arena.example/workshop.py sprint-2m");
   });
 
-  it("hangs above the entry form, and not for a planned event", () => {
+  it("sits in the entry column above the guide link, and not for a planned event", () => {
     const root = document.createElement("div");
-    root.innerHTML = '<aside id="entry"></aside>';
+    root.innerHTML = '<div class="entry-col"><a class="help-link"></a></div>';
     renderTrainPanel(root, { id: "highest-jump", status: "planned" }, "https://a");
     expect(root.querySelector(".train")).toBeNull();
     renderTrainPanel(root, sprint, "https://a");
-    expect(root.querySelector("#entry").previousElementSibling.classList.contains("train")).toBe(true);
+    expect(root.querySelector(".help-link").previousElementSibling.classList.contains("train")).toBe(true);
   });
 });

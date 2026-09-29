@@ -1,13 +1,6 @@
-// The entry panel's three states, exercised as rendered DOM rather than read
-// as code. `renderEntryPanel` replaces its container's innerHTML per state; if
-// its element references were captured before that (or anywhere other than
-// inside this function, after the innerHTML it belongs to), the buttons below
-// would look right and do nothing. Clicking them and observing the result is
-// what would have caught that.
-
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  arrangeLanes, otherRounds, raceHall, renderEntryPanel, renderEventFacts, renderVoteButton,
+  arrangeLanes, otherRounds, raceHall, renderEventFacts, renderVoteButton,
 } from "./race.js";
 
 const event = {
@@ -20,134 +13,6 @@ const event = {
   slope_deg: 0,
   rig: "legs",
 };
-
-function chooseFile(container, name = "policy.onnx") {
-  const input = container.querySelector("#policy-file");
-  const file = new File(["onnx-bytes"], name);
-  Object.defineProperty(input, "files", { value: [file], configurable: true });
-  input.dispatchEvent(new Event("change"));
-}
-
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-describe("renderEntryPanel: signed-out", () => {
-  it("offers a sign-in link that navigates in place, and no racing controls", () => {
-    const container = document.createElement("div");
-    renderEntryPanel(container, { signed_in: false, oauth_enabled: true }, { event });
-
-    const link = container.querySelector(".entry__signin");
-    expect(link).not.toBeNull();
-    expect(link.getAttribute("href")).toBe("/login");
-    // NOT target="_blank", though Hugging Face's own docs suggest it for the
-    // iframe/cookie reason — that advice assumes a PUBLIC Space. This one is
-    // private, so the Hub gateway 404s any request to <space>.hf.space without
-    // its auth, and a fresh top-level tab carries none: huggingface.co and
-    // hf.space are separate domains sharing no cookies. Opening in a new tab
-    // produced a Hugging Face 404 and nothing else. Navigating the iframe keeps
-    // the auth it already has; the cookies are SameSite=None so they survive
-    // that third-party context.
-    expect(link.hasAttribute("target")).toBe(false);
-
-    expect(container.querySelector("#dropzone")).toBeNull();
-    expect(container.querySelector("#try")).toBeNull();
-    expect(container.querySelector("#publish")).toBeNull();
-  });
-
-  it("is also what a null or empty /api/me renders", () => {
-    const container = document.createElement("div");
-    renderEntryPanel(container, null, { event });
-    expect(container.querySelector(".entry__signin")).not.toBeNull();
-  });
-});
-
-describe("renderEntryPanel: ready (signed in, can publish)", () => {
-  function render(entry = { repo: "", revision: "", env: "" }) {
-    const container = document.createElement("div");
-    const onTry = vi.fn(async () => {});
-    const onPublish = vi.fn(async () => ({ policy_name: "walker" }));
-    const onLiveryChange = vi.fn();
-    renderEntryPanel(
-      container,
-      { signed_in: true, oauth_enabled: true, user: "alice" },
-      { event, entry, onTry, onPublish, onLiveryChange },
-    );
-    return { container, onTry, onPublish, onLiveryChange };
-  }
-
-  it("names the signed-in user and renders the repo field, the file picker and every control", () => {
-    const { container } = render();
-    expect(container.querySelector("#entry-user").textContent).toBe("alice");
-    expect(container.querySelector("#policy-repo")).not.toBeNull();
-    expect(container.querySelector("#dropzone")).not.toBeNull();
-    expect(container.querySelector("#policy-name")).not.toBeNull();
-    expect(container.querySelectorAll("#liveries .swatch")).toHaveLength(4);
-    expect(container.querySelector("#speed")).not.toBeNull();
-    expect(container.querySelector("#try").disabled).toBe(false);
-    expect(container.querySelector("#publish").disabled).toBe(false);
-  });
-
-  it("shows what the workshop sent: the repo, the revision it pins, the code link", () => {
-    const { container } = render({ repo: "alice/microduck-walker", revision: "abc1234def", env: "https://github.com/alice/x/tree/abc" });
-    expect(container.querySelector("#policy-repo").value).toBe("alice/microduck-walker");
-    expect(container.querySelector("#policy-revision").textContent).toContain("abc1234");
-    expect(container.querySelector("#policy-env").value).toBe("https://github.com/alice/x/tree/abc");
-  });
-
-  it("Publish sends the repo, the revision and the link", async () => {
-    const { container, onPublish } = render({ repo: "alice/microduck-walker", revision: "abc1234", env: "https://github.com/a/b" });
-    container.querySelector("#publish").click();
-    await flush();
-    expect(onPublish.mock.calls[0][0]).toMatchObject({ repoId: "alice/microduck-walker", revision: "abc1234", envUrl: "https://github.com/a/b" });
-  });
-
-  it("editing the repo drops the revision, which belonged to the other one", async () => {
-    const { container, onPublish } = render({ repo: "alice/microduck-walker", revision: "abc1234", env: "" });
-    const repo = container.querySelector("#policy-repo");
-    repo.value = "alice/microduck-other";
-    repo.dispatchEvent(new Event("input"));
-    container.querySelector("#publish").click();
-    await flush();
-    expect(onPublish.mock.calls[0][0]).toMatchObject({ repoId: "alice/microduck-other", revision: "" });
-    expect(container.querySelector("#policy-revision").textContent).toBe("");
-  });
-
-  it("Publish without a repo says how to get one, and calls nothing", () => {
-    const { container, onPublish } = render();
-    chooseFile(container);
-    container.querySelector("#publish").click();
-    expect(container.querySelector("#entry-status").textContent).toMatch(/uv run publish/);
-    expect(onPublish).not.toHaveBeenCalled();
-  });
-
-  it("Test it sends the chosen file when there is one", async () => {
-    const { container, onTry } = render({ repo: "alice/microduck-walker", revision: "", env: "" });
-    chooseFile(container);
-    container.querySelector("#try").click();
-    await flush();
-    expect(onTry.mock.calls[0][0].file).toBeInstanceOf(File);
-    expect(onTry.mock.calls[0][0].repoId).toBeUndefined();
-  });
-
-  it("Test it races the repo when no file is chosen", async () => {
-    const { container, onTry } = render({ repo: "alice/microduck-walker", revision: "abc", env: "" });
-    container.querySelector("#try").click();
-    await flush();
-    expect(onTry.mock.calls[0][0]).toMatchObject({ repoId: "alice/microduck-walker", revision: "abc" });
-  });
-
-  it("with neither, Test it says so instead of silently doing nothing", () => {
-    const { container, onTry } = render();
-    container.querySelector("#try").click();
-    expect(container.querySelector("#entry-status").textContent).toMatch(/repo|file/i);
-    expect(onTry).not.toHaveBeenCalled();
-  });
-
-  it("picking a swatch reports the new livery, live", () => {
-    const { container, onLiveryChange } = render();
-    container.querySelector('[data-livery="charcoal"]').click();
-    expect(onLiveryChange).toHaveBeenCalledWith("charcoal");
-  });
-});
 
 describe("renderEventFacts: the caveat under the facts", () => {
   function render() {
@@ -183,114 +48,25 @@ describe("renderEventFacts: the caveat under the facts", () => {
 });
 
 
-describe("the speed picker applies to publishing too", () => {
-  it("passes the selected speed to onPublish, not only to onTry", async () => {
-    // Reversed deliberately. This used to be forbidden, on the reasoning that
-    // letting entrants choose a speed ranks whoever guessed best. The sweep
-    // already keeps the BEST time across every speed, so pinning one can only
-    // match or lose to it — self-penalising, not exploitable.
-    const onPublish = vi.fn(async () => ({ policy_name: "walker" }));
-    const container = document.createElement("div");
-    renderEntryPanel(
-      container,
-      { signed_in: true, oauth_enabled: true },
-      { event, entry: { repo: "alice/microduck-walker", revision: "", env: "" }, onTry: vi.fn(async () => {}), onPublish },
-    );
-
-    container.querySelector("#speed").value = "0.35";
-    container.querySelector("#publish").click();
-    await flush();
-
-    expect(onPublish).toHaveBeenCalledTimes(1);
-    expect(onPublish.mock.calls[0][0].commandVx).toBe("0.35");
-  });
-
-  it("still sweeps when no speed is chosen", () => {
-    // The default must stay the comparable measurement.
-    const container = document.createElement("div");
-    renderEntryPanel(
-      container,
-      { signed_in: true, oauth_enabled: true },
-      { event, onTry: vi.fn(), onPublish: vi.fn() },
-    );
-    expect(container.querySelector("#speed").value).toBe("");
-  });
-});
-
-describe("the training-environment field", () => {
-  const ready = () => {
-    const container = document.createElement("div");
-    renderEntryPanel(
-      container,
-      { signed_in: true, oauth_enabled: true },
-      { event, onTry: vi.fn(), onPublish: vi.fn() },
-    );
-    return container;
-  };
-
-  it("is in the panel at all", () => {
-    // It was not, for a whole commit: a string replace missed its target, the
-    // reader used optional chaining, and every publish silently carried no link.
-    expect(ready().querySelector("#policy-env")).not.toBeNull();
-  });
-
-  it("says which hosts are accepted, rather than waiting for a refusal", () => {
-    const input = ready().querySelector("#policy-env");
-    expect(input.placeholder).toContain("github.com");
-    expect(input.placeholder).toContain("huggingface.co");
-  });
-
-  it("reaches onPublish with what was typed", async () => {
-    const onPublish = vi.fn(async () => ({ policy_name: "w" }));
-    const container = document.createElement("div");
-    renderEntryPanel(
-      container,
-      { signed_in: true, oauth_enabled: true },
-      { event, entry: { repo: "alice/microduck-walker", revision: "", env: "" }, onTry: vi.fn(), onPublish },
-    );
-    container.querySelector("#policy-env").value = "https://github.com/me/env";
-    container.querySelector("#publish").click();
-    await flush();
-    expect(onPublish.mock.calls[0][0].envUrl).toBe("https://github.com/me/env");
-  });
-
-  it("is not sent on a trial, which records nothing", async () => {
-    const onTry = vi.fn(async () => {});
-    const container = document.createElement("div");
-    renderEntryPanel(
-      container,
-      { signed_in: true, oauth_enabled: true },
-      { event, onTry, onPublish: vi.fn() },
-    );
-    chooseFile(container);
-    container.querySelector("#policy-env").value = "https://github.com/me/env";
-    container.querySelector("#try").click();
-    await flush();
-    expect(onTry.mock.calls[0][0].envUrl).toBeUndefined();
-  });
-});
-
-describe("renderVoteButton: the way into the booth, above the entry form", () => {
+describe("renderVoteButton: the way into the booth, at the top of the entry column", () => {
   // A bare stand-in for the bit of renderRace's template this cares about --
   // no stage, no viewer, no leaderboard fetch, just the node the placement
   // is anchored on.
   function root() {
     const div = document.createElement("div");
-    div.innerHTML =
-      '<div class="racegrid"><div class="entry-col"><aside class="entry" id="entry"></aside></div></div>';
+    div.innerHTML = '<div class="entry-col"><a class="help-link"></a></div>';
     return div;
   }
 
-  it("sits directly above the entry form when the event takes votes", () => {
+  it("tops the entry column when the event takes votes", () => {
     const div = root();
     renderVoteButton(div, { id: "swag-contest", vote: { ballot_min: 2 } });
     const button = div.querySelector(".vote-button--panel");
     expect(button).not.toBeNull();
     expect(button.getAttribute("href")).toBe("#/v/swag-contest");
-    // Detached from the title on purpose (the owner asked for it "plus
-    // visible"): it is the sibling right before the form, not beside a
-    // heading somewhere else on the page.
-    expect(button.nextElementSibling).toBe(div.querySelector("#entry"));
+    // The column's first child: detached from the title on purpose (the
+    // owner asked for it "plus visible"), not beside a heading elsewhere.
+    expect(div.querySelector(".entry-col").firstElementChild).toBe(button);
   });
 
   it("adds nothing on a timed event", () => {
@@ -303,9 +79,9 @@ describe("renderVoteButton: the way into the booth, above the entry form", () =>
 describe("raceHall: the page's frame", () => {
   const hall = () => raceHall({ ...event, title: "2 m Sprint" });
 
-  it("puts the title INSIDE the stage's column, so the entry panel starts level with it", () => {
+  it("puts the title INSIDE the stage's column, so the entry column starts level with it", () => {
     // The whole point of the arrangement. With the title above the grid the
-    // entry panel began below the facts, a heading and a half down the page.
+    // entry column began below the facts, a heading and a half down the page.
     const column = hall().querySelector(".racegrid > div:first-child");
     const parts = [...column.children].map((n) => n.className);
     expect(parts[0]).toBe("racetitle");
@@ -397,6 +173,13 @@ describe("raceHall: the page's frame", () => {
     expect(hall().querySelector("#brightness")).toBeNull();
     expect(hall().querySelector(".bright")).toBeNull();
   });
+
+  it("says a failed withdrawal under the board", () => {
+    const hall = raceHall({ id: "sprint-2m", title: "2 m Sprint" });
+    const note = hall.querySelector(".boardsheet + #board-note");
+    expect(note).not.toBeNull();
+    expect(note.getAttribute("role")).toBe("status");
+  });
 });
 
 
@@ -458,13 +241,5 @@ describe("arrangeLanes", () => {
     const selected = arrangeLanes(board, [lanes.find(lane => lane.runId === "c")], () => 0);
     expect(board.querySelector('[data-run-id="a"]').closest('.tab').style.getPropertyValue('--lane')).toBe('');
     expect(selected[0].colour).toBe(board.querySelector('[data-run-id="c"]').closest('.tab').style.getPropertyValue('--lane'));
-  });
-
-  it("matches an unpublished trial to its row even when it ranks between published runs", () => {
-    const board = document.createElement("div");
-    board.innerHTML = '<table><tbody><tr><td class="tab"><input data-run-id="a"></td></tr><tr class="provisional"><td class="tab"></td></tr></tbody></table>';
-    const lanes = arrangeLanes(board, [{runId:null}, {runId:"a"}], () => 0.99);
-    expect(lanes[0].colour).toBe(board.querySelector('.provisional .tab').style.getPropertyValue('--lane'));
-    expect(lanes[0].colour).not.toBe(lanes[1].colour);
   });
 });
