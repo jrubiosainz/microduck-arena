@@ -29,12 +29,16 @@ class Hub:
                                             headers=build_hf_headers(token=token), timeout=WHOAMI_TIMEOUT_S)
             except httpx.TransportError:  # no route, no name resolution, a refused connection
                 pass
+            except Exception as exc:  # noqa: BLE001 — anything else is said by its kind, below
+                asked["error"] = exc
 
         # The limit is on the whole call: httpx's applies to each address in turn — huggingface.co
         # has several — and to each step. Past it the thread is left to give up on its own.
         thread = threading.Thread(target=ask, daemon=True)
         thread.start()
         thread.join(WHOAMI_TIMEOUT_S)
+        if "error" in asked:  # by its kind only: its message may carry the token
+            raise HubUnreachable(f"{constants.ENDPOINT} could not be asked: {type(asked['error']).__name__}")
         answer = asked.get("answer")
         if answer is None:
             raise HubUnreachable(f"{constants.ENDPOINT} did not answer within {WHOAMI_TIMEOUT_S:g} s")

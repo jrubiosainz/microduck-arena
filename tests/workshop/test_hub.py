@@ -83,3 +83,21 @@ def test_the_limit_covers_the_whole_call_not_each_step(monkeypatch):
     with pytest.raises(HubUnreachable):
         Hub().whoami()
     assert time.monotonic() - started < 2
+
+
+def test_any_other_failure_is_unreachable_at_once_and_named_without_the_token(monkeypatch):
+    """Not every failure is a silent network: whatever else the call raises is said by its kind, at
+    once rather than as a time limit that never ran out, and never with the token."""
+    import httpx
+
+    monkeypatch.setenv("HF_TOKEN", "hf_secret")
+
+    def fails(*args, **kwargs):
+        raise RuntimeError("the headers were Bearer hf_secret")
+
+    monkeypatch.setattr(httpx, "get", fails)
+    started = time.monotonic()
+    with pytest.raises(HubUnreachable, match="could not be asked: RuntimeError") as raised:
+        Hub().whoami()
+    assert time.monotonic() - started < 2
+    assert "hf_secret" not in str(raised.value)
