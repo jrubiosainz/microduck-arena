@@ -63,6 +63,13 @@ def test_publishing_needs_a_hugging_face_login(workshop, fakes, checkout, hub):
     assert _publish(workshop, make_run(checkout, "first")).status_code == 400
 
 
+def test_publishing_says_when_the_hub_is_unreachable(workshop, fakes, checkout, hub):
+    hub.reachable = False
+    response = _publish(workshop, make_run(checkout, "first"))
+    assert response.status_code == 503 and "unreachable" in response.json()["detail"]
+    assert fakes.calls("publish") == []
+
+
 def test_a_failed_publish_shows_its_whole_output(workshop, fakes, checkout, monkeypatch):
     monkeypatch.setenv("FAKE_UV_FAIL_PUBLISH", "1")
     response = _publish(workshop, make_run(checkout, "first"))

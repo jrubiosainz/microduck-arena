@@ -67,6 +67,14 @@ def test_hf_jobs_needs_a_hugging_face_login_and_nothing_is_touched_without_one(w
     assert fakes.calls("train") == []
 
 
+def test_hf_jobs_says_when_the_hub_is_unreachable_and_touches_nothing(workshop, hub, checkout, fakes):
+    hub.reachable = False
+    response = workshop.post("/api/workshop/train", json=LAUNCH)
+    assert response.status_code == 503 and "unreachable" in response.json()["detail"]
+    assert (checkout / "src" / "microduck_challenges" / "sprint_2m" / "challenge.toml").read_text() == SPRINT
+    assert fakes.calls("train") == []
+
+
 def test_a_second_launch_while_one_runs_is_refused(workshop, fakes, monkeypatch):
     fakes.gpu()
     monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")

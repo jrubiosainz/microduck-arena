@@ -24,6 +24,26 @@ describe("preflight", () => {
     expect(zone.querySelector(".preflight__login").hidden).toBe(true);
   });
 
+  it("says Hugging Face is being checked, with neither a tick nor a fix, while the check runs", () => {
+    const zone = document.createElement("section");
+    renderPreflight(zone, status({ ...ready, user: undefined }), { onLogin: vi.fn(), onRetry: vi.fn() });
+    expect(zone.querySelector(".preflight__checking").textContent).toMatch(/Hugging Face: checking/);
+    expect(zone.querySelectorAll(".preflight__missing")).toHaveLength(0);
+    expect(zone.querySelector(".preflight__login").hidden).toBe(true);
+  });
+
+  it("says Hugging Face is unreachable, and checks again on request", () => {
+    const zone = document.createElement("section");
+    const onRetry = vi.fn();
+    renderPreflight(zone, status({ ...ready, user: null, reachable: false }), { onLogin: vi.fn(), onRetry });
+    const row = zone.querySelector(".preflight__missing");
+    expect(row.textContent).toMatch(/Hugging Face unreachable/);
+    expect(row.textContent).not.toContain("hf auth login"); // logging in would not reach it either
+    expect(zone.querySelector(".preflight__login").hidden).toBe(true);
+    row.querySelector(".preflight__retry").click();
+    expect(onRetry).toHaveBeenCalled();
+  });
+
   it("says where training runs, and who pays for Hugging Face Jobs", () => {
     const zone = document.createElement("section");
     renderPreflight(zone, status(ready), { onLogin: vi.fn() });

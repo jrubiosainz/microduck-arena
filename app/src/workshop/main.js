@@ -7,7 +7,7 @@ import * as api from "./api.js";
 import { renderCurve } from "./curve.js";
 import { renderPreflight } from "./preflight.js";
 import { renderCode, renderPublish } from "./publish.js";
-import { appendLog, renderJobs, renderTrainForm, renderTraining } from "./train.js";
+import { appendLog, renderJobs, renderTrainForm, renderTraining, showTrainAccess } from "./train.js";
 import { renderResult, renderRuns } from "./trial.js";
 import { say } from "./ui.js";
 
@@ -31,18 +31,32 @@ async function refreshStatus() {
   document.title = `${event.title} · Microduck workshop`;
   $("#title").textContent = event.title;
   $("#arena-link").href = `${arena}/#/e/${event.id}`;
-  renderPreflight($("#preflight"), page.status, {
-    onLogin: async (token) => {
-      await api.login(token);
-      await refreshStatus();
-      // Publish's own "signed in" gate reads status.preflight.user, so a
-      // login that happened after a checkpoint was already chosen must
-      // redraw it too, or the button stays disabled until something else
-      // re-renders it.
-      renderPublishForm();
-    },
-  });
+  renderPreflightZone();
   renderTrainForm($("#train-form"), page.status, { onLaunch });
+}
+
+function renderPreflightZone() {
+  renderPreflight($("#preflight"), page.status, {
+    onLogin: async (token) => showHub({ ...(await api.login(token)), reachable: true }),
+    onRetry: () => checkHub().catch(fail),
+  });
+}
+
+/** Who is logged in to Hugging Face, asked apart from the status: the Hub
+ * may take seconds to answer, or never answer, and every zone draws without it. */
+async function checkHub() {
+  showHub({ user: undefined });
+  showHub(await api.getHub());
+}
+
+function showHub({ user, reachable }) {
+  Object.assign(page.status.preflight, { user, reachable });
+  renderPreflightZone();
+  showTrainAccess($("#train-form"), page.status.preflight);
+  // Publish's own "signed in" gate reads the same user: a login after a
+  // checkpoint was already chosen must redraw it, what was typed kept.
+  captureDraft();
+  renderPublishForm();
 }
 
 async function refreshRuns() {
@@ -170,17 +184,22 @@ async function follow() {
   }
 }
 
+function fail(error) {
+  $("main").insertAdjacentHTML("afterbegin", '<p class="failed"></p>');
+  $(".failed").textContent = `The workshop's server did not answer: ${error.message}`;
+}
+
 async function start() {
   try {
     await refreshStatus();
+    checkHub().catch(fail); // not awaited: the Hub may be slow, the zones below do not wait for it
     await refreshRuns();
     await refreshCode();
     renderPublishForm();
     await follow(); // a training launched before a reload is picked up again
     await refreshJobs(); // and a job launched before the workshop was closed
   } catch (error) {
-    $("main").insertAdjacentHTML("afterbegin", '<p class="failed"></p>');
-    $(".failed").textContent = `The workshop's server did not answer: ${error.message}`;
+    fail(error);
   }
 }
 

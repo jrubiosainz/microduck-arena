@@ -43,10 +43,15 @@ def commit_all(root: Path, message: str) -> bool:
 
 
 def gh_ready(root: Path) -> bool:
-    """The GitHub CLI is installed and logged in, so the workshop can fork for the user."""
+    """The GitHub CLI is installed and logged in, so the workshop can fork for the user.
+
+    `gh auth token` reads the login saved on this machine. `gh auth status` would also ask GitHub,
+    and wait half a minute when GitHub is unreachable; a login GitHub no longer accepts shows up
+    when the fork fails, with gh's own words.
+    """
     if shutil.which("gh") is None:
         return False
-    return subprocess.run(["gh", "auth", "status"], cwd=root, capture_output=True, check=False).returncode == 0
+    return subprocess.run(["gh", "auth", "token"], cwd=root, capture_output=True, check=False).returncode == 0
 
 
 def uv(*args: str) -> list[str]:

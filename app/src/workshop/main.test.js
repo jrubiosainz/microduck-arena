@@ -10,6 +10,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 let signedIn = false;
+const answersAtOnce = () => Promise.resolve({ user: signedIn ? "alice" : null, reachable: true });
+let hubAnswer = answersAtOnce;
 const run = { id: "2026-09-28_10-00-00_first", name: "first", dirty: false, checkpoints: [1000], trials: {} };
 
 vi.mock("./api.js", () => ({
@@ -17,9 +19,10 @@ vi.mock("./api.js", () => ({
     event: { id: "sprint-2m", title: "2 m Sprint", rig: "legs" },
     arena: "https://pollen-robotics-microduck-arena.hf.space",
     challenge: { folder: "sprint_2m", recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, knobs: [] },
-    preflight: { git: true, identity: true, uv: true, gpu: false, gh: true, user: signedIn ? "alice" : null },
+    preflight: { git: true, identity: true, uv: true, gpu: false, gh: true },
   }),
-  login: async () => { signedIn = true; },
+  getHub: () => hubAnswer(),
+  login: async () => { signedIn = true; return { user: "alice" }; },
   getRuns: async () => [run],
   getTraining: async () => ({ state: null }),
   getJobs: async () => [
@@ -56,9 +59,54 @@ const fixture = () => {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+describe("opening the workshop while Hugging Face takes its time", () => {
+  it("draws every zone at once, then names the account when the Hub answers", async () => {
+    signedIn = true;
+    let answer;
+    hubAnswer = () => new Promise((resolve) => { answer = resolve; });
+    fixture();
+    vi.resetModules();
+    await import("./main.js");
+    await settle();
+
+    expect(document.querySelector("#preflight").textContent).toMatch(/Hugging Face: checking/);
+    expect(document.querySelector("#train-form form")).not.toBeNull();
+    expect(document.querySelector("#runs .checkpoint")).not.toBeNull();
+    expect(document.querySelector("#code").textContent).not.toBe("");
+    expect(document.querySelector("#publish-form").textContent).not.toBe("");
+    expect(document.querySelector("#jobs .job")).not.toBeNull();
+    const launch = document.querySelector("#train-form button[type=submit]");
+    expect(launch.disabled).toBe(true); // no Hugging Face account known yet to bill the job to
+    document.querySelector("#train-form input[name=run]").value = "my-own-name";
+
+    answer({ user: "alice", reachable: true });
+    await settle();
+    expect(document.querySelector("#preflight").textContent).toContain("as alice");
+    expect(launch.disabled).toBe(false);
+    expect(document.querySelector("#train-form input[name=run]").value).toBe("my-own-name"); // not redrawn
+    expect(document.querySelector("#train-form").textContent).toContain("billed to alice");
+  });
+
+  it("says when Hugging Face is unreachable, and asks again on Retry", async () => {
+    signedIn = true;
+    hubAnswer = () => Promise.resolve({ user: null, reachable: false });
+    fixture();
+    vi.resetModules();
+    await import("./main.js");
+    await settle();
+    expect(document.querySelector("#preflight").textContent).toMatch(/Hugging Face unreachable/);
+
+    hubAnswer = answersAtOnce;
+    document.querySelector("#preflight .preflight__retry").click();
+    await settle();
+    expect(document.querySelector("#preflight").textContent).toContain("as alice");
+  });
+});
+
 describe("signing in after a checkpoint is already chosen", () => {
   it("re-renders Publish so the gate reflects the fresh login, not the stale one", async () => {
     signedIn = false;
+    hubAnswer = answersAtOnce;
     fixture();
     vi.resetModules();
     await import("./main.js");
@@ -78,6 +126,7 @@ describe("signing in after a checkpoint is already chosen", () => {
 
 describe("reopening the workshop while a Hugging Face job still runs", () => {
   it("lists the job in the Train zone, to fetch or stop", async () => {
+    hubAnswer = answersAtOnce;
     fixture();
     vi.resetModules();
     await import("./main.js");

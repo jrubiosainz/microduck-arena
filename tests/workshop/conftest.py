@@ -22,6 +22,7 @@ from arena.assets import ASSET_ROOT
 # under that PATH (e.g. running tests/workshop/test_training.py alone) would make that probe fail.
 from arena.workshop.app import create_workshop_app
 from arena.workshop.challenges import open_challenges
+from arena.workshop.hub import HubUnreachable
 
 HERE = Path(__file__).resolve().parent
 PROBE = HERE.parent / "fixtures" / "workshop" / "events.out.tfevents.probe"
@@ -134,10 +135,13 @@ def fakes(tmp_path, monkeypatch, remotes):
 class FakeHub:
     def __init__(self, user="alice"):
         self.user = user
+        self.reachable = True
         self.tokens = []
         self.cancelled = []
 
     def whoami(self):
+        if not self.reachable:
+            raise HubUnreachable("https://huggingface.co did not answer within 5 s")
         return self.user
 
     def login(self, token):

@@ -1,5 +1,9 @@
 // What the workshop needs before it can train or publish. Each missing item
 // shows the command that fixes it; nothing launches while one is missing.
+// Who is logged in to Hugging Face comes later than the rest (the Hub may be
+// slow, or unreachable): `user` is undefined until the Hub has answered.
+
+import { button } from "./ui.js";
 
 export const ITEMS = [
   { key: "git", label: "git", fix: "Install git: https://git-scm.com/downloads" },
@@ -17,7 +21,23 @@ export function canTrain(preflight) {
   return Boolean(preflight.git && preflight.identity && preflight.uv && (preflight.gpu || preflight.user));
 }
 
-export function renderPreflight(zone, status, { onLogin }) {
+/** The Hugging Face line before the Hub has named anyone: still asking, or no answer at all. */
+function hubPending(p, onRetry) {
+  const row = document.createElement("li");
+  const label = document.createElement("span");
+  row.append(label);
+  if (p.user === undefined) {
+    row.className = "preflight__checking";
+    label.textContent = "Hugging Face: checking…";
+  } else {
+    row.className = "preflight__missing";
+    label.textContent = "Hugging Face unreachable: huggingface.co did not answer. Check your connection.";
+    row.append(button("preflight__retry", "Check again", onRetry));
+  }
+  return row;
+}
+
+export function renderPreflight(zone, status, { onLogin, onRetry }) {
   const p = status.preflight;
   zone.innerHTML = `
     <p class="eyebrow">1 · Preflight</p>
@@ -33,6 +53,10 @@ export function renderPreflight(zone, status, { onLogin }) {
     </form>`;
   const list = zone.querySelector(".preflight");
   for (const item of ITEMS) {
+    if (item.key === "user" && (p.user === undefined || p.reachable === false)) {
+      list.append(hubPending(p, onRetry));
+      continue;
+    }
     const ok = Boolean(p[item.key]);
     const row = document.createElement("li");
     row.className = ok ? "preflight__ok" : "preflight__missing";
@@ -53,7 +77,7 @@ export function renderPreflight(zone, status, { onLogin }) {
     ? "GitHub CLI logged in: the workshop can fork the challenges for you."
     : "No GitHub CLI: to share your code you will fork on GitHub's page (optional).";
   const form = zone.querySelector(".preflight__login");
-  form.hidden = Boolean(p.user);
+  form.hidden = p.user !== null || p.reachable === false;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const note = form.querySelector(".preflight__note");

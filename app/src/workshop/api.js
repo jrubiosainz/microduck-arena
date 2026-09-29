@@ -15,6 +15,7 @@ const runUrl = (id) => `/api/workshop/runs/${encodeURIComponent(id)}`;
 const jobUrl = (name) => `/api/workshop/jobs/${encodeURIComponent(name)}`;
 
 export const getStatus = () => json("/api/workshop/status");
+export const getHub = () => json("/api/workshop/hub");
 export const login = (token) => post("/api/workshop/login", { token });
 export const launch = (body) => post("/api/workshop/train", body);
 export const getTraining = (since) => json(`/api/workshop/train?since=${since}`);

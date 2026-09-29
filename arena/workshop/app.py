@@ -24,7 +24,7 @@ from ..policy import PolicyError
 from ..web.routes_read import event_summary
 from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write_values
 from .code import code_state, code_url, fork, push
-from .hub import Hub
+from .hub import Hub, HubUnreachable
 from .jobs import find_job, recorded_jobs
 from .publishing import PublishError, arena_link, preview, publish, repo_for
 from .runs import curve, find_run, find_runs
@@ -57,7 +57,9 @@ class Workshop:
     publishing: threading.Lock = field(default_factory=threading.Lock)
 
 
-def preflight(root: Path, hub: Hub) -> dict:
+def preflight(root: Path) -> dict:
+    """What this machine has, known without the network. Who is logged in to Hugging Face is asked
+    apart (/hub): the page draws every zone from the status and must not wait on the Hub."""
     has_git = shutil.which("git") is not None
     return {
         "git": has_git,
@@ -66,7 +68,6 @@ def preflight(root: Path, hub: Hub) -> dict:
         "uv": shutil.which("uv") is not None,
         "gpu": shutil.which("nvidia-smi") is not None,
         "gh": gh_ready(root),
-        "user": hub.whoami(),
     }
 
 
@@ -74,10 +75,18 @@ def _workshop(request: Request) -> Workshop:
     return request.app.state.workshop
 
 
+def _hub_user(ws: Workshop) -> str | None:
+    try:
+        return ws.hub.whoami()
+    except HubUnreachable as exc:
+        raise HTTPException(status_code=503, detail=f"Hugging Face is unreachable: {exc}. "
+                                                    "Check your connection, then try again.") from exc
+
+
 @router.get("/status")
 def status(request: Request) -> dict:
     ws = _workshop(request)
-    tools = preflight(ws.root, ws.hub)
+    tools = preflight(ws.root)
     c = ws.challenge
     return {
         "challenge": {
@@ -89,6 +98,14 @@ def status(request: Request) -> dict:
         "preflight": tools,
         "mode": "local" if tools["gpu"] else "hf-jobs",
     }
+
+
+@router.get("/hub")
+def hub_account(request: Request) -> dict:
+    try:
+        return {"user": _workshop(request).hub.whoami(), "reachable": True}
+    except HubUnreachable:
+        return {"user": None, "reachable": False}
 
 
 class Token(BaseModel):
@@ -106,7 +123,7 @@ def login(body: Token, request: Request) -> dict:
     # HF_TOKEN outranks the token a login saves, for whoami and for every subprocess: one the
     # launcher exported, stale, would shadow this login.
     os.environ["HF_TOKEN"] = token
-    return {"user": ws.hub.whoami()}
+    return {"user": _hub_user(ws)}
 
 
 IN_PROGRESS = "A launch or a stop is already in progress."
@@ -144,9 +161,9 @@ def launch(body: Launch, request: Request) -> dict:
             raise HTTPException(status_code=409, detail=f"There is already a run called {body.name}.")
         if set(body.recipe) != set(RECIPE):
             raise HTTPException(status_code=400, detail=f"The recipe is {', '.join(RECIPE)}, all three.")
-        tools = preflight(ws.root, ws.hub)
-        hf_user = None if tools["gpu"] else tools["user"]
-        if not tools["gpu"] and not hf_user:
+        gpu = preflight(ws.root)["gpu"]
+        hf_user = None if gpu else _hub_user(ws)
+        if not gpu and not hf_user:
             raise HTTPException(
                 status_code=400,
                 detail="Without an NVIDIA GPU, training runs on Hugging Face Jobs: log in to Hugging Face first.",
@@ -333,7 +350,7 @@ async def publish_route(body: PublishRequest, request: Request) -> dict:
             detail="This run started from uncommitted changes, so the code it records is not what "
                    "trained it. Train again from the workshop (it commits first), or publish anyway.",
         )
-    user = await run_in_threadpool(ws.hub.whoami)
+    user = await run_in_threadpool(_hub_user, ws)
     if not user:
         raise HTTPException(status_code=400, detail="Log in to Hugging Face first (Preflight).")
     event = load_event(ws.challenge.event)

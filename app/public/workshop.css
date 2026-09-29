@@ -88,6 +88,7 @@ html, body {
 }
 
 .preflight__ok,
+.preflight__checking,
 .preflight__missing {
   display: flex;
   flex-wrap: wrap;
@@ -104,6 +105,10 @@ html, body {
   content: "✓";
   color: var(--lime-inked);
   font-weight: 700;
+}
+
+.preflight__checking {
+  color: var(--ink-70);
 }
 
 .preflight__missing {

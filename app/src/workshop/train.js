@@ -64,13 +64,8 @@ export function renderTrainForm(zone, status, { onLaunch }) {
     }));
     recipe.append(label);
   }
-  form.querySelector(".train-form__where").textContent = preflight.gpu
-    ? "Trains on this machine's NVIDIA GPU."
-    : `Trains on Hugging Face Jobs (one L4 GPU), billed to ${preflight.user ?? "your account"}; ` +
-      "the checkpoints come back here as they are saved. " +
-      "Closing the workshop does not stop a Hugging Face job: reopen it to fetch or stop it.";
+  showTrainAccess(zone, preflight);
   const button = form.querySelector("button[type=submit]");
-  button.disabled = !canTrain(preflight);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const note = form.querySelector(".train-form__status");
@@ -85,6 +80,16 @@ export function renderTrainForm(zone, status, { onLaunch }) {
       button.disabled = !canTrain(preflight);
     }
   });
+}
+
+/** What hangs on the Hugging Face account, redrawn in place when the Hub answers: what was typed stays. */
+export function showTrainAccess(zone, preflight) {
+  zone.querySelector(".train-form__where").textContent = preflight.gpu
+    ? "Trains on this machine's NVIDIA GPU."
+    : `Trains on Hugging Face Jobs (one L4 GPU), billed to ${preflight.user ?? "your account"}; ` +
+      "the checkpoints come back here as they are saved. " +
+      "Closing the workshop does not stop a Hugging Face job: reopen it to fetch or stop it.";
+  zone.querySelector(".train-form button[type=submit]").disabled = !canTrain(preflight);
 }
 
 export function renderTraining(zone, training, { onStop, onPull }) {

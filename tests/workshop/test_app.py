@@ -2,6 +2,8 @@
 
 import os
 
+import pytest
+
 from arena.workshop.app import create_workshop_app
 from tests.workshop.conftest import ADDRESS, PORT, git
 
@@ -19,8 +21,18 @@ def test_status_names_the_challenge_its_recipe_knobs_and_event(workshop):
 
 def test_without_an_nvidia_gpu_training_goes_to_hf_jobs(workshop):
     body = workshop.get("/api/workshop/status").json()
-    assert body["preflight"] == {"git": True, "identity": True, "uv": True, "gpu": False, "gh": True, "user": "alice"}
+    assert body["preflight"] == {"git": True, "identity": True, "uv": True, "gpu": False, "gh": True}
     assert body["mode"] == "hf-jobs"
+
+
+def test_the_status_answers_without_asking_the_hub(workshop, hub):
+    """The page draws every zone from the status: one call that waits on the network leaves it blank."""
+    hub.whoami = lambda: pytest.fail("the status asked the Hub")
+    assert workshop.get("/api/workshop/status").status_code == 200
+
+
+def test_the_hugging_face_account_is_asked_apart(workshop):
+    assert workshop.get("/api/workshop/hub").json() == {"user": "alice", "reachable": True}
 
 
 def test_with_an_nvidia_gpu_it_trains_here(workshop, fakes):
@@ -30,7 +42,12 @@ def test_with_an_nvidia_gpu_it_trains_here(workshop, fakes):
 
 def test_a_logged_out_user_is_told_so(workshop, hub):
     hub.user = None
-    assert workshop.get("/api/workshop/status").json()["preflight"]["user"] is None
+    assert workshop.get("/api/workshop/hub").json() == {"user": None, "reachable": True}
+
+
+def test_an_unreachable_hub_is_said_not_waited_for(workshop, hub):
+    hub.reachable = False
+    assert workshop.get("/api/workshop/hub").json() == {"user": None, "reachable": False}
 
 
 def test_logging_in_with_a_token(workshop, hub):
