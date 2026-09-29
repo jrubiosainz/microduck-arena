@@ -209,10 +209,20 @@ def test_a_stage_is_an_open_flat_floor():
 
 
 def test_a_stage_compiles_the_lanes_robot_and_solver():
-    """The same robot in every event: only the floor around it differs."""
+    """The same robot in every event: only the floor around it differs.
+
+    The static `course` body is left out of the mass/inertia comparison: its
+    mass is the lane's wall boxes (a stage has none of them), and no dynamics
+    reads it — the body carries no joint, so it never enters the mass matrix.
+    """
     stage = compile_course(load_event("got-a-talent"))
     lane = compile_course(load_event("sprint-2m"))
-    for field in ("body_mass", "body_inertia", "jnt_range", "dof_armature", "dof_damping", "actuator_forcerange"):
+    course = lane.body("course").id
+    assert stage.body("course").id == course
+    keep = np.arange(lane.nbody) != course
+    for field in ("body_mass", "body_inertia"):
+        np.testing.assert_array_equal(getattr(stage, field)[keep], getattr(lane, field)[keep], err_msg=field)
+    for field in ("jnt_range", "dof_armature", "dof_damping", "actuator_forcerange"):
         np.testing.assert_array_equal(getattr(stage, field), getattr(lane, field), err_msg=field)
     np.testing.assert_array_equal(stage.key("STAND").qpos, lane.key("STAND").qpos)
     assert stage.opt.timestep == lane.opt.timestep

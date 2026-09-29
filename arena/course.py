@@ -100,11 +100,6 @@ def _inject_course(root: ET.Element, manifest: Manifest) -> None:
     pinned to zero, a policy that pulls to one side scrubs speed against them, so
     straightness is part of the time rather than a separate rule. A stage is the
     same floor with nothing else: an open space to perform in.
-
-    The body has no joint, so its mass never enters the dynamics — but MuJoCo
-    still totals it up from density, and a box the size of a wall is not
-    negligible. density="0" keeps it what it actually is: pure collision
-    geometry, so a lane and a stage report the same (zero) course mass.
     """
     course = manifest.course
     worldbody = root.find("worldbody")
@@ -115,7 +110,7 @@ def _inject_course(root: ET.Element, manifest: Manifest) -> None:
     pitch = -math.radians(_slope_deg(course))
     body = _sub(worldbody, "body", name="course", euler=f"0 {pitch} 0")
 
-    _sub(body, "geom", name="floor", type="plane", size="0 0 0.05", pos="0 0 0", density="0")
+    _sub(body, "geom", name="floor", type="plane", size="0 0 0.05", pos="0 0 0")
     if course.kind == "stage":
         return
 
@@ -127,7 +122,6 @@ def _inject_course(root: ET.Element, manifest: Manifest) -> None:
             type="box",
             pos=" ".join(str(v) for v in pos),
             size=" ".join(str(v) for v in size),
-            density="0",
         )
 
 
