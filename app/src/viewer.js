@@ -38,6 +38,7 @@ import {
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
 import { attachStadium } from "./stadium.js";
 import { buildJudges } from "./judges.js";
+import { buildSwagStage, stageCameraPose, placeStagePerformer } from "./swag-stage.js";
 import { loadGymBranding } from "./gym-branding.js";
 import { stadiumDirection } from "./clip/direction.js";
 import { buildGym } from "./gym.js";
@@ -315,6 +316,7 @@ export async function createViewer(
   scene.add(rim);
   // Sky above, ground bounce below.
   scene.add(new HemisphereLight(0xcfe0ff, 0x70604c, HEMI));
+  const raceLights = scene.children.filter(child => child.isLight);
 
   const camera = new PerspectiveCamera(spec?.fov ?? 42, 1, 0.02, 100);
   camera.position.set(-0.35, 0.34, 1.15);
@@ -343,6 +345,7 @@ export async function createViewer(
   let course = null;
   let gym = null;
   let judges = null;
+  let stage = null;
   // The stadium's crowd, rebuilt with the course: posed in draw, disposed
   // with the course in clearScene.
   let audience = null;
@@ -355,6 +358,8 @@ export async function createViewer(
   let crowdDirection = stadiumDirection();
 
   function clearScene() {
+    stage?.dispose();
+    stage = null;
     judges?.dispose();
     judges = null;
     gym?.dispose();
@@ -376,11 +381,20 @@ export async function createViewer(
 
   function setLanes(entries, event, playerOptions = {}) {
     clearScene();
+    const swag = event?.id === "swag-contest";
+    if (swag) entries = entries.slice(0, 1);
+    raceLights.forEach(light => { light.visible = !swag; });
+    scene.background.set(swag ? 0x050716 : 0xb8dce7);
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
     slopeDeg = event?.slope_deg ?? 0;
     courseLength = event?.length_m ?? 2;
-    if (event) {
+    if (swag) {
+      slopeDeg = 0;
+      stage = buildSwagStage(event, spectators, reachy);
+      course = stage.group;
+      scene.add(course);
+    } else if (event) {
       course = attachCourse(
         scene,
         event,
@@ -451,11 +465,13 @@ export async function createViewer(
       // own walls, not between someone else's.
       const z = laneOffsetZ(i, entries.length, spacing);
       rig.placer.traverse(node => { if (node.isMesh) node.receiveShadow = true; });
-      placeLane(rig, z);
+      if (swag) placeStagePerformer(rig, entry.trace, stage.layout.centre);
+      else placeLane(rig, z);
       scene.add(rig.placer);
 
       // The follow-spot, on the course so it climbs a slope with it (placeMarker).
       const marker = buildMarker(tier, entry.colour ?? null);
+      if (swag) marker.material.opacity = 0;
       const shadow = new Mesh(shadowGeometry, shadowMaterial);
       shadow.position.z = -0.001; // Below the ring, above the course, including slopes.
       marker.add(shadow);
@@ -564,9 +580,11 @@ export async function createViewer(
     });
     audience?.pose(seconds, mood);
     gym?.pose?.(seconds, mood);
-    judges?.pose(seconds, lanes.map((lane) =>
+    const subjects = lanes.map((lane) =>
       lane.rig.bodies.get("trunk_base").getWorldPosition(lane.gazeTarget),
-    ));
+    );
+    judges?.pose(seconds, subjects);
+    stage?.pose(seconds, subjects, mood);
 
     if (chase && course) {
       // Follow the leader along +x, the direction of travel, from behind and
@@ -575,7 +593,9 @@ export async function createViewer(
         ? Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]))
         : courseLength / 2;
       const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
-      const pose = travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel);
+      const pose = stage
+        ? stageCameraPose(manual ? seconds : player.time, subjects, camera.aspect, camera.fov, stage.layout.depth)
+        : travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel);
       camera.position.set(...pose.position);
       _target.set(...pose.target);
       if (controls) controls.target.copy(_target);

@@ -350,6 +350,7 @@ def test_an_event_says_whether_it_takes_votes_and_how(client):
     assert events["sprint-2m"]["vote"] is None
     assert events["sprint-2m"]["metric"] == "mean_finish_time"
     swag = events["swag-contest"]
+    assert swag["title"] == "MicroDuck Got a Talent"
     assert swag["metric"] == "votes"
     assert swag["vote"] == {
         "ballot_min": 2, "ballot_max": 4, "window_days": 7, "per_day": 20,

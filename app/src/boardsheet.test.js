@@ -29,6 +29,15 @@ async function sheet(options = {}) {
 }
 
 describe("the board sheet", () => {
+  it("replaces the solo swag performer when another row is selected", async () => {
+    const { root, board, wired, onRace } = await sheet({ event: { ...event, id: "swag-contest" } });
+    expect(root.querySelector(".pickall").hidden).toBe(true);
+    expect(ticked(board)).toEqual(["r2"]);
+    tick(board.querySelector('input[data-run-id="r3"]'));
+    expect(ticked(board)).toEqual(["r3"]);
+    expect([...wired.selection]).toEqual(["r3"]);
+    expect(onRace).toHaveBeenLastCalledWith(["r3"], expect.any(Map));
+  });
   it("is one piece of paper: the picks and the filters, then the table", () => {
     const root = document.createElement("div");
     root.innerHTML = boardsheetMarkup;

@@ -1,4 +1,4 @@
-# Swag Contest
+# MicroDuck Got a Talent
 
 Create a distinctive walking style. Other players choose their favourite duck.
 
@@ -19,7 +19,8 @@ the earlier publication. Speed does not decide the ranking.
 Your **latest qualifying entry** represents you. Votes on an older entry do
 not transfer to its replacement.
 
-Ballots show two to four anonymous entries, excluding your own. You can cast
+Ballots offer two to four anonymous performances, excluding your own, watched
+one at a time on stage. You can cast
 **20 votes per UTC day**. Each accepted vote earns **2 player points** until it
 leaves the seven-day window.
 

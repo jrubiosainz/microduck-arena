@@ -273,7 +273,7 @@ export async function renderRun(root, runId, state) {
     event: { ...run.event, metric: "mean_finish_time" },
     me: me?.user ?? null,
     rows: () => run.board,
-    opening: (rows) => lanesFor({ board: rows }).map((row) => row.run_id),
+    opening: (rows) => lanesFor({ board: rows, event: run.event }).map((row) => row.run_id),
     onRace: race,
     // Everything: the row this page is about has to be on the table, whatever
     // its rank.

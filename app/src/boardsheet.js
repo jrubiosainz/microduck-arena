@@ -43,6 +43,8 @@ export function wireBoardsheet(
 ) {
   const sheet = root.querySelector(".boardsheet");
   const board = sheet.querySelector("#board");
+  const solo = event.id === "swag-contest";
+  sheet.querySelector(".pickall").hidden = solo;
   // Two narrowings rather than three modes: Mine and Top each turn on and off
   // on their own and compose, and All is the state where neither is on.
   const narrowing = { ...filters };
@@ -110,7 +112,7 @@ export function wireBoardsheet(
   async function paint() {
     const merged = await rows();
     tiers = tiersByRunId(merged);
-    if (selection === null) selection = new Set(opening(merged));
+    if (selection === null) selection = new Set(solo ? opening(merged).slice(0, 1) : opening(merged));
     // A run that has been withdrawn since the last paint keeps no lane.
     const live = new Set(merged.map((row) => row.run_id).filter(Boolean));
     for (const runId of selection) if (!live.has(runId)) selection.delete(runId);
@@ -123,6 +125,12 @@ export function wireBoardsheet(
       {
         selected: selection,
         onSelectionChange: (runIds) => {
+          if (solo) {
+            const picked = runIds.find(id => !selection.has(id));
+            selection = new Set(picked ? [picked] : runIds.slice(0, 1));
+            for (const box of board.querySelectorAll("input[data-run-id]")) box.checked = selection.has(box.dataset.runId);
+            return onRace([...selection], tiers);
+          }
           // The rows on screen are the only ones this can speak for: the rest
           // of the selection is not in the DOM to be read.
           const onScreen = new Set(shown());

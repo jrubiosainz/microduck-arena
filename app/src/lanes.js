@@ -12,6 +12,7 @@ export const RIVALS = 3;
  */
 export function lanesFor(run) {
   const at = run.board.findIndex((row) => row.you);
+  if (run.event?.id === "swag-contest") return [run.board[at]];
   return [run.board[at], ...run.board.slice(at + 1, at + 1 + RIVALS)];
 }
 

@@ -220,7 +220,7 @@ export function votePanel(ballot, onPick, initialStatus) {
     picks.append(button);
   }
   const headrow = el("div", "vote-headrow");
-  headrow.append(el("p", "vote-lead", "Which one has the swag?"), muteToggle());
+  headrow.append(el("p", "vote-lead", "Which performance gets your vote?"), muteToggle());
   panel.append(
     headrow,
     picks,
@@ -267,17 +267,16 @@ export async function renderVote(root, { event, state }) {
     const traces = await Promise.all(
       Array.from({ length: ballot.lanes }, (_, lane) => getBallotTrace(ballot.ballot, lane)),
     );
-    viewer.setLanes(
-      traces.map((trace, lane) => ({
-        runId: null,
-        trace,
-        // Every duck the same: the ring is what identifies a lane, not paint.
-        tier: "leader",
-        livery: "classic",
-        colour: LANE_COLORS[lane % LANE_COLORS.length],
-      })),
-      event,
-    );
+    const entries = traces.map((trace, lane) => ({
+      runId: null,
+      trace,
+      // Every performer wears the same livery on an anonymous ballot.
+      tier: "leader",
+      livery: "classic",
+      colour: LANE_COLORS[lane % LANE_COLORS.length],
+    }));
+    const solo = event.id === "swag-contest";
+    viewer.setLanes(solo ? entries.slice(0, 1) : entries, event);
     booth.replaceChildren(
       votePanel(ballot, async (lane) => {
         // A second click while the first is in flight would spend two ballots
@@ -303,6 +302,24 @@ export async function renderVote(root, { event, state }) {
         }
       }, message),
     );
+    if (solo) {
+      const watch = el("div", "vote-picks");
+      watch.setAttribute("aria-label", "Watch performances individually");
+      entries.forEach((entry, index) => {
+        const button = el("button", "", `Watch performance ${index + 1}`);
+        button.type = "button";
+        button.setAttribute("aria-pressed", String(index === 0));
+        button.addEventListener("click", () => {
+          viewer.setLanes([entry], event);
+          for (const other of watch.children) other.setAttribute("aria-pressed", String(other === button));
+        });
+        watch.append(button);
+      });
+      booth.prepend(watch);
+      booth.querySelectorAll(".vote-pick").forEach((button, index) => {
+        button.setAttribute("aria-label", `Vote for performance ${index + 1}`);
+      });
+    }
   }
 
   await next();

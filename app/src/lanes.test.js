@@ -3,6 +3,10 @@ import { LANE_CSS } from "./course.js";
 import { colourLanes, lanesFor } from "./lanes.js";
 
 describe("lanesFor", () => {
+  it("shows only the published solo performance for swag clips and replays", () => {
+    const board = [1, 2, 3].map(rank => ({ run_id: `R${rank}`, you: rank === 2 }));
+    expect(lanesFor({ board, event: { id: "swag-contest" } })).toEqual([board[1]]);
+  });
   it("opens on this run, then up to three ranked under it", () => {
     const board = [1, 2, 3, 4, 5, 6].map((rank) => ({ rank, run_id: `R${rank}`, you: rank === 2 }));
     expect(lanesFor({ board }).map((row) => row.run_id)).toEqual(["R2", "R3", "R4", "R5"]);

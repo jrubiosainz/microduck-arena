@@ -1,6 +1,6 @@
 id           = "swag-contest"
 order        = 15
-title        = "Swag Contest"
+title        = "MicroDuck Got a Talent"
 category     = "showcase"
 rig          = "legs"
 time_limit_s = 50.0

@@ -439,7 +439,7 @@ export async function renderRace(root, { event, state }) {
         runId: null, trace: trial.trace, tier: "trial", livery: currentLivery, name: "your test",
       });
     }
-    viewer.setLanes(arrangeLanes(board, lanes), event);
+    viewer.setLanes(arrangeLanes(board, event.id === "swag-contest" ? lanes.slice(0, 1) : lanes), event);
     deck.reset();
     root.querySelector("#stage-hint").textContent = lanes.length
       ? ""
