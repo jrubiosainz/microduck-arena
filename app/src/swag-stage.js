@@ -6,7 +6,7 @@ import {
 } from "three";
 import { crowd } from "./stadium.js";
 import { buildJudges } from "./judges.js";
-import { frameAt, frameCount } from "./replay.js";
+import { frameAt, frameCount, CTRL_DT } from "./replay.js";
 
 const mix = (a, b, t) => a + (b - a) * t;
 
@@ -28,6 +28,27 @@ export function placeStagePerformer(rig, trace, centre) {
   }
   rig.placer.rotation.set(0, Math.PI / 2, 0);
   rig.placer.position.set(centre + (minY + maxY) / 2, 0, (minX + maxX) / 2);
+}
+
+// A symmetric 2.4 s Hann window removes gait sway without introducing lag.
+// Read the recording, not the previous render: scrubbing and video exports agree.
+export function stageCameraTarget(trace, seconds, placer) {
+  let x = 0, y = 0, weight = 0;
+  const count = frameCount(trace);
+  const sample = seconds / CTRL_DT;
+  const centre = Math.floor(sample), blend = sample - centre;
+  for (let i = -30; i <= 30; i++) {
+    const w = 0.5 + 0.5 * Math.cos(Math.PI * i / 30);
+    const index = centre + i * 2;
+    const frame = frameAt(trace, Math.max(0, Math.min(count - 1, index)));
+    const next = frameAt(trace, Math.max(0, Math.min(count - 1, index + 1)));
+    x += mix(frame[0], next[0], blend) * w;
+    y += mix(frame[1], next[1], blend) * w;
+    weight += w;
+  }
+  const target = new Vector3(x / weight, 0, -y / weight).applyMatrix4(placer.matrixWorld);
+  target.y = 0.14;
+  return target;
 }
 
 // The broadcast clock keeps moving during clip titles, even while replay time
@@ -247,14 +268,6 @@ export function buildSwagStage(event, spectators, reachy) {
   followSpot.name = "follow-spot";
   followSpot.position.set(centre + 0.7, 2.6, -depth / 2 + 0.15);
   group.add(followSpot, followSpot.target);
-  const poolMaterial = new ShaderMaterial({
-    transparent: true, depthWrite: false, blending: AdditiveBlending,
-    vertexShader: "varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}",
-    fragmentShader: "varying vec2 vUv; void main(){float r=length(vUv-0.5)*2.0;gl_FragColor=vec4(0.8,0.86,1.0,0.28*(1.0-smoothstep(0.65,1.0,r)));}",
-  });
-  materials.add(poolMaterial);
-  const pool = mesh(new PlaneGeometry(0.72, 0.72), poolMaterial, [centre, 0.002, 0], "follow-pool");
-  pool.rotation.x = -Math.PI / 2;
   // Soft additive shafts show the moving lights in the theatrical haze.
   const beamGeometry = new ConeGeometry(0.48, 2.8, 24, 1, true);
   beamGeometry.translate(0, -1.4, 0); geometries.add(beamGeometry);
@@ -277,8 +290,6 @@ export function buildSwagStage(event, spectators, reachy) {
   function pose(seconds, subjects, mood) {
     panel.pose(seconds, subjects); audience.pose(seconds, mood);
     followSpot.target.position.copy(subjects[0] ?? new Vector3(centre, 0.1, 0));
-    pool.position.set(followSpot.target.position.x, 0.002, followSpot.target.position.z);
-    pool.visible = subjects.length > 0;
     beams.forEach((beam, i) => {
       beam.rotation.set(0.25 + 0.16 * Math.sin(seconds * 0.43 + i), 0,
         0.35 * Math.sin(seconds * 0.37 + i * 1.3));

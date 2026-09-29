@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { BoxGeometry, PerspectiveCamera, Raycaster, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { buildSwagStage, stageCameraPose, stageLayout, placeStagePerformer } from "./swag-stage.js";
+import { buildSwagStage, stageCameraPose, stageLayout, placeStagePerformer, stageCameraTarget } from "./swag-stage.js";
 import { applyFrame } from "./replay.js";
 import { meshNames, buildRigTree, STAND, TRUNK_HEIGHT } from "./rig.js";
 
@@ -102,7 +102,7 @@ describe("the solo stage", () => {
     expect(light.target.position.toArray()).toEqual(target.toArray());
     stage.pose(1, [new Vector3(-0.3, 0.08, 0.4)]);
     expect(light.target.position.toArray()).toEqual([-0.3, 0.08, 0.4]);
-    expect(stage.group.getObjectByName("follow-pool").position.toArray()).toEqual([-0.3, 0.002, 0.4]);
+    expect(stage.group.getObjectByName("follow-pool")).toBeUndefined();
     const shared = vi.spyOn(reachy.getObjectByProperty("isMesh", true).geometry, "dispose");
     stage.dispose();
     expect(shared).not.toHaveBeenCalled();
@@ -130,4 +130,33 @@ it("turns the robot and its complete recorded trajectory toward the audience", (
   expect(start.z).toBeCloseTo(1);
   expect(end.z).toBeCloseTo(-1);
   expect(trace).toEqual(original);
+});
+
+
+it("rejects gait sway and vertical bounce while following deliberate travel, even when seeking", () => {
+  const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
+  const rig = buildRigTree(kinematics);
+  const makeTrace = noisy => {
+    const trace = new Float32Array(500 * 21);
+    for (let i = 0; i < 500; i++) {
+      const t = i * 0.02;
+      trace.set([0.1 * t + (noisy ? 0.04 * Math.sin(t * Math.PI * 8) : 0),
+        noisy ? 0.04 * Math.cos(t * Math.PI * 8) : 0,
+        noisy ? 0.12 + 0.07 * Math.sin(t * Math.PI * 8) : 0.12,
+        1, 0, 0, 0, ...STAND], i * 21);
+    }
+    return trace;
+  };
+  const quiet = makeTrace(false), moving = makeTrace(true);
+  rig.placer.rotation.y = Math.PI / 2;
+  rig.placer.updateMatrixWorld(true);
+  const at = t => stageCameraTarget(moving, t, rig.placer);
+  for (const t of [2, 2.07, 3, 4.11, 5]) {
+    expect(at(t).distanceTo(stageCameraTarget(quiet, t, rig.placer))).toBeLessThan(0.002);
+    expect(at(t).y).toBe(0.14);
+  }
+  expect(at(5).z - at(2).z).toBeCloseTo(-0.3, 2);
+  const first = at(3);
+  at(8);
+  expect(at(3)).toEqual(first);
 });

@@ -154,35 +154,11 @@ describe("a still's duck on a slope", () => {
   });
 });
 
-describe("the wall toggle across a re-race", () => {
-  const WALLS = [{ name: "wall_left", pos: [1, 0.425, 0.075], half: [1.5, 0.025, 0.075] }];
-  const EVENT = { length_m: 2, walls: WALLS };
-
-  it("a rebuilt course remembers that the walls were showing", () => {
-    // setLanes rebuilds the course on every re-race and a fresh wall group
-    // starts hidden, so this is the page's own builder being exercised — not a
-    // model of it rebuilt in the test.
-    const scene = new Group();
-    attachCourse(scene, EVENT, 1, true);
-    const rebuilt = attachCourse(scene, EVENT, 2, true);
-    expect(rebuilt.getObjectByName("walls").visible).toBe(true);
-  });
-
-  it("and remembers equally that they were hidden", () => {
-    const scene = new Group();
-    expect(attachCourse(scene, EVENT, 1, false).getObjectByName("walls").visible).toBe(false);
-  });
-
-  it("puts the course in the scene", () => {
-    const scene = new Group();
-    const course = attachCourse(scene, EVENT, 1, false);
-    expect(course.parent).toBe(scene);
-  });
-
-  it("does not fall over on an event with no walls at all", () => {
-    const scene = new Group();
-    expect(() => attachCourse(scene, { length_m: 2 }, 1, true)).not.toThrow();
-  });
+it("attaches the floor without rendering collision walls", () => {
+  const scene = new Group();
+  const course = attachCourse(scene, { length_m: 2, walls: [{ pos: [1, 0.425, 0.075], half: [1.5, 0.025, 0.075] }] }, 1);
+  expect(course.parent).toBe(scene);
+  expect(course.getObjectByName("walls")).toBeUndefined();
 });
 
 describe("the camera's side offset", () => {

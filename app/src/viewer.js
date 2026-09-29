@@ -38,7 +38,7 @@ import {
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
 import { attachStadium } from "./stadium.js";
 import { buildJudges } from "./judges.js";
-import { buildSwagStage, stageCameraPose, placeStagePerformer } from "./swag-stage.js";
+import { buildSwagStage, stageCameraPose, placeStagePerformer, stageCameraTarget } from "./swag-stage.js";
 import { loadGymBranding } from "./gym-branding.js";
 import { stadiumDirection } from "./clip/direction.js";
 import { buildGym } from "./gym.js";
@@ -89,20 +89,9 @@ export function cameraSideOffset(lanes, spacing) {
   return Math.max(1.15, 0.75 + halfArena * 1.35);
 }
 
-/**
- * Build the course for one race and put it in the scene, honouring the wall
- * toggle.
- *
- * Exported for the same reason placeLane is: createViewer needs WebGL and
- * cannot run in the suite, and the thing worth pinning here is that a REBUILT
- * course remembers whether the walls were showing. setLanes rebuilds on every
- * re-race, and a fresh wall group starts hidden — so without this the walls
- * would silently vanish while the button still read "Hide walls".
- */
-export function attachCourse(scene, event, lanes, wallsVisible, stripes) {
+/** Attach the visible floor and lane markings to the replay scene. */
+export function attachCourse(scene, event, lanes, stripes) {
   const course = buildCourse(event, lanes, stripes);
-  const walls = course.getObjectByName("walls");
-  if (walls) walls.visible = Boolean(wallsVisible);
   scene.add(course);
   return course;
 }
@@ -349,7 +338,6 @@ export async function createViewer(
   // The stadium's crowd, rebuilt with the course: posed in draw, disposed
   // with the course in clearScene.
   let audience = null;
-  let wallsVisible = false;
   let namesVisible = false;
   let sideOffset = 1.15;
   let slopeDeg = 0;
@@ -399,7 +387,6 @@ export async function createViewer(
         scene,
         event,
         Math.max(1, entries.length),
-        wallsVisible,
         entries.map((entry) => entry.colour),
       );
       // The near stand starts a stride beyond where the chase camera stands,
@@ -470,11 +457,13 @@ export async function createViewer(
       scene.add(rig.placer);
 
       // The follow-spot, on the course so it climbs a slope with it (placeMarker).
-      const marker = buildMarker(tier, entry.colour ?? null);
-      if (swag) marker.material.opacity = 0;
-      const shadow = new Mesh(shadowGeometry, shadowMaterial);
-      shadow.position.z = -0.001; // Below the ring, above the course, including slopes.
-      marker.add(shadow);
+      const marker = swag ? new Mesh(shadowGeometry, shadowMaterial) : buildMarker(tier, entry.colour ?? null);
+      if (swag) marker.rotation.x = -Math.PI / 2;
+      else {
+        const shadow = new Mesh(shadowGeometry, shadowMaterial);
+        shadow.position.z = -0.001; // Below the ring, above the course, including slopes.
+        marker.add(shadow);
+      }
 
       // The duck's name, hung over its head in its lane's colour: the clip
       // has four ducks and no legend, so the name rides the duck.
@@ -482,7 +471,7 @@ export async function createViewer(
       if (entry.name) {
         plate = nameplate(entry.name, `#${marker.material.color.getHexString()}`, "#08080c");
         plate.sprite.scale.set(PLATE_HEIGHT * plate.ratio, PLATE_HEIGHT, 1);
-        // Remembered on the viewer, like the walls: setLanes rebuilds every
+        // Remembered on the viewer: setLanes rebuilds every
         // lane on each replay, so a plate built after the toggle was pressed
         // would come back showing whatever the default was.
         plate.sprite.visible = namesVisible;
@@ -509,21 +498,7 @@ export async function createViewer(
     player.play();
   }
 
-  /**
-   * Show or hide the lane walls.
-   *
-   * They are in the physics whether or not they are drawn — a robot that
-   * drifts hits them either way. The toggle exists because a roller policy was
-   * grazing something invisible, and being unable to see it made that
-   * impossible to diagnose from the page.
-   */
-  /**
-   * Show or hide the name over each duck.
-   *
-   * Kept on the viewer rather than on the sprites alone, for the same reason
-   * the walls are: setLanes discards and rebuilds every lane, so state held
-   * only on the meshes is lost on the next replay.
-   */
+  // Remember name visibility when setLanes rebuilds a replay.
   function setNamesVisible(visible) {
     namesVisible = Boolean(visible);
     for (const lane of lanes) {
@@ -531,21 +506,6 @@ export async function createViewer(
     }
     return namesVisible;
   }
-
-  function setWallsVisible(visible) {
-    // Remembered on the viewer, not only on the mesh: setLanes rebuilds the
-    // course on every re-race, and a fresh group starts hidden. Without this
-    // the walls would silently vanish while the button still said "Hide walls".
-    wallsVisible = Boolean(visible);
-    applyWallVisibility();
-    return wallsVisible;
-  }
-
-  function applyWallVisibility() {
-    const group = course?.getObjectByName("walls");
-    if (group) group.visible = wallsVisible;
-  }
-
 
   function follow() {
     chase = true;
@@ -594,7 +554,9 @@ export async function createViewer(
         : courseLength / 2;
       const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
       const pose = stage
-        ? stageCameraPose(manual ? seconds : player.time, subjects, camera.aspect, camera.fov, stage.layout.depth)
+        ? stageCameraPose(manual ? seconds : player.time,
+          lanes.length ? [stageCameraTarget(lanes[0].trace, player.time, lanes[0].rig.placer)] : [],
+          camera.aspect, camera.fov, stage.layout.depth)
         : travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel);
       camera.position.set(...pose.position);
       _target.set(...pose.target);
@@ -646,7 +608,6 @@ export async function createViewer(
   return {
     setLanes,
     follow,
-    setWallsVisible,
     setNamesVisible,
     setBrightness,
     frame,

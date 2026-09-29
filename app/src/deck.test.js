@@ -7,25 +7,24 @@ function stage() {
   const viewer = {
     player: { playing: true, toggle() { this.playing = !this.playing; } },
     follow: vi.fn(),
-    setWallsVisible: (visible) => visible,
     setNamesVisible: (visible) => visible,
   };
   return { root, viewer, deck: wireDeck(root, viewer) };
 }
 
 describe("the deck under a replay", () => {
-  it("is one chassis: the picture, then the four keys and the hint", () => {
+  it("is one chassis: the picture, then the three keys and the hint", () => {
     const { root } = stage();
     expect(root.querySelector(".deck > .stage > canvas#stage")).not.toBeNull();
     expect([...root.querySelectorAll(".deck > .controls button")].map((b) => b.id)).toEqual([
-      "playpause", "follow", "walls", "names",
+      "playpause", "follow", "names",
     ]);
     expect(root.querySelector(".deck > .controls #stage-hint")).not.toBeNull();
   });
 
-  it("toggles the walls and the names, saying so in the label and in aria-pressed", () => {
+  it("toggles the names, saying so in the label and in aria-pressed", () => {
     const { root } = stage();
-    for (const [id, thing] of [["walls", "walls"], ["names", "names"]]) {
+    for (const [id, thing] of [["names", "names"]]) {
       const key = root.querySelector(`#${id}`);
       expect(key.textContent).toBe(`Show ${thing}`);
       key.click();

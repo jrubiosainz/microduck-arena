@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Vector3 } from "three";
-import { LANE_COLORS, LANE_SPACING, TIER_MARKER, buildCourse, buildMarker, laneOffsetZ, buildWalls, laneSpacing } from "./course.js";
+import { LANE_COLORS, LANE_SPACING, TIER_MARKER, buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
 
 describe("laneOffsetZ", () => {
   it("centres a single lane", () => {
@@ -118,78 +118,6 @@ describe("buildMarker", () => {
     const marker = buildMarker("leader");
     expect(marker.position.y).toBeGreaterThan(0);
     expect(marker.position.y).toBeLessThan(0.02);
-  });
-});
-
-describe("the lane walls", () => {
-  // Exactly what arena/course.py serves for sprint-2m, pinned there against the
-  // compiled MuJoCo model. Nothing here recomputes them.
-  const WALLS = [
-    { name: "wall_left", pos: [1.0, 0.425, 0.075], half: [1.5, 0.025, 0.075] },
-    { name: "wall_right", pos: [1.0, -0.425, 0.075], half: [1.5, 0.025, 0.075] },
-  ];
-  const EVENT = { length_m: 2, width_m: 0.8, walls: WALLS };
-
-  it("is hidden until asked for", () => {
-    expect(buildWalls(WALLS).visible).toBe(false);
-  });
-
-  it("converts MJCF axes to three.js ones", () => {
-    // MJCF +y is three -z. Getting this wrong draws the walls across the lane
-    // instead of along it, which would look deliberate and be wrong.
-    const [left, right] = buildWalls(WALLS).children;
-    expect(left.position.x).toBeCloseTo(1.0, 6);
-    expect(left.position.y).toBeCloseTo(0.075, 6); // MJCF z -> three y
-    expect(left.position.z).toBeCloseTo(-0.425, 6); // MJCF y -> three -z
-    expect(right.position.z).toBeCloseTo(0.425, 6);
-  });
-
-  it("doubles the half-extents, mapping them the same way", () => {
-    const [left] = buildWalls(WALLS).children;
-    const { width, height, depth } = left.geometry.parameters;
-    expect(width).toBeCloseTo(3.0, 6);
-    expect(height).toBeCloseTo(0.15, 6);
-    expect(depth).toBeCloseTo(0.05, 6);
-  });
-
-  it("draws nothing when an event serves no walls", () => {
-    expect(buildWalls().children).toHaveLength(0);
-    expect(buildWalls([]).children).toHaveLength(0);
-  });
-
-  it("gives EVERY lane its own pair", () => {
-    // The physics has no lanes: each run is a separate simulation on the same
-    // single course, so each drawn lane really did have its own walls.
-    expect(buildWalls(WALLS, 3, laneSpacing(EVENT)).children).toHaveLength(6);
-  });
-
-  it("puts each duck between its own walls, not inside them", () => {
-    // The bug she saw: at the old fixed 0.45 m spacing the outer ducks stood
-    // exactly where the walls were drawn.
-    const spacing = laneSpacing(EVENT);
-    const group = buildWalls(WALLS, 3, spacing);
-    for (let lane = 0; lane < 3; lane += 1) {
-      const z = laneOffsetZ(lane, 3, spacing);
-      const [a, b] = group.children.slice(lane * 2, lane * 2 + 2).map((m) => m.position.z);
-      expect(Math.abs(a - z)).toBeCloseTo(0.425, 6);
-      expect(Math.abs(b - z)).toBeCloseTo(0.425, 6);
-      expect(Math.min(a, b)).toBeLessThan(z);
-      expect(Math.max(a, b)).toBeGreaterThan(z);
-    }
-  });
-
-  it("makes neighbouring lanes share a wall line, as a real track does", () => {
-    const spacing = laneSpacing(EVENT);
-    const group = buildWalls(WALLS, 2, spacing);
-    const zs = group.children.map((m) => m.position.z).sort((x, y) => x - y);
-    expect(zs[1]).toBeCloseTo(zs[2], 6);
-  });
-
-  it("rides with the course, so it tilts with a slope", () => {
-    const course = buildCourse({ ...EVENT, slope_deg: 8 }, 1);
-    const group = course.getObjectByName("walls");
-    expect(group).not.toBeNull();
-    expect(group.parent).toBe(course);
   });
 });
 

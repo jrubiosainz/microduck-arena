@@ -64,47 +64,6 @@ export function laneOffsetZ(i, n, spacing = LANE_SPACING) {
  * physics has them, but on screen they hide the robot, and the start and finish
  * lines are what actually make a race readable.
  */
-/**
- * The lane walls the physics uses, drawn exactly where they are.
- *
- * `walls` comes from the server, computed by the same function that writes the
- * MJCF, so nothing is recomputed here — the numbers are only converted from
- * MJCF axes to three.js ones: MJCF +x is three +x, MJCF +y is three -z, MJCF +z
- * is three +y. A box's half-extents map the same way, and three's BoxGeometry
- * takes FULL extents, hence the doubling.
- *
- * Hidden by default. They exist so a robot cannot wander out of its lane, and
- * showing them all the time would put two grey slabs around every replay — but
- * leaving them undrawable meant a roller policy grazing something invisible,
- * which is how this came up.
- */
-export function buildWalls(walls = [], lanes = 1, spacing = LANE_SPACING) {
-  const group = new Group();
-  group.name = "walls";
-  group.visible = false;
-  for (let lane = 0; lane < lanes; lane += 1) {
-   const laneZ = laneOffsetZ(lane, lanes, spacing);
-   for (const { pos, half } of walls) {
-    const mesh = new Mesh(
-      new BoxGeometry(half[0] * 2, half[2] * 2, half[1] * 2),
-      new MeshStandardMaterial({
-        color: 0x3a3a44,
-        roughness: 0.9,
-        metalness: 0,
-        transparent: true,
-        opacity: 0.35,
-      }),
-    );
-    // Each lane carries its OWN pair: every run really did have walls at
-    // +/- width/2 around ITS centreline, and since the runs are spread out to
-    // be compared, their walls spread with them.
-    mesh.position.set(pos[0], pos[2], laneZ - pos[1]);
-    group.add(mesh);
-   }
-  }
-  return group;
-}
-
 export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = [] }, lanes = 1, stripes = []) {
   const course = new Group();
   course.name = "course";
@@ -156,7 +115,6 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
 
   course.add(line(0, span, 0xf5f5f5, "start"));
   course.add(checker(length_m, span));
-  course.add(buildWalls(walls, lanes, spacing));
 
   // One stripe per lane, so a table row can point at its duck.
   //

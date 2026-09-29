@@ -312,8 +312,8 @@ button.link {
 }
 .controls button:hover { color: var(--paper); border-color: var(--paper); }
 .controls button:active { translate: 2px 2px; }
-/* No lit state: both toggles say "Hide walls" / "Hide names" when they are
-   on, so the label carries it and a filled key would be saying it twice. The
+/* No lit state: the names toggle says "Hide names" when enabled, so the
+   label carries it and a filled key would be saying it twice. The
    `aria-pressed` attribute still carries it for anyone not reading the panel. */
 .controls .hint {
   margin-left: auto;

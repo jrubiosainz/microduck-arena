@@ -355,7 +355,7 @@ describe("raceHall: the page's frame", () => {
     const controls = hall().querySelector(".deck > .controls");
     expect(controls).not.toBeNull();
     expect([...controls.querySelectorAll("button")].map((b) => b.id)).toEqual([
-      "playpause", "follow", "walls", "names",
+      "playpause", "follow", "names",
     ]);
     expect(controls.querySelector("#stage-hint")).not.toBeNull();
   });

@@ -10,7 +10,6 @@ export const deckMarkup = `
     <div class="controls">
       <button id="playpause">Pause</button>
       <button id="follow" hidden>Follow the leader</button>
-      <button id="walls" aria-pressed="false" title="The lane walls are in the physics whether or not they are drawn">Show walls</button>
       <button id="names" aria-pressed="false" title="Who each duck belongs to, hung over its head">Show names</button>
       <span class="hint" id="stage-hint"></span>
     </div>
@@ -33,21 +32,13 @@ export function wireDeck(root, viewer) {
   });
   root.querySelector("#follow").addEventListener("click", () => viewer.follow());
 
-  // The walls are always there for the robot; the key only decides whether
-  // you can see them. The names are off to begin with too: four plates over
-  // four ducks is a legend nobody asked for until they did. aria-pressed as
-  // well as the label, so the state is readable without reading the text.
-  const toggle = (id, thing, set) => {
-    const key = root.querySelector(`#${id}`);
-    let shown = false;
-    key.addEventListener("click", () => {
-      shown = set(!shown);
-      key.setAttribute("aria-pressed", String(shown));
-      key.textContent = `${shown ? "Hide" : "Show"} ${thing}`;
-    });
-  };
-  toggle("walls", "walls", (visible) => viewer.setWallsVisible(visible));
-  toggle("names", "names", (visible) => viewer.setNamesVisible(visible));
+  const names = root.querySelector("#names");
+  let namesVisible = false;
+  names.addEventListener("click", () => {
+    namesVisible = viewer.setNamesVisible(!namesVisible);
+    names.setAttribute("aria-pressed", String(namesVisible));
+    names.textContent = `${namesVisible ? "Hide" : "Show"} names`;
+  });
 
   return {
     /** A fresh replay plays from the top, whatever the last one was doing. */

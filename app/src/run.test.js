@@ -22,7 +22,7 @@ describe("a publication's frame", () => {
     const page = runHall();
     expect(page.querySelector(".run-top > .deck > .stage > canvas#stage")).not.toBeNull();
     expect([...page.querySelectorAll(".deck > .controls button")].map((b) => b.id)).toEqual([
-      "playpause", "follow", "walls", "names",
+      "playpause", "follow", "names",
     ]);
   });
 
