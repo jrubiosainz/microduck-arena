@@ -111,6 +111,32 @@ def test_jsons_non_finite_literals_are_refused(tmp_path, literal):
         load_timeline(write(tmp_path, text), LIMIT_S)
 
 
+def test_an_integer_too_large_for_a_float_is_refused_as_a_command_value(tmp_path):
+    """math.isfinite raises OverflowError on a 400-digit int rather than saying no."""
+    raw = good(keyframes=[{"t": 0.0, "twist": [10**400, 0, 0]}])
+    with pytest.raises(TimelineError, match=r"keyframes\[0\]\.twist\[0\]: must be finite"):
+        load_timeline(write(tmp_path, raw), LIMIT_S)
+
+
+def test_an_integer_too_large_for_a_float_is_refused_as_duration_s(tmp_path):
+    with pytest.raises(TimelineError, match="duration_s: must be finite"):
+        load_timeline(write(tmp_path, good(duration_s=10**400)), LIMIT_S)
+
+
+def test_an_integer_over_pythons_string_conversion_limit_is_refused(tmp_path):
+    """A 5000-digit integer literal makes json.loads raise a plain ValueError,
+    not a JSONDecodeError, when it converts the digits to an int."""
+    text = '{"timeline_version": 1, "duration_s": %s, "keyframes": [{"t": 0.0}]}' % ("1" * 5000)
+    with pytest.raises(TimelineError, match="not a JSON file"):
+        load_timeline(write(tmp_path, text), LIMIT_S)
+
+
+def test_deeply_nested_json_is_refused(tmp_path):
+    """100k nested '[' overflows json's recursive descent parser."""
+    with pytest.raises(TimelineError, match="not a JSON file"):
+        load_timeline(write(tmp_path, "[" * 100000), LIMIT_S)
+
+
 def test_a_file_that_is_not_json_is_refused(tmp_path):
     with pytest.raises(TimelineError, match="timeline.json: not a JSON file"):
         load_timeline(write(tmp_path, "{nope"), LIMIT_S)

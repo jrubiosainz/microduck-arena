@@ -153,12 +153,11 @@ def test_sweep_speeds_span_the_declared_range_inclusive():
 def test_the_sweep_is_wide_enough_to_be_worth_running():
     """A one-point sweep would quietly restore the pinned-command behaviour.
 
-    Except for an event ranked on votes: there, the sweep is deliberately one
-    point, so every entrant is judged on the same commanded speed instead of
-    the fastest one it can reach.
+    Except for a stage event: there it plays each entry's timeline (or the
+    event's own command) rather than sweeping a speed, so it has no sweep.
     """
     for m in all_events():
-        if m.metric == "votes":
+        if m.sweep is None:
             continue
         speeds = m.sweep.speeds()
         assert len(speeds) >= 10, f"{m.id}: {len(speeds)} speeds is not a sweep"

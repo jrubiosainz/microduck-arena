@@ -1,7 +1,10 @@
+import dataclasses
+
+import numpy as np
 import pytest
 
 from arena.assets import ASSET_ROOT
-from arena.constants import CTRL_DT, RUNNER_VERSION
+from arena.constants import CTRL_DT, NUM_JOINTS, RUNNER_VERSION
 from arena.evaluate import evaluate
 from arena.manifest import load_event
 from arena.policy import load_policy
@@ -44,3 +47,24 @@ def test_a_timeline_sets_the_performance_and_its_length(swag, walker):
 def test_a_race_refuses_a_timeline(walker):
     with pytest.raises(ValueError, match="race"):
         evaluate(load_event("sprint-2m"), walker, Timeline(2.0, (0.0,), (STILL,)))
+
+
+class _RecordingPolicy:
+    def __init__(self):
+        self.observed = []
+
+    def act(self, obs):
+        self.observed.append(obs.copy())
+        return np.zeros(NUM_JOINTS, dtype=np.float32)
+
+
+def test_the_events_own_command_reaches_the_policy_without_a_timeline(swag):
+    """With no timeline, evaluate() must still drive the policy on the event's
+    own command for the whole time limit — not zeros, not something else."""
+    command = (0.5,) + (0.0,) * 12
+    manifest = dataclasses.replace(swag, command=command, time_limit_s=1.0)
+    policy = _RecordingPolicy()
+    result = evaluate(manifest, policy)
+    commands = [tuple(float(v) for v in obs[48:61]) for obs in policy.observed]
+    assert commands and set(commands) == {command}
+    assert result.trace.shape[0] == 50

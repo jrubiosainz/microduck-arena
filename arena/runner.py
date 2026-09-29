@@ -278,14 +278,14 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     )
 
 
-def run_stage(manifest: Manifest, policy, timeline: Timeline, seed: int, model=None) -> RunOutcome:
+def run_stage(manifest: Manifest, policy, timeline: Timeline, seed: int) -> RunOutcome:
     """Play a timeline on a stage: no line to cross, and no fall stops the show.
 
     The settle plays the first keyframe; timed step k plays the command at
     k * CTRL_DT. Only a non-finite state ends a performance early — a solver
     explosion is not a performance, and a trace cannot hold one.
     """
-    sim, settle = _start(manifest, policy, seed, model, np.asarray(timeline.command_at(0.0), dtype=np.float64))
+    sim, settle = _start(manifest, policy, seed, None, np.asarray(timeline.command_at(0.0), dtype=np.float64))
     steps = round(timeline.duration_s / CTRL_DT)
     frames = np.empty((steps, TRACE_WIDTH), dtype=np.float32)
     status, time_s, written = "finish", steps * CTRL_DT, 0

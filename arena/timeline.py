@@ -58,9 +58,13 @@ def _number(value, where: str) -> float:
     # bool is an int in Python, and `true` would otherwise read as 1.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TimelineError(f"{where}: expected a number, got {value!r}")
+    try:
+        value = float(value)
+    except OverflowError as exc:
+        raise TimelineError(f"{where}: must be finite, got an integer too large for a float") from exc
     if not math.isfinite(value):
         raise TimelineError(f"{where}: must be finite, got {value!r}")
-    return float(value)
+    return value
 
 
 def _keyframe(raw, index: int, duration_s: float, previous_t: float | None):
@@ -100,7 +104,7 @@ def load_timeline(path: Path, max_duration_s: float) -> Timeline:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
         raise TimelineError(f"{path}: {exc.strerror or exc}") from exc
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise TimelineError(f"{path.name}: not a JSON file ({exc})") from exc
     if not isinstance(raw, dict):
         raise TimelineError(f"{path.name}: expected a JSON object, got {type(raw).__name__}")
