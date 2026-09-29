@@ -26,7 +26,7 @@ from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write
 from .code import code_state, code_url, fork, push
 from .hub import Hub, HubUnreachable
 from .jobs import find_job, recorded_jobs
-from .publishing import PublishError, arena_link, preview, publish, repo_for
+from .publishing import PublishError, preview, publish, repo_for
 from .runs import curve, find_run, find_runs
 from .shell import ShellError, commit_all, gh_ready, git
 from .training import Training, ckpt_repo, fetch, train_command
@@ -336,6 +336,8 @@ class PublishRequest(BaseModel):
     description: str = ""
     allow_dirty: bool = False
     dry_run: bool = False
+    livery: str = "classic"
+    speed: float | None = None
 
 
 @router.post("/publish")
@@ -357,20 +359,20 @@ async def publish_route(body: PublishRequest, request: Request) -> dict:
     repo = repo_for(user, body.name)
     args = (ws.root, run, body.checkpoint, repo, body.name, body.description.strip() or event.title,
             ws.challenge.event, body.allow_dirty)
+    env = code_url(ws.root, run.provenance.get("commit"))
     if not ws.publishing.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="A publish is already running.")
     try:
         if body.dry_run:
             return {"repo": repo, **await run_in_threadpool(preview, *args)}
-        published = await run_in_threadpool(publish, *args)
+        published = await run_in_threadpool(publish, *args, arena=ws.arena, livery=body.livery,
+                                            speed=body.speed, code_url=env)
     except PublishError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
         ws.publishing.release()
-    env = code_url(ws.root, run.provenance.get("commit"))
-    link = arena_link(ws.arena, ws.challenge.event, repo, published["revision"], env)
-    ws.open_browser(link)  # the Arena's page, pre-filled: the user clicks Publish there
-    return {**published, "env": env, "arena_url": link}
+    ws.open_browser(published["page_url"])  # the entry's page on the Arena, where its reveal plays
+    return {**published, "env": env}
 
 
 def _only_its_own_page(app: FastAPI, port: int) -> None:

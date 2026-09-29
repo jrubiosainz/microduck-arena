@@ -5,7 +5,8 @@ mjlab does (provenance.json, model_0.pt and model_1.pt, the fixture TensorBoard
 file); with --hf-jobs it prints what hf_jobs prints and writes the run into
 $FAKE_HUB/<ckpt repo>/ instead, which `hf download` copies back. `publish
 --dry-run` writes ./publish-<name>/ with $FAKE_UV_ONNX as policy.onnx; a real
-`publish` prints the commit URL the real one prints. FAKE_UV_FAIL_<COMMAND>=1
+`publish` prints the commit URL the real one prints and, with `--enter`, the
+line an entry prints (FAKE_UV_ENTER_REFUSED=1: the refusal, exit 3). FAKE_UV_FAIL_<COMMAND>=1
 makes that command fail; FAKE_UV_TRAIN_S keeps `train` alive that long;
 FAKE_UV_RESUBMIT=1 prints a second `[job] id:` line, as `train --hf-jobs`
 does when a volume mount fails and it resubmits.
@@ -76,7 +77,14 @@ def publish(argv):
         (out / "README.md").write_text(f"# {name}\n")
         print(f"[publish] dry run: wrote {out.resolve()}/ (policy.onnx, manifest.json, README.md, checkpoint.pt)")
         return 0
-    print(f"[publish] uploaded: https://huggingface.co/{flag(argv, '--repo')}/commit/{'a' * 40}")
+    repo = flag(argv, "--repo")
+    print(f"[publish] uploaded: https://huggingface.co/{repo}/commit/{'a' * 40}")
+    if "--enter" in argv:
+        if os.environ.get("FAKE_UV_ENTER_REFUSED"):
+            print(f"[publish] uploaded https://huggingface.co/{repo}/commit/{'a' * 40}, "
+                  "but the Arena did not enter it: 403: not yours", file=sys.stderr)
+            return 3
+        print(f"[publish] entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s → {flag(argv, '--arena')}/#/r/fakerun1")
     return 0
 
 

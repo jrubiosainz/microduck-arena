@@ -1,7 +1,5 @@
 """Publish: `uv run publish` does the work; the workshop previews, publishes, and sends the user back to the Arena."""
 
-from urllib.parse import parse_qs, urlsplit
-
 from arena.manifest import load_event
 from arena.workshop.publishing import SPEED_TWIST, publish_args, slug
 from tests.workshop.conftest import git, make_run
@@ -20,33 +18,51 @@ def test_the_preview_is_a_dry_run_showing_the_hub_card(workshop, fakes, checkout
     assert body["repo"] == "alice/microduck-my-walker"
     assert body["readme"] == "# my-walker\n" and body["manifest"]["kind"] == "perpetual"
     (call,) = fakes.calls("publish")
-    assert "--dry-run" in call and "--no-private" not in call
+    assert "--dry-run" in call and "--no-private" not in call and "--enter" not in call
     assert not (checkout / "publish-my-walker").exists()
 
 
-def test_publishing_is_public_pins_the_commit_and_opens_the_arena(workshop, fakes, checkout):
+def test_publishing_enters_it_and_opens_its_page(workshop, fakes, checkout):
     run = make_run(checkout, "first")
     body = _publish(workshop, run).json()
     (call,) = fakes.calls("publish")
     assert call[3:7] == ["--run", str(run), "--checkpoint", "1"]
-    assert {"--no-private", "--force"} <= set(call)
+    assert {"--no-private", "--force", "--enter"} <= set(call)
+    assert call[call.index("--arena") + 1] == "http://arena.test"
+    assert call[call.index("--livery") + 1] == "classic"
+    assert "--speed" not in call and "--code-url" not in call
     assert call[call.index("--repo") + 1] == "alice/microduck-my-walker"
     assert "--description=2 m Sprint" in call and "--name=my-walker" in call
     assert call[call.index("--twist-help") + 1] == SPEED_TWIST
     assert body["revision"] == AAA and body["env"] is None
-    link = urlsplit(body["arena_url"])
-    assert (link.scheme, link.netloc, link.fragment) == ("http", "arena.test", "/e/sprint-2m")
-    assert parse_qs(link.query) == {"repo": ["alice/microduck-my-walker"], "revision": [AAA]}
-    assert workshop.opened == [body["arena_url"]]
+    assert body["entered"] == "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s"
+    assert body["page_url"] == "http://arena.test/#/r/fakerun1"
+    assert workshop.opened == [body["page_url"]]
 
 
-def test_the_arena_link_carries_the_code_once_it_is_shared(workshop, fakes, checkout):
+def test_a_colour_and_a_speed_go_with_the_entry(workshop, fakes, checkout):
+    _publish(workshop, make_run(checkout, "first"), livery="yellow", speed=0.55)
+    (call,) = fakes.calls("publish")
+    assert call[call.index("--livery") + 1] == "yellow"
+    assert call[call.index("--speed") + 1] == "0.55"
+
+
+def test_the_entry_carries_the_code_once_it_is_shared(workshop, fakes, checkout):
     workshop.post("/api/workshop/code/fork", json={})
     run = make_run(checkout, "first")
     commit = git(checkout, "rev-parse", "--short=9", "HEAD")
     body = _publish(workshop, run).json()
     assert body["env"] == f"https://github.com/alice/microduck-challenges/tree/{commit}"
-    assert parse_qs(urlsplit(body["arena_url"]).query)["env"] == [body["env"]]
+    (call,) = fakes.calls("publish")
+    assert call[call.index("--code-url") + 1] == body["env"]
+
+
+def test_an_entry_the_arena_refuses_shows_the_whole_output_and_opens_nothing(workshop, fakes, checkout, monkeypatch):
+    monkeypatch.setenv("FAKE_UV_ENTER_REFUSED", "1")
+    response = _publish(workshop, make_run(checkout, "first"))
+    assert response.status_code == 400
+    assert "but the Arena did not enter it: 403: not yours" in response.json()["detail"]
+    assert workshop.opened == []
 
 
 def test_a_dirty_run_is_refused_unless_published_anyway(workshop, fakes, checkout):

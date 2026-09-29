@@ -1,15 +1,14 @@
-"""Publish a run's checkpoint with `uv run publish`, then send the user to the Arena to enter it.
+"""Publish a run's checkpoint with `uv run publish`, which also enters it on the Arena.
 
-The workshop writes no manifest and uploads nothing itself: `publish --run`
-does, exactly as from a shell. It runs twice — `--dry-run` for the preview of
-the Hub card, then for real — and the real one prints the commit it made,
-which is the revision the Arena pins.
+The workshop writes no manifest, uploads nothing and calls no Arena itself: `publish --run
+--enter` does all three, exactly as from a shell. It runs twice — `--dry-run` for the preview
+of the Hub card, then for real — and the real one prints the commit it made and the entry's
+time and page, which the workshop opens.
 """
 
 import json
 import re
 import shutil
-from urllib.parse import urlencode
 
 from ..manifest import load_event
 from .shell import uv_run
@@ -19,6 +18,7 @@ from .shell import uv_run
 SPEED_TWIST = "[vx, vy, wz]: forward and sideways speed in m/s, turn rate in rad/s"
 _UNSAFE = re.compile(r"[^a-z0-9]+")
 _COMMIT = re.compile(r"/commit/([0-9a-f]{7,40})")
+_ENTERED = re.compile(r"^\[publish\] ((?:already )?entered on .+) → (\S+)$", re.MULTILINE)
 
 
 class PublishError(RuntimeError):
@@ -63,18 +63,19 @@ def preview(root, run, checkpoint, repo, name, description, event_id, allow_dirt
         shutil.rmtree(out, ignore_errors=True)
 
 
-def publish(root, run, checkpoint, repo, name, description, event_id, allow_dirty) -> dict:
+def publish(root, run, checkpoint, repo, name, description, event_id, allow_dirty, *,
+            arena: str, livery: str, speed: float | None, code_url: str | None) -> dict:
     args = publish_args(run, checkpoint, repo, name, description, load_event(event_id), allow_dirty)
     # Public, or the Arena cannot read it; --force because publishing a name again is a new
     # commit on the same repo, and the Arena pins the commit it raced.
-    output = _run(root, [*args, "--no-private", "--force"])
-    found = _COMMIT.search(output)
-    if not found:
-        raise PublishError(output + "\n[workshop] publish printed no commit for the Arena to pin")
-    return {"repo": repo, "revision": found.group(1), "output": output}
-
-
-def arena_link(arena: str, event_id: str, repo: str, revision: str, env: str | None) -> str:
-    query = {"repo": repo, "revision": revision} | ({"env": env} if env else {})
-    # The site routes on the hash, so the query goes before it.
-    return f"{arena}/?{urlencode(query)}#/e/{event_id}"
+    args += ["--no-private", "--force", "--enter", "--arena", arena, "--livery", livery]
+    if speed is not None:
+        args += ["--speed", f"{speed:g}"]
+    if code_url:
+        args += ["--code-url", code_url]
+    output = _run(root, args)
+    commit, entered = _COMMIT.search(output), _ENTERED.search(output)
+    if not commit or not entered:
+        raise PublishError(output + "\n[workshop] publish printed no entry for the workshop to open")
+    return {"repo": repo, "revision": commit.group(1), "entered": entered.group(1),
+            "page_url": entered.group(2), "output": output}
