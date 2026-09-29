@@ -63,16 +63,6 @@ describe("visibleRows", () => {
     expect(shown.map((r) => r.rank)).toEqual([...shown.map((r) => r.rank)].sort((a, b) => a - b));
   });
 
-  it("always keeps a trial, whichever keys are on", () => {
-    // It is the run you just asked for; hiding it would make Test look broken.
-    const rows = [...field(9), { rank: 0, run_id: null, user: "you", provisional: true }];
-    for (const mine of [false, true]) {
-      for (const top of [false, true]) {
-        expect(visibleRows(rows, { mine, top, me: "nobody" }).some((r) => r.provisional)).toBe(true);
-      }
-    }
-  });
-
   it("is harmless when nobody is signed in", () => {
     expect(visibleRows(field(12), { top: true }).map((r) => r.rank)).toEqual([1, 2, 3]);
     expect(visibleRows(field(12), { mine: true })).toHaveLength(0);

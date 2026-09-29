@@ -23,10 +23,6 @@ export const TOP_ROWS = 3;
  *            exactly the case someone turns both on for.
  * - neither — everything. "All" is not a third mode; it is the absence of the
  *            other two, which is why the header's All key turns both off.
- *
- * A provisional row (a trial you just ran, published nowhere) always survives:
- * it is the run you are looking at, and hiding it behind a filter would make
- * the Test button appear to do nothing.
  */
 export function visibleRows(rows, { mine = false, top = false, me = null } = {}) {
   if (!mine && !top) return rows.slice();
@@ -34,7 +30,6 @@ export function visibleRows(rows, { mine = false, top = false, me = null } = {})
   const isMine = (row) => Boolean(me) && row.user === me;
   const keep = new Set();
   rows.forEach((row, i) => {
-    if (row.provisional) keep.add(i);
     if (top && i < TOP_ROWS) keep.add(i);
     if (mine && isMine(row)) keep.add(i);
   });

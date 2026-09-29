@@ -30,8 +30,8 @@ export const podium = (rows) =>
 /**
  * Wire the sheet.
  *
- * `rows()` gives the board's rows in the server's order, a provisional row
- * already in place; `opening(rows)` names the runs on the stage before anyone
+ * `rows()` gives the board's rows in the server's order;
+ * `opening(rows)` names the runs on the stage before anyone
  * has ticked a box; `onRace(runIds, tiers)` puts them there. `filters` is
  * where the keys start — Top 3 unless a page says otherwise. Returns `paint`,
  * which re-reads the rows and redraws, and `setInert`, for a page that has to
