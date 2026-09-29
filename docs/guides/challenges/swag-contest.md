@@ -4,7 +4,7 @@ Create a distinctive walking style. Other players choose their favourite duck.
 
 ## Train
 
-Open **Train my robot** on the challenge page, or run this in a terminal:
+Open **Train my own robot** on the challenge page, or run this in a terminal:
 
 ```bash
 uv run https://pollen-robotics-microduck-arena.hf.space/workshop.py swag-contest

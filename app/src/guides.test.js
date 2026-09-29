@@ -20,12 +20,18 @@ describe("public guides", () => {
     expect(root.querySelector('a[href*="roller-sprint"]')).toBeNull();
   });
 
-  it("tells someone who already has an .onnx how to enter it", () => {
+  it("tells someone who already has an .onnx how to race it here and how to enter it", () => {
     const root = show("train-a-policy");
     const commands = [...root.querySelectorAll("pre code")].map(node => node.textContent).join("\n");
+    expect(commands).toContain("uv run --group workshop arena score policy.onnx --event sprint-2m");
     expect(commands).toContain(
-      "uv run publish --onnx policy.onnx --repo <you>/microduck-<name> --kind perpetual --no-private");
-    expect(root.textContent).toMatch(/A file alone can only be tested/);
+      "uv run publish --onnx policy.onnx --repo <you>/microduck-<name> --kind perpetual --no-private --enter --event sprint-2m");
+    expect(root.textContent).not.toMatch(/on a challenge's page/);
+  });
+
+  it("enters from the shell with publish --enter", () => {
+    const commands = [...show("train-a-policy").querySelectorAll("pre code")].map(node => node.textContent).join("\n");
+    expect(commands).toContain("uv run publish --run logs/rsl_rl/sprint_2m/<the run> --repo <you>/microduck-first --no-private --enter");
   });
 
   it("gives general help no navigation of its own: the strip's mark is the way back", () => {

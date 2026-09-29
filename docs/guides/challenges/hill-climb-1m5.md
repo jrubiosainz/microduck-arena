@@ -4,7 +4,7 @@ Walk 1.5 metres up an **8° slope**. The lowest average time wins.
 
 ## Train
 
-Open **Train my robot** on the challenge page, or run this in a terminal:
+Open **Train my own robot** on the challenge page, or run this in a terminal:
 
 ```bash
 uv run https://pollen-robotics-microduck-arena.hf.space/workshop.py hill-climb-1m5

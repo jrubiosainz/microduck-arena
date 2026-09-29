@@ -1,14 +1,14 @@
 # Train your first policy
 
-A policy is the model that controls the robot. You train it in simulation, publish it
-to your Hugging Face account, then enter it here. You do not need a physical robot.
+A policy is the model that controls the robot. You train it in simulation, publish it to
+your Hugging Face account and enter it here, all from a workshop on your machine. You do not
+need a physical robot.
 
 ## The workshop
 
-Open a challenge and select **Train my robot**. You need `git`, `uv` and a Hugging Face
-account; the panel gives one line to paste in a terminal. It clones
-[microduck-challenges](https://github.com/pollen-robotics/microduck-challenges) and opens
-the workshop in your browser:
+Open a challenge and copy the line under **Train my own robot** into a terminal. It clones
+[microduck-challenges](https://github.com/pollen-robotics/microduck-challenges) and opens the
+workshop in your browser, which asks for what it needs as it goes:
 
 1. **Preflight** checks your tools and your Hugging Face login.
 2. **Train** starts from the challenge's own recipe. Change a knob if you like, then launch.
@@ -16,8 +16,8 @@ the workshop in your browser:
    billed to your account, and brings the checkpoints back as they are saved.
 3. **Test** exports a checkpoint and races it with this Arena's own rules, on your machine.
    The time is indicative: only the Arena times an entry.
-4. **Publish** puts the policy, its manifest and its recipe in your Hugging Face account,
-   then opens this page with everything filled in. Select **Publish** here to enter it.
+4. **Publish and enter** puts the policy, its manifest and its recipe in your Hugging Face
+   account, enters it here in the colour and at the speed you chose, and opens its result.
 
 ## From a shell
 
@@ -29,20 +29,25 @@ uv run train Mjlab-Sprint2m-MicroDuck --env.scene.num-envs 4096 --agent.max-iter
     --agent.seed 1 --agent.logger tensorboard --agent.run-name first
 # no NVIDIA GPU: add --hf-jobs --no-wandb, then bring the run back with
 # uv run hf download <the checkpoint repo it printed> --local-dir logs/rsl_rl
-uv run publish --run logs/rsl_rl/sprint_2m/<the run> --repo <you>/microduck-first --no-private
+uv run publish --run logs/rsl_rl/sprint_2m/<the run> --repo <you>/microduck-first --no-private --enter
 ```
 
-Then enter `<you>/microduck-first` on the challenge's page. The Arena expects 61
+`--enter` races it here and prints its time and its page. Add `--livery yellow` for a
+colour, and `--speed 0.6` to be timed at one speed instead of the sweep. The Arena expects 61
 observations, 14 actions and a file no larger than 64 MiB; `publish` checks all three.
 
 ## Already have an `.onnx`
 
-A file alone can only be tested on a challenge's page. To enter it, publish it to a
-Hugging Face model repo, then enter that repo on the challenge's page:
+Race it on your machine with this Arena's rules, in the same clone:
 
 ```bash
-uv run publish --onnx policy.onnx --repo <you>/microduck-<name> --kind perpetual --no-private
+uv run --group workshop arena score policy.onnx --event sprint-2m
 ```
 
-For a roller challenge, add `--accessories rollers`. Any public model repo holding the
-file works too.
+To enter it, publish it to your Hugging Face account with the event it is for:
+
+```bash
+uv run publish --onnx policy.onnx --repo <you>/microduck-<name> --kind perpetual --no-private --enter --event sprint-2m
+```
+
+For a roller challenge, add `--accessories rollers`.
