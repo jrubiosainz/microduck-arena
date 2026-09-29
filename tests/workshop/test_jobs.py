@@ -3,6 +3,7 @@ workshop can still fetch the job's checkpoints or stop it."""
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from arena.workshop.app import create_workshop_app
@@ -122,3 +123,14 @@ def test_a_recorded_jobs_name_is_not_reused_before_its_run_is_fetched(workshop, 
     wait_for(lambda: _job_id(workshop))
     assert _reopened(checkout, hub).post("/api/workshop/train", json=LAUNCH).status_code == 409
     workshop.post("/api/workshop/train/stop")
+
+
+@pytest.mark.parametrize("junk", ['{"first": "not a list"}', '[1, "two", {"no": "name"}]'])
+def test_a_hand_edited_jobs_file_keeps_only_what_reads_as_a_job(workshop, fakes, checkout, junk, monkeypatch):
+    """Raising there after the launch's Popen would leave a job running and billed with no record."""
+    (checkout / "logs").mkdir()
+    (checkout / "logs" / "workshop-jobs.json").write_text(junk)
+    assert workshop.get("/api/workshop/jobs").json() == {"jobs": []}
+    monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")
+    assert workshop.post("/api/workshop/train", json=LAUNCH).status_code == 200
+    assert [j["name"] for j in workshop.get("/api/workshop/jobs").json()["jobs"]] == ["first"]

@@ -18,11 +18,12 @@ _WRITING = threading.Lock()  # a launch and the log it follows both write
 
 
 def recorded_jobs(root: Path) -> list[dict]:
-    """Newest first."""
+    """Newest first. What does not read as a job (a hand-edited file) is left out."""
     try:
-        return json.loads((root / JOBS).read_text())
+        jobs = json.loads((root / JOBS).read_text())
     except (OSError, ValueError):
         return []
+    return [job for job in jobs if isinstance(job, dict) and "name" in job] if isinstance(jobs, list) else []
 
 
 def find_job(root: Path, name: str) -> dict | None:
