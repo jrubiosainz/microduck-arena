@@ -142,6 +142,10 @@ def test_a_publish_owes_a_clip_only_where_a_renderer_exists(tmp_path, monkeypatc
     api = TestClient(app)
     run_id = submit(api, REFERENCE).json()["run_id"]
     assert app.state.store.clip_state(run_id) == ("none", None)
+    # Withdrawn: otherwise re-submitting the identical policy is the same user
+    # re-entering the same ONNX, which comes back as this run, unraced — no
+    # second publish to owe a clip for.
+    assert api.post(f"/api/runs/{run_id}/withdraw").status_code == 200
 
     monkeypatch.setattr(app.state.clips, "available", True)
     run_id = submit(api, REFERENCE).json()["run_id"]

@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 
 from arena.assets import ASSET_ROOT
 from arena.hub_fetch import FetchedPolicy
-from arena.policy import MAX_MODEL_BYTES
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
 
@@ -196,6 +195,63 @@ def test_a_local_arena_needs_no_token_and_checks_no_namespace(api, hub_users):
     assert hub_users == []
 
 
+def test_the_same_policy_entered_again_answers_the_entry_already_there(api, monkeypatch):
+    first = enter(api, token=None).json()
+    raced = []
+    monkeypatch.setattr("arena.web.routes_submit.evaluate", lambda *a: raced.append(a))
+    again = enter(api, token=None, name="another name")
+    assert again.status_code == 200
+    body = again.json()
+    assert body["already_entered"] is True and body["run_id"] == first["run_id"]
+    assert body["score"] == first["score"] and body["page_url"] == first["page_url"]
+    assert raced == [], "not raced again"
+    assert [r["run_id"] for r in api.get("/api/events/sprint-2m/leaderboard").json()["rows"]] == [first["run_id"]]
+
+
+def test_a_withdrawn_entry_can_be_entered_again(api):
+    first = enter(api, token=None).json()
+    assert api.post(f"/api/runs/{first['run_id']}/withdraw").status_code == 200
+    again = enter(api, token=None).json()
+    assert again["already_entered"] is False and again["run_id"] != first["run_id"]
+
+
+def test_an_entry_from_an_older_runner_is_not_the_same_entry(api, monkeypatch):
+    from arena.constants import RUNNER_VERSION
+
+    first = enter(api, token=None).json()
+    monkeypatch.setattr("arena.web.routes_submit.RUNNER_VERSION", RUNNER_VERSION + 1)
+    again = enter(api, token=None).json()
+    assert again["already_entered"] is False and again["run_id"] != first["run_id"]
+
+
+def test_the_answer_says_where_to_see_the_entry(api):
+    body = enter(api, token=None).json()
+    assert body["page_url"] == f"https://testserver/#/r/{body['run_id']}"
+    assert body["already_entered"] is False
+
+
+def test_on_hugging_face_the_page_is_the_spaces_own(store_dir, monkeypatch, hub_users):
+    monkeypatch.setenv("OAUTH_CLIENT_ID", "cid")
+    monkeypatch.setenv("OAUTH_CLIENT_SECRET", "csecret")
+    monkeypatch.setenv("SPACE_HOST", "pollen-robotics-microduck-arena.hf.space")
+    monkeypatch.setenv("SPACE_ID", "pollen-robotics/microduck-arena")
+    space = TestClient(create_app(ArenaConfig.from_env(store_dir=store_dir, dev_user="coralie")),
+                       base_url="https://testserver")
+    body = enter(space).json()
+    assert body["page_url"] == f"https://huggingface.co/spaces/pollen-robotics/microduck-arena#/r/{body['run_id']}"
+
+
+def test_a_file_is_not_an_entry(api):
+    response = api.post("/api/events/sprint-2m/submit",
+                        files={"file": ("p.onnx", REFERENCE.read_bytes(), "application/octet-stream")})
+    assert response.status_code == 400
+    assert "--enter" in response.json()["detail"]
+
+
+def test_there_is_no_trial_route_any_more(api):
+    assert api.post("/api/events/sprint-2m/try", data={"repo_id": "alice/walker"}).status_code in (404, 405)
+
+
 def test_the_reference_policy_scores_and_is_recorded(api):
     response = submit(api)
     assert response.status_code == 200, response.text
@@ -267,6 +323,9 @@ def test_a_nameless_entry_is_called_by_its_manifest_then_its_repo(api, monkeypat
     )
     named = api.post("/api/events/sprint-2m/submit", data={"repo_id": "alice/microduck-walker"}).json()
     assert named["policy_name"] == "strider"
+    # Withdrawn first: otherwise the second call is the same user re-entering the same
+    # ONNX (identical bytes both times) and comes back as the first entry, unraced.
+    assert api.post(f"/api/runs/{named['run_id']}/withdraw").status_code == 200
     monkeypatch.setattr(
         "arena.web.routes_submit._fetch_from_hub",
         lambda repo_id, revision, event: _fetched(repo_id="alice/microduck-walker"),
@@ -292,87 +351,6 @@ def test_nothing_is_recorded_when_a_submission_is_rejected(api, tmp_path):
     assert api.get("/api/events/sprint-2m/leaderboard").json()["rows"] == []
 
 
-def try_it(api, path=REFERENCE, event="sprint-2m", name="trial", command_vx=None):
-    data = {"name": name}
-    if command_vx is not None:
-        data["command_vx"] = command_vx
-    with open(path, "rb") as fh:
-        return api.post(
-            f"/api/events/{event}/try",
-            files={"file": (getattr(path, "name", "p.onnx"), fh)},
-            data=data,
-        )
-
-
-def test_a_trial_scores_the_policy_without_recording_it(api, store_dir):
-    """The point of a trial: measure against the standing board, publish nothing."""
-    response = try_it(api)
-    assert response.status_code == 200, response.text
-    body = response.json()
-
-    assert body["policy_name"] == "trial"
-    assert body["seeds_finished"] == 5
-    # v3 (MJCF position servos): 11.724 s at 0.40 m/s. v4 (BAM servos): 7.988 s
-    # at 0.55 before training's reset and fifth actuator writes joined the runner; re-measured since.
-    assert body["score"] == pytest.approx(8.672, rel=0.02)
-    assert body["command_vx"] == pytest.approx(0.50)
-
-    # Nothing on the board, and nothing on disk.
-    assert api.get("/api/events/sprint-2m/leaderboard").json()["rows"] == []
-    assert list(store_dir.rglob("*.json")) == []
-    assert list(store_dir.rglob("*.npz")) == []
-
-
-def test_a_trial_returns_a_watchable_trace_inline(api):
-    """A trial is kept nowhere, so its trace has to travel in the response."""
-    import base64
-
-    from arena.constants import TRACE_WIDTH
-
-    body = try_it(api).json()
-    raw = base64.b64decode(body["trace_b64"])
-    assert len(raw) % (TRACE_WIDTH * 4) == 0
-    frames = len(raw) // (TRACE_WIDTH * 4)
-    # v3 (MJCF position servos): ~11.7 s at 50 Hz, ~585 frames. v4 (BAM
-    # servos): ~8.0 s, 399 frames before training's reset and fifth actuator writes joined the runner; 8.66 s, 433 frames since. Bounded on
-    # both sides against the event's own limits and not the fixture default:
-    # below the finish time it would not be a finish, and 50 s at 50 Hz is the
-    # hard ceiling.
-    assert 380 < frames < 480
-
-
-def test_a_trial_and_a_submission_give_the_same_time(api):
-    """Why publishing can re-run instead of trusting the browser's numbers.
-
-    Runs are deterministic, so re-evaluating on submit costs a second and
-    returns the identical score — which is what lets a trial button exist
-    without weakening "the server does the timing".
-    """
-    trialled = try_it(api).json()["score"]
-    published = submit(api).json()["score"]
-    assert trialled == published
-
-
-def test_a_trial_rejects_a_bad_file_with_the_same_wording_as_a_submission(api, tmp_path):
-    junk = tmp_path / "junk.onnx"
-    junk.write_bytes(b"not an onnx file")
-    response = try_it(api, path=junk)
-    assert response.status_code == 400
-    assert "not a loadable ONNX model" in response.json()["detail"]
-
-
-def test_a_trial_on_an_unknown_event_is_a_404(api):
-    response = try_it(api, event="nope")
-    assert response.status_code == 404
-    assert "no such event" in response.json()["detail"]
-
-
-def test_an_oversize_trial_is_refused_too(api, tmp_path):
-    fat = tmp_path / "fat.onnx"
-    fat.write_bytes(b"\0" * (MAX_MODEL_BYTES + 1))
-    assert try_it(api, path=fat).status_code == 413
-
-
 def test_a_submission_remembers_its_livery(api):
     response = submit(api, name="purple-runner", livery="purple")
     assert response.json()["livery"] == "purple"
@@ -386,75 +364,11 @@ def test_a_submission_without_a_livery_races_in_the_default(api):
     assert submit(api).json()["livery"] == "classic"
 
 
-def test_a_trial_reports_the_livery_it_was_asked_for(api):
-    with open(REFERENCE, "rb") as fh:
-        response = api.post(
-            "/api/events/sprint-2m/try",
-            files={"file": ("p.onnx", fh)},
-            data={"livery": "blue"},
-        )
-    assert response.json()["livery"] == "blue"
-
-
 def test_an_absurd_livery_is_capped_rather_than_stored_whole(api):
     """Submitter-supplied text again. The viewer falls back for a name it does
     not know, so this only has to stay bounded."""
     response = submit(api, livery="z" * 500)
     assert len(response.json()["livery"]) == 32
-
-
-def test_a_trial_can_pin_one_speed_instead_of_sweeping(api):
-    """What the sidebar's speed picker asks for: try this policy at this speed."""
-    body = try_it(api, command_vx="0.30").json()
-    assert body["command_vx"] == pytest.approx(0.30)
-    # 0.30 is a real, slower result for this walker, not the sweep's 0.50 answer
-    # — so this proves the pin took effect rather than being ignored.
-    # v3 (MJCF position servos): 15.2 s. v4 (BAM servos): 14.136 s before training's reset and fifth actuator writes joined the runner;
-    # re-measured since.
-    assert body["score"] == pytest.approx(14.280, rel=0.05)
-    assert body["seeds_finished"] == 5
-
-
-def test_a_pinned_trial_is_faster_than_a_swept_one(api):
-    """Why the pin exists at all: five runs instead of thirty-odd."""
-    import time
-
-    start = time.monotonic()
-    try_it(api, command_vx="0.40")
-    pinned = time.monotonic() - start
-
-    start = time.monotonic()
-    try_it(api)
-    swept = time.monotonic() - start
-
-    # Generous factor: this asserts the shape (one speed vs the whole range),
-    # not a performance budget that a loaded CI box could fail on.
-    assert pinned < swept / 2, f"pinned {pinned:.2f}s vs swept {swept:.2f}s"
-
-
-def test_a_pinned_trial_at_the_sweeps_own_answer_agrees_with_it(api):
-    """The two paths share the scoring code, so pinning the sweep's own answer
-    must reproduce its number exactly. If these drift, one of them has its own
-    arithmetic."""
-    swept = try_it(api).json()
-    pinned = try_it(api, command_vx=str(swept["command_vx"])).json()
-    assert pinned["score"] == pytest.approx(swept["score"])
-    assert pinned["per_seed"] == swept["per_seed"]
-
-
-def test_a_speed_outside_the_events_range_is_clamped_not_rejected(api):
-    """The picker is built from the event's range, so an out-of-range value is a
-    stale page rather than an attack. Clamping keeps it usable."""
-    body = try_it(api, command_vx="9.9").json()
-    assert body["command_vx"] == pytest.approx(1.20)  # sprint-2m's sweep ceiling
-
-
-def test_an_unparseable_speed_falls_back_to_the_sweep(api):
-    body = try_it(api, command_vx="fast please").json()
-    # The sweep's own answer for this policy, which is what "I don't know what
-    # you asked for" should give you. v3 (MJCF position servos): 0.40. v4 (BAM
-    # servos): 0.55 before training's reset and fifth actuator writes joined the runner; re-measured since.
-    assert body["command_vx"] == pytest.approx(0.50)
 
 
 def test_publishing_honours_a_pinned_speed(api):
@@ -489,12 +403,6 @@ def test_publishing_without_a_speed_still_sweeps(api):
     # 7.988 s before training's reset and fifth actuator writes joined the runner; re-measured since.
     assert body["command_vx"] == pytest.approx(0.50)
     assert body["score"] == pytest.approx(8.672, rel=0.02)
-
-
-def test_testing_a_policy_signed_out_is_refused(spaced_api):
-    response = try_it(spaced_api)
-    assert response.status_code == 401
-    assert "sign in" in response.json()["detail"].lower()
 
 
 def test_publishing_signed_out_is_refused(spaced_api, hub_users):
@@ -554,42 +462,6 @@ def test_a_repo_id_races_without_uploading_anything(api, store_dir, monkeypatch)
     assert rows[0]["policy_url"] == fetched.url
 
 
-def test_a_trial_can_race_a_repo_id_too(api, monkeypatch):
-    fetched = _fetched()
-    monkeypatch.setattr(
-        "arena.web.routes_submit._fetch_from_hub", lambda repo_id, revision, event: fetched
-    )
-    response = api.post(
-        "/api/events/sprint-2m/try",
-        data={"repo_id": "alice/walker"},
-    )
-    assert response.status_code == 200, response.text
-    body = response.json()
-    # v3 (MJCF position servos): 11.724. v4 (BAM servos): 7.988 before training's reset and fifth actuator writes joined the runner;
-    # re-measured since.
-    assert body["score"] == pytest.approx(8.672, rel=0.02)
-    # A trial keeps nothing regardless of where the policy came from, and a
-    # nameless Hub entry is called by its repo, same as a submission.
-    assert body["policy_name"] == "walker"
-
-
-def test_sending_both_a_file_and_a_repo_id_is_refused(api):
-    with open(REFERENCE, "rb") as fh:
-        response = api.post(
-            "/api/events/sprint-2m/try",
-            files={"file": ("p.onnx", fh)},
-            data={"repo_id": "alice/walker"},
-        )
-    assert response.status_code == 400
-    assert "not both and not neither" in response.json()["detail"]
-
-
-def test_sending_neither_a_file_nor_a_repo_id_is_refused(api):
-    response = api.post("/api/events/sprint-2m/try")
-    assert response.status_code == 400
-    assert "not both and not neither" in response.json()["detail"]
-
-
 def test_an_unresolvable_repo_id_is_refused_with_its_reason(api, store_dir, monkeypatch):
     from arena.hub_fetch import FetchError
 
@@ -625,7 +497,7 @@ def test_a_refused_link_is_a_400_and_costs_no_simulation(api, store_dir, monkeyp
     import arena.web.routes_submit as routes
 
     raced = []
-    monkeypatch.setattr(routes, "_load_and_evaluate", lambda *a, **k: raced.append(True))
+    monkeypatch.setattr(routes, "evaluate", lambda *a, **k: raced.append(True))
 
     response = submit(api, env_url="https://github.com.evil.com/x")
     assert response.status_code == 400
@@ -634,38 +506,12 @@ def test_a_refused_link_is_a_400_and_costs_no_simulation(api, store_dir, monkeyp
     assert list(store_dir.rglob("*.json")) == []
 
 
-def test_publishing_a_file_is_refused_with_the_two_ways_to_publish(api, store_dir):
-    with open(REFERENCE, "rb") as fh:
-        response = api.post("/api/events/sprint-2m/submit", files={"file": ("w.onnx", fh)})
-    assert response.status_code == 400
-    detail = response.json()["detail"]
-    assert "workshop" in detail and "uv run publish" in detail
-    assert list(store_dir.rglob("*.json")) == []
-
-
-def test_a_file_and_a_repo_together_are_refused_for_publishing_too(api):
-    _HUB["alice/walker"] = REFERENCE
-    with open(REFERENCE, "rb") as fh:
-        response = api.post(
-            "/api/events/sprint-2m/submit", files={"file": ("w.onnx", fh)}, data={"repo_id": "alice/walker"}
-        )
-    assert response.status_code == 400
-    assert "uv run publish" in response.json()["detail"]
-
-
 def test_a_revision_is_pinned_and_recorded(api, hub):
     body = submit(api, revision="abc1234").json()
     assert hub[-1] == ("alice/best_alpha_walking", "abc1234", "sprint-2m")
     assert body["policy_url"].endswith("/resolve/abc1234/policy.onnx")
     row = api.get("/api/events/sprint-2m/leaderboard").json()["rows"][0]
     assert row["policy_url"] == body["policy_url"]
-
-
-def test_a_trial_can_pin_a_revision_too(api, hub):
-    _HUB["alice/walker"] = REFERENCE
-    response = api.post("/api/events/sprint-2m/try", data={"repo_id": "alice/walker", "revision": "abc1234"})
-    assert response.status_code == 200, response.text
-    assert hub[-1] == ("alice/walker", "abc1234", "sprint-2m")
 
 
 def test_a_manifest_that_disagrees_is_a_400_naming_the_field(api, monkeypatch, store_dir):

@@ -1,52 +1,33 @@
-"""Racing a policy: as a trial, or for the record.
+"""Entering a policy: a Hub repo, raced here, recorded on the board.
 
-Both paths run the SAME evaluation. `try` returns the result and keeps nothing;
-`submit` returns the result and appends it to the log. That split exists so you
-can measure a policy against the standing board without publishing every
-experiment you run.
+The server does the timing: it downloads the repo at the revision given, validates the ONNX
+with the same `load_policy` the CLI uses (so a refusal carries the engine's own wording),
+races it and appends the run to the log. Nothing is recorded unless the evaluation completes.
 
-`submit` re-evaluates rather than accepting numbers from the browser, even
-straight after a trial produced them. Runs are deterministic — the golden test
-pins that — so re-running costs about a second and yields the identical time,
-which means the rule "the server does the timing" survives having a trial
-button at all.
-
-Uploads are validated by the same `load_policy` the CLI uses, so a rejection
-carries the engine's own wording, and nothing is recorded unless the evaluation
-completes.
-
-Entering the board takes a Hugging Face repo, at a revision when one is given:
-the policy is published by its author (`uv run publish`, or the workshop that
-runs it) and the Space only reads it. A file can still be tried, never
-entered — the Space writes into no one's namespace and keeps no weights.
+An entry is made by `uv run publish … --enter`, from a shell or from the workshop, with the
+user's Hugging Face token; the site has no entry form, and nothing here races a policy
+without entering it. The Space writes into no one's namespace and keeps no weights.
 """
 
-import base64
-import tempfile
 from datetime import UTC, datetime
-from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
 from .. import trace as trace_codec
+from ..constants import RUNNER_VERSION
 from ..envlink import EnvLinkError, normalise_env_url
 from ..evaluate import evaluate, evaluate_at
 from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy, parse_repo_ref
 from ..manifest import ManifestError, load_event
-from ..policy import MAX_MODEL_BYTES, PolicyError, load_policy
+from ..policy import PolicyError, load_policy
 from ..store import RunRecord, Withdrawal, new_id
 from .hub_identity import HubUnreachable, TokenRefused, whoami
 from .routes_auth import current_user
+from .routes_read import _withdrawn
 from .session import Session
 
 router = APIRouter(prefix="/api")
-
-PUBLISH_A_REPO = (
-    "A file can be tested, not published. Publish it to your Hugging Face account "
-    "first — from the workshop (Train my robot, on this page) or with `uv run publish` — "
-    "then enter its repo here."
-)
 
 
 def _fetch_from_hub(repo_id: str, revision: str | None, event) -> FetchedPolicy:
@@ -121,14 +102,6 @@ def _require_own_repo(repo_id: str, user: str, orgs: frozenset[str] | None) -> N
         )
 
 
-def _load_and_evaluate(path: Path, manifest, command_vx: float | None = None):
-    """The blocking half of a run, in one call so it takes one thread hop."""
-    policy = load_policy(path)
-    if command_vx is None:
-        return policy, evaluate(manifest, policy)
-    return policy, evaluate_at(manifest, policy, command_vx)
-
-
 def _event_or_404(event_id: str):
     try:
         return load_event(event_id)
@@ -151,82 +124,6 @@ def _speed(manifest, value: str | None) -> float | None:
     except (TypeError, ValueError):
         return None
     return min(manifest.sweep.hi, max(manifest.sweep.lo, vx))
-
-
-async def _race(
-    event_id: str,
-    file: UploadFile | None,
-    repo_id: str | None = None,
-    command_vx: str | None = None,
-    revision: str | None = None,
-):
-    """Validate a policy and evaluate it. Shared by both paths, and both sources.
-
-    Exactly one of `file` (a trial's upload) and `repo_id` (a Hub repo, at
-    `revision` when given) is given — the routes enforce that before calling
-    in. Returns `(manifest, policy, evaluation, payload, fetched)`, or raises
-    the HTTP error a submitter should see.
-
-    `payload` comes back because `submit` stores an upload's weights so others
-    can download and race them, and re-reading the upload after it has been
-    consumed is not possible. `fetched` comes back instead, for the Hub path:
-    the policy already lives with its author, so there is nothing here to
-    store — `submit` records a link built from it rather than a blob.
-    """
-    manifest = _event_or_404(event_id)
-
-    if repo_id:
-        try:
-            # Offloaded to a worker thread: this is a network call.
-            fetched = await run_in_threadpool(_fetch_from_hub, repo_id, revision, manifest)
-        except FetchError as exc:
-            # 400, not 500: the reference is the problem, and the message is
-            # written to be read by the person who typed it.
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        try:
-            # Offloaded to a worker thread. Both steps are CPU-bound — an ONNX
-            # session load plus five simulated runs, about a second in total —
-            # and these are `async def` handlers, so doing them inline would
-            # block the whole event loop. This is also where the 64 MiB cap is
-            # enforced for a fetched policy: `load_policy` checks every path
-            # alike, whichever source it came from.
-            policy, result = await run_in_threadpool(
-                _load_and_evaluate, fetched.path, manifest, _speed(manifest, command_vx)
-            )
-        except PolicyError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return manifest, policy, result, None, fetched
-
-    payload = await file.read()
-    if len(payload) > MAX_MODEL_BYTES:
-        # Checked before writing anything: an oversize upload should cost nothing.
-        raise HTTPException(
-            status_code=413,
-            detail=f"model is {len(payload)} bytes, larger than the "
-            f"{MAX_MODEL_BYTES} byte limit",
-        )
-
-    with tempfile.TemporaryDirectory() as work:
-        path = Path(work) / "submitted.onnx"
-        path.write_bytes(payload)
-        try:
-            # Offloaded to a worker thread. Both steps are CPU-bound — an ONNX
-            # session load plus five simulated runs, about a second in total —
-            # and these are `async def` handlers, so doing them inline would
-            # block the whole event loop.
-            policy, result = await run_in_threadpool(
-                _load_and_evaluate, path, manifest, _speed(manifest, command_vx)
-            )
-        except PolicyError as exc:
-            # 400, not 500: the file is the problem, and the message is written
-            # to be read by the person who uploaded it.
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    return manifest, policy, result, payload, None
-
-
-def _seed_rows(result):
-    return [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in result.per_seed]
 
 
 def _env_url(value: str | None) -> str | None:
@@ -263,55 +160,59 @@ def _label(name: str | None, fallback: str) -> str:
     return ((name or "").strip() or fallback)[:80]
 
 
-def _require_exactly_one(file: UploadFile | None, repo_id: str | None) -> None:
-    """A policy comes from an upload or a Hub repo id, never both, never neither."""
-    if (file is None) == (not repo_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Send either a .onnx file or a repo id, not both and not neither.",
-        )
+ENTER_A_REPO = "The Arena enters a Hugging Face repo: enter from the workshop, or with `uv run publish … --enter`."
 
 
-@router.post("/events/{event_id}/try")
-async def try_policy(
-    event_id: str,
-    request: Request,
-    file: UploadFile | None = File(default=None),
-    repo_id: str | None = Form(default=None),
-    name: str | None = Form(default=None),
-    livery: str | None = Form(default=None),
-    command_vx: str | None = Form(default=None),
-    revision: str | None = Form(default=None),
-) -> dict:
-    """Race a policy and keep nothing.
+def _seed_rows(per_seed) -> list[dict]:
+    return [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in per_seed]
 
-    The trace comes back inline rather than being parked server-side: a trial
-    that was never recorded should not create state with a lifetime to manage.
 
-    `command_vx` pins the commanded speed for this trial. Omit it for the full
-    sweep — the same measurement the board uses. Pinning is five runs instead of
-    thirty-odd, so it is also the quick way to look at one behaviour.
+def _evaluate(manifest, policy, command_vx: float | None):
+    return evaluate(manifest, policy) if command_vx is None else evaluate_at(manifest, policy, command_vx)
 
-    `repo_id` races a policy already on the Hub, by reference — nothing is
-    uploaded, and exactly one of `file` and `repo_id` must be given.
+
+def _page_url(request: Request, run_id: str) -> str:
+    """Where a browser sees the entry: on Hugging Face, the Space's own page (which hands the
+    hash to the Space and opens it for anyone logged in there, private or not); else here."""
+    space = request.app.state.config.space_id
+    if space:
+        return f"https://huggingface.co/spaces/{space}#/r/{run_id}"
+    return f"{str(request.base_url).rstrip('/')}/#/r/{run_id}"
+
+
+def _already_entered(store, event_id: str, user: str, sha256: str) -> RunRecord | None:
+    """This user's entry of this very policy, if one is on the board.
+
+    Keyed on the ONNX's sha256, not the revision or the speed: a retry after a lost answer is
+    the same file, and a pinned speed can only match or lose to the sweep, which already keeps
+    the best. An entry withdrawn, or raced by an older runner, is no longer on the board.
     """
-    _require_session(request)
-    _require_exactly_one(file, repo_id)
-    _, _, result, _payload, fetched = await _race(event_id, file, repo_id, command_vx, revision)
+    withdrawn = _withdrawn(store)
+    return next(
+        (r for r in store.runs(event_id)
+         if r.user == user and r.model_sha256 == sha256
+         and r.runner_version == RUNNER_VERSION and r.run_id not in withdrawn),
+        None,
+    )
+
+
+def _answer(record: RunRecord, page_url: str, already: bool) -> dict:
     return {
-        "policy_name": _label(
-            name, Path(file.filename or "policy.onnx").stem if file else _hub_name(fetched)
-        ),
-        "livery": _livery(livery),
-        "score": result.score,
-        "command_vx": result.command_vx,
-        "seeds_finished": result.seeds_finished,
-        "seeds_total": len(result.per_seed),
-        "per_seed": _seed_rows(result),
-        "trace_seed": result.trace_seed,
-        "trace_b64": base64.b64encode(
-            result.trace.astype("<f4").tobytes()
-        ).decode("ascii"),
+        "run_id": record.run_id,
+        "user": record.user,
+        "policy_name": record.policy_name,
+        "livery": record.livery,
+        "score": record.score,
+        "command_vx": record.command_vx,
+        "model_stored": record.model_stored,
+        "offers_download": record.offers_download,
+        "policy_url": (record.source or {}).get("url"),
+        "seeds_finished": record.seeds_finished,
+        "seeds_total": len(record.per_seed),
+        "per_seed": _seed_rows(record.per_seed),
+        "trace_seed": record.trace_seed,
+        "page_url": page_url,
+        "already_entered": already,
     }
 
 
@@ -319,7 +220,6 @@ async def try_policy(
 async def submit(
     event_id: str,
     request: Request,
-    file: UploadFile | None = File(default=None),
     repo_id: str | None = Form(default=None),
     name: str | None = Form(default=None),
     livery: str | None = Form(default=None),
@@ -330,95 +230,107 @@ async def submit(
     # Who, before any of the expensive work: an entry nobody can be credited with is not worth
     # thirty seconds of a shared CPU.
     user, orgs = await _entrant(request)
-    if file is not None or not repo_id:
-        raise HTTPException(status_code=400, detail=PUBLISH_A_REPO)
+    if not repo_id:
+        raise HTTPException(status_code=400, detail=ENTER_A_REPO)
+    manifest = _event_or_404(event_id)
     _require_own_repo(repo_id, user, orgs)
+    # Checked before racing: a link this server will refuse should cost nobody thirty seconds
+    # of simulation first.
     link = _env_url(env_url)
     racing = request.app.state.racing
     if user in racing:
         raise HTTPException(status_code=409, detail="Your previous entry is still racing: wait for its result.")
     racing.add(user)
     try:
-        # `command_vx` pins the commanded speed for this entry; omit it for the full
-        # sweep, which stays the default.
-        #
-        # An earlier version refused it here, on the reasoning that a board where
-        # entrants choose their own speed ranks whoever guessed best. That objection
-        # does not survive the arithmetic: the sweep already keeps the BEST time
-        # across every speed in the range, including whichever one you would have
-        # pinned. Pinning can therefore only match or lose to sweeping — it is
-        # self-penalising, not exploitable.
-        #
-        # One honest caveat. The sweep's shortlist is chosen from a ONE-SEED scan, so
-        # it can miss a speed that would have won over five. A pinned entry can
-        # occasionally beat the sweep's answer for the same policy by a hair. The
-        # board shows each row's commanded speed, so this is visible rather than
-        # hidden.
-        manifest, policy, result, _payload, fetched = await _race(
-            event_id, None, repo_id, command_vx, revision
-        )
-
-        store = request.app.state.store
-        record = RunRecord(
-            run_id=new_id(),
-            event_id=manifest.id,
-            # Zero-padded ISO-8601 ending in Z. arena/index.py breaks a full tie by
-            # comparing this as a STRING, so an isoformat() offset would misorder it.
-            submitted_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            user=user,
-            policy_name=_label(name, _hub_name(fetched)),
-            source={
-                "kind": "hub",
-                "repo_id": fetched.repo_id,
-                "filename": fetched.filename,
-                "revision": fetched.revision,
-                "url": fetched.url,
-            },
-            model_sha256=policy.sha256,
-            score=result.score,
-            command_vx=result.command_vx,
-            seeds_finished=result.seeds_finished,
-            per_seed=result.per_seed,
-            trace_seed=result.trace_seed,
-            runner_version=result.runner_version,
-            # The weights live in the author's own repo, at this revision; the
-            # Space keeps none, and anyone can download and race them from there.
-            model_stored=False,
-            env_url=link,
-            livery=_livery(livery),
-        )
-        store.append(record, trace_codec.encode(result.trace, result.settle))
-
-        clips = request.app.state.clips
-        if clips.available:
-            # Owed now, rendered later: the response does not wait for a video.
-            # The run is already on the board at this point, so a marker that
-            # fails to write must not turn a successful publish into a 500.
-            try:
-                store.mark_clip_pending(
-                    record.run_id, record.user, record.event_id, record.submitted_at
-                )
-                clips.enqueue(record.run_id)
-            except Exception as exc:  # noqa: BLE001 — see above
-                print(f"clip: {record.run_id} not queued ({type(exc).__name__}: {exc})")
-
-        return {
-            "run_id": record.run_id,
-            "user": record.user,
-            "policy_name": record.policy_name,
-            "livery": record.livery,
-            "score": record.score,
-            "command_vx": record.command_vx,
-            "model_stored": record.model_stored,
-            "offers_download": record.offers_download,
-            "policy_url": (record.source or {}).get("url"),
-            "seeds_finished": record.seeds_finished,
-            "seeds_total": len(record.per_seed),
-            "per_seed": _seed_rows(result),
-            "trace_seed": record.trace_seed,
-        }
+        return await _enter(request, manifest, user, repo_id, revision, name, livery, command_vx, link)
     finally:
         racing.discard(user)
+
+
+async def _enter(request, manifest, user, repo_id, revision, name, livery, command_vx, link) -> dict:
+    try:
+        # Offloaded to a worker thread: this is a network call.
+        fetched = await run_in_threadpool(_fetch_from_hub, repo_id, revision, manifest)
+    except FetchError as exc:
+        # 400, not 500: the reference is the problem, and the message is written to be read
+        # by the person who sent it.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        # An ONNX session load, off the event loop. The 64 MiB cap is checked here too.
+        policy = await run_in_threadpool(load_policy, fetched.path)
+    except PolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    store = request.app.state.store
+    kept = _already_entered(store, manifest.id, user, policy.sha256)
+    if kept is not None:
+        return _answer(kept, _page_url(request, kept.run_id), already=True)
+
+    # `command_vx` pins the commanded speed for this entry; omit it for the full
+    # sweep, which stays the default.
+    #
+    # An earlier version refused it here, on the reasoning that a board where
+    # entrants choose their own speed ranks whoever guessed best. That objection
+    # does not survive the arithmetic: the sweep already keeps the BEST time
+    # across every speed in the range, including whichever one you would have
+    # pinned. Pinning can therefore only match or lose to sweeping — it is
+    # self-penalising, not exploitable.
+    #
+    # One honest caveat. The sweep's shortlist is chosen from a ONE-SEED scan, so
+    # it can miss a speed that would have won over five. A pinned entry can
+    # occasionally beat the sweep's answer for the same policy by a hair. The
+    # board shows each row's commanded speed, so this is visible rather than
+    # hidden.
+    try:
+        # Five simulated runs per speed, CPU-bound: off the event loop.
+        result = await run_in_threadpool(_evaluate, manifest, policy, _speed(manifest, command_vx))
+    except PolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    record = RunRecord(
+        run_id=new_id(),
+        event_id=manifest.id,
+        # Zero-padded ISO-8601 ending in Z. arena/index.py breaks a full tie by
+        # comparing this as a STRING, so an isoformat() offset would misorder it.
+        submitted_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        user=user,
+        policy_name=_label(name, _hub_name(fetched)),
+        source={
+            "kind": "hub",
+            "repo_id": fetched.repo_id,
+            "filename": fetched.filename,
+            "revision": fetched.revision,
+            "url": fetched.url,
+        },
+        model_sha256=policy.sha256,
+        score=result.score,
+        command_vx=result.command_vx,
+        seeds_finished=result.seeds_finished,
+        per_seed=result.per_seed,
+        trace_seed=result.trace_seed,
+        runner_version=result.runner_version,
+        # The weights live in the author's own repo, at this revision; the
+        # Space keeps none, and anyone can download and race them from there.
+        model_stored=False,
+        env_url=link,
+        livery=_livery(livery),
+    )
+    store.append(record, trace_codec.encode(result.trace, result.settle))
+
+    clips = request.app.state.clips
+    if clips.available:
+        # Owed now, rendered later: the response does not wait for a video.
+        # The run is already on the board at this point, so a marker that
+        # fails to write must not turn a successful publish into a 500.
+        try:
+            store.mark_clip_pending(
+                record.run_id, record.user, record.event_id, record.submitted_at
+            )
+            clips.enqueue(record.run_id)
+        except Exception as exc:  # noqa: BLE001 — see above
+            print(f"clip: {record.run_id} not queued ({type(exc).__name__}: {exc})")
+
+    return _answer(record, _page_url(request, record.run_id), already=False)
 
 
 @router.post("/runs/{run_id}/withdraw")

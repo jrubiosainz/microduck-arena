@@ -74,6 +74,9 @@ class ArenaConfig:
     # The address a shared link carries. A Space knows its host; locally there
     # is none, and the unfurl route falls back to the request's.
     public_origin: str | None = None
+    # The Space's own id, e.g. pollen-robotics/microduck-arena; its huggingface.co page opens an
+    # entry's result for anyone logged in there, private Space or not.
+    space_id: str | None = None
     # Layouts rendered at once. Half the cores: SwiftShader takes every core a
     # frame can get, so a 2-vCPU Space renders one layout at a time.
     clip_parallel: int = 1
@@ -156,6 +159,7 @@ class ArenaConfig:
             session_secret=secret,
             origin=os.environ.get("ARENA_ORIGIN") or origin or "http://127.0.0.1:8000",
             public_origin=(f"https://{host}" if (host := os.environ.get("SPACE_HOST")) else None),
+            space_id=(os.environ.get("SPACE_ID") or "").strip() or None,
             clip_parallel=clip_parallel,
             clip_worker=clip_worker,
             clips_enabled=(os.environ.get("ARENA_CLIPS") or "1").strip() not in {"0", "false", "no"},
