@@ -40,9 +40,8 @@ def test_a_challenge_reads_its_contract_recipe_and_knobs(tmp_path):
         "forward_reward", "Follow the speed order", 2.0, 0.5, 5.0)
 
 
-def test_only_challenges_whose_event_is_open_here_are_offered(tmp_path):
+def test_only_challenges_whose_event_this_arena_races_are_offered(tmp_path):
     _folder(tmp_path, "sprint_2m", SPRINT)
-    _folder(tmp_path, "jump", SPRINT.replace('"sprint-2m"', '"highest-jump"'))  # planned
     _folder(tmp_path, "gone", SPRINT.replace('"sprint-2m"', '"no-such-event"'))
     assert [c.event for c in open_challenges(tmp_path)] == ["sprint-2m"]
 

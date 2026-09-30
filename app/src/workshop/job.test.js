@@ -25,9 +25,9 @@ const JOB = {
   recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, params: { forward_reward: 2 }, code_url: null,
 };
 const CODE = { fork: null, changes: [], identity: true, commit: "abc1234", unpushed: 0 };
-const SPRINT = { id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", vote: null, metric: "time", rig: "legs",
+const SPRINT = { id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null, metric: "time", rig: "legs",
   length_m: 2, slope_deg: 0, sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21 };
-const SWAG = { ...SPRINT, id: "swag-contest", title: "Swag Contest", metric: "votes", vote: { ballot_min: 2 } };
+const SWAG = { ...SPRINT, id: "swag-contest", title: "MicroDuck Got a Talent", metric: "votes", vote: { ballot_min: 2 } };
 const status = (event) => ({ arena: "https://arena.test", gpu: false, challenges: [{ event, folder: "sprint_2m", task: "S", recipe: {}, knobs: [], running: 1 }] });
 const account = { get: () => ({ phase: "in", user: "alice", canPay: true }), logIn: vi.fn(), check: vi.fn() };
 const settle = async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); };

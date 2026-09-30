@@ -12,7 +12,7 @@ vi.mock("./api.js", () => api);
 
 import { POLL_MS, mountChallenge } from "./challenge.js";
 
-const SPRINT = { id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", vote: null, metric: "time",
+const SPRINT = { id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null, metric: "time",
   length_m: 2, slope_deg: 0, rig: "legs", sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21 };
 const STATUS = { arena: "https://arena.test", gpu: false, challenges: [
   { event: SPRINT, folder: "sprint_2m", task: "S", recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, knobs: [], running: 0 }] };

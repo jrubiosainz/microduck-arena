@@ -135,7 +135,7 @@ function results(publications, player, me) {
     // opened.
     if (me?.user === player.user && !pub.seen) link.classList.add("unread");
     // A voted event's rank is earned by votes, not by time — "#1 · 18.46s"
-    // beside a Swag Contest entry would read as a finish time that placed it,
+    // beside a MicroDuck Got a Talent entry would read as a finish time that placed it,
     // when the finish time never ranked anything there.
     const earned = pub.votes != null
       ? (pub.votes ? `${pub.votes} votes` : "no votes yet")

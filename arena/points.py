@@ -62,7 +62,7 @@ def boards_by_user(
 
     `voted` maps a votable event id to its rules. Those events are ranked on
     votes instead of on time, which is what makes the podium bonus follow the
-    swag contest without a line of its own.
+    MicroDuck Got a Talent without a line of its own.
     """
     if ballots and now is None:
         raise ValueError("a sliding window needs a `now`; this module never reads a clock")

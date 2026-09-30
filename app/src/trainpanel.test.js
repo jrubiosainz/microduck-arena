@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { oneLine, renderTrainPanel, trainPanel } from "./trainpanel.js";
 
-const sprint = { id: "sprint-2m", status: "open" };
+const sprint = { id: "sprint-2m" };
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -36,11 +36,9 @@ describe("Train my own robot", () => {
     expect(writeText).toHaveBeenCalledWith("uv run https://arena.example/workshop.py sprint-2m");
   });
 
-  it("sits in the entry column above the guide link, and not for a planned event", () => {
+  it("sits in the entry column above the guide link", () => {
     const root = document.createElement("div");
     root.innerHTML = '<div class="entry-col"><a class="help-link"></a></div>';
-    renderTrainPanel(root, { id: "highest-jump", status: "planned" }, "https://a");
-    expect(root.querySelector(".train")).toBeNull();
     renderTrainPanel(root, sprint, "https://a");
     expect(root.querySelector(".help-link").previousElementSibling.classList.contains("train")).toBe(true);
   });

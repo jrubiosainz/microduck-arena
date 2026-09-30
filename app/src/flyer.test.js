@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { flyer } from "./flyer.js";
 
 const SPRINT = {
-  id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", vote: null,
+  id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null,
   length_m: 2, slope_deg: 0, rig: "legs", sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21,
 };
-const SWAG = { ...SPRINT, id: "swag-contest", title: "Swag Contest", category: "showcase", vote: { ballot_min: 2 } };
+const SWAG = { ...SPRINT, id: "swag-contest", title: "MicroDuck Got a Talent", category: "showcase", vote: { ballot_min: 2 } };
 
 describe("flyer", () => {
   it("leads to the race page and says who holds it, by default", () => {

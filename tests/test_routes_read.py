@@ -383,7 +383,7 @@ def test_a_voted_board_ranks_on_votes_and_still_reports_the_time(client):
 
 def test_a_players_best_row_on_a_voted_event_carries_its_vote_count(client):
     """`player_page` used to return a voted `rank` beside a timed `score` and
-    no votes, so the profile rendered `#1 · 18.46s` for the Swag Contest — a
+    no votes, so the profile rendered `#1 · 18.46s` for the MicroDuck Got a Talent — a
     vote rank next to a finish time, with nothing saying which is which."""
     api, app = client
     ann = record_run(app, user="ann", event_id="swag-contest", score=12.0)
@@ -492,7 +492,7 @@ def test_voting_puts_points_on_the_ladder(client):
 
 
 def test_every_event_tells_the_page_what_kind_it_is(client):
-    """The swag contest is not a race, and not even timed — so the page has to
+    """The MicroDuck Got a Talent is not a race, and not even timed — so the page has to
     be told, not left to guess from `metric`."""
     api, _ = client
     events = {e["id"]: e.get("category") for e in api.get("/api/events").json()["events"]}

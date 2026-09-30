@@ -15,7 +15,7 @@ it("plays swag ballot entries one at a time and lets the viewer watch each perfo
   const viewer = { setLanes: vi.fn() };
   createViewer.mockResolvedValue(viewer);
   const root = document.createElement("div");
-  const event = { id: "swag-contest", title: "Swag Contest", rig: "legs" };
+  const event = { id: "swag-contest", title: "MicroDuck Got a Talent", rig: "legs" };
   await renderVote(root, { event, state: {} });
   expect(getBallotTrace).toHaveBeenCalledTimes(3);
   expect(viewer.setLanes.mock.lastCall[0]).toHaveLength(1);

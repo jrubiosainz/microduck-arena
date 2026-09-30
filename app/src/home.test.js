@@ -288,7 +288,7 @@ describe("an open event's flyer", () => {
 const voted = {
   ...open,
   id: "swag-contest",
-  title: "Swag Contest",
+  title: "MicroDuck Got a Talent",
   metric: "votes",
   vote: { ballot_min: 2, ballot_max: 4, window_days: 7, per_day: 20 },
 };

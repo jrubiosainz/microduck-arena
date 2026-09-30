@@ -67,16 +67,15 @@ def read_challenge(toml: Path) -> Challenge:
 
 
 def open_challenges(root: Path) -> list[Challenge]:
-    """The checkout's challenges whose event is open on this Arena, in folder order."""
+    """The checkout's challenges whose event this Arena races, in folder order."""
     found = []
     for toml in sorted((root / PACKAGE).glob("*/challenge.toml")):
         challenge = read_challenge(toml)
         try:
-            is_open = load_event(challenge.event).status == "open"
+            load_event(challenge.event)
         except ManifestError:
-            is_open = False  # an event this Arena version does not have
-        if is_open:
-            found.append(challenge)
+            continue  # an event this Arena version does not have
+        found.append(challenge)
     return found
 
 

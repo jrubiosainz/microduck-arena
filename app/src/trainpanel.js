@@ -37,8 +37,7 @@ export function trainPanel(event, origin = location.origin) {
   return panel;
 }
 
-/** In the entry column, above the guide link, for an event that can be trained for today. */
+/** In the entry column, above the guide link. */
 export function renderTrainPanel(root, event, origin = location.origin) {
-  if (event.status !== "open") return;
   root.querySelector(".entry-col .help-link").before(trainPanel(event, origin));
 }

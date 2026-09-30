@@ -356,7 +356,7 @@ describe("taking your own entry off the board", () => {
 });
 
 describe("a voted board shows votes, not a time", () => {
-  const votedEvent = { id: "swag-contest", title: "Swag Contest", metric: "votes" };
+  const votedEvent = { id: "swag-contest", title: "MicroDuck Got a Talent", metric: "votes" };
 
   function render(rows) {
     const container = document.createElement("div");

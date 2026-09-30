@@ -19,7 +19,7 @@ const PROGRAMME = [
   event("sprint-2m", "2 m Sprint"),
   event("roller-sprint-2m", "2 m Roller Sprint"),
   event("hill-climb-1m5", "1.5 m Hill Climb"),
-  event("swag-contest", "Swag Contest", "showcase"),
+  event("swag-contest", "MicroDuck Got a Talent", "showcase"),
 ];
 
 const asked = [];

@@ -193,7 +193,7 @@ describe("otherRounds: the way on, under the board", () => {
     round("sprint-2m", "2 m Sprint", "race"),
     round("roller-sprint-2m", "2 m Roller Sprint", "race", "rollers"),
     round("hill-climb-1m5", "1.5 m Hill Climb", "race"),
-    round("swag-contest", "Swag Contest", "showcase", "legs", { vote: {} }),
+    round("swag-contest", "MicroDuck Got a Talent", "showcase", "legs", { vote: {} }),
   ];
   const here = programme[0];
 
