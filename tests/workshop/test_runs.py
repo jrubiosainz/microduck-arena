@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from arena.workshop import eventfile
-from arena.workshop.runs import curve, find_run, find_runs
+from arena.workshop.runs import curve, find_runs
 
 PROBE = Path(__file__).resolve().parents[1] / "fixtures" / "workshop" / "events.out.tfevents.probe"
 TASK = "Mjlab-Sprint2m-MicroDuck"
@@ -45,12 +45,6 @@ def test_a_provenance_still_being_written_is_skipped_not_fatal(tmp_path):
     torn = _run(tmp_path, "pulling", stamp="2026-09-28_12-00-00")
     (torn / "provenance.json").write_text('{"task": "Mjlab-Spr')
     assert [r.name for r in find_runs(tmp_path, TASK)] == ["first"]
-
-
-def test_find_run_by_id(tmp_path):
-    _run(tmp_path, "first")
-    assert find_run(tmp_path, TASK, "2026-09-28_10-00-00_first").name == "first"
-    assert find_run(tmp_path, TASK, "nope") is None
 
 
 def test_the_curve_is_the_mean_reward_tensorboard_recorded(tmp_path):

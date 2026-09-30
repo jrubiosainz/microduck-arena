@@ -23,17 +23,21 @@ def _free_port() -> int:
         return probe.getsockname()[1]
 
 
-def test_with_no_challenge_it_lists_the_open_ones(checkout, monkeypatch, capsys):
+def test_with_no_challenge_it_opens_the_home(checkout, monkeypatch, capsys):
+    served = {}
+    port = _free_port()
     monkeypatch.chdir(checkout)
-    assert cli.main([]) == 0
-    assert "uv run --group workshop workshop sprint-2m" in capsys.readouterr().out
+    monkeypatch.setattr("uvicorn.Server.run", lambda server: served.update(app=server.config.app))
+    assert cli.main(["--no-browser", "--port", str(port)]) == 0
+    assert f"http://127.0.0.1:{port}/  (" in capsys.readouterr().out
+    assert list(served["app"].state.workshop.challenges) == ["sprint-2m"]
 
 
-def test_an_unknown_challenge_is_refused_with_the_list(checkout, monkeypatch, capsys):
+def test_an_unknown_challenge_is_refused_naming_the_open_ones(checkout, monkeypatch, capsys):
     monkeypatch.chdir(checkout)
     assert cli.main(["moon-landing"]) == 2
-    out = capsys.readouterr()
-    assert "moon-landing" in out.err and "workshop sprint-2m" in out.out
+    err = capsys.readouterr().err
+    assert "moon-landing" in err and "sprint-2m" in err
 
 
 def test_outside_a_checkout_it_says_where_to_run_it(tmp_path, monkeypatch, capsys):
@@ -42,7 +46,7 @@ def test_outside_a_checkout_it_says_where_to_run_it(tmp_path, monkeypatch, capsy
     assert "microduck-challenges" in capsys.readouterr().err
 
 
-def test_a_challenge_opens_the_workshop_on_it(checkout, monkeypatch):
+def test_a_challenge_opens_the_workshop_on_it(checkout, monkeypatch, capsys):
     served = {}
     port = _free_port()
     monkeypatch.chdir(checkout)
@@ -50,20 +54,21 @@ def test_a_challenge_opens_the_workshop_on_it(checkout, monkeypatch):
         app=server.config.app, host=server.config.host, port=server.config.port))
     assert cli.main(["sprint-2m", "--arena", "http://127.0.0.1:8000/", "--no-browser", "--port", str(port)]) == 0
     workshop = served["app"].state.workshop
-    assert workshop.challenge.event == "sprint-2m"
+    assert list(workshop.challenges) == ["sprint-2m"]
     assert workshop.arena == "http://127.0.0.1:8000"
     assert served["port"] == port and served["host"] == "127.0.0.1"
+    assert f"http://127.0.0.1:{port}/#/c/sprint-2m" in capsys.readouterr().out
     # It answers at the address it serves on, and only there.
     assert TestClient(served["app"], base_url=f"http://127.0.0.1:{port}").get("/api/workshop/nothing").status_code == 404
     assert TestClient(served["app"], base_url="http://127.0.0.1:1").get("/api/workshop/nothing").status_code == 403
 
 
-def test_the_folder_name_works_too(checkout, monkeypatch):
+def test_the_folder_name_works_too(checkout, monkeypatch, capsys):
     served = {}
     monkeypatch.chdir(checkout)
     monkeypatch.setattr("uvicorn.Server.run", lambda server: served.update(app=server.config.app))
     assert cli.main(["sprint_2m", "--no-browser", "--port", str(_free_port())]) == 0
-    assert served["app"].state.workshop.challenge.event == "sprint-2m"
+    assert "/#/c/sprint-2m" in capsys.readouterr().out
 
 
 def test_the_address_is_printed_at_once_even_into_a_pipe(checkout, monkeypatch):

@@ -3,24 +3,32 @@
 import pytest
 
 from arena.workshop.app import create_workshop_app
-from tests.workshop.conftest import ADDRESS, PORT, git
+from tests.workshop.conftest import ADDRESS, PORT, git, reopen
 
 
-def test_status_names_the_challenge_its_recipe_knobs_and_event(workshop):
+def test_status_lists_the_open_challenges_with_their_settings(workshop):
     body = workshop.get("/api/workshop/status").json()
-    assert body["challenge"]["event"] == "sprint-2m"
-    assert body["challenge"]["task"] == "Mjlab-Sprint2m-MicroDuck"
-    assert body["challenge"]["recipe"] == {"num_envs": 4096, "max_iterations": 3000, "seed": 1}
-    assert body["challenge"]["knobs"] == [
-        {"name": "forward_reward", "label": "Follow the speed order", "value": 2.0, "min": 0.5, "max": 5.0}]
-    assert body["event"]["id"] == "sprint-2m" and body["event"]["rig"] == "legs"
-    assert body["arena"] == "http://arena.test"
+    (sprint,) = body["challenges"]
+    assert sprint["event"]["id"] == "sprint-2m" and sprint["event"]["rig"] == "legs"
+    assert (sprint["folder"], sprint["task"]) == ("sprint_2m", "Mjlab-Sprint2m-MicroDuck")
+    assert sprint["recipe"] == {"num_envs": 4096, "max_iterations": 3000, "seed": 1}
+    assert sprint["knobs"] == [{"name": "forward_reward", "label": "Follow the speed order", "value": 2.0,
+                                "min": 0.5, "max": 5.0, "group": "reward"}]
+    assert sprint["running"] == 0
+    assert body["arena"] == "http://arena.test" and body["gpu"] is False
 
 
-def test_without_an_nvidia_gpu_training_goes_to_hf_jobs(workshop):
-    body = workshop.get("/api/workshop/status").json()
-    assert body["preflight"] == {"git": True, "uv": True, "gpu": False}
-    assert body["mode"] == "hf-jobs"
+def test_a_knob_that_is_not_a_reward_goes_with_the_recipe(checkout, fakes, hub):
+    toml = checkout / "src" / "microduck_challenges" / "sprint_2m" / "challenge.toml"
+    toml.write_text(toml.read_text() + '\n[params.max_slope_deg]\nlabel = "Steepest training slope"\n'
+                    "value = 10.0\nmin   = 0.0\nmax   = 15.0\n")
+    (sprint,) = reopen(checkout, hub).get("/api/workshop/status").json()["challenges"]
+    assert [(k["name"], k["group"]) for k in sprint["knobs"]] == [("forward_reward", "reward"), ("max_slope_deg", "recipe")]
+
+
+def test_with_an_nvidia_gpu_the_status_says_so(workshop, fakes):
+    fakes.gpu()
+    assert workshop.get("/api/workshop/status").json()["gpu"] is True
 
 
 def test_the_status_answers_without_asking_the_hub(workshop, hub):
@@ -48,11 +56,6 @@ def test_an_unreachable_hub_is_said_not_waited_for(workshop, hub):
     assert workshop.get("/api/workshop/hub").json() == {"user": None, "reachable": False, "can_pay": False}
 
 
-def test_with_an_nvidia_gpu_it_trains_here(workshop, fakes):
-    fakes.gpu()
-    assert workshop.get("/api/workshop/status").json()["mode"] == "local"
-
-
 def test_the_page_is_served_from_the_built_site(checkout, fakes, hub, tmp_path):
     from fastapi.testclient import TestClient
 
@@ -61,7 +64,7 @@ def test_the_page_is_served_from_the_built_site(checkout, fakes, hub, tmp_path):
     site = tmp_path / "site"
     site.mkdir()
     (site / "workshop.html").write_text("<html>workshop</html>")
-    app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub, PORT, frontend_dir=site)
+    app = create_workshop_app(checkout, open_challenges(checkout), "http://arena.test", hub, PORT, frontend_dir=site)
     assert TestClient(app, base_url=ADDRESS).get("/").text == "<html>workshop</html>"
 
 
@@ -73,7 +76,7 @@ def test_the_api_wins_over_the_static_mount(checkout, fakes, hub, tmp_path):
     site = tmp_path / "site"
     site.mkdir()
     (site / "workshop.html").write_text("<html>workshop</html>")
-    app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub, PORT, frontend_dir=site)
+    app = create_workshop_app(checkout, open_challenges(checkout), "http://arena.test", hub, PORT, frontend_dir=site)
     assert TestClient(app, base_url=ADDRESS).get("/api/workshop/status").status_code == 200
 
 
@@ -104,6 +107,6 @@ def test_a_post_from_another_site_is_refused(workshop, checkout):
 
 
 def test_a_post_from_the_page_itself_or_from_no_page_goes_through(workshop):
-    # 409: nothing is running — the guard let it reach the route.
+    # 404: no such training — the guard let it reach the route.
     for headers in ({"Origin": "http://127.0.0.1:8765"}, {"Origin": "http://localhost:8765"}, {}):
-        assert workshop.post("/api/workshop/train/stop", headers=headers).status_code == 409
+        assert workshop.post("/api/workshop/challenges/sprint-2m/jobs/nope/stop", headers=headers).status_code == 404

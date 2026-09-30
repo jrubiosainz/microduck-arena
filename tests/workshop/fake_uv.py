@@ -49,7 +49,7 @@ def train(argv):
         base = Path(os.environ["FAKE_HUB"]) / repo
     else:
         base = Path("logs") / "rsl_rl"
-    run = base / "sprint_2m" / f"{datetime.now().astimezone():%Y-%m-%d_%H-%M-%S}_{name}"
+    run = base / argv[0].lower() / f"{datetime.now().astimezone():%Y-%m-%d_%H-%M-%S}_{name}"
     run.mkdir(parents=True)
     (run / "provenance.json").write_text(json.dumps(record))
     shutil.copy(os.environ["FAKE_UV_TFEVENTS"], run / "events.out.tfevents.1.fake")

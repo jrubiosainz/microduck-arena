@@ -3,7 +3,9 @@ bare repos (https://github.com/<owner>/<name> is rewritten to them with url.inst
 `uv` on a PATH that holds nothing else — a symlink stands in for the real git, so a machine's
 other neighbours of git (an nvidia-smi on a training box, say) are never picked up."""
 
+import base64
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -15,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from arena.assets import ASSET_ROOT
+from arena.constants import RUNNER_VERSION, TRACE_WIDTH
 
 # Imported here, at collection time, while PATH is still whatever the developer's shell gives it:
 # arena.workshop.app pulls in mujoco, which probes `sysctl` on macOS at import time. The `fakes`
@@ -63,17 +66,44 @@ def wait_for(predicate, timeout=10.0):
     raise AssertionError("timed out waiting")
 
 
-def make_run(root, name="first", checkpoints=(0, 1), dirty=False, stamp="2026-09-28_10-00-00", task="Mjlab-Sprint2m-MicroDuck"):
+def make_run(root, name="first", checkpoints=(0, 1), dirty=False, stamp="2026-09-28_10-00-00",
+             task="Mjlab-Sprint2m-MicroDuck", iterations=None, age_s=60):
+    """A run as mjlab writes it. `iterations`: the --agent.max-iterations its provenance records.
+    Its checkpoint files are `age_s` old: an evaluation waits for a file younger than 30 s."""
     run = root / "logs" / "rsl_rl" / "sprint_2m" / f"{stamp}_{name}"
     run.mkdir(parents=True)
-    (run / "provenance.json").write_text(json.dumps({
+    day, time_of_day = stamp.split("_")
+    provenance = {
         "task": task, "commit": git(root, "rev-parse", "--short=9", "HEAD"), "branch": "main",
-        "dirty": dirty, "seed": 1, "started": "2026-09-28T10:00:00Z",
-    }))
+        "dirty": dirty, "seed": 1, "started": f"{day}T{time_of_day.replace('-', ':')}Z",
+    }
+    if iterations is not None:
+        provenance["command"] = ["train", task, "--agent.max-iterations", str(iterations)]
+    (run / "provenance.json").write_text(json.dumps(provenance))
+    old = time.time() - age_s
     for n in checkpoints:
         (run / f"model_{n}.pt").write_bytes(b"pt")
+        os.utime(run / f"model_{n}.pt", (old, old))
     shutil.copy(PROBE, run / "events.out.tfevents.1.probe")
     return run
+
+
+def store_evaluation(run, n, score=5.0, finished=5, total=5):
+    """What an evaluation of checkpoint n stores, written by hand."""
+    trace = base64.b64encode(bytes(4 * TRACE_WIDTH * 2)).decode("ascii")
+    folder = run / "workshop"
+    folder.mkdir(exist_ok=True)
+    (folder / f"model_{n}.json").write_text(json.dumps({
+        "checkpoint": n, "score": score, "command_vx": 0.55, "seeds_finished": finished, "seeds_total": total,
+        "per_seed": [], "trace_seed": 1, "trace_b64": trace, "runner_version": RUNNER_VERSION,
+    }))
+
+
+def reopen(checkout, hub, opened=None):
+    """The workshop closed and opened again on the same checkout: nothing left in memory."""
+    app = create_workshop_app(checkout, open_challenges(checkout), "http://arena.test", hub, PORT,
+                              open_browser=(opened.append if opened is not None else lambda url: None))
+    return TestClient(app, base_url=ADDRESS)
 
 
 @pytest.fixture
@@ -159,18 +189,14 @@ def hub():
 
 @pytest.fixture
 def workshop(checkout, fakes, hub, monkeypatch):
-    # As the launcher exports it. A page login replaces it in os.environ; monkeypatch puts the
-    # developer's own back after the test.
+    # As the launcher exports it. monkeypatch puts the developer's own back after the test.
     monkeypatch.setenv("HF_TOKEN", "hf_from_the_launcher")
     opened = []
-    app = create_workshop_app(checkout, open_challenges(checkout)[0], "http://arena.test", hub, PORT,
-                              open_browser=opened.append)
-    client = TestClient(app, base_url=ADDRESS)
+    client = reopen(checkout, hub, opened)
     client.opened = opened
     yield client
     # A training still followed pulls one last time as it ends: after this test, PATH is the
     # developer's again, and that pull would be the real uv's `hf download`, on the real Hub.
-    training = app.state.workshop.training
-    if training:
+    for training in client.app.state.workshop.trainings.values():
         training.stop(hub)
         wait_for(lambda: training.returncode is not None)

@@ -8,7 +8,7 @@ from tests.workshop.conftest import make_run
 
 
 def _trial(workshop, run, checkpoint=1):
-    return workshop.post(f"/api/workshop/runs/{run.name}/trial", json={"checkpoint": checkpoint})
+    return workshop.post(f"/api/workshop/challenges/sprint-2m/runs/{run.name}/trial", json={"checkpoint": checkpoint})
 
 
 def test_a_checkpoint_is_exported_by_a_dry_run_publish_and_raced(workshop, fakes, checkout):
@@ -55,7 +55,7 @@ def test_a_failed_export_shows_its_whole_output(workshop, fakes, checkout, monke
 def test_an_unknown_checkpoint_or_run_is_refused(workshop, fakes, checkout):
     run = make_run(checkout, "first")
     assert _trial(workshop, run, checkpoint=7).status_code == 400
-    assert workshop.post("/api/workshop/runs/nope/trial", json={"checkpoint": 1}).status_code == 404
+    assert workshop.post("/api/workshop/challenges/sprint-2m/runs/nope/trial", json={"checkpoint": 1}).status_code == 404
 
 
 def test_a_dirty_run_can_still_be_tested(workshop, fakes, checkout):
@@ -63,13 +63,12 @@ def test_a_dirty_run_can_still_be_tested(workshop, fakes, checkout):
     assert _trial(workshop, run).status_code == 200
 
 
-def test_the_runs_listing_shows_what_was_tested(workshop, fakes, checkout):
+def test_the_tickets_show_what_was_tested(workshop, fakes, checkout):
     run = make_run(checkout, "first")
     score = _trial(workshop, run).json()["score"]
-    (listed,) = workshop.get("/api/workshop/runs").json()["runs"]
-    assert set(listed["trials"]) == {"1"}
-    assert listed["trials"]["1"]["score"] == score and listed["trials"]["1"]["seeds_finished"] == 5
-    assert "trace_b64" not in listed["trials"]["1"]
+    (ticket,) = workshop.get("/api/workshop/challenges/sprint-2m/jobs").json()["jobs"]
+    assert [(c["n"], c["status"]) for c in ticket["checkpoints"]] == [(0, "queued"), (1, "evaluated")]
+    assert ticket["checkpoints"][1]["score"] == score and ticket["checkpoints"][1]["seeds_finished"] == 5
 
 
 def test_a_corrupt_cache_does_not_break_the_listing_and_is_measured_again(workshop, fakes, checkout):
@@ -77,10 +76,10 @@ def test_a_corrupt_cache_does_not_break_the_listing_and_is_measured_again(worksh
     cache_dir = run / "workshop"
     cache_dir.mkdir()
     (cache_dir / "model_1.json").write_text("{not json")
-    listing = workshop.get("/api/workshop/runs")
+    listing = workshop.get("/api/workshop/challenges/sprint-2m/jobs")
     assert listing.status_code == 200
-    (listed,) = listing.json()["runs"]
-    assert listed["trials"] == {}
+    (ticket,) = listing.json()["jobs"]
+    assert [c["status"] for c in ticket["checkpoints"]] == ["queued", "queued"]
     assert _trial(workshop, run).status_code == 200
     assert len(fakes.calls("publish")) == 1
 

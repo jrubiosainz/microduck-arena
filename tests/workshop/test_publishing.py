@@ -9,7 +9,7 @@ AAA = "a" * 40
 
 def _publish(workshop, run, **fields):
     body = {"run": run.name, "checkpoint": 1, "name": "My Walker!", "description": "", **fields}
-    return workshop.post("/api/workshop/publish", json=body)
+    return workshop.post("/api/workshop/challenges/sprint-2m/publish", json=body)
 
 
 def test_the_preview_is_a_dry_run_showing_the_hub_card(workshop, fakes, checkout):

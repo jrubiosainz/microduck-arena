@@ -5,7 +5,7 @@ With an NVIDIA GPU the process IS the training. Without one it is `train …
 job's uploader pushes the run to a Hub repo that mirrors logs/rsl_rl/; this
 pulls that repo back into logs/rsl_rl/ every few minutes and once more at the
 end, so Test and Publish find an HF run exactly where they find a local one.
-The job itself is written down (jobs.py): it outlives this process.
+Every launch is written down (jobs.py): it outlives this process.
 """
 
 import os
@@ -22,6 +22,7 @@ from .shell import child_env, uv
 
 PULL_EVERY_S = 120.0
 _JOB_ID = re.compile(r"^\[job\] id:\s+(\S+)")
+_ITERATION = re.compile(r"Learning iteration (\d+)/(\d+)")
 # Every download into logs/rsl_rl/ in turn: the periodic pull, a button press, a recorded job's.
 _PULLING = threading.Lock()
 
@@ -56,12 +57,18 @@ def train_command(challenge, name: str, recipe: dict[str, int], hf_user: str | N
 
 
 class Training:
-    def __init__(self, root, name: str, command: list[str], ckpt_repo: str | None = None, namespace: str | None = None):
-        self.root, self.name, self.ckpt_repo, self.namespace = root, name, ckpt_repo, namespace
+    def __init__(self, root, challenge, name: str, where: str, recipe: dict[str, int],
+                 params: dict[str, float], hf_user: str | None = None):
+        """`where` is "local" or "hf-jobs"; `hf_user` the account an HF job runs (and is billed) under."""
+        self.root, self.task, self.name, self.where = root, challenge.task, name, where
+        self.namespace = hf_user if where == "hf-jobs" else None
+        self.ckpt_repo = ckpt_repo(hf_user, challenge, name) if self.namespace else None
+        command = train_command(challenge, name, recipe, self.namespace)
         self.returncode: int | None = None
         self._lines = [f"$ {shlex.join(command)}"]
         self._job_id: str | None = None
-        # Reentrant: snapshot() reads job_id while already holding this lock.
+        self._progress: tuple[int, int] | None = None
+        # Reentrant: `state` reads under it while `log` already holds it.
         self._lock = threading.RLock()
         self._ended = threading.Event()
         self._stopped = False
@@ -69,23 +76,27 @@ class Training:
             command, cwd=root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, errors="replace", bufsize=1, env=child_env(), start_new_session=True,
         )
-        if ckpt_repo:  # before the log is read: its job ids update this record
-            remember_job(root, name, ckpt_repo=ckpt_repo, namespace=namespace, job_id=None,
-                         started=datetime.now(UTC).isoformat(timespec="seconds"))
+        # Before the log is read: its job ids update this record.
+        hf = {"ckpt_repo": self.ckpt_repo, "namespace": self.namespace, "job_id": None} if self.ckpt_repo else {}
+        remember_job(root, self.task, name, where=where, recipe=recipe, params=params,
+                     started=datetime.now(UTC).isoformat(timespec="seconds"), **hf)
         threading.Thread(target=self._follow, daemon=True).start()
-        if ckpt_repo:
+        if self.ckpt_repo:
             threading.Thread(target=self._pull_while_running, daemon=True).start()
 
     def _say(self, line: str) -> None:
-        # A resubmitted job (mjlab retries on a volume-mount failure) prints a
-        # fresh id; the last one seen is the one actually running and billed.
+        # A resubmitted job (mjlab retries on a volume-mount failure) prints a fresh id; the last one
+        # seen is the one actually running and billed.
         job = _JOB_ID.match(line) if self.ckpt_repo else None
+        iteration = _ITERATION.search(line)
         with self._lock:
             self._lines.append(line)
             if job:
                 self._job_id = job.group(1)
+            if iteration:
+                self._progress = (int(iteration.group(1)), int(iteration.group(2)))
         if job:
-            remember_job(self.root, self.name, job_id=job.group(1))
+            remember_job(self.root, self.task, self.name, job_id=job.group(1))
 
     def _follow(self) -> None:
         for line in self.proc.stdout:
@@ -96,6 +107,9 @@ class Training:
             self.pull()  # whatever the job saved last
         with self._lock:
             self.returncode = code  # read by `state`; set with the log so a snapshot is never torn
+        if not self.ckpt_repo:
+            # How a local training ended, for its ticket after a restart; an HF job's end is the Hub's word.
+            remember_job(self.root, self.task, self.name, ended=self.state)
 
     def _pull_while_running(self) -> None:
         while not self._ended.wait(PULL_EVERY_S):
@@ -114,6 +128,12 @@ class Training:
     def job_id(self) -> str | None:
         with self._lock:
             return self._job_id
+
+    @property
+    def progress(self) -> tuple[int, int] | None:
+        """(iteration, iterations) as the log last said it."""
+        with self._lock:
+            return self._progress
 
     @property
     def state(self) -> str:
@@ -140,11 +160,7 @@ class Training:
         except OSError:
             pass
 
-    def snapshot(self, since: int = 0) -> dict:
+    def log(self, since: int = 0) -> tuple[list[str], int]:
+        """The lines from `since`, and where the next read starts."""
         with self._lock:
-            lines, total = self._lines[max(since, 0):], len(self._lines)
-            return {
-                "name": self.name, "mode": "hf-jobs" if self.ckpt_repo else "local", "state": self.state,
-                "returncode": self.returncode, "ckpt_repo": self.ckpt_repo, "job_id": self.job_id,
-                "log": lines, "next": total,
-            }
+            return self._lines[max(since, 0):], len(self._lines)

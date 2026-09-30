@@ -43,10 +43,6 @@ def find_runs(root: Path, task: str) -> list[Run]:
     return sorted((r for r in runs if r and r.provenance.get("task") == task), key=lambda r: r.id, reverse=True)
 
 
-def find_run(root: Path, task: str, run_id: str) -> Run | None:
-    return next((r for r in find_runs(root, task) if r.id == run_id), None)
-
-
 def curve(run: Run, tag: str = REWARD) -> list[tuple[int, float]]:
     """The run's `tag` over its steps, from every TensorBoard file in it."""
     points = []

@@ -1,4 +1,4 @@
-"""The workshop's server: one challenge, one checkout, on 127.0.0.1, never deployed.
+"""The workshop's server: the open challenges of one checkout, on 127.0.0.1, never deployed.
 
 Separate from arena/web — no OAuth, no store — and it only ever runs on the
 machine that holds the checkout. The page (workshop.html) is built with the
@@ -24,13 +24,14 @@ from ..web.routes_read import event_summary
 from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write_values
 from .code import code_state, code_url, commit, push, use_fork
 from .hub import Hub, HubUnreachable
-from .jobs import find_job, recorded_jobs
+from .jobs import TERMINAL, recorded_jobs, remember_job
 from .login import BrowserLogin, LoginError
 from .publishing import PublishError, preview, publish, repo_for
-from .runs import curve, find_run, find_runs
-from .shell import ShellError, commit_all
-from .training import Training, ckpt_repo, fetch, train_command
-from .trials import TrialError, tested, trial
+from .runs import find_runs
+from .shell import ShellError, commit_all, git
+from .tickets import source, ticket, ticket_detail, tickets
+from .training import Training
+from .trials import TrialError, trial
 
 NO_SITE = (
     "The workshop's page has not been built.\n\n"
@@ -44,29 +45,35 @@ router = APIRouter(prefix="/api/workshop")
 @dataclass
 class Workshop:
     root: Path
-    challenge: Challenge
+    challenges: dict[str, Challenge]  # by event id, in folder order
     arena: str
     hub: Hub
     open_browser: object
-    training: object = field(default=None)
-    login: BrowserLogin = field(default=None)
-    # Serializes launch and stop: without it, two POST /train ~250ms apart could both pass
-    # `_running` before either sets `ws.training`, starting two processes (one an unreachable,
-    # still-billed HF job) and racing `write_values`/`commit_all` over the same checkout.
+    login: BrowserLogin
+    # The trainings this workshop launched and follows, by (task, run name): two challenges may each
+    # have a run called "first".
+    trainings: dict[tuple[str, str], Training] = field(default_factory=dict)
+    # Serializes launch and stop: without it two launches ~250 ms apart could both pass the
+    # one-local-training rule, and race `write_values`/`commit_all` over the same checkout.
     lock: threading.Lock = field(default_factory=threading.Lock)
     # One publish or preview at a time: two of one name race over ./publish-<name>/ and the Hub repo.
     publishing: threading.Lock = field(default_factory=threading.Lock)
 
 
-def preflight(root: Path) -> dict:
-    """What this machine has, known without the network. Who is logged in to Hugging Face is asked
-    apart (/hub), and whether commits have a name is asked with the rest of the code's state
-    (/code): the page draws every zone from the status and must not wait on the Hub."""
-    return {
-        "git": shutil.which("git") is not None,
-        "uv": shutil.which("uv") is not None,
-        "gpu": shutil.which("nvidia-smi") is not None,
-    }
+def has_gpu() -> bool:
+    return shutil.which("nvidia-smi") is not None
+
+
+def _challenge_or_404(ws: Workshop, event: str) -> Challenge:
+    challenge = ws.challenges.get(event)
+    if challenge is None:
+        raise HTTPException(status_code=404, detail=f"{event} is not a challenge open here.")
+    return challenge
+
+
+def _knob(knob) -> dict:
+    # A knob named *_reward weighs a reward; any other (the hill's steepest slope) shapes the recipe.
+    return {**asdict(knob), "group": "reward" if knob.name.endswith("_reward") else "recipe"}
 
 
 def _workshop(request: Request) -> Workshop:
@@ -84,18 +91,20 @@ def _hub_user(ws: Workshop) -> str | None:
 
 @router.get("/status")
 def status(request: Request) -> dict:
+    """What the pages draw from, known without the network: the open challenges, the Arena, the GPU.
+    Who is logged in to Hugging Face is asked apart (/hub)."""
     ws = _workshop(request)
-    tools = preflight(ws.root)
-    c = ws.challenge
     return {
-        "challenge": {
-            "folder": c.folder, "event": c.event, "task": c.task, "kind": c.kind,
-            "recipe": c.recipe, "knobs": [asdict(k) for k in c.knobs],
-        },
-        "event": event_summary(load_event(c.event)),
+        "challenges": [
+            {
+                "event": event_summary(load_event(c.event)), "folder": c.folder, "task": c.task,
+                "recipe": c.recipe, "knobs": [_knob(k) for k in c.knobs],
+                "running": sum(t["state"] in ("starting", "running") for t in tickets(ws, c)),
+            }
+            for c in ws.challenges.values()
+        ],
         "arena": ws.arena,
-        "preflight": tools,
-        "mode": "local" if tools["gpu"] else "hf-jobs",
+        "gpu": has_gpu(),
     }
 
 
@@ -123,173 +132,129 @@ def login_state(request: Request) -> dict:
 
 
 IN_PROGRESS = "A launch or a stop is already in progress."
+WHERE = ("local", "hf-jobs")
 # Also a Hub repo name: no leading, trailing or doubled dash.
 RUN_NAME = re.compile(r"^(?=.{1,40}$)[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 class Launch(BaseModel):
     name: str
+    where: str
     recipe: dict[str, int]
     params: dict[str, float] = {}
 
 
-def _running(ws: Workshop) -> bool:
-    return ws.training is not None and ws.training.state == "running"
-
-
-@router.post("/train")
-def launch(body: Launch, request: Request) -> dict:
+@router.post("/challenges/{event}/train")
+def launch(event: str, body: Launch, request: Request) -> dict:
     ws = _workshop(request)
+    challenge = _challenge_or_404(ws, event)
     if not ws.lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail=IN_PROGRESS)
     try:
-        if _running(ws):
-            raise HTTPException(status_code=409, detail="A training is already running: stop it first.")
+        if body.where not in WHERE:
+            raise HTTPException(status_code=400, detail="A training runs on this machine or on Hugging Face Jobs.")
         if not RUN_NAME.match(body.name):
             raise HTTPException(
                 status_code=400,
                 detail="A run name is lowercase letters and digits, joined by single dashes, up to 40 characters.",
             )
         # A recorded job's run may not be fetched yet, and its name is also its checkpoint repo's.
-        taken = ({r.name for r in find_runs(ws.root, ws.challenge.task)} | {j["name"] for j in recorded_jobs(ws.root)}
-                 | ({ws.training.name} if ws.training else set()))
+        taken = ({r.name for r in find_runs(ws.root, challenge.task)}
+                 | {j["name"] for j in recorded_jobs(ws.root, challenge.task)}
+                 | {name for task, name in ws.trainings if task == challenge.task})
         if body.name in taken:
             raise HTTPException(status_code=409, detail=f"There is already a run called {body.name}.")
         if set(body.recipe) != set(RECIPE):
             raise HTTPException(status_code=400, detail=f"The recipe is {', '.join(RECIPE)}, all three.")
-        gpu = preflight(ws.root)["gpu"]
-        hf_user = None if gpu else _hub_user(ws)
-        if not gpu and not hf_user:
-            raise HTTPException(
-                status_code=400,
-                detail="Without an NVIDIA GPU, training runs on Hugging Face Jobs: log in to Hugging Face first.",
-            )
+        if git(ws.root, "status", "--porcelain"):
+            raise HTTPException(status_code=409, detail="Commit your changes first: every training starts from a commit.")
+        hf_user = None
+        if body.where == "local":
+            if not has_gpu():
+                raise HTTPException(status_code=400, detail="There is no NVIDIA GPU on this machine: train on Hugging Face Jobs.")
+            if any(t.where == "local" and t.state == "running" for t in ws.trainings.values()):
+                raise HTTPException(status_code=409, detail="A training already runs on this machine: stop it first.")
+        else:
+            hf_user = _hub_user(ws)
+            if not hf_user:
+                raise HTTPException(status_code=400, detail="Hugging Face Jobs need a Hugging Face login: log in first.")
         try:
-            write_values(ws.challenge, body.recipe, body.params)
+            write_values(challenge, body.recipe, body.params)
             # Every run starts from a commit, so the recipe a policy is published with is what trained it.
-            commit_all(ws.root, f"{ws.challenge.event}: run {body.name}")
-        except ChallengeError as exc:
+            commit_all(ws.root, f"{challenge.event}: run {body.name}")
+        except (ChallengeError, ShellError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except ShellError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        ws.challenge = read_challenge(ws.challenge.toml)
-        ws.training = Training(
-            ws.root, body.name, train_command(ws.challenge, body.name, body.recipe, hf_user),
-            ckpt_repo=ckpt_repo(hf_user, ws.challenge, body.name) if hf_user else None, namespace=hf_user,
-        )
-        return ws.training.snapshot()
+        challenge = ws.challenges[event] = read_challenge(challenge.toml)
+        ws.trainings[(challenge.task, body.name)] = Training(
+            ws.root, challenge, body.name, body.where, body.recipe, body.params, hf_user)
+        return ticket(ws, challenge, body.name)
     finally:
         ws.lock.release()
 
 
-@router.get("/train")
-def follow_training(request: Request, since: int = 0) -> dict:
+@router.get("/challenges/{event}/jobs")
+def jobs(event: str, request: Request) -> dict:
     ws = _workshop(request)
-    return ws.training.snapshot(since) if ws.training else {"state": None}
+    return {"jobs": tickets(ws, _challenge_or_404(ws, event))}
 
 
-@router.post("/train/stop")
-def stop(request: Request) -> dict:
+@router.get("/challenges/{event}/jobs/{ticket_id}")
+def job(event: str, ticket_id: str, request: Request, since: int = 0) -> dict:
     ws = _workshop(request)
+    body = ticket_detail(ws, _challenge_or_404(ws, event), ticket_id, since)
+    if body is None:
+        raise HTTPException(status_code=404, detail=f"No training {ticket_id} for {event}.")
+    return body
+
+
+@router.post("/challenges/{event}/jobs/{ticket_id}/stop")
+def stop(event: str, ticket_id: str, request: Request) -> dict:
+    ws = _workshop(request)
+    challenge = _challenge_or_404(ws, event)
     if not ws.lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail=IN_PROGRESS)
     try:
-        if not _running(ws):
-            raise HTTPException(status_code=409, detail="No training is running.")
+        found = source(ws, challenge, ticket_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"No training {ticket_id} for {event}.")
+        _, live, record, _ = found
+        recorded_hf = (live is None and record is not None and record.get("where") == "hf-jobs"
+                       and record.get("job_id") and record.get("stage") not in TERMINAL)
+        if not (live is not None and live.state == "running") and not recorded_hf:
+            raise HTTPException(status_code=409, detail=f"{ticket_id} is not running.")
         try:
-            # Training.stop() only lets the Hub's own cancel_job() raise past it.
-            ws.training.stop(ws.hub)
+            if live is not None:
+                live.stop(ws.hub)  # an HF job is cancelled on the Hub first; only that can raise
+            else:
+                ws.hub.cancel_job(record["job_id"], record["namespace"])
+                remember_job(ws.root, challenge.task, record["name"], stage="CANCELED")
         except Exception as exc:
-            # The job was NOT cancelled and is still billed: say so, keep following it.
+            # The job was NOT cancelled and is still billed: say so; the ticket still says running.
             raise HTTPException(status_code=502, detail=f"Could not cancel the Hugging Face job: {exc}") from exc
-        return ws.training.snapshot()
+        return ticket(ws, challenge, ticket_id)
     finally:
         ws.lock.release()
 
 
-@router.post("/train/pull")
-async def pull(request: Request) -> dict:
-    ws = _workshop(request)
-    if ws.training is None or not ws.training.ckpt_repo:
-        raise HTTPException(status_code=409, detail="Only a Hugging Face Jobs run has checkpoints to fetch.")
-    await run_in_threadpool(ws.training.pull)
-    return ws.training.snapshot()
-
-
-@router.get("/jobs")
-def jobs(request: Request) -> dict:
-    """Every HF job launched from this checkout, newest first — each still reachable after a restart."""
-    return {"jobs": recorded_jobs(_workshop(request).root)}
-
-
-def _job_or_404(ws: Workshop, name: str) -> dict:
-    job = find_job(ws.root, name)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"No Hugging Face job called {name} was launched from here.")
-    return job
-
-
-@router.post("/jobs/{name}/pull")
-async def pull_job(name: str, request: Request) -> dict:
-    ws = _workshop(request)
-    job = _job_or_404(ws, name)
-    done = await run_in_threadpool(fetch, ws.root, job["ckpt_repo"])
-    output = done.stdout + done.stderr
-    if done.returncode != 0:
-        raise HTTPException(status_code=502, detail=f"Could not fetch {job['ckpt_repo']}:\n{output}")
-    return {**job, "output": output}
-
-
-@router.post("/jobs/{name}/stop")
-def stop_job(name: str, request: Request) -> dict:
-    ws = _workshop(request)
-    job = _job_or_404(ws, name)
-    if not job["job_id"]:
-        raise HTTPException(status_code=409, detail=f"{name} never printed a job id: there is no job to stop.")
-    try:
-        ws.hub.cancel_job(job["job_id"], job["namespace"])
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Could not cancel the Hugging Face job: {exc}") from exc
-    return job
-
-
-def _run_summary(run) -> dict:
-    return {
-        "id": run.id, "name": run.name, "started": run.provenance.get("started"),
-        "dirty": bool(run.provenance.get("dirty")), "checkpoints": list(run.checkpoints),
-        "trials": {str(n): r for n, r in tested(run).items()},
-    }
-
-
-@router.get("/runs")
-def runs(request: Request) -> dict:
-    ws = _workshop(request)
-    return {"runs": [_run_summary(r) for r in find_runs(ws.root, ws.challenge.task)]}
-
-
-def _run_or_404(ws: Workshop, run_id: str):
-    run = find_run(ws.root, ws.challenge.task, run_id)
+def _run_or_404(ws: Workshop, challenge: Challenge, run_id: str):
+    run = next((r for r in find_runs(ws.root, challenge.task) if r.id == run_id), None)
     if run is None:
         raise HTTPException(status_code=404, detail=f"No run {run_id} in logs/rsl_rl/.")
     return run
-
-
-@router.get("/runs/{run_id}/curve")
-def run_curve(run_id: str, request: Request) -> dict:
-    return {"points": curve(_run_or_404(_workshop(request), run_id))}
 
 
 class TrialRequest(BaseModel):
     checkpoint: int
 
 
-@router.post("/runs/{run_id}/trial")
-async def run_trial(run_id: str, body: TrialRequest, request: Request) -> dict:
+@router.post("/challenges/{event}/runs/{run_id}/trial")
+async def run_trial(event: str, run_id: str, body: TrialRequest, request: Request) -> dict:
     ws = _workshop(request)
-    run = _run_or_404(ws, run_id)
+    challenge = _challenge_or_404(ws, event)
+    run = _run_or_404(ws, challenge, run_id)
     try:
         # Seconds of export and simulation: off the event loop, which keeps the log flowing.
-        return await run_in_threadpool(trial, ws.root, run, body.checkpoint, ws.challenge.event)
+        return await run_in_threadpool(trial, ws.root, run, body.checkpoint, challenge.event)
     except (TrialError, PolicyError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -344,10 +309,11 @@ class PublishRequest(BaseModel):
     speed: float | None = None
 
 
-@router.post("/publish")
-async def publish_route(body: PublishRequest, request: Request) -> dict:
+@router.post("/challenges/{event}/publish")
+async def publish_route(event: str, body: PublishRequest, request: Request) -> dict:
     ws = _workshop(request)
-    run = _run_or_404(ws, body.run)
+    challenge = _challenge_or_404(ws, event)
+    run = _run_or_404(ws, challenge, body.run)
     if body.checkpoint not in run.checkpoints:
         raise HTTPException(status_code=400, detail=f"{run.id} has no model_{body.checkpoint}.pt")
     if run.provenance.get("dirty") and not body.allow_dirty:
@@ -359,10 +325,10 @@ async def publish_route(body: PublishRequest, request: Request) -> dict:
     user = await run_in_threadpool(_hub_user, ws)
     if not user:
         raise HTTPException(status_code=400, detail="Log in to Hugging Face first (Preflight).")
-    event = load_event(ws.challenge.event)
+    manifest = load_event(challenge.event)
     repo = repo_for(user, body.name)
-    args = (ws.root, run, body.checkpoint, repo, body.name, body.description.strip() or event.title,
-            ws.challenge.event, body.allow_dirty)
+    args = (ws.root, run, body.checkpoint, repo, body.name, body.description.strip() or manifest.title,
+            challenge.event, body.allow_dirty)
     env = code_url(ws.root, run.provenance.get("commit"))
     if not ws.publishing.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="A publish is already running.")
@@ -403,17 +369,18 @@ def _only_its_own_page(app: FastAPI, port: int) -> None:
 
 def create_workshop_app(
     root: Path,
-    challenge: Challenge,
+    challenges: list[Challenge],
     arena: str,
     hub: Hub,
     port: int,
     frontend_dir: Path | None = None,
     open_browser=webbrowser.open,
 ) -> FastAPI:
-    """`port` is the one the workshop serves on, on 127.0.0.1: requests must name it."""
+    """`port` is the one the workshop serves on, on 127.0.0.1: requests must name it.
+    `challenges`: the checkout's open ones."""
     app = FastAPI(title="Microduck workshop", docs_url=None, redoc_url=None)
-    app.state.workshop = Workshop(root, challenge, arena, hub, open_browser)
-    app.state.workshop.login = BrowserLogin(root, open_browser)
+    app.state.workshop = Workshop(root, {c.event: c for c in challenges}, arena, hub, open_browser,
+                                  BrowserLogin(root, open_browser))
     _only_its_own_page(app, port)
     app.include_router(router)
 

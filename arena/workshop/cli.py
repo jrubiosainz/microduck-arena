@@ -1,7 +1,7 @@
-"""`workshop` — train, test and publish a policy for one challenge, from a microduck-challenges checkout.
+"""`workshop` — train, test and publish policies for the challenges of a microduck-challenges checkout.
 
-    uv run --group workshop workshop              # the challenges open here
-    uv run --group workshop workshop sprint-2m    # the workshop for that one, in the browser
+    uv run --group workshop workshop              # the workshop's home, every open challenge
+    uv run --group workshop workshop sprint-2m    # straight to that challenge's page
 
 The one line on a challenge's page runs the second form for you.
 """
@@ -64,7 +64,8 @@ def serve(app, port: int) -> None:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="workshop", description=__doc__.splitlines()[0])
-    parser.add_argument("challenge", nargs="?", help="the Arena event, e.g. sprint-2m")
+    parser.add_argument("challenge", nargs="?",
+                        help="an open challenge's event, e.g. sprint-2m, to open straight on its page")
     parser.add_argument("--arena", default=SPACE, help="the Arena to enter the published policy on")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true", help="print the address instead of opening it")
@@ -75,14 +76,13 @@ def main(argv=None) -> int:
     if not challenges:
         print(f"No open challenge here. Run this inside a clone of {CHALLENGES}.", file=sys.stderr)
         return 2
-    chosen = next((c for c in challenges if args.challenge in (c.event, c.folder)), None)
-    if chosen is None:
-        if args.challenge:
-            print(f"{args.challenge!r} is not a challenge open here.", file=sys.stderr)
-        print("Open challenges:")
-        for c in challenges:
-            print(f"  uv run --group workshop workshop {c.event}")
-        return 2 if args.challenge else 0
+    chosen = None
+    if args.challenge:
+        chosen = next((c for c in challenges if args.challenge in (c.event, c.folder)), None)
+        if chosen is None:
+            names = ", ".join(c.event for c in challenges)
+            print(f"{args.challenge!r} is not a challenge open here. Open here: {names}.", file=sys.stderr)
+            return 2
 
     # Before the browser opens: a second workshop on a busy port would open the first one's page.
     if not _port_free(args.port):
@@ -96,10 +96,10 @@ def main(argv=None) -> int:
     drop_exported_token()
     site = default_frontend(Path(__file__).resolve().parents[1])
     app = create_workshop_app(
-        root, chosen, args.arena.rstrip("/"), Hub(), args.port, site if (site / "workshop.html").is_file() else None
+        root, challenges, args.arena.rstrip("/"), Hub(), args.port, site if (site / "workshop.html").is_file() else None
     )
-    url = f"http://127.0.0.1:{args.port}/"
-    print(f"{chosen.event} workshop: {url}  (Ctrl-C to close it)", flush=True)  # piped, it would wait for exit
+    url = f"http://127.0.0.1:{args.port}/" + (f"#/c/{chosen.event}" if chosen else "")
+    print(f"Microduck workshop: {url}  (Ctrl-C to close it)", flush=True)  # piped, it would wait for exit
     if not args.no_browser:
         threading.Timer(1.0, webbrowser.open, [url]).start()
     serve(app, args.port)
