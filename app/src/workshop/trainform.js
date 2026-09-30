@@ -1,7 +1,8 @@
 // The form that launches a training. It stays locked until the checkout is committed — a training
 // starts from a commit, so its job records exactly the code that trained it — then asks where to
 // train and under which name; the rewards and the recipe are folded away. Redrawing it never
-// touches what is typed in it.
+// touches what is typed in it, and a new commit brings challenge.toml's values into every setting
+// the user has not changed.
 
 import { el } from "./dom.js";
 
@@ -72,9 +73,28 @@ export function trainForm({ challenge, gpu }, { onCommit, onTrain }) {
   const $ = (selector) => card.querySelector(selector);
   $(".gate__identity pre").textContent = IDENTITY;
   $("input[name=run]").value = runName();
-  for (const knob of challenge.knobs.filter((k) => k.group === "reward")) $(".rewards").append(knobField(knob));
-  for (const row of RECIPE) $(".recipe").append(recipeField(row, challenge.recipe[row[0]]));
-  for (const knob of challenge.knobs.filter((k) => k.group !== "reward")) $(".recipe").append(knobField(knob));
+
+  let knobs = []; // challenge.toml's knobs as last read: the ones Train sends
+  let seeded = {}; // setting name -> the value challenge.toml last gave it
+  // The settings, from challenge.toml as read now. One the user changed since it was last given a
+  // value keeps theirs; every other takes the file's.
+  function seed(next) {
+    const settings = () => [...card.querySelectorAll(".settings input")];
+    const changed = new Map(settings().filter((input) => input.value !== seeded[input.name]).map((input) => [input.name, input.value]));
+    knobs = next.knobs;
+    $(".rewards").replaceChildren(...knobs.filter((k) => k.group === "reward").map(knobField));
+    $(".recipe").replaceChildren(...RECIPE.map((row) => recipeField(row, next.recipe[row[0]])),
+      ...knobs.filter((k) => k.group !== "reward").map(knobField));
+    seeded = {};
+    for (const input of settings()) {
+      seeded[input.name] = input.value;
+      if (changed.has(input.name)) {
+        input.value = changed.get(input.name);
+        input.dispatchEvent(new Event("input")); // a knob's shown value follows
+      }
+    }
+  }
+  seed(challenge);
 
   let where = gpu ? "local" : "hf-jobs";
   let latest = null; // { code, account }
@@ -85,7 +105,7 @@ export function trainForm({ challenge, gpu }, { onCommit, onTrain }) {
     return {
       name: field("run").trim(), where,
       recipe: Object.fromEntries(RECIPE.map(([key]) => [key, Number.parseInt(field(key), 10)])),
-      params: Object.fromEntries(challenge.knobs.map((k) => [k.name, Number.parseFloat(field(k.name))])),
+      params: Object.fromEntries(knobs.map((k) => [k.name, Number.parseFloat(field(k.name))])),
     };
   };
   const say = (selector, text, bad = false) => {
@@ -153,11 +173,18 @@ export function trainForm({ challenge, gpu }, { onCommit, onTrain }) {
     }
   });
   $(".train-go").addEventListener("click", async () => {
+    const chosen = values();
+    // An emptied number would go as null, and come back as the server's raw validation error.
+    const empty = RECIPE.find(([key]) => Number.isNaN(chosen.recipe[key]));
+    if (empty) {
+      say(".train-note", `${empty[1]} needs a number.`, true);
+      return;
+    }
     pending = true;
     draw();
     say(".train-note", "Committing the settings and starting…");
     try {
-      await onTrain(values());
+      await onTrain(chosen);
       say(".train-note", "");
       $("input[name=run]").value = runName();
     } catch (error) {
@@ -174,5 +201,7 @@ export function trainForm({ challenge, gpu }, { onCommit, onTrain }) {
       latest = next;
       draw();
     },
+    /** challenge.toml read again, after a commit: it may have been edited by hand. */
+    reseed: seed,
   };
 }

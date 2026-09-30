@@ -113,6 +113,43 @@ describe("the training form", () => {
     });
   });
 
+  it("says so, and sends nothing, while a recipe number is empty", async () => {
+    const onTrain = vi.fn(async () => {});
+    const form = trainForm({ challenge: CHALLENGE, gpu: false }, { onCommit: vi.fn(), onTrain });
+    form.update({ code: CLEAN, account: IN });
+    form.el.querySelector("[name=num_envs]").value = "";
+    form.el.querySelector(".train-go").click();
+    await Promise.resolve();
+    expect(onTrain).not.toHaveBeenCalled();
+    expect(form.el.querySelector(".train-note").textContent).toBe("Robots in parallel needs a number.");
+    expect(form.el.querySelector(".train-note").classList.contains("bad")).toBe(true);
+  });
+
+  it("takes challenge.toml's values again after a commit, keeping what the user changed", async () => {
+    const onTrain = vi.fn(async () => {});
+    const form = trainForm({ challenge: CHALLENGE, gpu: false }, { onCommit: vi.fn(), onTrain });
+    const field = (name) => form.el.querySelector(`[name=${name}]`);
+    form.update({ code: CLEAN, account: IN });
+    field("seed").value = "7";
+    form.el.querySelector("details.settings").open = true;
+    // Edited by hand and committed: 10 iterations, a forward reward of 4 under a new maximum of 8.
+    const edited = { ...CHALLENGE, recipe: { ...CHALLENGE.recipe, max_iterations: 10 },
+      knobs: [{ ...CHALLENGE.knobs[0], value: 4, max: 8 }, CHALLENGE.knobs[1]] };
+    form.reseed(edited);
+    expect([field("max_iterations").value, field("forward_reward").value, field("seed").value]).toEqual(["10", "4", "7"]);
+    expect(field("forward_reward").max).toBe("8");
+    expect(form.el.querySelector(".rewards output").textContent).toBe("4.0");
+    expect(form.el.querySelector("details.settings").open).toBe(true);
+    form.el.querySelector(".train-go").click();
+    await Promise.resolve();
+    expect(onTrain).toHaveBeenCalledWith(expect.objectContaining({
+      recipe: { num_envs: 4096, max_iterations: 10, seed: 7 }, params: { forward_reward: 4, max_slope_deg: 10 } }));
+    // Once the file says what the user chose, the next edit of it shows as well.
+    form.reseed({ ...edited, recipe: { ...edited.recipe, seed: 7 } });
+    form.reseed({ ...edited, recipe: { ...edited.recipe, seed: 9 } });
+    expect(field("seed").value).toBe("9");
+  });
+
   it("keeps what is typed through every redraw, an emptied message included", () => {
     const form = trainForm({ challenge: CHALLENGE, gpu: false }, { onCommit: vi.fn(), onTrain: vi.fn() });
     const field = (name) => form.el.querySelector(`[name=${name}]`);

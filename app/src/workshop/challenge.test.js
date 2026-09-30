@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
+  getStatus: vi.fn(),
   getCode: vi.fn(async () => ({ fork: null, changes: [], identity: true, commit: "abc1234", unpushed: 0 })),
   commitCode: vi.fn(),
   train: vi.fn(async () => ({})),
@@ -136,6 +137,29 @@ describe("a challenge's page", () => {
     expect(root.querySelector(".ticket .sticker").textContent).toBe("Stopped");
     page.leave();
     confirm.mockRestore();
+  });
+
+  it("takes the Settings from challenge.toml again when a new commit lands", async () => {
+    const withKnob = { ...STATUS, challenges: [{ ...STATUS.challenges[0],
+      knobs: [{ name: "forward_reward", label: "Follow the speed order", value: 2, min: 0.5, max: 5, group: "reward" }] }] };
+    api.getJobs.mockResolvedValue([]);
+    const root = document.createElement("div");
+    const page = await mountChallenge(root, { status: withKnob, account, route: { view: "challenge", event: "sprint-2m" } });
+    const field = (name) => root.querySelector(`[name=${name}]`);
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(api.getStatus).not.toHaveBeenCalled(); // the same commit: nothing to read again
+    field("seed").value = "7";
+    const edited = { ...withKnob.challenges[0], recipe: { num_envs: 4096, max_iterations: 10, seed: 1 },
+      knobs: [{ ...withKnob.challenges[0].knobs[0], value: 4 }] };
+    api.getStatus.mockResolvedValue({ ...withKnob, challenges: [edited] });
+    api.getCode.mockResolvedValue({ fork: null, changes: [], identity: true, commit: "def5678", unpushed: 0 });
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(api.getStatus).toHaveBeenCalledTimes(1);
+    expect([field("max_iterations").value, field("forward_reward").value, field("seed").value]).toEqual(["10", "4", "7"]);
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(api.getStatus).toHaveBeenCalledTimes(1);
+    page.leave();
+    api.getCode.mockResolvedValue({ fork: null, changes: [], identity: true, commit: "abc1234", unpushed: 0 });
   });
 
   it("says so for a challenge that is not open here", async () => {

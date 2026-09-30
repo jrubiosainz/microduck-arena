@@ -144,7 +144,10 @@ export async function mountChallenge(root, { status, account, route }) {
     clearTimeout(timer);
     try {
       const [jobs, now] = await Promise.all([api.getJobs(event), api.getCode()]);
+      // A new commit may carry challenge.toml edited by hand: the Settings read it again.
+      const fresh = now.commit === code.commit ? null : await api.getStatus();
       if (!latest(mine)) return;
+      if (fresh) form.reseed(fresh.challenges.find((c) => c.event.id === event));
       code = now; // files edited meanwhile lock the form again
       redrawForm();
       const running = jobs.filter((t) => t.state === "starting" || t.state === "running").length;
