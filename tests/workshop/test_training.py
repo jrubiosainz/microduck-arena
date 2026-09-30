@@ -5,7 +5,7 @@ import threading
 
 import pytest
 
-from tests.workshop.conftest import SPRINT, git, make_run, reopen, wait_for
+from tests.workshop.conftest import SPRINT, edit_by_hand, git, make_run, reopen, wait_for
 
 SPRINT_URL = "/api/workshop/challenges/sprint-2m"
 TASK = "Mjlab-Sprint2m-MicroDuck"
@@ -57,6 +57,19 @@ def test_on_hf_jobs_it_submits_the_job_and_brings_the_run_back(workshop, fakes):
     assert ["run", "--no-sync", "hf", "download", "alice/mjlab-sprint2m-microduck-first",
             "--local-dir", "logs/rsl_rl", "--quiet"] in fakes.calls("hf")
     assert any("fetched the checkpoints" in line for line in body["log"])
+
+
+def test_a_launch_reads_challenge_toml_as_it_is_now(workshop, fakes, checkout):
+    """A hand edit committed while the workshop runs: its bounds are the ones checked, its values the
+    ones kept."""
+    fakes.gpu()
+    edit_by_hand(checkout)
+    response = launch(workshop, LOCAL | {"recipe": {"num_envs": 4096, "max_iterations": 10, "seed": 1},
+                                         "params": {"forward_reward": 7.5}})
+    assert response.status_code == 200, response.text
+    toml = checkout.joinpath(*TOML).read_text()
+    assert "max_iterations = 10" in toml and "value = 7.5" in toml and "max   = 8.0" in toml
+    assert git(checkout, "log", "-1", "--format=%s") == "longer strides"  # nothing changed: no commit
 
 
 def test_a_training_waits_for_a_commit(workshop, fakes, checkout):

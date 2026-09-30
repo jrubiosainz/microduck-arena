@@ -45,8 +45,8 @@ class Challenge:
 
 
 def read_challenge(toml: Path) -> Challenge:
-    table = tomllib.loads(toml.read_text())
     try:
+        table = tomllib.loads(toml.read_text())  # a syntax error is a ValueError too
         return Challenge(
             folder=toml.parent.name,
             toml=toml,

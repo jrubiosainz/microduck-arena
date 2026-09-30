@@ -99,6 +99,15 @@ def store_evaluation(run, n, score=5.0, finished=5, total=5):
     }))
 
 
+def edit_by_hand(checkout):
+    """The user edits the sprint's challenge.toml in an editor and commits it, the workshop still open:
+    10 iterations, and a forward reward of 7.5 under a new maximum of 8."""
+    toml = checkout / "src" / "microduck_challenges" / "sprint_2m" / "challenge.toml"
+    toml.write_text(toml.read_text().replace("max_iterations = 3000", "max_iterations = 10")
+                    .replace("value = 2.0", "value = 7.5").replace("max   = 5.0", "max   = 8.0"))
+    git(checkout, "commit", "-qam", "longer strides")
+
+
 def reopen(checkout, hub, opened=None):
     """The workshop closed and opened again on the same checkout: nothing left in memory."""
     app = create_workshop_app(checkout, open_challenges(checkout), "http://arena.test", hub, PORT,

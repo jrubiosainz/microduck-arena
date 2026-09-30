@@ -46,7 +46,8 @@ router = APIRouter(prefix="/api/workshop")
 @dataclass
 class Workshop:
     root: Path
-    challenges: dict[str, Challenge]  # by event id, in folder order
+    # By event id, in folder order, as read at start: /status and Train read each file again.
+    challenges: dict[str, Challenge]
     arena: str
     hub: Hub
     open_browser: object
@@ -72,6 +73,15 @@ def _challenge_or_404(ws: Workshop, event: str) -> Challenge:
     if challenge is None:
         raise HTTPException(status_code=404, detail=f"{event} is not a challenge open here.")
     return challenge
+
+
+def _as_it_reads(challenge: Challenge) -> Challenge:
+    """`challenge` as its challenge.toml says now — the user edits the file by hand between two
+    commits — or, while the file does not read, as it read at start: Train then says what is wrong."""
+    try:
+        return read_challenge(challenge.toml)
+    except ChallengeError:
+        return challenge
 
 
 def _knob(knob) -> dict:
@@ -104,7 +114,7 @@ def status(request: Request) -> dict:
                 "recipe": c.recipe, "knobs": [_knob(k) for k in c.knobs],
                 "running": sum(t["state"] in ("starting", "running") for t in tickets(ws, c)),
             }
-            for c in ws.challenges.values()
+            for c in map(_as_it_reads, ws.challenges.values())
         ],
         "arena": ws.arena,
         "gpu": has_gpu(),
@@ -154,6 +164,12 @@ def launch(event: str, body: Launch, request: Request) -> dict:
     if not ws.lock.acquire(blocking=False):
         raise HTTPException(status_code=409, detail=IN_PROGRESS)
     try:
+        try:
+            # As the file is now, edited by hand or not: its bounds are the ones checked, and what the
+            # form did not change stays as the file says.
+            challenge = read_challenge(challenge.toml)
+        except ChallengeError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         if body.where not in WHERE:
             raise HTTPException(status_code=400, detail="A training runs on this machine or on Hugging Face Jobs.")
         if not RUN_NAME.match(body.name):
@@ -187,7 +203,6 @@ def launch(event: str, body: Launch, request: Request) -> dict:
             commit_all(ws.root, f"{challenge.event}: run {body.name}")
         except (ChallengeError, ShellError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        challenge = ws.challenges[event] = read_challenge(challenge.toml)
         ws.trainings[(challenge.task, body.name)] = Training(
             ws.root, challenge, body.name, body.where, body.recipe, body.params, hf_user)
         return ticket(ws, challenge, body.name)

@@ -3,7 +3,7 @@
 import pytest
 
 from arena.workshop.app import create_workshop_app
-from tests.workshop.conftest import ADDRESS, PORT, git, reopen
+from tests.workshop.conftest import ADDRESS, PORT, edit_by_hand, git, reopen
 
 
 def test_status_lists_the_open_challenges_with_their_settings(workshop):
@@ -16,6 +16,26 @@ def test_status_lists_the_open_challenges_with_their_settings(workshop):
                                 "min": 0.5, "max": 5.0, "group": "reward"}]
     assert sprint["running"] == 0
     assert body["arena"] == "http://arena.test" and body["gpu"] is False
+
+
+def test_the_status_reads_challenge_toml_as_it_is_now(workshop, checkout):
+    """Edited by hand and committed while the workshop runs: Settings show it, and Train does not
+    write the old values back."""
+    edit_by_hand(checkout)
+    (sprint,) = workshop.get("/api/workshop/status").json()["challenges"]
+    assert sprint["recipe"]["max_iterations"] == 10
+    assert (sprint["knobs"][0]["value"], sprint["knobs"][0]["max"]) == (7.5, 8.0)
+
+
+def test_a_challenge_toml_that_does_not_read_keeps_the_page_drawing(workshop, checkout):
+    toml = checkout / "src" / "microduck_challenges" / "sprint_2m" / "challenge.toml"
+    toml.write_text(toml.read_text().replace("max_iterations = 3000", "max_iterations ="))
+    git(checkout, "commit", "-qam", "half an edit")
+    (sprint,) = workshop.get("/api/workshop/status").json()["challenges"]
+    assert sprint["recipe"]["max_iterations"] == 3000  # as it last read
+    response = workshop.post("/api/workshop/challenges/sprint-2m/train", json={
+        "name": "first", "where": "hf-jobs", "recipe": sprint["recipe"], "params": {}})
+    assert response.status_code == 400 and "challenge.toml" in response.json()["detail"]
 
 
 def test_a_knob_that_is_not_a_reward_goes_with_the_recipe(checkout, fakes, hub):
