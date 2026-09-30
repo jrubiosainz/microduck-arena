@@ -34,23 +34,28 @@ class BrowserLogin:
         self._lines: list[str] = []
         self._found = threading.Event()  # the URL and the code are out
         self._read = threading.Event()  # the process has ended and its output is all read
+        # FastAPI runs a sync route in a threadpool: two POST /login overlapping (a double click,
+        # two tabs) would otherwise each read and end the other's still-starting process. Reentrant,
+        # since start() calls end() on itself while held.
+        self._starting = threading.RLock()
 
     def start(self) -> dict:
-        self.end()
-        self._lines, self._found, self._read = [], threading.Event(), threading.Event()
-        self.proc = subprocess.Popen(
-            uv("hf", "auth", "login", "--force"), cwd=self.root, stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1,
-            env=child_env(),
-        )
-        threading.Thread(target=self._follow, args=(self.proc, self._lines, self._found, self._read), daemon=True).start()
-        self._found.wait(READ_WITHIN_S)
-        url, code = _url_and_code(self._lines)
-        if url is None or code is None:
+        with self._starting:
             self.end()
-            raise LoginError("\n".join(self._lines) or "hf auth login printed nothing")
-        self.open_browser(url)
-        return {"url": url, "code": code}
+            self._lines, self._found, self._read = [], threading.Event(), threading.Event()
+            self.proc = subprocess.Popen(
+                uv("hf", "auth", "login", "--force"), cwd=self.root, stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1,
+                env=child_env(),
+            )
+            threading.Thread(target=self._follow, args=(self.proc, self._lines, self._found, self._read), daemon=True).start()
+            self._found.wait(READ_WITHIN_S)
+            url, code = _url_and_code(self._lines)
+            if url is None or code is None:
+                self.end()
+                raise LoginError("\n".join(self._lines) or "hf auth login printed nothing")
+            self.open_browser(url)
+            return {"url": url, "code": code}
 
     @staticmethod
     def _follow(proc, lines, found, read) -> None:
@@ -76,12 +81,13 @@ class BrowserLogin:
 
     def end(self) -> None:
         """Give up a login still waiting for approval (a second click starts afresh)."""
-        if self.proc is not None and self.proc.poll() is None:
-            try:
-                self.proc.send_signal(signal.SIGTERM)
-            except OSError:
-                pass
-            self.proc.wait()
+        with self._starting:
+            if self.proc is not None and self.proc.poll() is None:
+                try:
+                    self.proc.send_signal(signal.SIGTERM)
+                except OSError:
+                    pass
+                self.proc.wait()
 
 
 def _url_and_code(lines: list[str]) -> tuple[str | None, str | None]:

@@ -2,6 +2,7 @@
 huggingface_hub's browser flow, and opens the URL it prints. No token is pasted anywhere."""
 
 import os
+import threading
 
 from tests.workshop.conftest import wait_for
 
@@ -28,6 +29,27 @@ def test_until_it_is_approved_the_login_waits(workshop, fakes, monkeypatch):
     assert workshop.get("/api/workshop/login").json()["state"] == "waiting"
     workshop.app.state.workshop.login.end()
     assert wait_for(lambda: _ended(workshop))["state"] == "failed"
+
+
+def test_two_logins_at_once_do_not_end_each_other(workshop, fakes, monkeypatch):
+    """A double click or two tabs: both requests answer, neither killed by the other."""
+    monkeypatch.setenv("FAKE_HF_LOGIN_S", "30")
+    responses = [None, None]
+
+    def start(i):
+        responses[i] = workshop.post("/api/workshop/login")
+
+    threads = [threading.Thread(target=start, args=(i,)) for i in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    for response in responses:
+        assert response.status_code == 200, response.text
+        assert response.json() == {"url": URL, "code": "WDJB-MJHT"}
+    assert workshop.get("/api/workshop/login").json()["state"] == "waiting"
+    workshop.app.state.workshop.login.end()
 
 
 def test_a_denied_login_says_so_with_its_output(workshop, fakes, monkeypatch):
