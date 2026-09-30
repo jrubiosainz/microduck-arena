@@ -36,11 +36,23 @@ describe("Publish & compete", () => {
     expect(go.disabled).toBe(false);
   });
 
-  it("is shut while logged out", () => {
+  it("asks for plain sentences Peter & Ray can read on air, 280 characters at most", () => {
+    const p = panel();
+    p.update({ job: JOB, code: CODE, account: IN, selected: 1000 });
+    expect(p.el.querySelector("textarea").maxLength).toBe(280);
+    expect(p.el.querySelector(".publish__plain").textContent).toBe("Plain sentences: no links, no file or code names, no slashes.");
+  });
+
+  it("is shut while logged out, and says why", () => {
     const p = panel();
     p.update({ job: JOB, code: CODE, account: { phase: "out" }, selected: 1000 });
     type(p.el.querySelector("textarea"), "x");
     expect(p.el.querySelector(".publish__go").disabled).toBe(true);
+    const why = p.el.querySelector(".publish__why");
+    expect(why.hidden).toBe(false);
+    expect(why.textContent).toBe("Log in to Hugging Face first (top right).");
+    p.update({ job: JOB, code: CODE, account: IN, selected: 1000 });
+    expect(why.hidden).toBe(true);
   });
 
   it("holds a dirty run until publish anyway is ticked", () => {

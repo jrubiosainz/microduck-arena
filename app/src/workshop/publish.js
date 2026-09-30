@@ -8,6 +8,8 @@ import { el } from "./dom.js";
 import { officialTime } from "./tickets.js";
 
 export const PLACEHOLDER = "What makes it behave like that? What did you change? Describe what it is doing.";
+// Why Publish is off while no account is logged in, as the challenge's form says it.
+const NOT_IN = { checking: "Checking your Hugging Face account…", unreachable: "Hugging Face is unreachable: check your connection." };
 
 export function defaultName(folder, run) {
   return `${folder.replaceAll("_", "-")}-${run}`;
@@ -20,10 +22,12 @@ export function publishPanel({ event, folder }, { onPublish, onPreview, onPush, 
     <label class="field">Name <input name="policy" spellcheck="false" /></label>
     <label class="field"><span class="booth"><span class="booth__heads"><img src="/duck-head-mark.webp" alt="" /><img src="/duck-head-mark.webp" alt="" /></span>
       <span class="booth__who"><b>For the commentators</b><span>Peter &amp; Ray read it on air when your duck races.</span></span></span>
-      <textarea name="description"></textarea></label>
+      <textarea name="description" maxlength="280"></textarea></label>
+    <p class="hint publish__plain">Plain sentences: no links, no file or code names, no slashes.</p>
     <ul class="checks"></ul>
     <p class="publish__dirty" hidden>This run started from uncommitted changes: the code it records is not what trained it.
       <label><input type="checkbox" name="anyway" /> Publish anyway</label></p>
+    <p class="hint publish__why" hidden></p>
     <div class="actions"><button class="button publish__go" type="button"></button><button class="quiet publish__preview" type="button">Preview the Hub card</button></div>
     <p class="note publish__status"></p>
     <div class="result" hidden></div>
@@ -54,6 +58,8 @@ export function publishPanel({ event, folder }, { onPublish, onPreview, onPush, 
     const shut = pending || selected === null || !v.name || !v.description || (job.dirty && !v.allow_dirty) || account.phase !== "in";
     $(".publish__go").disabled = shut;
     $(".publish__preview").disabled = shut;
+    $(".publish__why").hidden = account.phase === "in";
+    $(".publish__why").textContent = NOT_IN[account.phase] ?? "Log in to Hugging Face first (top right).";
   }
 
   function drawChecks() {

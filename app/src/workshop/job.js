@@ -250,8 +250,10 @@ export async function mountJob(root, { status, account, route }) {
       try {
         body = await api.getCheckpoint(event.id, job.id, n);
       } catch (error) {
-        unplayable = error.message;
-        drawHint();
+        if (selected === n) { // a checkpoint picked since owns the stage's hint
+          unplayable = error.message;
+          drawHint();
+        }
         return;
       }
       if (body.error) return;
@@ -289,7 +291,7 @@ export async function mountJob(root, { status, account, route }) {
   // Confirmed, and once pressed it waits for its answer: a second press asks nothing.
   const stop = $(".job-stop");
   stop.addEventListener("click", async () => {
-    if (stop.disabled || !confirmStop(job)) return;
+    if (!confirmStop(job)) return;
     stop.disabled = true;
     try {
       await api.stopJob(event.id, job.id);

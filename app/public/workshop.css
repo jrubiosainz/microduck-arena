@@ -218,6 +218,8 @@ details.output summary { margin: 26px 0 8px; }
 .publish .box { width: 22px; height: 22px; margin: 0; }
 .publish .check__note { font-size: 0.74rem; }
 .publish .guide { margin-left: 32px; font-size: 0.8rem; }
+/* Under the commentators' textarea, as close to it as a field's own label. */
+.publish__plain { margin-top: -8px; }
 .publish__dirty { margin: 0; font-size: 0.8rem; color: var(--orange-inked); }
 .publish__dirty label { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-weight: 600; color: var(--ink); }
 .publish .actions { display: flex; flex-direction: column; gap: 10px; }

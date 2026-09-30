@@ -9,11 +9,11 @@ const STICKERS = {
   starting: ["Starting", "sticker-lime"], running: ["Training", "sticker-lime"],
   done: ["Done", "sticker-paper"], stopped: ["Stopped", "sticker-paper"], failed: ["Failed", "sticker-magenta"],
 };
-export const WHERE = { "hf-jobs": "HF Jobs · L4", local: "This machine" };
+const WHERE = { "hf-jobs": "HF Jobs · L4", local: "This machine" };
 
 export const seconds = (s) => `${s.toFixed(2)} s`;
 
-export function describe(c) {
+function describe(c) {
   if (c.status === "queued") return `Checkpoint ${c.n}: not evaluated yet`;
   if (c.status === "failed") return `Checkpoint ${c.n}: could not be evaluated`;
   if (!c.seeds_finished) return `Checkpoint ${c.n}: no seed finishes`;

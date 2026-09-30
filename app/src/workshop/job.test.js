@@ -136,6 +136,22 @@ describe("a training's page", () => {
     page.leave();
   });
 
+  it("a checkpoint that fails to load late never paints over the one picked since", async () => {
+    api.getJob.mockResolvedValue(JOB);
+    const root = document.createElement("div");
+    const page = await open(root);
+    await settle();
+    let fail;
+    api.getCheckpoint.mockImplementationOnce(() => new Promise((resolve, reject) => { fail = reject; }));
+    root.querySelectorAll(".ckpts .bars i")[1].click(); // 250, still loading
+    root.querySelectorAll(".ckpts .bars i")[2].click(); // 500, loaded already
+    await settle();
+    fail(new Error("Checkpoint 250 is not evaluated yet."));
+    await settle();
+    expect(root.querySelector("#stage-hint").textContent).toBe("Checkpoint 500 · its best seed");
+    page.leave();
+  });
+
   it("stops a training once confirmed, saying what is lost, and asks once while it stops", async () => {
     api.getJob.mockResolvedValue(JOB);
     let stopped;
@@ -147,7 +163,7 @@ describe("a training's page", () => {
     const stop = root.querySelector(".job-stop");
     expect(stop.hidden).toBe(false);
     stop.click();
-    stop.dispatchEvent(new MouseEvent("click"));
+    stop.click();
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(confirm).toHaveBeenCalledWith("Stop first? A stopped Hugging Face job cannot be resumed.");
     expect(api.stopJob).toHaveBeenCalledTimes(1);

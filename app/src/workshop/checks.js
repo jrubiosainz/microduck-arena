@@ -12,8 +12,8 @@ const FRAMES = [
 ];
 // The tick overshoots the box, as a pen does.
 const TICK = "M7 14.5 12 20 25.5 3.5";
-export const FORK_PAGE = "https://github.com/pollen-robotics/microduck-challenges/fork";
-export const BILLING = "https://huggingface.co/settings/billing";
+const FORK_PAGE = "https://github.com/pollen-robotics/microduck-challenges/fork";
+const BILLING = "https://huggingface.co/settings/billing";
 
 function path(className, d) {
   const line = document.createElementNS(SVG, "path");
