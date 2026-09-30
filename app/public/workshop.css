@@ -4,6 +4,9 @@
 
 /* The Arena's full-bleed bands reach past the window on its front; the workshop's pages do not scroll sideways. */
 html, body { overflow-x: clip; }
+/* A page is drawn in its own box, off the document until it is the one to show; on screen the box
+   lays out as if it were not there, so the Arena's column (#app) still holds the page's parts. */
+.ws-view { display: contents; }
 
 /* ── a quiet button: the charter's small sticker, never a second orange block ─ */
 .quiet {

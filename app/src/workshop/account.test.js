@@ -9,7 +9,10 @@ vi.mock("./api.js", () => api);
 
 import { POLL_MS, createAccount, fromHub } from "./account.js";
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => {
+  vi.resetAllMocks(); // what one test queued (a Once) never answers the next
+  vi.useFakeTimers();
+});
 afterEach(() => vi.useRealTimers());
 
 describe("the account", () => {
@@ -37,6 +40,21 @@ describe("the account", () => {
     expect(account.get()).toEqual({ phase: "waiting", url: "https://huggingface.co/oauth/device?user_code=X" });
     await vi.advanceTimersByTimeAsync(POLL_MS);
     expect(account.get().phase).toBe("waiting");
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(account.get()).toEqual({ phase: "in", user: "alice", canPay: true });
+  });
+
+  it("stays waiting while a login is under way, whatever asks the Hub meanwhile", async () => {
+    api.getHub.mockResolvedValue({ user: null, reachable: true, can_pay: false });
+    api.startLogin.mockResolvedValue({ url: "u", code: "X" });
+    api.getLogin.mockResolvedValueOnce({ state: "done", output: "" });
+    const account = createAccount(() => {});
+    await account.check();
+    expect(account.get()).toEqual({ phase: "out" });
+    await account.logIn();
+    await account.check();
+    expect(account.get()).toEqual({ phase: "waiting", url: "u" });
+    api.getHub.mockResolvedValue({ user: "alice", reachable: true, can_pay: true });
     await vi.advanceTimersByTimeAsync(POLL_MS);
     expect(account.get()).toEqual({ phase: "in", user: "alice", canPay: true });
   });

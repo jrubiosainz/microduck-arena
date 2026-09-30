@@ -1,7 +1,6 @@
 // The workshop's front: what this machine is connected to, and the challenges to train for.
 
 import { flyer } from "../flyer.js";
-import { dress } from "../router.js";
 import { chequer, footer } from "../signage.js";
 import { renderThumbnails } from "../thumbnail.js";
 import * as api from "./api.js";
@@ -36,7 +35,6 @@ export function runningSticker(count) {
 
 export async function mountHome(root, { status, account }) {
   let code = await api.getCode().catch(() => null);
-  dress("menu"); // the club's sheet, which the Arena's front wears
   const slot = el("span");
   const post = el("div", "todo");
   post.append(el("span", "flyer-tape"), el("h3", "todo__title", "Ready to train?"));

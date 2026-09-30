@@ -2,6 +2,7 @@
 // browser's back button works. Each page mounts itself and says how to leave it (its polls, its
 // viewer) and how to redraw the account when that changes.
 
+import { dress } from "../router.js";
 import { createAccount } from "./account.js";
 import * as api from "./api.js";
 import { el } from "./dom.js";
@@ -9,10 +10,12 @@ import { mountHome } from "./home.js";
 import { parseRoute } from "./routes.js";
 
 const MOUNTS = { home: mountHome };
+// The Arena's sheet each page wears (router.js's dress): the club's, as on the Arena's front.
+const SHEETS = { home: "menu" };
 
 const root = document.querySelector("#app");
 let page = null;
-let shown = 0; // the latest show(): an older one that finishes late does not mount over it
+let shown = 0; // the latest show(): an older one that finishes late shows nothing
 
 const account = createAccount(() => page?.accountChanged());
 
@@ -24,15 +27,21 @@ async function show() {
     const status = await api.getStatus();
     const route = parseRoute(location.hash);
     if (mine !== shown) return;
-    const next = await (MOUNTS[route.view] ?? mountHome)(root, { status, account, route });
+    const view = MOUNTS[route.view] ? route.view : "home";
+    // Drawn off the document, then shown only if no newer page was asked for meanwhile: a page
+    // that answers late must not paint over, nor dress, the one on screen.
+    const box = el("div", "ws-view");
+    const next = await MOUNTS[view](box, { status, account, route });
     if (mine !== shown) {
       next.leave();
       return;
     }
+    dress(SHEETS[view]);
+    root.replaceChildren(box);
     page = next;
     window.scrollTo(0, 0);
   } catch (error) {
-    root.replaceChildren(el("p", "failed", `The workshop's server did not answer: ${error.message}`));
+    if (mine === shown) root.replaceChildren(el("p", "failed", `The workshop's server did not answer: ${error.message}`));
   }
 }
 

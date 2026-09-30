@@ -18,13 +18,18 @@ export function createAccount(onChange) {
     onChange(state);
   };
 
-  async function check() {
+  async function ask() {
     set({ phase: "checking" });
     try {
       set(fromHub(await api.getHub()));
     } catch {
       set({ phase: "unreachable" });
     }
+  }
+
+  // A login under way ends with its own look at the Hub: until then the account stays waiting.
+  async function check() {
+    if (state.phase !== "waiting") await ask();
   }
 
   async function wait() {
@@ -37,7 +42,7 @@ export function createAccount(onChange) {
     }
     if (login.state === "waiting") setTimeout(wait, POLL_MS);
     else if (login.state === "failed") set({ phase: "out", error: login.output || "The login did not finish." });
-    else await check();
+    else await ask();
   }
 
   async function logIn() {

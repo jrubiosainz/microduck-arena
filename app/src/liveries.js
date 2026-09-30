@@ -86,7 +86,7 @@ export const VARIANTS = {
   // shells - warm gray face plate, yellow trim / rigid jaw / shoes, soft
   // purple mouth interior, purple eye ring on purple soles. The head dome
   // and the trunk / leg shells stay charcoal, which is what tells this
-  // variant apart from purple (and what the picker chip shows).
+  // variant apart from purple.
   charcoal: {
     headDome: CHARCOAL,
     facePlate: WARM_GRAY,
@@ -131,7 +131,7 @@ export const VARIANTS = {
   // shells - warm gray face plate, amber eye, orange beak, amber mouth
   // interior, orange shoes on yellow soles, gray hips. The head dome and
   // the trunk / leg shells stay pale blue, which is what tells this
-  // variant apart from classic (and what the picker chip shows).
+  // variant apart from classic.
   blue: {
     headDome: PALE_BLUE,
     facePlate: WARM_GRAY,
