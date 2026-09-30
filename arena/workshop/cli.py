@@ -91,8 +91,9 @@ def main(argv=None) -> int:
 
     from ..web.config import default_frontend
     from .app import create_workshop_app
-    from .hub import Hub
+    from .hub import Hub, drop_exported_token
 
+    drop_exported_token()
     site = default_frontend(Path(__file__).resolve().parents[1])
     app = create_workshop_app(
         root, chosen, args.arena.rstrip("/"), Hub(), args.port, site if (site / "workshop.html").is_file() else None

@@ -137,7 +137,6 @@ class FakeHub:
         self.user = user
         self.can_pay = True
         self.reachable = True
-        self.tokens = []
         self.cancelled = []
         self.stages = {}  # job id -> what inspect_job says; RUNNING when not set
 
@@ -150,12 +149,6 @@ class FakeHub:
         if not self.reachable:
             raise HubUnreachable("https://huggingface.co did not answer within 5 s")
         return self.stages.get(job_id, "RUNNING")
-
-    def login(self, token):
-        if token != "hf_good":
-            raise ValueError("Invalid user token.")
-        self.tokens.append(token)
-        self.user = "alice"
 
     def cancel_job(self, job_id, namespace):
         self.cancelled.append((job_id, namespace))

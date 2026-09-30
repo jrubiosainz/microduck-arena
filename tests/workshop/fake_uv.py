@@ -9,7 +9,9 @@ $FAKE_HUB/<ckpt repo>/ instead, which `hf download` copies back. `publish
 line an entry prints (FAKE_UV_ENTER_REFUSED=1: the refusal, exit 3). FAKE_UV_FAIL_<COMMAND>=1
 makes that command fail; FAKE_UV_TRAIN_S keeps `train` alive that long;
 FAKE_UV_RESUBMIT=1 prints a second `[job] id:` line, as `train --hf-jobs`
-does when a volume mount fails and it resubmits.
+does when a volume mount fails and it resubmits. `hf auth login` prints what
+huggingface_hub's browser flow prints without a terminal, waits FAKE_HF_LOGIN_S, then succeeds
+(FAKE_HF_LOGIN_DENIED=1: fails; FAKE_HF_LOGIN_SILENT=1: prints no URL).
 """
 
 import json
@@ -59,11 +61,30 @@ def train(argv):
 
 
 def hf(argv):
+    if argv[:2] == ["auth", "login"]:
+        return login(argv)
     repo, dest = argv[1], Path(flag(argv, "--local-dir"))
     source = Path(os.environ["FAKE_HUB"]) / repo
     if source.is_dir():
         shutil.copytree(source, dest, dirs_exist_ok=True)
     print(dest)
+    return 0
+
+
+def login(argv):
+    assert "--force" in argv, argv
+    if os.environ.get("FAKE_HF_LOGIN_SILENT"):
+        print("hf: unknown command 'auth'", file=sys.stderr)
+        return 2
+    print("\n    Open this URL in your browser:\n        https://huggingface.co/oauth/device?user_code=WDJB-MJHT\n", flush=True)
+    print("    And enter the code: WDJB-MJHT\n", flush=True)
+    print("    Waiting for authorization", end="", flush=True)
+    time.sleep(float(os.environ.get("FAKE_HF_LOGIN_S", "0")))
+    print()
+    if os.environ.get("FAKE_HF_LOGIN_DENIED"):
+        print("Authorization denied.", file=sys.stderr)
+        return 1
+    print("Login successful.")
     return 0
 
 

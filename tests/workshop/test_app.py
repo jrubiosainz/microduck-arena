@@ -1,7 +1,5 @@
 """The page's server: what it says about the checkout and the machine, before anything runs."""
 
-import os
-
 import pytest
 
 from arena.workshop.app import create_workshop_app
@@ -53,30 +51,6 @@ def test_an_unreachable_hub_is_said_not_waited_for(workshop, hub):
 def test_with_an_nvidia_gpu_it_trains_here(workshop, fakes):
     fakes.gpu()
     assert workshop.get("/api/workshop/status").json()["mode"] == "local"
-
-
-def test_logging_in_with_a_token(workshop, hub):
-    hub.user = None
-    assert workshop.post("/api/workshop/login", json={"token": " hf_good "}).json() == {"user": "alice"}
-    assert hub.tokens == ["hf_good"]
-
-
-def test_a_page_login_outranks_a_stale_token_the_launcher_exported(workshop, hub, monkeypatch):
-    """huggingface_hub's whoami and every subprocess read HF_TOKEN before the token a login saves:
-    a stale one the launcher exported would shadow the new login."""
-    hub.user = None
-    monkeypatch.setenv("HF_TOKEN", "hf_stale")
-    assert workshop.post("/api/workshop/login", json={"token": " hf_good "}).status_code == 200
-    assert os.environ["HF_TOKEN"] == "hf_good"
-
-
-def test_a_refused_token_says_why(workshop, hub, monkeypatch):
-    hub.user = None
-    monkeypatch.setenv("HF_TOKEN", "hf_stale")
-    response = workshop.post("/api/workshop/login", json={"token": "nope"})
-    assert response.status_code == 400
-    assert "Invalid user token" in response.json()["detail"]
-    assert os.environ["HF_TOKEN"] == "hf_stale"
 
 
 def test_git_without_a_name_on_commits_is_flagged(workshop, checkout, monkeypatch, tmp_path):

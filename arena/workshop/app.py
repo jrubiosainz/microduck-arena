@@ -5,7 +5,6 @@ machine that holds the checkout. The page (workshop.html) is built with the
 site and served from the same folder, so the replay uses the site's viewer.
 """
 
-import os
 import re
 import shutil
 import threading
@@ -26,6 +25,7 @@ from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write
 from .code import code_state, code_url, fork, push
 from .hub import Hub, HubUnreachable
 from .jobs import find_job, recorded_jobs
+from .login import BrowserLogin, LoginError
 from .publishing import PublishError, preview, publish, repo_for
 from .runs import curve, find_run, find_runs
 from .shell import ShellError, commit_all, gh_ready, git
@@ -49,6 +49,7 @@ class Workshop:
     hub: Hub
     open_browser: object
     training: object = field(default=None)
+    login: BrowserLogin = field(default=None)
     # Serializes launch and stop: without it, two POST /train ~250ms apart could both pass
     # `_running` before either sets `ws.training`, starting two processes (one an unreachable,
     # still-billed HF job) and racing `write_values`/`commit_all` over the same checkout.
@@ -110,22 +111,18 @@ def hub_account(request: Request) -> dict:
     return {"user": account.name if account else None, "reachable": True, "can_pay": bool(account and account.can_pay)}
 
 
-class Token(BaseModel):
-    token: str
-
-
 @router.post("/login")
-def login(body: Token, request: Request) -> dict:
-    ws = _workshop(request)
-    token = body.token.strip()
+def login(request: Request) -> dict:
+    """Start the browser login; the page then asks /hub until the account appears."""
     try:
-        ws.hub.login(token)
-    except Exception as exc:  # the Hub's own sentence is the useful part
-        raise HTTPException(status_code=400, detail=f"Hugging Face refused this token: {exc}") from exc
-    # HF_TOKEN outranks the token a login saves, for whoami and for every subprocess: one the
-    # launcher exported, stale, would shadow this login.
-    os.environ["HF_TOKEN"] = token
-    return {"user": _hub_user(ws)}
+        return _workshop(request).login.start()
+    except LoginError as exc:
+        raise HTTPException(status_code=502, detail=f"Could not start the Hugging Face login:\n{exc}") from exc
+
+
+@router.get("/login")
+def login_state(request: Request) -> dict:
+    return _workshop(request).login.state()
 
 
 IN_PROGRESS = "A launch or a stop is already in progress."
@@ -411,6 +408,7 @@ def create_workshop_app(
     """`port` is the one the workshop serves on, on 127.0.0.1: requests must name it."""
     app = FastAPI(title="Microduck workshop", docs_url=None, redoc_url=None)
     app.state.workshop = Workshop(root, challenge, arena, hub, open_browser)
+    app.state.workshop.login = BrowserLogin(root, open_browser)
     _only_its_own_page(app, port)
     app.include_router(router)
 

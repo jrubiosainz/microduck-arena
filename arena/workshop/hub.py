@@ -1,7 +1,9 @@
 """The Hugging Face calls the workshop makes itself; everything else is a `uv run` subprocess."""
 
+import os
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 
 # The Hub names the account in well under a second. huggingface_hub's own whoami has no time limit:
 # with the Hub unreachable it waits for the system's connect timeout, over a minute on macOS.
@@ -64,12 +66,20 @@ class Hub:
         stage = HfApi().inspect_job(job_id=job_id, namespace=namespace).status.stage
         return getattr(stage, "value", str(stage))
 
-    def login(self, token: str) -> None:
-        from huggingface_hub import login
-
-        login(token=token)
-
     def cancel_job(self, job_id: str, namespace: str) -> None:
         from huggingface_hub import HfApi
 
         HfApi().cancel_job(job_id=job_id, namespace=namespace)
+
+
+def drop_exported_token() -> None:
+    """The launcher exports HF_TOKEN so uv can install the Arena wheel from its private repo.
+    huggingface_hub reads HF_TOKEN before the saved login and refreshes only the saved one: kept,
+    the exported copy of a browser login would expire under the workshop. Dropped when it is
+    that saved login; a token set on purpose, different from it, stays."""
+    from huggingface_hub import constants
+
+    exported = os.environ.get("HF_TOKEN")
+    saved = Path(constants.HF_TOKEN_PATH)
+    if exported and saved.is_file() and saved.read_text().strip() == exported.strip():
+        del os.environ["HF_TOKEN"]

@@ -103,6 +103,30 @@ def test_the_limit_covers_the_whole_call_not_each_step(monkeypatch):
     assert time.monotonic() - started < 2
 
 
+def test_the_token_the_launcher_exported_goes_when_it_is_the_saved_login(monkeypatch, tmp_path):
+    from arena.workshop.hub import drop_exported_token
+
+    saved = tmp_path / "token"
+    saved.write_text("hf_saved\n")
+    monkeypatch.setattr(constants, "HF_TOKEN_PATH", str(saved))
+    monkeypatch.setenv("HF_TOKEN", "hf_saved")
+    drop_exported_token()
+    assert "HF_TOKEN" not in __import__("os").environ
+
+
+def test_a_token_that_is_not_the_saved_login_stays(monkeypatch, tmp_path):
+    import os
+
+    from arena.workshop.hub import drop_exported_token
+
+    saved = tmp_path / "token"
+    saved.write_text("hf_saved\n")
+    monkeypatch.setattr(constants, "HF_TOKEN_PATH", str(saved))
+    monkeypatch.setenv("HF_TOKEN", "hf_other")
+    drop_exported_token()
+    assert os.environ["HF_TOKEN"] == "hf_other"
+
+
 def test_any_other_failure_is_unreachable_at_once_and_named_without_the_token(monkeypatch):
     """Not every failure is a silent network: whatever else the call raises is said by its kind, at
     once rather than as a time limit that never ran out, and never with the token."""
