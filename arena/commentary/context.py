@@ -127,14 +127,29 @@ def _points(record: RunRecord, receipts: list[Receipt]) -> Fact | None:
 
 
 NOTE_MAX = 280
+# What an author may write in a note and not in a name: a unit (m/s, km/h, rad/s: a short word,
+# one slash, a shorter one, not a path's a/b/c) and a snake_case word.
+NOTE_ALLOWS = re.compile(r"(?<![\w/])[^\W_]{1,5}/[^\W_]{1,3}(?![\w/])|\b[^\W_]+(?:_[^\W_]+)+\b")
+# What a note may not hold although a name may: a link without its :// (that slash is refused
+# anyway) and a file name, a word with an extension.
+NOTE_REFUSES = re.compile(r"\bwww\.|\b[^\W_][\w-]+\.[a-z][a-z0-9]{0,4}\b", re.IGNORECASE)
+
+
+def _quotable(text: str) -> bool:
+    """A note a fact may quote: `label`'s checks, with NOTE_ALLOWS let through (masked at the same
+    length) and NOTE_REFUSES refused. A turn that repeats such a unit or name as written is still
+    refused by the dialogue's own check: the writer has to say it in words."""
+    text = unicodedata.normalize("NFKC", text)
+    return (not NOTE_REFUSES.search(text)
+            and label(NOTE_ALLOWS.sub(lambda m: "x" * len(m[0]), text), limit=NOTE_MAX))
 
 
 def _note(record: RunRecord) -> Fact | None:
     """The author's own words about the policy, quoted as theirs: never a result, and only when they
-    read as prose (the same checks as any submitter text), so no turn that cites it is refused. Its
-    line breaks and runs of spaces are a textarea's layout: quoted as single spaces."""
+    read as prose (`_quotable`). Its line breaks and runs of spaces are a textarea's layout: quoted
+    as single spaces."""
     text = " ".join((record.description or "").split())
-    if not label(text, limit=NOTE_MAX):
+    if not _quotable(text):
         return None
     return Fact("run#/note", f'@{record.user} says about the policy: "{text}"', "notable",
                 identities=(record.user,))

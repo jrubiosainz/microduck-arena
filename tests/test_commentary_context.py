@@ -114,7 +114,25 @@ def test_the_authors_words_on_several_lines_are_quoted_on_one():
     assert note.text == '@alice says about the policy: "It leans into every step. Then it sprints, low."'
 
 
-@pytest.mark.parametrize("description", [None, "see https://example.com", "tuned track_linear_velocity", "x" * 281, "<b>fast</b>"])
+@pytest.mark.parametrize("description", [
+    "It runs at 0.8 m/s.",
+    "Near 3 km/h on the flat, e.g. a brisk trot, and it turns at 2 rad/s.",
+    "It walks at 0.5m/s².",
+    "Tuned track_linear_velocity until the wobble went.",
+])
+def test_the_authors_words_may_give_a_unit_or_a_snake_case_name(description):
+    manifest = load_event("sprint-2m")
+    mine = run("alice", 12.40, "2026-09-11T10:00:00Z", run_id="R1", description=description)
+    (note,) = [f for f in result_facts(mine, manifest, [mine], []) if f.ref == "run#/note"]
+    assert note.text == f'@alice says about the policy: "{description}"'
+
+
+@pytest.mark.parametrize("description", [
+    None, "x" * 281, "<b>fast</b>", "run 01a2b3c4d5e6f7a8b9", "see C:\\ducks",
+    "see https://example.com", "see www.duckpond", "see duckpond.com",
+    "the reward is in env.py", "set it in challenge.toml", "the rewards live in rewards/gait/env",
+    "see configs/walking", "copied from sprint_2m/rewards",
+])
 def test_no_note_when_the_words_are_missing_or_machine_shaped(description):
     manifest = load_event("sprint-2m")
     mine = run("alice", 12.40, "2026-09-11T10:00:00Z", run_id="R1", description=description)

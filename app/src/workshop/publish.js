@@ -23,7 +23,7 @@ export function publishPanel({ event, folder }, { onPublish, onPreview, onPush, 
     <label class="field"><span class="booth"><span class="booth__heads"><img src="/duck-head-mark.webp" alt="" /><img src="/duck-head-mark.webp" alt="" /></span>
       <span class="booth__who"><b>For the commentators</b><span>Peter &amp; Ray read it on air when your duck races.</span></span></span>
       <textarea name="description" maxlength="280"></textarea></label>
-    <p class="hint publish__plain">Plain sentences: no links, no file or code names, no slashes.</p>
+    <p class="hint publish__plain">Plain sentences: no links, no file names or paths.</p>
     <ul class="checks"></ul>
     <p class="publish__dirty" hidden>This run started from uncommitted changes: the code it records is not what trained it.
       <label><input type="checkbox" name="anyway" /> Publish anyway</label></p>

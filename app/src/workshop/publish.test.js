@@ -40,7 +40,7 @@ describe("Publish & compete", () => {
     const p = panel();
     p.update({ job: JOB, code: CODE, account: IN, selected: 1000 });
     expect(p.el.querySelector("textarea").maxLength).toBe(280);
-    expect(p.el.querySelector(".publish__plain").textContent).toBe("Plain sentences: no links, no file or code names, no slashes.");
+    expect(p.el.querySelector(".publish__plain").textContent).toBe("Plain sentences: no links, no file names or paths.");
   });
 
   it("is shut while logged out, and says why", () => {
