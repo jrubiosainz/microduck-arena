@@ -29,8 +29,8 @@ describe("parseRoute", () => {
   });
 
   it("opens one voting booth", () => {
-    expect(parseRoute("#/v/swag-contest")).toEqual({ view: "vote", eventId: "swag-contest" });
-    expect(parseRoute("#/v/swag-contest/")).toEqual({ view: "vote", eventId: "swag-contest" });
+    expect(parseRoute("#/v/got-a-talent")).toEqual({ view: "vote", eventId: "got-a-talent" });
+    expect(parseRoute("#/v/got-a-talent/")).toEqual({ view: "vote", eventId: "got-a-talent" });
   });
 
   it("opens one publication", () => {
@@ -63,9 +63,9 @@ describe("parseRoute", () => {
   it("builds the links it parses", () => {
     expect(parseRoute(raceHref("sprint-2m"))).toEqual({ view: "race", eventId: "sprint-2m" });
     expect(parseRoute(playerHref("cdeplanne"))).toEqual({ view: "player", user: "cdeplanne" });
-    expect(parseRoute(voteHref("swag-contest"))).toEqual({
+    expect(parseRoute(voteHref("got-a-talent"))).toEqual({
       view: "vote",
-      eventId: "swag-contest",
+      eventId: "got-a-talent",
     });
     expect(parseRoute(menuHref)).toEqual({ view: "menu" });
   });

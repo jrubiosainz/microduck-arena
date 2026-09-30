@@ -140,10 +140,10 @@ function titleMap() {
 
 /** A theatre in metres, with the performance floor still at physics y=0.
  * The jury and audience face +Z; the LED proscenium is upstage at +Z. */
-export function buildSwagStage(event, spectators, reachy) {
+export function buildTalentStage(event, spectators, reachy) {
   const layout = stageLayout(event);
   const { width, depth, centre, juryZ, audienceZ } = layout;
-  const group = new Group(); group.name = "swag-theatre";
+  const group = new Group(); group.name = "talent-theatre";
   const geometries = new Set(), materials = new Set(), textures = new Set();
   function surface(color, metalness = 0, roughness = 0.6) {
     const material = new MeshStandardMaterial({ color, metalness, roughness, envMapIntensity: 0.12 });
@@ -210,7 +210,7 @@ export function buildSwagStage(event, spectators, reachy) {
   }
   const map = titleMap(); textures.add(map);
   const titleMaterial = new MeshBasicMaterial({ map, toneMapped: false }); materials.add(titleMaterial);
-  const title = mesh(new PlaneGeometry(2.35, 0.78), titleMaterial, [centre, 1.68, backZ - 0.02], "swag-title");
+  const title = mesh(new PlaneGeometry(2.35, 0.78), titleMaterial, [centre, 1.68, backZ - 0.02], "talent-title");
   title.rotation.y = Math.PI;
   // Four luminous Xs above the proscenium, echoing the four seats at the desk.
   for (let i = 0; i < 4; i++) {

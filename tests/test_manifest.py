@@ -209,7 +209,7 @@ EXPECTED_CATEGORIES = {
     "sprint-2m": "race",
     "roller-sprint-2m": "race",
     "hill-climb-1m5": "race",
-    "swag-contest": "showcase",
+    "got-a-talent": "showcase",
 }
 
 
@@ -237,7 +237,7 @@ def test_the_programme_has_a_declared_order_with_the_sprint_first():
     programme = sorted(all_events(), key=lambda m: (m.order, m.title))
     assert [m.id for m in programme] == [
         "sprint-2m",
-        "swag-contest",
+        "got-a-talent",
         "roller-sprint-2m",
         "hill-climb-1m5",
     ]
@@ -260,27 +260,27 @@ def test_an_event_without_a_vote_section_has_no_vote_rules():
     assert load_event("sprint-2m").vote is None
 
 
-def test_the_swag_contest_declares_its_ballot_and_its_window():
-    vote = load_event("swag-contest").vote
+def test_got_a_talent_declares_its_ballot_and_its_window():
+    vote = load_event("got-a-talent").vote
     assert (vote.ballot_min, vote.ballot_max) == (2, 4)
     assert (vote.window_days, vote.per_day) == (7, 20)
 
 
-def test_the_swag_contest_races_the_sprints_environment_at_one_pinned_speed():
-    swag, sprint = load_event("swag-contest"), load_event("sprint-2m")
-    assert swag.course == sprint.course
-    assert swag.command == sprint.command
-    assert swag.start == sprint.start
-    assert swag.termination == sprint.termination
-    assert swag.seeds == sprint.seeds
+def test_got_a_talent_races_the_sprints_environment_at_one_pinned_speed():
+    talent, sprint = load_event("got-a-talent"), load_event("sprint-2m")
+    assert talent.course == sprint.course
+    assert talent.command == sprint.command
+    assert talent.start == sprint.start
+    assert talent.termination == sprint.termination
+    assert talent.seeds == sprint.seeds
     # lo == hi: everyone walks at the same commanded speed, so the judgement
     # lands on style and not on who was asked to go faster.
-    assert swag.sweep.speeds() == (0.25,)
-    assert swag.metric == "votes"
+    assert talent.sweep.speeds() == (0.25,)
+    assert talent.metric == "votes"
 
 
 def test_a_vote_section_is_validated_loudly(tmp_path):
-    base = (EVENTS_DIR / "swag-contest.toml").read_text()
+    base = (EVENTS_DIR / "got-a-talent.toml").read_text()
     for bad, message in [
         ("ballot_min  = 1", "ballot_min"),
         ("ballot_max  = 1", "ballot_max"),
@@ -301,7 +301,7 @@ def test_ballot_max_cannot_outgrow_the_voting_page_s_colour_palette(tmp_path):
     """The voting page has exactly 5 lane colours (LANE_CSS in course.js). A
     ballot_max above that would put two lanes in the same colour, which is
     unvotable in a feature whose whole premise is "pick a colour"."""
-    base = (EVENTS_DIR / "swag-contest.toml").read_text()
+    base = (EVENTS_DIR / "got-a-talent.toml").read_text()
     broken = "\n".join(
         "ballot_max  = 6" if line.startswith("ballot_max") else line
         for line in base.splitlines()
@@ -328,7 +328,7 @@ def test_a_vote_section_without_metric_votes_is_refused(tmp_path):
     voted while `event_leaderboard` (keyed on `metric`) kept ranking it on
     time — the two readings would diverge silently.
     """
-    base = (EVENTS_DIR / "swag-contest.toml").read_text()
+    base = (EVENTS_DIR / "got-a-talent.toml").read_text()
     path = tmp_path / "vote-without-metric.toml"
     path.write_text(base.replace('metric       = "votes"', 'metric       = "mean_finish_time"'))
     with pytest.raises(ManifestError, match="vote"):

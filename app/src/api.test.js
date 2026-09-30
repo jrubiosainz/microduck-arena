@@ -100,14 +100,14 @@ describe("the ballot", () => {
       ok: true,
       json: async () => ({ state: "ballot", ballot: "tok.mac", lanes: 3, cast_today: 1, per_day: 20 }),
     });
-    expect(await getBallot("swag-contest")).toEqual({
+    expect(await getBallot("got-a-talent")).toEqual({
       state: "ballot", ballot: "tok.mac", lanes: 3, cast_today: 1, per_day: 20,
     });
   });
 
   it("reads being signed out as a state, not a failure", async () => {
     globalThis.fetch = async () => ({ ok: false, status: 401, json: async () => ({}) });
-    expect(await getBallot("swag-contest")).toEqual({ state: "signed-out" });
+    expect(await getBallot("got-a-talent")).toEqual({ state: "signed-out" });
   });
 
   it("addresses a lane's replay through the ballot and never a run", () => {

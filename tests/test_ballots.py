@@ -6,7 +6,7 @@ from arena.store import Ballot, LocalBallots, new_id
 def make_ballot(**overrides) -> Ballot:
     fields = {
         "ballot_id": new_id(),
-        "event_id": "swag-contest",
+        "event_id": "got-a-talent",
         "voter": "coralie",
         "cast_at": "2026-09-15T10:00:00Z",
         "candidates": ("run-a", "run-b", "run-c"),

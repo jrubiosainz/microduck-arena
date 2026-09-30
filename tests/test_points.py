@@ -156,7 +156,7 @@ def test_a_ballot_pays_its_voter_two_capped_at_the_manifests_per_day():
     from tests.test_ballots import make_ballot
 
     now = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
-    rules = {"swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=2)}
+    rules = {"got-a-talent": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=2)}
     today = [
         make_ballot(voter="ann", cast_at=f"2026-09-15T0{i}:00:00Z") for i in range(3)
     ]
@@ -186,12 +186,12 @@ def test_a_voted_events_podium_is_paid_on_votes_not_on_time():
     from tests.test_ballots import make_ballot
 
     now = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
-    rules = {"swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
+    rules = {"got-a-talent": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
     quick = make_record(
-        user="ann", event_id="swag-contest", score=10.0, submitted_at="2026-09-14T09:00:00Z"
+        user="ann", event_id="got-a-talent", score=10.0, submitted_at="2026-09-14T09:00:00Z"
     )
     slow = make_record(
-        user="bob", event_id="swag-contest", score=40.0, submitted_at="2026-09-14T10:00:00Z"
+        user="bob", event_id="got-a-talent", score=40.0, submitted_at="2026-09-14T10:00:00Z"
     )
     loved = [
         make_ballot(
@@ -201,7 +201,7 @@ def test_a_voted_events_podium_is_paid_on_votes_not_on_time():
         )
     ]
     rows = boards_by_user([quick, slow], frozenset(), ballots=loved, voted=rules, now=now)
-    assert [r.record.user for r in rows["swag-contest"]] == ["bob", "ann"]
+    assert [r.record.user for r in rows["got-a-talent"]] == ["bob", "ann"]
 
     # bob is slow but voted-for; ann is quick but unvoted. bob takes the
     # podium, ann does not — a zero-vote row is unpaid even where it ranks
@@ -223,12 +223,12 @@ def test_a_zero_vote_row_is_unpaid_even_beside_a_row_that_holds_votes():
     from tests.test_ballots import make_ballot
 
     now = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
-    rules = {"swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
+    rules = {"got-a-talent": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
     voted_for = make_record(
-        user="bob", event_id="swag-contest", submitted_at="2026-09-14T09:00:00Z"
+        user="bob", event_id="got-a-talent", submitted_at="2026-09-14T09:00:00Z"
     )
     unvoted = make_record(
-        user="ann", event_id="swag-contest", submitted_at="2026-09-14T10:00:00Z"
+        user="ann", event_id="got-a-talent", submitted_at="2026-09-14T10:00:00Z"
     )
     ballots = [
         make_ballot(
@@ -250,10 +250,10 @@ def test_a_voted_events_podium_pays_nothing_when_nobody_has_voted():
     from arena.manifest import Vote
 
     now = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
-    rules = {"swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
-    ann = make_record(user="ann", event_id="swag-contest", score=10.0)
-    bob = make_record(user="bob", event_id="swag-contest", score=20.0)
-    cid = make_record(user="cid", event_id="swag-contest", score=30.0)
+    rules = {"got-a-talent": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
+    ann = make_record(user="ann", event_id="got-a-talent", score=10.0)
+    bob = make_record(user="bob", event_id="got-a-talent", score=20.0)
+    cid = make_record(user="cid", event_id="got-a-talent", score=30.0)
 
     podium = acts(
         receipts([ann, bob, cid], frozenset(), ballots=[], voted=rules, now=now), "podium"
@@ -268,7 +268,7 @@ def test_a_ballot_outside_its_events_own_window_pays_nothing():
     from tests.test_ballots import make_ballot
 
     now = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
-    rules = {"swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=1, per_day=20)}
+    rules = {"got-a-talent": Vote(ballot_min=2, ballot_max=4, window_days=1, per_day=20)}
     stale = make_ballot(cast_at="2026-09-13T09:00:00Z")  # two days old; the window is one day
 
     paid = acts(receipts([], frozenset(), ballots=[stale], voted=rules, now=now), "ballot")
@@ -283,14 +283,14 @@ def test_two_votable_events_each_pay_on_their_own_window_not_the_widest():
 
     now = datetime(2026, 9, 15, 12, 0, 0, tzinfo=UTC)
     rules = {
-        "swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=1, per_day=20),
+        "got-a-talent": Vote(ballot_min=2, ballot_max=4, window_days=1, per_day=20),
         "sprint-2m": Vote(ballot_min=2, ballot_max=4, window_days=30, per_day=20),
     }
-    # Five days old: outside the one-day swag-contest window, inside sprint-2m's
+    # Five days old: outside the one-day got-a-talent window, inside sprint-2m's
     # thirty-day one. A payment loop windowed against the WIDEST window any
     # event declares would pay both; each event's own window pays only one.
     old_on_the_short_event = make_ballot(
-        event_id="swag-contest", voter="ann", cast_at="2026-09-10T09:00:00Z"
+        event_id="got-a-talent", voter="ann", cast_at="2026-09-10T09:00:00Z"
     )
     old_on_the_long_event = make_ballot(
         event_id="sprint-2m", voter="bob", cast_at="2026-09-10T09:00:00Z"

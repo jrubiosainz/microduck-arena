@@ -88,7 +88,7 @@ describe("the voting panel", () => {
     // and started passing them along "to help the voter".
     const leaks = {
       user: "nicolasrabault",
-      policy_name: "swagbot-v3",
+      policy_name: "talentbot-v3",
       run_id: "01HZQKTVXBHJ8P0N5T8W3YFM2R",
     };
     const panel = votePanel({

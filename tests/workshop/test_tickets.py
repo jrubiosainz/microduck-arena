@@ -214,13 +214,13 @@ def test_the_best_checkpoint_is_the_fastest_that_finishes(workshop, checkout):
 
 
 def test_a_voted_event_has_no_best(checkout, fakes, hub):
-    swag = checkout / "src" / "microduck_challenges" / "swag_contest"
-    swag.mkdir()
-    (swag / "challenge.toml").write_text(SPRINT.replace('"sprint-2m"', '"swag-contest"')
-                                         .replace(TASK, "Mjlab-SwagContest-MicroDuck"))
+    talent = checkout / "src" / "microduck_challenges" / "got_a_talent"
+    talent.mkdir()
+    (talent / "challenge.toml").write_text(SPRINT.replace('"sprint-2m"', '"got-a-talent"')
+                                           .replace(TASK, "Mjlab-GotATalent-MicroDuck"))
     git(checkout, "add", "-A")
-    git(checkout, "commit", "-q", "-m", "the swag")
-    run = make_run(checkout, "first", checkpoints=(0,), task="Mjlab-SwagContest-MicroDuck")
+    git(checkout, "commit", "-q", "-m", "MicroDuck Got a Talent")
+    run = make_run(checkout, "first", checkpoints=(0,), task="Mjlab-GotATalent-MicroDuck")
     store_evaluation(run, 0, score=12.0)
-    (ticket,) = reopen(checkout, hub).get("/api/workshop/challenges/swag-contest/jobs").json()["jobs"]
+    (ticket,) = reopen(checkout, hub).get("/api/workshop/challenges/got-a-talent/jobs").json()["jobs"]
     assert ticket["best"] is None and ticket["checkpoints"][0]["status"] == "evaluated"

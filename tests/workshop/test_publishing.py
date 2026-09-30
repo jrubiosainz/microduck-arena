@@ -149,8 +149,8 @@ def test_no_speed_order_for_an_event_that_does_not_sweep(checkout):
 
     make_run(checkout, "first")
     (run,) = find_runs(checkout, "Mjlab-Sprint2m-MicroDuck")
-    swag = publish_args(run, 1, "alice/microduck-x", "x", "d", load_event("swag-contest"), False)
-    assert "--twist-help" not in swag
+    talent = publish_args(run, 1, "alice/microduck-x", "x", "d", load_event("got-a-talent"), False)
+    assert "--twist-help" not in talent
     sprint = publish_args(run, 1, "alice/microduck-x", "x", "d", load_event("sprint-2m"), False)
     assert "--twist-help" in sprint
 

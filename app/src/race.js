@@ -242,7 +242,7 @@ export async function renderRace(root, { event, state }) {
       // below decides whether it is shown.
       name: names.get(runId),
     }));
-    viewer.setLanes(arrangeLanes(board, event.id === "swag-contest" ? lanes.slice(0, 1) : lanes), event);
+    viewer.setLanes(arrangeLanes(board, event.id === "got-a-talent" ? lanes.slice(0, 1) : lanes), event);
     deck.reset();
     root.querySelector("#stage-hint").textContent = lanes.length
       ? ""

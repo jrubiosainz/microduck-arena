@@ -83,8 +83,8 @@ describe("a voted event's best row", () => {
       points: 100,
       rank: 1,
       publications: [
-        { event_id: "swag-contest", event_title: "MicroDuck Got a Talent", rank: 1, score: 18.46,
-          seeds_finished: 5, seeds_total: 5, policy_name: "swagbot", run_id: "r9",
+        { event_id: "got-a-talent", event_title: "MicroDuck Got a Talent", rank: 1, score: 18.46,
+          seeds_finished: 5, seeds_total: 5, policy_name: "talentbot", run_id: "r9",
           submitted_at: "2026-09-10T10:00:00Z", votes: 43 },
       ],
     };
@@ -99,8 +99,8 @@ describe("a voted event's best row", () => {
       points: 0,
       rank: 3,
       publications: [
-        { event_id: "swag-contest", event_title: "MicroDuck Got a Talent", rank: 2, score: 18.46,
-          seeds_finished: 5, seeds_total: 5, policy_name: "swagbot", run_id: "r9",
+        { event_id: "got-a-talent", event_title: "MicroDuck Got a Talent", rank: 2, score: 18.46,
+          seeds_finished: 5, seeds_total: 5, policy_name: "talentbot", run_id: "r9",
           submitted_at: "2026-09-10T10:00:00Z", votes: 0 },
       ],
     };
@@ -180,7 +180,7 @@ describe("byEvent: the player's rounds, best first", () => {
     // "#1" beside a time would name the wrong thing on a board ranked by
     // votes.
     const [group] = byEvent([
-      pub({ event_id: "swag-contest", event_title: "MicroDuck Got a Talent", rank: 1, votes: 12 }),
+      pub({ event_id: "got-a-talent", event_title: "MicroDuck Got a Talent", rank: 1, votes: 12 }),
     ]);
     expect(group.votes).toBe(12);
   });

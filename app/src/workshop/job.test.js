@@ -27,7 +27,7 @@ const JOB = {
 const CODE = { fork: null, changes: [], identity: true, commit: "abc1234", unpushed: 0 };
 const SPRINT = { id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null, metric: "time", rig: "legs",
   length_m: 2, slope_deg: 0, sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21 };
-const SWAG = { ...SPRINT, id: "swag-contest", title: "MicroDuck Got a Talent", metric: "votes", vote: { ballot_min: 2 } };
+const TALENT = { ...SPRINT, id: "got-a-talent", title: "MicroDuck Got a Talent", metric: "votes", vote: { ballot_min: 2 } };
 const status = (event) => ({ arena: "https://arena.test", gpu: false, challenges: [{ event, folder: "sprint_2m", task: "S", recipe: {}, knobs: [], running: 1 }] });
 const account = { get: () => ({ phase: "in", user: "alice", canPay: true }), logIn: vi.fn(), check: vi.fn() };
 const settle = async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); };
@@ -77,7 +77,7 @@ describe("a training's page", () => {
   it("a voted event opens on no checkpoint", async () => {
     api.getJob.mockResolvedValue({ ...JOB, best: null });
     const root = document.createElement("div");
-    await mountJob(root, { status: status(SWAG), account, route: { view: "job", event: "swag-contest", job: "first" } });
+    await mountJob(root, { status: status(TALENT), account, route: { view: "job", event: "got-a-talent", job: "first" } });
     await settle();
     expect(root.querySelector(".score__label").textContent).toBe("No checkpoint chosen");
     expect(root.querySelector(".publish__go").textContent).toBe("Pick a checkpoint");

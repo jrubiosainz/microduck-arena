@@ -40,7 +40,7 @@ def test_nature_reads_the_manifest():
     assert nature(load_event("sprint-2m")) == ("a 2 m sprint on foot", ("sprint",))
     assert nature(load_event("hill-climb-1m5")) == ("a 1.5 m climb up an 8 degree slope", ("hill",))
     assert nature(load_event("roller-sprint-2m")) == ("a 2 m race on roller skates", ("rollers",))
-    assert nature(load_event("swag-contest")) == ("a contest decided by the public's votes", ("vote",))
+    assert nature(load_event("got-a-talent")) == ("a contest decided by the public's votes", ("vote",))
 
 
 def test_a_clean_run_states_event_participant_time_rank_gap_and_points():
@@ -91,9 +91,9 @@ def test_a_dnf_by_timeout_is_not_a_fall_and_a_voted_event_has_no_board():
     assert facts["run#/result"].outcome == "dnf"
     # A policy name that is not a label is left out, never quoted.
     assert facts["run#/participant"].text == "The participant is @dan."
-    swag = load_event("swag-contest")
-    voted = run("eve", 20.0, "2026-09-11T10:00:00Z", event="swag-contest")
-    refs = [f.ref for f in result_facts(voted, swag, [voted], [])]
+    talent = load_event("got-a-talent")
+    voted = run("eve", 20.0, "2026-09-11T10:00:00Z", event="got-a-talent")
+    refs = [f.ref for f in result_facts(voted, talent, [voted], [])]
     assert "run#/board" not in refs
 
 

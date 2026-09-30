@@ -28,7 +28,7 @@ def test_events_lists_the_whole_programme(client):
         "sprint-2m",
         "roller-sprint-2m",
         "hill-climb-1m5",
-        "swag-contest",
+        "got-a-talent",
     }
 
 
@@ -249,7 +249,7 @@ def test_the_programme_is_served_in_its_declared_order(client):
     events = api.get("/api/events").json()["events"]
     assert [e["id"] for e in events[:4]] == [
         "sprint-2m",
-        "swag-contest",
+        "got-a-talent",
         "roller-sprint-2m",
         "hill-climb-1m5",
     ]
@@ -341,10 +341,10 @@ def test_an_event_says_whether_it_takes_votes_and_how(client):
     events = {e["id"]: e for e in api.get("/api/events").json()["events"]}
     assert events["sprint-2m"]["vote"] is None
     assert events["sprint-2m"]["metric"] == "mean_finish_time"
-    swag = events["swag-contest"]
-    assert swag["title"] == "MicroDuck Got a Talent"
-    assert swag["metric"] == "votes"
-    assert swag["vote"] == {
+    talent = events["got-a-talent"]
+    assert talent["title"] == "MicroDuck Got a Talent"
+    assert talent["metric"] == "votes"
+    assert talent["vote"] == {
         "ballot_min": 2, "ballot_max": 4, "window_days": 7, "per_day": 20,
     }
 
@@ -356,7 +356,7 @@ def cast(app, choice, candidates, **overrides):
 
     fields = {
         "ballot_id": new_id(),
-        "event_id": "swag-contest",
+        "event_id": "got-a-talent",
         "voter": "coralie",
         "cast_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "candidates": tuple(candidates),
@@ -368,11 +368,11 @@ def cast(app, choice, candidates, **overrides):
 
 def test_a_voted_board_ranks_on_votes_and_still_reports_the_time(client):
     api, app = client
-    ann = record_run(app, user="ann", event_id="swag-contest", score=12.0)
-    bob = record_run(app, user="bob", event_id="swag-contest", score=40.0)
+    ann = record_run(app, user="ann", event_id="got-a-talent", score=12.0)
+    bob = record_run(app, user="bob", event_id="got-a-talent", score=40.0)
     cast(app, bob.run_id, [ann.run_id, bob.run_id])
 
-    rows = api.get("/api/events/swag-contest/leaderboard").json()["rows"]
+    rows = api.get("/api/events/got-a-talent/leaderboard").json()["rows"]
     assert [(r["rank"], r["user"], r["votes"], r["shown"]) for r in rows] == [
         (1, "bob", 1, 1),
         (2, "ann", 0, 1),
@@ -386,17 +386,17 @@ def test_a_players_best_row_on_a_voted_event_carries_its_vote_count(client):
     no votes, so the profile rendered `#1 · 18.46s` for the MicroDuck Got a Talent — a
     vote rank next to a finish time, with nothing saying which is which."""
     api, app = client
-    ann = record_run(app, user="ann", event_id="swag-contest", score=12.0)
-    bob = record_run(app, user="bob", event_id="swag-contest", score=40.0)
+    ann = record_run(app, user="ann", event_id="got-a-talent", score=12.0)
+    bob = record_run(app, user="bob", event_id="got-a-talent", score=40.0)
     cast(app, bob.run_id, [ann.run_id, bob.run_id])
 
     winner = api.get("/api/players/bob").json()
-    [swag] = [b for b in winner["publications"] if b["event_id"] == "swag-contest"]
-    assert swag["votes"] == 1
+    [talent] = [b for b in winner["publications"] if b["event_id"] == "got-a-talent"]
+    assert talent["votes"] == 1
 
     runner_up = api.get("/api/players/ann").json()
-    [swag] = [b for b in runner_up["publications"] if b["event_id"] == "swag-contest"]
-    assert swag["votes"] == 0
+    [talent] = [b for b in runner_up["publications"] if b["event_id"] == "got-a-talent"]
+    assert talent["votes"] == 0
 
 
 def test_a_players_best_row_on_a_timed_event_carries_no_vote_count(client):
@@ -423,13 +423,13 @@ def test_a_vote_cast_days_ago_but_still_inside_the_window_counts(client):
     from datetime import UTC, datetime, timedelta
 
     api, app = client
-    ann = record_run(app, user="ann", event_id="swag-contest")
-    bob = record_run(app, user="bob", event_id="swag-contest")
+    ann = record_run(app, user="ann", event_id="got-a-talent")
+    bob = record_run(app, user="bob", event_id="got-a-talent")
     edge = (datetime.now(UTC) - timedelta(days=7)).replace(microsecond=0)
     stamp = (edge + timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     cast(app, bob.run_id, [ann.run_id, bob.run_id], cast_at=stamp)
 
-    rows = api.get("/api/events/swag-contest/leaderboard").json()["rows"]
+    rows = api.get("/api/events/got-a-talent/leaderboard").json()["rows"]
     by_user = {r["user"]: r["votes"] for r in rows}
     assert by_user == {"ann": 0, "bob": 1}
 
@@ -450,13 +450,13 @@ def test_a_vote_that_fell_out_of_the_window_no_longer_counts(client):
     from datetime import UTC, datetime, timedelta
 
     api, app = client
-    ann = record_run(app, user="ann", event_id="swag-contest")
-    bob = record_run(app, user="bob", event_id="swag-contest")
+    ann = record_run(app, user="ann", event_id="got-a-talent")
+    bob = record_run(app, user="bob", event_id="got-a-talent")
     edge = (datetime.now(UTC) - timedelta(days=7)).replace(microsecond=0)
     stamp = (edge - timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     cast(app, ann.run_id, [ann.run_id, bob.run_id], cast_at=stamp)
 
-    rows = api.get("/api/events/swag-contest/leaderboard").json()["rows"]
+    rows = api.get("/api/events/got-a-talent/leaderboard").json()["rows"]
     assert all(r["votes"] == 0 for r in rows)
 
 
@@ -466,11 +466,11 @@ def test_the_leaderboard_only_counts_this_events_own_ballots(client):
     unique in practice — contrived here to name the same run id from another
     event's ballot, which is exactly the leak the missing filter allowed."""
     api, app = client
-    ann = record_run(app, user="ann", event_id="swag-contest", score=12.0)
-    bob = record_run(app, user="bob", event_id="swag-contest", score=40.0)
+    ann = record_run(app, user="ann", event_id="got-a-talent", score=12.0)
+    bob = record_run(app, user="bob", event_id="got-a-talent", score=40.0)
     cast(app, ann.run_id, [ann.run_id, bob.run_id], event_id="some-other-votable-event")
 
-    rows = api.get("/api/events/swag-contest/leaderboard").json()["rows"]
+    rows = api.get("/api/events/got-a-talent/leaderboard").json()["rows"]
     assert all(r["votes"] == 0 for r in rows)
 
 
@@ -483,8 +483,8 @@ def test_a_timed_board_is_untouched_and_carries_no_vote_columns(client):
 
 def test_voting_puts_points_on_the_ladder(client):
     api, app = client
-    ann = record_run(app, user="ann", event_id="swag-contest")
-    bob = record_run(app, user="bob", event_id="swag-contest")
+    ann = record_run(app, user="ann", event_id="got-a-talent")
+    bob = record_run(app, user="bob", event_id="got-a-talent")
     cast(app, ann.run_id, [ann.run_id, bob.run_id], voter="coralie")
 
     rows = {r["user"]: r["points"] for r in api.get("/api/standings").json()["rows"]}
@@ -497,7 +497,7 @@ def test_every_event_tells_the_page_what_kind_it_is(client):
     api, _ = client
     events = {e["id"]: e.get("category") for e in api.get("/api/events").json()["events"]}
     assert events["sprint-2m"] == "race"
-    assert events["swag-contest"] == "showcase"
+    assert events["got-a-talent"] == "showcase"
 
 
 def test_a_run_detail_carries_its_place_its_receipts_and_its_event(client):

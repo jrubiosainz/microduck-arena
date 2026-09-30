@@ -43,7 +43,7 @@ export function wireBoardsheet(
 ) {
   const sheet = root.querySelector(".boardsheet");
   const board = sheet.querySelector("#board");
-  const solo = event.id === "swag-contest";
+  const solo = event.id === "got-a-talent";
   sheet.querySelector(".pickall").hidden = solo;
   // Two narrowings rather than three modes: Mine and Top each turn on and off
   // on their own and compose, and All is the state where neither is on.

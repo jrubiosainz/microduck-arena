@@ -60,10 +60,10 @@ describe("renderVoteButton: the way into the booth, at the top of the entry colu
 
   it("tops the entry column when the event takes votes", () => {
     const div = root();
-    renderVoteButton(div, { id: "swag-contest", vote: { ballot_min: 2 } });
+    renderVoteButton(div, { id: "got-a-talent", vote: { ballot_min: 2 } });
     const button = div.querySelector(".vote-button--panel");
     expect(button).not.toBeNull();
-    expect(button.getAttribute("href")).toBe("#/v/swag-contest");
+    expect(button.getAttribute("href")).toBe("#/v/got-a-talent");
     // The column's first child: detached from the title on purpose (the
     // owner asked for it "plus visible"), not beside a heading elsewhere.
     expect(div.querySelector(".entry-col").firstElementChild).toBe(button);
@@ -193,7 +193,7 @@ describe("otherRounds: the way on, under the board", () => {
     round("sprint-2m", "2 m Sprint", "race"),
     round("roller-sprint-2m", "2 m Roller Sprint", "race", "rollers"),
     round("hill-climb-1m5", "1.5 m Hill Climb", "race"),
-    round("swag-contest", "MicroDuck Got a Talent", "showcase", "legs", { vote: {} }),
+    round("got-a-talent", "MicroDuck Got a Talent", "showcase", "legs", { vote: {} }),
   ];
   const here = programme[0];
 

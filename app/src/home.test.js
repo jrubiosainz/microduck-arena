@@ -287,7 +287,7 @@ describe("an open event's flyer", () => {
 
 const voted = {
   ...open,
-  id: "swag-contest",
+  id: "got-a-talent",
   title: "MicroDuck Got a Talent",
   metric: "votes",
   vote: { ballot_min: 2, ballot_max: 4, window_days: 7, per_day: 20 },
@@ -297,7 +297,7 @@ describe("a votable flyer", () => {
   it("wears a vote button and links to the booth", () => {
     const note = flyer(voted, []);
     expect(note.querySelector(".vote-button--sticker").textContent).toBe("VOTE HERE");
-    expect(note.querySelector(".vote-button--sticker").getAttribute("href")).toBe("#/v/swag-contest");
+    expect(note.querySelector(".vote-button--sticker").getAttribute("href")).toBe("#/v/got-a-talent");
   });
 
   it("counts the week's votes instead of a time", () => {

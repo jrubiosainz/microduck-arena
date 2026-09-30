@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { voteButton } from "./votebutton.js";
 
-const event = { id: "swag-contest" };
+const event = { id: "got-a-talent" };
 
 describe("voteButton", () => {
   it("points at the event's voting booth", () => {
     const link = voteButton(event, { variant: "panel" });
     expect(link.tagName).toBe("A");
-    expect(link.getAttribute("href")).toBe("#/v/swag-contest");
+    expect(link.getAttribute("href")).toBe("#/v/got-a-talent");
   });
 
   it("reads VOTE HERE, not just VOTE -- the owner's complaint was that it did not read as a button", () => {

@@ -275,7 +275,7 @@ export async function renderVote(root, { event, state }) {
       livery: "classic",
       colour: LANE_COLORS[lane % LANE_COLORS.length],
     }));
-    const solo = event.id === "swag-contest";
+    const solo = event.id === "got-a-talent";
     viewer.setLanes(solo ? entries.slice(0, 1) : entries, event);
     booth.replaceChildren(
       votePanel(ballot, async (lane) => {

@@ -24,7 +24,7 @@ def client(tmp_path):
 
 
 def enter(app, user, **overrides):
-    record = make_record(user=user, event_id="swag-contest", policy_name=user, **overrides)
+    record = make_record(user=user, event_id="got-a-talent", policy_name=user, **overrides)
     app.state.store.append(record, encode(np.zeros((5, 21), dtype=np.float32)))
     return record
 
@@ -40,15 +40,15 @@ def _capped(event_id: str, per_day: int):
 
 def test_a_ballot_book_entry_round_trips():
     book = BallotBook()
-    token = book.issue("swag-contest", "ann", ["a", "b"])
+    token = book.issue("got-a-talent", "ann", ["a", "b"])
     entry = book.get(token)
-    assert (entry.event_id, entry.voter, entry.run_ids) == ("swag-contest", "ann", ("a", "b"))
+    assert (entry.event_id, entry.voter, entry.run_ids) == ("got-a-talent", "ann", ("a", "b"))
     assert entry.spent is False
 
 
 def test_a_minted_token_is_safe_as_a_filename():
     book = BallotBook()
-    token = book.issue("swag-contest", "ann", ["a", "b"])
+    token = book.issue("got-a-talent", "ann", ["a", "b"])
     assert re.fullmatch(r"[A-Za-z0-9_-]+", token)
 
 
@@ -60,7 +60,7 @@ def test_a_garbage_token_returns_none_and_never_raises():
 
 def test_a_ballot_book_entry_expires(monkeypatch):
     book = BallotBook()
-    token = book.issue("swag-contest", "ann", ["a", "b"])
+    token = book.issue("got-a-talent", "ann", ["a", "b"])
     later = time.time() + BALLOT_TTL_S + 1
     monkeypatch.setattr("arena.web.routes_vote.time.time", lambda: later)
     assert book.get(token) is None
@@ -68,7 +68,7 @@ def test_a_ballot_book_entry_expires(monkeypatch):
 
 def test_spending_a_ballot_marks_it_without_evicting_it():
     book = BallotBook()
-    token = book.issue("swag-contest", "ann", ["a", "b"])
+    token = book.issue("got-a-talent", "ann", ["a", "b"])
     book.spend(token)
     entry = book.get(token)
     assert entry is not None
@@ -85,11 +85,11 @@ def test_issuing_sweeps_every_expired_entry_first():
     book = BallotBook()
     now = 1_000_000.0
     for i in range(1000):
-        book.issue("swag-contest", f"voter-{i}", ["a", "b"], now=now)
+        book.issue("got-a-talent", f"voter-{i}", ["a", "b"], now=now)
     assert len(book._by_token) == 1000
 
     later = now + BALLOT_TTL_S + 1
-    fresh = book.issue("swag-contest", "late-voter", ["a", "b"], now=later)
+    fresh = book.issue("got-a-talent", "late-voter", ["a", "b"], now=later)
     assert len(book._by_token) == 1
     assert book.get(fresh, now=later) is not None
 
@@ -98,7 +98,7 @@ def test_issue_genuinely_honours_its_own_ttl():
     """A parameter the body ignores is a lie; this pins that it is not one."""
     book = BallotBook()
     now = 1_000_000.0
-    token = book.issue("swag-contest", "ann", ["a", "b"], ttl_s=10.0, now=now)
+    token = book.issue("got-a-talent", "ann", ["a", "b"], ttl_s=10.0, now=now)
     assert book.get(token, now=now + 9) is not None
     assert book.get(token, now=now + 11) is None
 
@@ -114,7 +114,7 @@ def test_an_event_that_takes_no_votes_has_no_ballot(client):
 def test_a_field_too_small_is_a_state_and_not_an_error(client):
     api, app = client
     enter(app, "ann")
-    body = api.get("/api/events/swag-contest/ballot").json()
+    body = api.get("/api/events/got-a-talent/ballot").json()
     assert body == {"state": "too-few", "have": 1, "need": 2}
 
 
@@ -122,7 +122,7 @@ def test_issuing_a_ballot_is_never_cached(client):
     api, app = client
     enter(app, "ann")
     enter(app, "bob")
-    resp = api.get("/api/events/swag-contest/ballot")
+    resp = api.get("/api/events/got-a-talent/ballot")
     assert resp.headers["cache-control"] == "no-store"
 
 
@@ -131,7 +131,7 @@ def test_a_ballot_never_holds_your_own_duck(client):
     own = enter(app, "coralie")
     for name in ("ann", "bob"):
         enter(app, name)
-    body = api.get("/api/events/swag-contest/ballot").json()
+    body = api.get("/api/events/got-a-talent/ballot").json()
     assert body["state"] == "ballot"
     assert body["lanes"] == 2
     entry = app.state.ballot_book.get(body["ballot"])
@@ -143,7 +143,7 @@ def test_the_client_response_never_carries_a_run_id(client):
     api, app = client
     for name in ("ann", "bob"):
         enter(app, name)
-    body = api.get("/api/events/swag-contest/ballot").json()
+    body = api.get("/api/events/got-a-talent/ballot").json()
     entry = app.state.ballot_book.get(body["ballot"])
     for run_id in entry.run_ids:
         assert run_id not in body["ballot"]
@@ -154,8 +154,8 @@ def test_voting_records_the_whole_field_and_pays_the_voter(client):
     api, app = client
     for name in ("ann", "bob", "cid"):
         enter(app, name)
-    body = api.get("/api/events/swag-contest/ballot").json()
-    result = api.post("/api/events/swag-contest/vote", json={"ballot": body["ballot"], "lane": 1})
+    body = api.get("/api/events/got-a-talent/ballot").json()
+    result = api.post("/api/events/got-a-talent/vote", json={"ballot": body["ballot"], "lane": 1})
 
     assert result.json() == {"points": 2, "cast_today": 1}
     [ballot] = app.state.ballots.since("2000-01-01")
@@ -169,10 +169,10 @@ def test_voting_twice_with_one_ballot_changes_nothing(client):
     api, app = client
     for name in ("ann", "bob"):
         enter(app, name)
-    body = api.get("/api/events/swag-contest/ballot").json()
+    body = api.get("/api/events/got-a-talent/ballot").json()
     payload = {"ballot": body["ballot"], "lane": 0}
-    api.post("/api/events/swag-contest/vote", json=payload)
-    again = api.post("/api/events/swag-contest/vote", json=payload)
+    api.post("/api/events/got-a-talent/vote", json=payload)
+    again = api.post("/api/events/got-a-talent/vote", json=payload)
 
     assert again.json() == {"points": 0, "cast_today": 1}
     assert len(app.state.ballots.since("2000-01-01")) == 1
@@ -183,7 +183,7 @@ def test_a_replay_across_utc_midnight_does_not_double_count(client, monkeypatch)
     api, app = client
     for name in ("ann", "bob"):
         enter(app, name)
-    token = api.get("/api/events/swag-contest/ballot").json()["ballot"]
+    token = api.get("/api/events/got-a-talent/ballot").json()["ballot"]
 
     times = iter(
         [
@@ -200,8 +200,8 @@ def test_a_replay_across_utc_midnight_does_not_double_count(client, monkeypatch)
     monkeypatch.setattr("arena.web.routes_vote.datetime", _Clock)
 
     payload = {"ballot": token, "lane": 0}
-    first = api.post("/api/events/swag-contest/vote", json=payload)
-    second = api.post("/api/events/swag-contest/vote", json=payload)
+    first = api.post("/api/events/got-a-talent/vote", json=payload)
+    second = api.post("/api/events/got-a-talent/vote", json=payload)
 
     assert first.json() == {"points": 2, "cast_today": 1}
     # cast_today legitimately resets at UTC midnight — the ballot landed on
@@ -215,8 +215,8 @@ def test_a_ballot_issued_for_someone_else_is_refused(client):
     api, app = client
     for name in ("ann", "bob"):
         enter(app, name)
-    stolen = app.state.ballot_book.issue("swag-contest", "someone-else", ["a", "b"])
-    refused = api.post("/api/events/swag-contest/vote", json={"ballot": stolen, "lane": 0})
+    stolen = app.state.ballot_book.issue("got-a-talent", "someone-else", ["a", "b"])
+    refused = api.post("/api/events/got-a-talent/vote", json={"ballot": stolen, "lane": 0})
     assert refused.status_code == 400
 
 
@@ -224,8 +224,8 @@ def test_a_lane_outside_the_ballot_is_refused(client):
     api, app = client
     for name in ("ann", "bob"):
         enter(app, name)
-    body = api.get("/api/events/swag-contest/ballot").json()
-    refused = api.post("/api/events/swag-contest/vote", json={"ballot": body["ballot"], "lane": 7})
+    body = api.get("/api/events/got-a-talent/ballot").json()
+    refused = api.post("/api/events/got-a-talent/vote", json={"ballot": body["ballot"], "lane": 7})
     assert refused.status_code == 400
 
 
@@ -235,10 +235,10 @@ def test_the_daily_quota_closes_the_gate(client, monkeypatch):
     for name in ("ann", "bob", "cid"):
         enter(app, name)
     for _ in range(2):
-        body = api.get("/api/events/swag-contest/ballot").json()
-        api.post("/api/events/swag-contest/vote", json={"ballot": body["ballot"], "lane": 0})
+        body = api.get("/api/events/got-a-talent/ballot").json()
+        api.post("/api/events/got-a-talent/vote", json={"ballot": body["ballot"], "lane": 0})
 
-    gate = api.get("/api/events/swag-contest/ballot").json()
+    gate = api.get("/api/events/got-a-talent/ballot").json()
     assert gate == {"state": "quota", "cast_today": 2, "per_day": 2}
 
 
@@ -249,12 +249,12 @@ def test_the_quota_check_and_the_write_are_one_critical_section(client, monkeypa
     for name in ("ann", "bob", "cid", "dan", "eve"):
         enter(app, name)
 
-    tokens = [api.get("/api/events/swag-contest/ballot").json()["ballot"] for _ in range(4)]
+    tokens = [api.get("/api/events/got-a-talent/ballot").json()["ballot"] for _ in range(4)]
     results: list = []
     lock = threading.Lock()
 
     def vote(token: str) -> None:
-        result = api.post("/api/events/swag-contest/vote", json={"ballot": token, "lane": 0})
+        result = api.post("/api/events/got-a-talent/vote", json={"ballot": token, "lane": 0})
         with lock:
             results.append(result)
 
@@ -273,7 +273,7 @@ def test_a_lanes_trace_is_served_without_ever_naming_a_run(client):
     api, app = client
     for name in ("ann", "bob"):
         enter(app, name)
-    body = api.get("/api/events/swag-contest/ballot").json()
+    body = api.get("/api/events/got-a-talent/ballot").json()
     trace = api.get(f"/api/ballots/{body['ballot']}/lanes/0/trace")
     assert trace.status_code == 200
     assert trace.headers["X-Frame-Count"] == "5"
@@ -282,6 +282,6 @@ def test_a_lanes_trace_is_served_without_ever_naming_a_run(client):
 
 def test_a_lane_whose_trace_is_missing_404s_not_500s(client):
     api, app = client
-    token = app.state.ballot_book.issue("swag-contest", "coralie", ("ghost-run", "ghost-run-2"))
+    token = app.state.ballot_book.issue("got-a-talent", "coralie", ("ghost-run", "ghost-run-2"))
     missing = api.get(f"/api/ballots/{token}/lanes/0/trace")
     assert missing.status_code == 404

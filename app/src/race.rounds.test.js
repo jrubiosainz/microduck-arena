@@ -19,7 +19,7 @@ const PROGRAMME = [
   event("sprint-2m", "2 m Sprint"),
   event("roller-sprint-2m", "2 m Roller Sprint"),
   event("hill-climb-1m5", "1.5 m Hill Climb"),
-  event("swag-contest", "MicroDuck Got a Talent", "showcase"),
+  event("got-a-talent", "MicroDuck Got a Talent", "showcase"),
 ];
 
 const asked = [];
@@ -52,7 +52,7 @@ describe("keepRacing", () => {
     const root = document.createElement("div");
     root.append(document.createElement("footer"));
     await keepRacing(root, PROGRAMME[0]);
-    expect(asked).toEqual(["roller-sprint-2m", "hill-climb-1m5", "swag-contest"]);
+    expect(asked).toEqual(["roller-sprint-2m", "hill-climb-1m5", "got-a-talent"]);
     expect(root.querySelectorAll(".rounds-on .challenge-note")).toHaveLength(3);
   });
 

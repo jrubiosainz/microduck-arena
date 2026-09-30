@@ -7,7 +7,7 @@ Create a distinctive walking style. Other players choose their favourite duck.
 Open **Train my own robot** on the challenge page, or run this in a terminal:
 
 ```bash
-uv run https://pollen-robotics-microduck-arena.hf.space/workshop.py swag-contest
+uv run https://pollen-robotics-microduck-arena.hf.space/workshop.py got-a-talent
 ```
 
 Then experiment with step rhythm, body motion or head movement. Keep the gait

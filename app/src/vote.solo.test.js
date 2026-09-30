@@ -11,11 +11,11 @@ vi.mock("./api.js", () => ({
   castVote: vi.fn(),
 }));
 
-it("plays swag ballot entries one at a time and lets the viewer watch each performance", async () => {
+it("plays MicroDuck Got a Talent ballot entries one at a time and lets the viewer watch each performance", async () => {
   const viewer = { setLanes: vi.fn() };
   createViewer.mockResolvedValue(viewer);
   const root = document.createElement("div");
-  const event = { id: "swag-contest", title: "MicroDuck Got a Talent", rig: "legs" };
+  const event = { id: "got-a-talent", title: "MicroDuck Got a Talent", rig: "legs" };
   await renderVote(root, { event, state: {} });
   expect(getBallotTrace).toHaveBeenCalledTimes(3);
   expect(viewer.setLanes.mock.lastCall[0]).toHaveLength(1);

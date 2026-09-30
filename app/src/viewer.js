@@ -38,7 +38,7 @@ import {
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
 import { attachStadium } from "./stadium.js";
 import { buildJudges } from "./judges.js";
-import { buildSwagStage, stageCameraPose, placeStagePerformer, stageCameraTarget } from "./swag-stage.js";
+import { buildTalentStage, stageCameraPose, placeStagePerformer, stageCameraTarget } from "./talent-stage.js";
 import { loadGymBranding } from "./gym-branding.js";
 import { stadiumDirection } from "./clip/direction.js";
 import { buildGym } from "./gym.js";
@@ -369,17 +369,17 @@ export async function createViewer(
 
   function setLanes(entries, event, playerOptions = {}) {
     clearScene();
-    const swag = event?.id === "swag-contest";
-    if (swag) entries = entries.slice(0, 1);
-    raceLights.forEach(light => { light.visible = !swag; });
-    scene.background.set(swag ? 0x050716 : 0xb8dce7);
+    const talent = event?.id === "got-a-talent";
+    if (talent) entries = entries.slice(0, 1);
+    raceLights.forEach(light => { light.visible = !talent; });
+    scene.background.set(talent ? 0x050716 : 0xb8dce7);
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
     slopeDeg = event?.slope_deg ?? 0;
     courseLength = event?.length_m ?? 2;
-    if (swag) {
+    if (talent) {
       slopeDeg = 0;
-      stage = buildSwagStage(event, spectators, reachy);
+      stage = buildTalentStage(event, spectators, reachy);
       course = stage.group;
       scene.add(course);
     } else if (event) {
@@ -452,13 +452,13 @@ export async function createViewer(
       // own walls, not between someone else's.
       const z = laneOffsetZ(i, entries.length, spacing);
       rig.placer.traverse(node => { if (node.isMesh) node.receiveShadow = true; });
-      if (swag) placeStagePerformer(rig, entry.trace, stage.layout.centre);
+      if (talent) placeStagePerformer(rig, entry.trace, stage.layout.centre);
       else placeLane(rig, z);
       scene.add(rig.placer);
 
       // The follow-spot, on the course so it climbs a slope with it (placeMarker).
-      const marker = swag ? new Mesh(shadowGeometry, shadowMaterial) : buildMarker(tier, entry.colour ?? null);
-      if (swag) marker.rotation.x = -Math.PI / 2;
+      const marker = talent ? new Mesh(shadowGeometry, shadowMaterial) : buildMarker(tier, entry.colour ?? null);
+      if (talent) marker.rotation.x = -Math.PI / 2;
       else {
         const shadow = new Mesh(shadowGeometry, shadowMaterial);
         shadow.position.z = -0.001; // Below the ring, above the course, including slopes.

@@ -2,13 +2,13 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { BoxGeometry, PerspectiveCamera, Raycaster, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { buildSwagStage, stageCameraPose, stageLayout, placeStagePerformer, stageCameraTarget } from "./swag-stage.js";
+import { buildTalentStage, stageCameraPose, stageLayout, placeStagePerformer, stageCameraTarget } from "./talent-stage.js";
 import { applyFrame } from "./replay.js";
 import { meshNames, buildRigTree, STAND, TRUNK_HEIGHT } from "./rig.js";
 
 const subjects = [new Vector3(0.4, 0.14, 0.1)];
 
-describe("swag broadcast camera", () => {
+describe("the MicroDuck Got a Talent broadcast camera", () => {
   it.each([16 / 9, 9 / 16])("keeps the solo performer in frame at aspect %s", aspect => {
     const camera = new PerspectiveCamera(42, aspect, 0.02, 100);
     for (let time = 0; time <= 20; time += 0.25) {
@@ -43,7 +43,7 @@ describe("swag broadcast camera", () => {
 
 describe("theatre layout", () => {
   it("fits existing lane traces and future stationary performances without race markings", () => {
-    for (const event of [{ id: "swag-contest", length_m: 2 }, { id: "swag-contest" }]) {
+    for (const event of [{ id: "got-a-talent", length_m: 2 }, { id: "got-a-talent" }]) {
       const layout = stageLayout(event);
       expect(layout.width).toBeGreaterThan(3);
       expect(layout.depth / 2).toBeGreaterThan(0.85);
@@ -67,7 +67,7 @@ describe("the solo stage", () => {
   it("seats four official judges before the audience and follows a moving performer when seeking", () => {
     const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
     const geometries = new Map(meshNames(kinematics).map(name => [name, new BoxGeometry(0.01, 0.01, 0.01)]));
-    const stage = buildSwagStage({ id: "swag-contest" }, { kinematics, geometries }, reachy);
+    const stage = buildTalentStage({ id: "got-a-talent" }, { kinematics, geometries }, reachy);
     const jury = stage.group.getObjectByName("judges");
     expect(jury.children.filter(child => child.name.startsWith("judge-"))).toHaveLength(4);
     expect(stage.group.getObjectByName("finish")).toBeUndefined();

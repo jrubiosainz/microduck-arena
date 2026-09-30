@@ -45,7 +45,7 @@ def test_the_quota_counts_this_voter_on_this_event_today_only():
     elsewhere = make_ballot(voter="ann", event_id="other", cast_at="2026-09-15T09:00:00Z")
     someone = make_ballot(voter="bob", cast_at="2026-09-15T09:00:00Z")
     every = mine + [yesterday, elsewhere, someone]
-    assert cast_today(every, "ann", "swag-contest", NOW) == 3
+    assert cast_today(every, "ann", "got-a-talent", NOW) == 3
 
 
 def test_the_pool_is_one_entry_per_person_their_most_recent():

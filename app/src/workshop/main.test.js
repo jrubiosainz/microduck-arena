@@ -6,12 +6,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { api, CODE } = vi.hoisted(() => {
   const SPRINT = { id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null, metric: "time",
     length_m: 2, slope_deg: 0, rig: "legs", sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21 };
-  const SWAG = { ...SPRINT, id: "swag-contest", title: "MicroDuck Got a Talent", category: "showcase", vote: { ballot_min: 2 }, metric: "votes" };
+  const TALENT = { ...SPRINT, id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", vote: { ballot_min: 2 }, metric: "votes" };
   const CODE = { fork: null, changes: [], identity: true, commit: "abc1234", unpushed: 0 };
   const api = {
     getStatus: async () => ({ arena: "https://arena.test", gpu: false, challenges: [
       { event: SPRINT, folder: "sprint_2m", task: "S", recipe: {}, knobs: [], running: 1 },
-      { event: SWAG, folder: "swag_contest", task: "W", recipe: {}, knobs: [], running: 0 },
+      { event: TALENT, folder: "got_a_talent", task: "W", recipe: {}, knobs: [], running: 0 },
     ] }),
     getHub: vi.fn(),
     startLogin: vi.fn(async () => ({ url: "https://huggingface.co/oauth/device?user_code=X", code: "X" })),
@@ -53,7 +53,7 @@ describe("the workshop's home", () => {
     expect(app.querySelector(".todo__title").textContent).toBe("Ready to train?");
     expect(app.querySelector(".lede").textContent).toBe("Pick a challenge, then train, submit, compete, repeat.");
     const links = [...app.querySelectorAll(".challenge-link")].map((a) => a.getAttribute("href"));
-    expect(links).toEqual(["#/c/sprint-2m", "#/c/swag-contest"]);
+    expect(links).toEqual(["#/c/sprint-2m", "#/c/got-a-talent"]);
     expect(app.querySelector(".flyer-leader")).toBeNull();
     expect(app.querySelector(".vote-button")).toBeNull();
     expect(app.querySelector(".ws-running").textContent).toBe("1 training now");
