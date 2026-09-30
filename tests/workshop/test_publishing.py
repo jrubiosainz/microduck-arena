@@ -47,8 +47,12 @@ def test_a_colour_and_a_speed_go_with_the_entry(workshop, fakes, checkout):
     assert call[call.index("--speed") + 1] == "0.55"
 
 
-def test_the_entry_carries_the_code_once_it_is_shared(workshop, fakes, checkout):
-    workshop.post("/api/workshop/code/fork", json={})
+def test_the_entry_carries_the_code_once_it_is_shared(workshop, fakes, checkout, remotes):
+    fork = remotes / "alice" / "microduck-challenges"
+    fork.mkdir(parents=True)
+    git(fork.parent, "init", "-q", "--bare", str(fork))
+    workshop.post("/api/workshop/code/fork", json={"url": "https://github.com/alice/microduck-challenges"})
+    workshop.post("/api/workshop/code/push")
     run = make_run(checkout, "first")
     commit = git(checkout, "rev-parse", "--short=9", "HEAD")
     body = _publish(workshop, run).json()

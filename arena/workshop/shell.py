@@ -1,4 +1,4 @@
-"""The workshop's subprocesses: git and gh as they are, uv as `uv run --no-sync <command>`.
+"""The workshop's subprocesses: git as it is, uv as `uv run --no-sync <command>`.
 
 `--no-sync`: the workshop already runs in the checkout's environment — the
 launcher synced it once — so every command runs in that environment as it is.
@@ -11,7 +11,6 @@ failing with output the page can show.
 """
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -40,18 +39,6 @@ def commit_all(root: Path, message: str) -> bool:
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", message)
     return True
-
-
-def gh_ready(root: Path) -> bool:
-    """The GitHub CLI is installed and logged in, so the workshop can fork for the user.
-
-    `gh auth token` reads the login saved on this machine. `gh auth status` would also ask GitHub,
-    and wait half a minute when GitHub is unreachable; a login GitHub no longer accepts shows up
-    when the fork fails, with gh's own words.
-    """
-    if shutil.which("gh") is None:
-        return False
-    return subprocess.run(["gh", "auth", "token"], cwd=root, capture_output=True, check=False).returncode == 0
 
 
 def uv(*args: str) -> list[str]:

@@ -22,13 +22,13 @@ from ..manifest import load_event
 from ..policy import PolicyError
 from ..web.routes_read import event_summary
 from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write_values
-from .code import code_state, code_url, fork, push
+from .code import code_state, code_url, commit, push, use_fork
 from .hub import Hub, HubUnreachable
 from .jobs import find_job, recorded_jobs
 from .login import BrowserLogin, LoginError
 from .publishing import PublishError, preview, publish, repo_for
 from .runs import curve, find_run, find_runs
-from .shell import ShellError, commit_all, gh_ready, git
+from .shell import ShellError, commit_all
 from .training import Training, ckpt_repo, fetch, train_command
 from .trials import TrialError, tested, trial
 
@@ -60,15 +60,12 @@ class Workshop:
 
 def preflight(root: Path) -> dict:
     """What this machine has, known without the network. Who is logged in to Hugging Face is asked
-    apart (/hub): the page draws every zone from the status and must not wait on the Hub."""
-    has_git = shutil.which("git") is not None
+    apart (/hub), and whether commits have a name is asked with the rest of the code's state
+    (/code): the page draws every zone from the status and must not wait on the Hub."""
     return {
-        "git": has_git,
-        # A commit needs a name: the workshop commits before every training.
-        "identity": has_git and bool(git(root, "config", "user.email", check=False)),
+        "git": shutil.which("git") is not None,
         "uv": shutil.which("uv") is not None,
         "gpu": shutil.which("nvidia-smi") is not None,
-        "gh": gh_ready(root),
     }
 
 
@@ -297,35 +294,43 @@ async def run_trial(run_id: str, body: TrialRequest, request: Request) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+class CommitRequest(BaseModel):
+    message: str
+
+
 class ForkRequest(BaseModel):
-    url: str | None = None
+    url: str
 
 
-def _code(ws: Workshop, output: str = "") -> dict:
-    return {**code_state(ws.root), "output": output}
+def _code_step(ws: Workshop, step) -> dict:
+    try:
+        step()
+    except ShellError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return code_state(ws.root)
 
 
 @router.get("/code")
 def code(request: Request) -> dict:
-    return _code(_workshop(request))
+    return code_state(_workshop(request).root)
+
+
+@router.post("/code/commit")
+def code_commit(body: CommitRequest, request: Request) -> dict:
+    ws = _workshop(request)
+    return _code_step(ws, lambda: commit(ws.root, body.message))
 
 
 @router.post("/code/fork")
 def code_fork(body: ForkRequest, request: Request) -> dict:
     ws = _workshop(request)
-    try:
-        return _code(ws, fork(ws.root, body.url, f"{ws.challenge.event}: my changes"))
-    except ShellError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _code_step(ws, lambda: use_fork(ws.root, body.url))
 
 
 @router.post("/code/push")
 def code_push(request: Request) -> dict:
     ws = _workshop(request)
-    try:
-        return _code(ws, push(ws.root, f"{ws.challenge.event}: my changes"))
-    except ShellError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _code_step(ws, lambda: push(ws.root))
 
 
 class PublishRequest(BaseModel):

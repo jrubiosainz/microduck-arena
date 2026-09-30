@@ -1,7 +1,7 @@
 """The workshop's world, played locally: a microduck-challenges checkout in a temp dir, GitHub as
 bare repos (https://github.com/<owner>/<name> is rewritten to them with url.insteadOf), and fake
-`uv` and `gh` on a PATH that holds nothing else — a symlink stands in for the real git, so a
-machine's other neighbours of git (an nvidia-smi on a training box, say) are never picked up."""
+`uv` on a PATH that holds nothing else — a symlink stands in for the real git, so a machine's
+other neighbours of git (an nvidia-smi on a training box, say) are never picked up."""
 
 import json
 import shutil
@@ -104,13 +104,12 @@ def checkout(tmp_path, remotes):
 
 
 @pytest.fixture
-def fakes(tmp_path, monkeypatch, remotes):
+def fakes(tmp_path, monkeypatch):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for tool, source in (("uv", "fake_uv.py"), ("gh", "fake_gh.py")):
-        target = bin_dir / tool
-        target.write_text(f"#!{sys.executable}\n" + (HERE / source).read_text())
-        target.chmod(0o755)
+    target = bin_dir / "uv"
+    target.write_text(f"#!{sys.executable}\n" + (HERE / "fake_uv.py").read_text())
+    target.chmod(0o755)
     (bin_dir / "git").symlink_to(shutil.which("git"))
     monkeypatch.setenv("PATH", str(bin_dir))
     log = tmp_path / "uv-calls.jsonl"
@@ -118,7 +117,6 @@ def fakes(tmp_path, monkeypatch, remotes):
     monkeypatch.setenv("FAKE_HUB", str(tmp_path / "hub"))
     monkeypatch.setenv("FAKE_UV_TFEVENTS", str(PROBE))
     monkeypatch.setenv("FAKE_UV_ONNX", str(REFERENCE))
-    monkeypatch.setenv("FAKE_GITHUB", str(remotes))
 
     def gpu():
         smi = bin_dir / "nvidia-smi"

@@ -19,7 +19,7 @@ def test_status_names_the_challenge_its_recipe_knobs_and_event(workshop):
 
 def test_without_an_nvidia_gpu_training_goes_to_hf_jobs(workshop):
     body = workshop.get("/api/workshop/status").json()
-    assert body["preflight"] == {"git": True, "identity": True, "uv": True, "gpu": False, "gh": True}
+    assert body["preflight"] == {"git": True, "uv": True, "gpu": False}
     assert body["mode"] == "hf-jobs"
 
 
@@ -51,13 +51,6 @@ def test_an_unreachable_hub_is_said_not_waited_for(workshop, hub):
 def test_with_an_nvidia_gpu_it_trains_here(workshop, fakes):
     fakes.gpu()
     assert workshop.get("/api/workshop/status").json()["mode"] == "local"
-
-
-def test_git_without_a_name_on_commits_is_flagged(workshop, checkout, monkeypatch, tmp_path):
-    git(checkout, "config", "--unset", "user.email")
-    monkeypatch.setenv("HOME", str(tmp_path))  # no global identity either
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    assert workshop.get("/api/workshop/status").json()["preflight"]["identity"] is False
 
 
 def test_the_page_is_served_from_the_built_site(checkout, fakes, hub, tmp_path):
