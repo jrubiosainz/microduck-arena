@@ -140,6 +140,7 @@ def test_a_recorded_name_is_not_reused_before_its_run_is_fetched(workshop, fakes
     f'[{{"task": "{TASK}", "name": "y", "where": "local", "recipe": {{"num_envs": 1}}}}]',  # recipe without max_iterations
     f'[{{"task": "{TASK}", "name": "z", "where": "local", "ended": "done"}}]',  # "done" is not a training's ended state
     f'[{{"task": "{TASK}", "name": ["a"], "where": "local"}}]',  # name is not a string
+    f'[{{"task": "{TASK}", "name": "x", "where": "hf-jobs", "job_id": "j1"}}]',  # hf-jobs without namespace/ckpt_repo
 ])
 def test_an_older_or_hand_edited_jobs_file_keeps_only_what_reads_as_a_job(workshop, fakes, checkout, junk, monkeypatch):
     """Review focus: never a 500, and a launch still works."""

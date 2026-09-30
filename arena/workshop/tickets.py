@@ -68,6 +68,14 @@ def _started(record, run) -> str:
     return (record or {}).get("started") or (run.provenance.get("started") if run else None) or ""
 
 
+def _job_url(live, record) -> str | None:
+    """An HF job's page on the Hub, where its whole log is, once its id is known."""
+    job_id = (live.job_id if live is not None else None) or (record or {}).get("job_id")
+    if not record or record.get("where") != "hf-jobs" or not job_id:
+        return None
+    return f"https://huggingface.co/jobs/{record['namespace']}/{job_id}"
+
+
 def _sources(ws, challenge) -> list[tuple]:
     """(id, live, record, run) for each training of `challenge`, newest first."""
     runs = find_runs(ws.root, challenge.task)  # newest first: the first of a name is its newest
@@ -100,6 +108,7 @@ def _ticket(source_, voted: bool) -> dict:
         "dirty": bool(run and run.provenance.get("dirty")),
         "checkpoints": rows,
         "best": best,
+        "job_url": _job_url(live, record),
     }
 
 

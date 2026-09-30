@@ -38,6 +38,11 @@ def _is_job(entry) -> bool:
     recipe = entry.get("recipe")
     if recipe is not None and not (isinstance(recipe, dict) and isinstance(recipe.get("max_iterations"), int)):
         return False
+    if entry.get("where") == "hf-jobs":
+        if not (isinstance(entry.get("namespace"), str) and isinstance(entry.get("ckpt_repo"), str)):
+            return False
+        if entry.get("job_id") is not None and not isinstance(entry.get("job_id"), str):
+            return False
     return entry.get("ended") in (None, "finished", "failed", "stopped")
 
 

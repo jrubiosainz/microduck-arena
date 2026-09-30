@@ -167,6 +167,7 @@ class FakeHub:
         self.reachable = True
         self.cancelled = []
         self.stages = {}  # job id -> what inspect_job says; RUNNING when not set
+        self.asked = []  # every job id job_stage was asked of, in order
 
     def whoami(self):
         if not self.reachable:
@@ -174,6 +175,7 @@ class FakeHub:
         return Account(self.user, self.can_pay) if self.user else None
 
     def job_stage(self, job_id, namespace):
+        self.asked.append(job_id)
         if not self.reachable:
             raise HubUnreachable("https://huggingface.co did not answer within 5 s")
         return self.stages.get(job_id, "RUNNING")

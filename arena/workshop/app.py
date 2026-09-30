@@ -32,6 +32,7 @@ from .runs import find_runs
 from .shell import ShellError, commit_all, git
 from .tickets import source, ticket, ticket_detail, tickets
 from .training import Training
+from .watch import watch_forever
 
 NO_SITE = (
     "The workshop's page has not been built.\n\n"
@@ -369,7 +370,8 @@ def _only_its_own_page(app: FastAPI, port: int) -> None:
 async def _background(app: FastAPI):
     """The workers that keep the tickets up to date, for as long as the app serves."""
     ws = app.state.workshop
-    threading.Thread(target=evaluate_forever, args=(ws,), name="workshop-evaluator", daemon=True).start()
+    for work, name in ((evaluate_forever, "workshop-evaluator"), (watch_forever, "workshop-watcher")):
+        threading.Thread(target=work, args=(ws,), name=name, daemon=True).start()
     yield
     ws.stopping.set()
 
