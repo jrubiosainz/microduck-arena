@@ -3,7 +3,7 @@ import inspect
 
 import pytest
 
-from arena.manifest import EVENTS_DIR, ManifestError, all_events, load_event, load_manifest
+from arena.manifest import EVENTS_DIR, ManifestError, Stage, all_events, load_event, load_manifest
 
 # A well-formed manifest, as TOML sections. Tests override one entry to build a
 # specific malformation, so each test names only what it is breaking.
@@ -202,6 +202,34 @@ def test_a_missing_sweep_section_is_rejected(tmp_path):
         load_manifest(path)
 
 
+# A stage's sections, over GOOD: [course] names only its kind, and there is no [sweep].
+STAGE = {"course": '[course]\nkind="stage"\n', "sweep": ""}
+
+
+def test_a_stage_loads_with_no_lane_and_no_sweep(tmp_path):
+    m = load_manifest(write_manifest(tmp_path, **STAGE))
+    assert m.course == Stage()
+    assert m.course.kind == "stage"
+    assert m.sweep is None
+
+
+def test_a_stage_refuses_a_lanes_geometry(tmp_path):
+    course = '[course]\nkind="stage"\nlength_m=2.0\n'
+    with pytest.raises(ManifestError, match=r"\[course\]: unknown keys \['length_m'\]"):
+        load_manifest(write_manifest(tmp_path, course=course, sweep=""))
+
+
+def test_a_stage_refuses_a_sweep(tmp_path):
+    with pytest.raises(ManifestError, match=r"takes no \[sweep\]"):
+        load_manifest(write_manifest(tmp_path, course=STAGE["course"]))
+
+
+def test_a_stage_plays_one_seed(tmp_path):
+    root = GOOD["root"].replace("seeds=[1]", "seeds=[1,2]")
+    with pytest.raises(ManifestError, match="exactly one seed"):
+        load_manifest(write_manifest(tmp_path, root=root, **STAGE))
+
+
 # The programme. Written out rather than derived, so
 # that adding an event fails this test until someone chooses its category on
 # purpose — which is the whole reason the field is required.
@@ -266,16 +294,16 @@ def test_got_a_talent_declares_its_ballot_and_its_window():
     assert (vote.window_days, vote.per_day) == (7, 20)
 
 
-def test_got_a_talent_races_the_sprints_environment_at_one_pinned_speed():
+def test_got_a_talent_is_a_stage_played_once_for_20_s():
     talent, sprint = load_event("got-a-talent"), load_event("sprint-2m")
-    assert talent.course == sprint.course
-    assert talent.command == sprint.command
+    assert talent.course == Stage()
+    assert talent.sweep is None
+    assert talent.seeds == (1,)
+    assert talent.time_limit_s == 20.0
+    # An entry without a timeline stands still: the all-zero command.
+    assert talent.command == (0.0,) * 13
     assert talent.start == sprint.start
     assert talent.termination == sprint.termination
-    assert talent.seeds == sprint.seeds
-    # lo == hi: everyone walks at the same commanded speed, so the judgement
-    # lands on style and not on who was asked to go faster.
-    assert talent.sweep.speeds() == (0.25,)
     assert talent.metric == "votes"
 
 

@@ -26,7 +26,7 @@ METRICS = ("mean_finish_time", "votes")
 # manifest.json names another kind than its event's (arena/hub_fetch.py).
 KINDS = ("episodic", "perpetual")
 
-COURSE_KINDS = ("lane",)
+COURSE_KINDS = ("lane", "stage")
 
 # The voting page has exactly this many colours to hand a lane: LANE_CSS (and
 # its 3D twin LANE_COLORS) in app/src/course.js. This is a second source of
@@ -47,6 +47,14 @@ class Course:
     width_m: float
     wall_height_m: float
     slope_deg: float
+
+
+@dataclass(frozen=True)
+class Stage:
+    """An open floor: no walls, no slope, no line to cross. A stage event plays
+    each entry's own command timeline (arena/timeline.py) instead of racing it."""
+
+    kind: str = "stage"
 
 
 @dataclass(frozen=True)
@@ -175,10 +183,11 @@ class Manifest:
     time_limit_s: float
     metric: str
     seeds: tuple[int, ...]
-    course: Course
+    course: Course | Stage
     start: Start
     termination: Termination
-    sweep: Sweep
+    # None on a stage, which plays the entry's timeline rather than a speed.
+    sweep: Sweep | None
     # 13 values, held constant for the whole run. A tuple rather than an ndarray:
     # an ndarray would be mutable in place despite frozen=True, letting one bad
     # write corrupt the event for every later run in the same process — and
@@ -268,6 +277,22 @@ def _clip(raw: dict | None, where: str) -> ClipConfig:
     return ClipConfig(tape_max_s=tape, sounds=sounds, camera=_camera(raw.get("camera"), f"{where}.camera"))
 
 
+def _sweep(raw: dict, path: Path) -> Sweep:
+    sweep = Sweep(
+        lo=float(_require(raw, "lo", "[sweep]")),
+        hi=float(_require(raw, "hi", "[sweep]")),
+        step=float(_require(raw, "step", "[sweep]")),
+        finalists=int(_require(raw, "finalists", "[sweep]")),
+    )
+    if sweep.step <= 0:
+        raise ManifestError(f"{path}: [sweep] step must be positive")
+    if sweep.hi < sweep.lo:
+        raise ManifestError(f"{path}: [sweep] hi must not be below lo")
+    if sweep.finalists < 1:
+        raise ManifestError(f"{path}: [sweep] finalists must be at least 1")
+    return sweep
+
+
 def load_manifest(path: Path) -> Manifest:
     with open(path, "rb") as fh:
         raw = tomllib.load(fh)
@@ -303,19 +328,23 @@ def load_manifest(path: Path) -> Manifest:
     start_raw = _require(raw, "start", str(path))
     perturb = _require(start_raw, "perturbation", "[start]")
     term_raw = _require(raw, "termination", str(path))
-    sweep_raw = _require(raw, "sweep", str(path))
-    sweep = Sweep(
-        lo=float(_require(sweep_raw, "lo", "[sweep]")),
-        hi=float(_require(sweep_raw, "hi", "[sweep]")),
-        step=float(_require(sweep_raw, "step", "[sweep]")),
-        finalists=int(_require(sweep_raw, "finalists", "[sweep]")),
-    )
-    if sweep.step <= 0:
-        raise ManifestError(f"{path}: [sweep] step must be positive")
-    if sweep.hi < sweep.lo:
-        raise ManifestError(f"{path}: [sweep] hi must not be below lo")
-    if sweep.finalists < 1:
-        raise ManifestError(f"{path}: [sweep] finalists must be at least 1")
+
+    if kind == "stage":
+        _refuse_unknown(course_raw, {"kind"}, "[course]")
+        if len(seeds) != 1:
+            raise ManifestError(f"{path}: a stage plays one performance, so it declares exactly one seed")
+        if "sweep" in raw:
+            raise ManifestError(f"{path}: a stage plays each entry's timeline, so it takes no [sweep]")
+        course, sweep = Stage(), None
+    else:
+        course = Course(
+            kind=kind,
+            length_m=float(_require(course_raw, "length_m", "[course]")),
+            width_m=float(_require(course_raw, "width_m", "[course]")),
+            wall_height_m=float(_require(course_raw, "wall_height_m", "[course]")),
+            slope_deg=float(_require(course_raw, "slope_deg", "[course]")),
+        )
+        sweep = _sweep(_require(raw, "sweep", str(path)), path)
 
     vote_raw = raw.get("vote")
     vote = None
@@ -355,13 +384,7 @@ def load_manifest(path: Path) -> Manifest:
         time_limit_s=float(_require(raw, "time_limit_s", str(path))),
         metric=metric,
         seeds=seeds,
-        course=Course(
-            kind=kind,
-            length_m=float(_require(course_raw, "length_m", "[course]")),
-            width_m=float(_require(course_raw, "width_m", "[course]")),
-            wall_height_m=float(_require(course_raw, "wall_height_m", "[course]")),
-            slope_deg=float(_require(course_raw, "slope_deg", "[course]")),
-        ),
+        course=course,
         start=Start(
             keyframe=_require(start_raw, "keyframe", "[start]"),
             settle_s=float(_require(start_raw, "settle_s", "[start]")),

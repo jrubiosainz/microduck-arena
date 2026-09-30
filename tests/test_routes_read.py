@@ -270,6 +270,16 @@ def test_an_event_carries_the_walls_the_physics_uses(client):
     assert walls[1]["half"] == walls[0]["half"]
 
 
+def test_a_stage_event_is_served_without_a_lane_or_a_sweep(client):
+    """MicroDuck Got a Talent plays on an open stage: no length, walls, slope or speed sweep to draw."""
+    api, _ = client
+    talent = next(e for e in api.get("/api/events").json()["events"] if e["id"] == "got-a-talent")
+    for key in ("length_m", "width_m", "slope_deg", "walls", "sweep_lo", "sweep_hi", "sweep_step", "sweep_count"):
+        assert key not in talent, key
+    assert talent["time_limit_s"] == 20.0
+    assert talent["seeds"] == 1
+
+
 def test_standings_rank_every_player_who_published(client):
     api, app = client
     record_run(app, user="ann", score=20.0, submitted_at="2026-09-03T09:00:00Z")

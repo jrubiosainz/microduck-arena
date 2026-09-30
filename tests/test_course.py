@@ -194,3 +194,27 @@ def test_the_served_walls_are_the_walls_the_physics_compiles():
             assert model.geom_pos[geom.id] == pytest.approx(pos), f"{event_id}/{name} pos"
             assert model.geom_size[geom.id] == pytest.approx(half), f"{event_id}/{name} size"
             assert model.geom_type[geom.id] == mujoco.mjtGeom.mjGEOM_BOX
+
+
+def test_a_stage_is_an_open_flat_floor():
+    model = compile_course(load_event("got-a-talent"))
+    assert model.geom("floor").id >= 0
+    for wall in ("wall_left", "wall_right"):
+        with pytest.raises(KeyError):
+            model.geom(wall)
+    np.testing.assert_array_equal(model.body("course").quat, [1.0, 0.0, 0.0, 0.0])
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("STAND").id)
+    np.testing.assert_allclose(data.qpos[0:3], [0.0, 0.0, SPAWN_HEIGHT_M])
+
+
+def test_a_stage_compiles_the_lanes_robot_and_solver():
+    """The same robot in every event: only the floor around it differs."""
+    stage = compile_course(load_event("got-a-talent"))
+    lane = compile_course(load_event("sprint-2m"))
+    for field in ("body_mass", "body_inertia", "jnt_range", "dof_armature", "dof_damping", "actuator_forcerange"):
+        np.testing.assert_array_equal(getattr(stage, field), getattr(lane, field), err_msg=field)
+    np.testing.assert_array_equal(stage.key("STAND").qpos, lane.key("STAND").qpos)
+    assert stage.opt.timestep == lane.opt.timestep
+    assert stage.opt.integrator == lane.opt.integrator
+    assert (stage.opt.iterations, stage.opt.ls_iterations) == (lane.opt.iterations, lane.opt.ls_iterations)

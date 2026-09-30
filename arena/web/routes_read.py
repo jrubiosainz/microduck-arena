@@ -25,7 +25,7 @@ router = APIRouter(prefix="/api")
 
 
 def event_summary(manifest: Manifest) -> dict:
-    return {
+    summary = {
         "id": manifest.id,
         "title": manifest.title,
         "rig": manifest.rig,
@@ -46,26 +46,32 @@ def event_summary(manifest: Manifest) -> dict:
             else None
         ),
         "order": manifest.order,
-        "length_m": manifest.course.length_m,
-        "width_m": manifest.course.width_m,
-        "slope_deg": manifest.course.slope_deg,
-        # The lane walls the PHYSICS uses, in MJCF coordinates, so the viewer can
-        # draw exactly what the robot can hit rather than recomputing where the
-        # walls ought to be. They are invisible unless you ask for them.
-        "walls": [
-            {"name": name, "pos": list(pos), "half": list(half)}
-            for name, pos, half in wall_boxes(manifest.course)
-        ],
         "time_limit_s": manifest.time_limit_s,
         "seeds": len(manifest.seeds),
-        # The sweep, not a single command: the event no longer pins a speed,
-        # it declares the range every entry is tried over.
-        "sweep_lo": manifest.sweep.lo,
-        "sweep_hi": manifest.sweep.hi,
-        "sweep_step": manifest.sweep.step,
-        "sweep_count": len(manifest.sweep.speeds()),
         "clip": manifest.clip.to_dict(),
     }
+    # A stage is an open floor that plays each entry's timeline: no lane to
+    # draw and no speed to sweep.
+    if manifest.course.kind == "lane":
+        summary |= {
+            "length_m": manifest.course.length_m,
+            "width_m": manifest.course.width_m,
+            "slope_deg": manifest.course.slope_deg,
+            # The lane walls the PHYSICS uses, in MJCF coordinates, so the viewer can
+            # draw exactly what the robot can hit rather than recomputing where the
+            # walls ought to be. They are invisible unless you ask for them.
+            "walls": [
+                {"name": name, "pos": list(pos), "half": list(half)}
+                for name, pos, half in wall_boxes(manifest.course)
+            ],
+            # The sweep, not a single command: the event no longer pins a speed,
+            # it declares the range every entry is tried over.
+            "sweep_lo": manifest.sweep.lo,
+            "sweep_hi": manifest.sweep.hi,
+            "sweep_step": manifest.sweep.step,
+            "sweep_count": len(manifest.sweep.speeds()),
+        }
+    return summary
 
 
 def _event_or_404(event_id: str) -> Manifest:

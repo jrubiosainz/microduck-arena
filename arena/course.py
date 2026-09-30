@@ -2,9 +2,9 @@
 
 Mirrors buildPhysicsXml() in the sandbox's app/src/game/game.js: strip visual
 geoms, prune the meshes they were the only user of, pin the timestep, inject a
-floor and a STAND keyframe. Differences, all deliberate: a lane instead of a
-square arena, and no ball, props or terrain — nothing in an official run may
-depend on scenery. The vendored MJCF still describes the sandbox's
+floor and a STAND keyframe. Differences, all deliberate: a lane or an open
+stage instead of a square arena, and no ball, props or terrain — nothing in an
+official run may depend on scenery. The vendored MJCF still describes the sandbox's
 position-servo robot; `compile_course` converts the 14 actuated joints to the
 torque motors `arena.actuator` drives, so the built XML and the compiled
 model disagree on purpose.
@@ -87,13 +87,24 @@ def _strip_visuals(root: ET.Element) -> None:
             asset.remove(mesh)
 
 
-def _inject_lane(root: ET.Element, manifest: Manifest) -> None:
-    """Floor plus two side walls, inside one static rotated body.
+def _slope_deg(course) -> float:
+    """A lane tilts by what it declares; a stage is flat."""
+    return course.slope_deg if course.kind == "lane" else 0.0
+
+
+def _inject_course(root: ET.Element, manifest: Manifest) -> None:
+    """The floor inside one static rotated body, plus a lane's two side walls.
 
     A static body (no joint) leaves qpos untouched, so tilting the whole lane for
     a hill climb costs nothing in the keyframe. The walls are the referee: with wz
     pinned to zero, a policy that pulls to one side scrubs speed against them, so
-    straightness is part of the time rather than a separate rule.
+    straightness is part of the time rather than a separate rule. A stage is the
+    same floor with nothing else: an open space to perform in.
+
+    The body has no joint, so its mass never enters the dynamics — but MuJoCo
+    still totals it up from density, and a box the size of a wall is not
+    negligible. density="0" keeps it what it actually is: pure collision
+    geometry, so a lane and a stage report the same (zero) course mass.
     """
     course = manifest.course
     worldbody = root.find("worldbody")
@@ -101,19 +112,22 @@ def _inject_lane(root: ET.Element, manifest: Manifest) -> None:
     # which this body inherits. Writing the degree value straight in would tilt
     # the lane by 8 radians for slope_deg = 8 — geometry that compiles cleanly
     # and is completely wrong.
-    pitch = -math.radians(course.slope_deg)
-    lane = _sub(worldbody, "body", name="course", euler=f"0 {pitch} 0")
+    pitch = -math.radians(_slope_deg(course))
+    body = _sub(worldbody, "body", name="course", euler=f"0 {pitch} 0")
 
-    _sub(lane, "geom", name="floor", type="plane", size="0 0 0.05", pos="0 0 0")
+    _sub(body, "geom", name="floor", type="plane", size="0 0 0.05", pos="0 0 0", density="0")
+    if course.kind == "stage":
+        return
 
     for name, pos, size in wall_boxes(course):
         _sub(
-            lane,
+            body,
             "geom",
             name=name,
             type="box",
             pos=" ".join(str(v) for v in pos),
             size=" ".join(str(v) for v in size),
+            density="0",
         )
 
 
@@ -127,7 +141,7 @@ def _inject_keyframe(root: ET.Element, manifest: Manifest) -> None:
     driven by `arena.actuator`, so the keyframe holds no command: ctrl is
     zeros.
     """
-    slope = manifest.course.slope_deg
+    slope = _slope_deg(manifest.course)
     spawn = ramp_normal(slope) * SPAWN_HEIGHT_M
     free = f"{spawn[0]} {spawn[1]} {spawn[2]} 1 0 0 0"
 
@@ -157,7 +171,7 @@ def build_course_xml(manifest: Manifest) -> tuple[str, dict[str, bytes]]:
     compiler.set("meshdir", "")
 
     _sub(root, "option", timestep=TIMESTEP)
-    _inject_lane(root, manifest)
+    _inject_course(root, manifest)
     _inject_keyframe(root, manifest)
 
     asset = root.find("asset")
