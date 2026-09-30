@@ -26,3 +26,15 @@ export const commitCode = (message) => post("/api/workshop/code/commit", { messa
 export const train = (event, body) => post(`${challengeUrl(event)}/train`, body);
 export const getJobs = (event) => json(`${challengeUrl(event)}/jobs`).then((body) => body.jobs);
 export const stopJob = (event, id) => post(`${jobUrl(event, id)}/stop`);
+export const getJob = (event, id, since = 0) => json(`${jobUrl(event, id)}?since=${since}`);
+export const publishJob = (event, id, body) => post(`${jobUrl(event, id)}/publish`, body);
+export const pushCode = () => post("/api/workshop/code/push");
+
+/** A checkpoint's stored evaluation, its trace decoded as the viewer takes it; `{checkpoint, error}` when it failed. */
+export async function getCheckpoint(event, id, n) {
+  const body = await json(`${jobUrl(event, id)}/checkpoints/${n}`);
+  if (body.error) return body;
+  const { trace_b64: encoded, ...evaluation } = body;
+  const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+  return { ...evaluation, trace: new Float32Array(bytes.buffer) };
+}

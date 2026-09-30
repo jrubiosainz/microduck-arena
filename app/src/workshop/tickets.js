@@ -21,7 +21,7 @@ export function describe(c) {
 }
 
 /** A bar per checkpoint, as tall as its speed against the fastest; `future` adds the empty slots still to come. */
-export function bars(checkpoints, best, { future = [], selected = null, onPick = null } = {}) {
+export function bars(checkpoints, best, { future = [], onPick = null } = {}) {
   let fastest = Infinity;
   for (const c of checkpoints) if (c.status === "evaluated" && c.seeds_finished > 0 && c.score < fastest) fastest = c.score;
   const row = el("div", "bars");
@@ -34,7 +34,6 @@ export function bars(checkpoints, best, { future = [], selected = null, onPick =
       bar.style.height = `${Math.max(6, Math.round((fastest / c.score) * 100))}%`;
       if (c.n === best) bar.className = "best";
     }
-    if (c.n === selected) bar.classList.add("sel");
     bar.title = describe(c);
     if (onPick && c.status !== "queued") {
       bar.tabIndex = 0;
@@ -88,6 +87,12 @@ export function progress({ done, total }) {
   return bar;
 }
 
+/** Asks before stopping a training, saying what is lost. */
+export function confirmStop(ticket) {
+  const lost = ticket.where === "hf-jobs" ? "A stopped Hugging Face job cannot be resumed." : "It cannot be resumed.";
+  return window.confirm(`Stop ${ticket.name}? ${lost}`);
+}
+
 /** Stop, on a running ticket: confirmed, and once pressed it waits for its answer (a second press asks nothing). */
 function stopButton(current, onStop) {
   // A span, not a button: the whole card is a link, and a button may not sit inside one.
@@ -98,8 +103,7 @@ function stopButton(current, onStop) {
     e.preventDefault();
     e.stopPropagation();
     const ticket = current();
-    const lost = ticket.where === "hf-jobs" ? "A stopped Hugging Face job cannot be resumed." : "It cannot be resumed.";
-    if (stop.getAttribute("aria-disabled") === "true" || !window.confirm(`Stop ${ticket.name}? ${lost}`)) return;
+    if (stop.getAttribute("aria-disabled") === "true" || !confirmStop(ticket)) return;
     stop.setAttribute("aria-disabled", "true");
     try {
       await onStop(ticket.id);

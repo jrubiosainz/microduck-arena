@@ -8,12 +8,13 @@ import * as api from "./api.js";
 import { mountChallenge } from "./challenge.js";
 import { el } from "./dom.js";
 import { mountHome } from "./home.js";
+import { mountJob } from "./job.js";
 import { parseRoute } from "./routes.js";
 
-const MOUNTS = { home: mountHome, challenge: mountChallenge };
+const MOUNTS = { home: mountHome, challenge: mountChallenge, job: mountJob };
 // The Arena's sheet each page wears (router.js's dress): the club's on the home, as on the Arena's
-// front; trackside on a challenge's page, as on the Arena's own.
-const SHEETS = { home: "menu", challenge: "race" };
+// front; trackside on a challenge's page and a training's, as on the Arena's own.
+const SHEETS = { home: "menu", challenge: "race", job: "race" };
 
 const root = document.querySelector("#app");
 let page = null;

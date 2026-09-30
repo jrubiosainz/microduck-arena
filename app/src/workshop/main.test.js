@@ -19,11 +19,15 @@ const { api, CODE } = vi.hoisted(() => {
     getCode: vi.fn(),
     useFork: async () => ({ ...CODE, fork: "alice/microduck-challenges" }),
     getJobs: async () => [],
+    getJob: async () => ({ id: "first", name: "first", where: "local", state: "done", progress: null, started: null, run_id: "r",
+      dirty: false, job_url: null, checkpoints: [], best: null, published: null, log: [], next: 0, following: false, curve: [],
+      commit: null, recipe: null, params: null, code_url: null }),
   };
   return { api, CODE };
 });
 vi.mock("./api.js", () => api);
 vi.mock("../thumbnail.js", () => ({ renderThumbnails: async () => new Map() }));
+vi.mock("../viewer.js", () => ({ createViewer: async () => ({ setLanes() {}, setBrightness() {}, dispose() {} }) }));
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const settled = async () => {
@@ -116,5 +120,18 @@ describe("a challenge's page in the workshop", () => {
     openCode();
     await settled();
     expect(document.querySelector("#app .signage .profile-chip").textContent).toBe("alice");
+  });
+});
+
+describe("a training's page in the workshop", () => {
+  it("is mounted from its address and wears the Arena's trackside sheet", async () => {
+    history.replaceState(null, "", "/#/c/sprint-2m/j/first");
+    await import("./main.js");
+    await settled();
+    const app = document.querySelector("#app");
+    expect(app.querySelector(".racetitle").textContent).toBe("first");
+    expect(app.querySelector(".raceback").getAttribute("href")).toBe("#/c/sprint-2m");
+    expect(document.querySelector("link[data-theme=race]").disabled).toBe(false);
+    expect(document.querySelector("link[data-theme=club]").disabled).toBe(true);
   });
 });
