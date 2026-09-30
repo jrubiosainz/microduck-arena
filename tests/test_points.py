@@ -61,10 +61,10 @@ def test_a_voted_event_pays_no_own_best():
     so a shorter performance is no personal best; the same pair of runs on a timed event pays one."""
     from arena.manifest import Vote
 
-    rules = {"swag-contest": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
-    long = make_record(user="alice", event_id="swag-contest", score=20.0,
+    rules = {"got-a-talent": Vote(ballot_min=2, ballot_max=4, window_days=7, per_day=20)}
+    long = make_record(user="alice", event_id="got-a-talent", score=20.0,
                        submitted_at="2026-09-03T09:00:00Z")
-    short = make_record(user="alice", event_id="swag-contest", score=12.0,
+    short = make_record(user="alice", event_id="got-a-talent", score=12.0,
                         submitted_at="2026-09-03T10:00:00Z")
     assert acts(receipts([long, short], frozenset(), voted=rules), "own_best") == []
     timed = [make_record(user="alice", event_id="sprint-2m", score=s, submitted_at=r.submitted_at)

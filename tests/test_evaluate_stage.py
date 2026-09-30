@@ -14,8 +14,8 @@ STILL = (0.0,) * 13
 
 
 @pytest.fixture(scope="module")
-def swag():
-    return load_event("swag-contest")
+def talent():
+    return load_event("got-a-talent")
 
 
 @pytest.fixture(scope="module")
@@ -23,10 +23,11 @@ def walker():
     return load_policy(ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx")
 
 
-def test_an_entry_without_a_timeline_plays_the_events_command_for_20_s(swag, walker):
-    """Every swag entry reaching the Space today comes without a timeline; it must
-    still play the whole performance and stay eligible for ballots."""
-    result = evaluate(swag, walker)
+def test_an_entry_without_a_timeline_plays_the_events_command_for_20_s(talent, walker):
+    """Every MicroDuck Got a Talent entry reaching the Space today comes without
+    a timeline; it must still play the whole performance and stay eligible for
+    ballots."""
+    result = evaluate(talent, walker)
     assert result.trace.shape[0] == round(20.0 / CTRL_DT)
     assert result.seeds_finished == 1
     assert result.score == pytest.approx(20.0)
@@ -37,9 +38,9 @@ def test_an_entry_without_a_timeline_plays_the_events_command_for_20_s(swag, wal
     assert result.runner_version == RUNNER_VERSION
 
 
-def test_a_timeline_sets_the_performance_and_its_length(swag, walker):
+def test_a_timeline_sets_the_performance_and_its_length(talent, walker):
     timeline = Timeline(2.0, (0.0, 1.0), (STILL, (1.0,) + (0.0,) * 12))
-    result = evaluate(swag, walker, timeline)
+    result = evaluate(talent, walker, timeline)
     assert result.trace.shape[0] == 100
     assert result.score == pytest.approx(2.0)
 
@@ -58,11 +59,11 @@ class _RecordingPolicy:
         return np.zeros(NUM_JOINTS, dtype=np.float32)
 
 
-def test_the_events_own_command_reaches_the_policy_without_a_timeline(swag):
+def test_the_events_own_command_reaches_the_policy_without_a_timeline(talent):
     """With no timeline, evaluate() must still drive the policy on the event's
     own command for the whole time limit — not zeros, not something else."""
     command = (0.5,) + (0.0,) * 12
-    manifest = dataclasses.replace(swag, command=command, time_limit_s=1.0)
+    manifest = dataclasses.replace(talent, command=command, time_limit_s=1.0)
     policy = _RecordingPolicy()
     result = evaluate(manifest, policy)
     commands = [tuple(float(v) for v in obs[48:61]) for obs in policy.observed]

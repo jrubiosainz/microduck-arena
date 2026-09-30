@@ -156,7 +156,7 @@ def _timeline(tmp_path):
 
 
 def test_score_on_a_stage_summarises_the_performance(tmp_path, capsys):
-    assert main(["score", REFERENCE, "--event", "swag-contest", "--timeline", str(_timeline(tmp_path))]) == 0
+    assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(_timeline(tmp_path))]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == "stage: 2.00 s played, timeline.json (2 keyframes)"
     assert re.fullmatch(r"fell: (no|at \d+\.\d\d s)", lines[1])
@@ -164,7 +164,7 @@ def test_score_on_a_stage_summarises_the_performance(tmp_path, capsys):
 
 
 def test_score_on_a_stage_without_a_timeline_plays_the_events_command(capsys):
-    assert main(["score", REFERENCE, "--event", "swag-contest"]) == 0
+    assert main(["score", REFERENCE, "--event", "got-a-talent"]) == 0
     assert capsys.readouterr().out.splitlines()[0] == "stage: 20.00 s played, the event's default command"
 
 
@@ -176,21 +176,21 @@ def test_a_timeline_on_a_race_is_refused(tmp_path, capsys):
 def test_a_malformed_timeline_exits_1_with_where(tmp_path, capsys):
     path = tmp_path / "timeline.json"
     path.write_text('{"timeline_version": 1, "duration_s": 2.0, "keyframes": [{"t": 0.5}]}')
-    assert main(["score", REFERENCE, "--event", "swag-contest", "--timeline", str(path)]) == 1
+    assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(path)]) == 1
     assert "keyframes[0].t" in capsys.readouterr().err
 
 
 def test_a_timeline_that_is_not_json_exits_1(tmp_path, capsys):
     path = tmp_path / "timeline.json"
     path.write_text("{nope")
-    assert main(["score", REFERENCE, "--event", "swag-contest", "--timeline", str(path)]) == 1
+    assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(path)]) == 1
     assert "not a JSON file" in capsys.readouterr().err
 
 
 def test_a_stage_run_is_recorded_and_boarded(tmp_path, capsys):
     store = str(tmp_path / "store")
-    assert main(["score", REFERENCE, "--event", "swag-contest", "--timeline", str(_timeline(tmp_path)),
+    assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(_timeline(tmp_path)),
                  "--user", "alice", "--store", store]) == 0
     capsys.readouterr()
-    assert main(["board", "--event", "swag-contest", "--store", store]) == 0
+    assert main(["board", "--event", "got-a-talent", "--store", store]) == 0
     assert re.search(r"^\s*1\s+alice\b.*2\.000s", capsys.readouterr().out, re.MULTILINE)

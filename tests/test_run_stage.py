@@ -12,8 +12,8 @@ STILL = (0.0,) * 13
 
 
 @pytest.fixture(scope="module")
-def swag():
-    return load_event("swag-contest")
+def talent():
+    return load_event("got-a-talent")
 
 
 @pytest.fixture(scope="module")
@@ -35,23 +35,23 @@ class _RecordingPolicy:
         return np.zeros(NUM_JOINTS, dtype=np.float32)
 
 
-def test_a_stage_plays_exactly_its_duration(swag, walker):
-    outcome = run_stage(swag, walker, constant_timeline(STILL, 3.0), seed=1)
+def test_a_stage_plays_exactly_its_duration(talent, walker):
+    outcome = run_stage(talent, walker, constant_timeline(STILL, 3.0), seed=1)
     assert outcome.status == "finish"
     assert outcome.trace.shape[0] == round(3.0 / CTRL_DT)
     assert outcome.time_s == pytest.approx(3.0)
     assert outcome.progress_m == 0.0 and outcome.start_progress_m == 0.0
 
 
-def test_a_fall_does_not_stop_a_performance(swag):
+def test_a_fall_does_not_stop_a_performance(talent):
     """The same limp policy is a fall on a lane; on a stage it plays to the end."""
     assert run_once(load_event("sprint-2m"), _ZeroPolicy(), seed=1).status == "fall"
-    outcome = run_stage(swag, _ZeroPolicy(), constant_timeline(STILL, 3.0), seed=1)
+    outcome = run_stage(talent, _ZeroPolicy(), constant_timeline(STILL, 3.0), seed=1)
     assert outcome.status == "finish"
     assert outcome.trace.shape[0] == round(3.0 / CTRL_DT)
 
 
-def test_each_step_observes_the_command_at_its_time(swag):
+def test_each_step_observes_the_command_at_its_time(talent):
     """The settle plays the first keyframe; timed step k plays command_at(k * CTRL_DT).
     A keyframe at 0.3 s is first seen at step 15, although 15 * 0.02 < 0.3 in floating point."""
     first = (0.0,) * 13
@@ -59,9 +59,9 @@ def test_each_step_observes_the_command_at_its_time(swag):
     look = (0.0, 0.0, 0.0, -0.25, 0.0, 0.0, 0.0) + (0.0,) * 5 + (0.25,)
     timeline = Timeline(1.5, (0.0, 0.3, 1.0), (first, sit, look))
     policy = _RecordingPolicy()
-    run_stage(swag, policy, timeline, seed=1)
+    run_stage(talent, policy, timeline, seed=1)
 
-    settle_steps = round(swag.start.settle_s / CTRL_DT)
+    settle_steps = round(talent.start.settle_s / CTRL_DT)
     commands = [tuple(float(v) for v in obs[48:61]) for obs in policy.observed]
     assert len(commands) == settle_steps + round(1.5 / CTRL_DT)
     assert set(commands[:settle_steps]) == {first}
@@ -71,9 +71,9 @@ def test_each_step_observes_the_command_at_its_time(swag):
     assert timed[-1] == look
 
 
-def test_a_stage_run_is_deterministic(swag, walker):
+def test_a_stage_run_is_deterministic(talent, walker):
     timeline = constant_timeline(STILL, 2.0)
-    a = run_stage(swag, walker, timeline, seed=1)
-    b = run_stage(swag, walker, timeline, seed=1)
+    a = run_stage(talent, walker, timeline, seed=1)
+    b = run_stage(talent, walker, timeline, seed=1)
     assert np.array_equal(a.trace, b.trace)
     assert np.array_equal(a.settle, b.settle)

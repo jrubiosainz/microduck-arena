@@ -29,13 +29,13 @@ def test_seated_and_standing_follow_height_and_tilt():
 
 def test_a_fall_is_timed_where_a_lane_would_have_stopped():
     """Tipped past 60 degrees for 0.3 s (15 steps) straight; a shorter tip resets the count."""
-    term = load_event("swag-contest").termination
+    term = load_event("got-a-talent").termination
     trace = np.concatenate([frames(50), frames(14, tilt=80.0), frames(10), frames(20, tilt=80.0)])
     assert fell_at(trace, term) == pytest.approx((50 + 14 + 10 + 15) * CTRL_DT)
 
 
 def test_leaning_short_of_the_rule_is_no_fall():
-    assert fell_at(frames(100, tilt=55.0), load_event("swag-contest").termination) is None
+    assert fell_at(frames(100, tilt=55.0), load_event("got-a-talent").termination) is None
 
 
 class _ZeroPolicy:

@@ -197,7 +197,7 @@ uv run arena score $REF --event sprint-2m --user me --name reference --store ~/a
 uv run arena board --event sprint-2m --store ~/arena-board
 
 # A stage event plays a command timeline (arena/timeline.py) instead of racing:
-uv run arena score $REF --event swag-contest --timeline timeline.json
+uv run arena score $REF --event got-a-talent --timeline timeline.json
 ```
 
 ## What a policy has to be
