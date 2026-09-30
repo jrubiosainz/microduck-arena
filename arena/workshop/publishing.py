@@ -39,7 +39,7 @@ def publish_args(run, checkpoint: int, repo: str, name: str, description: str, e
     # `--description=<text>`: as two words, a description starting with "-" reads as an option.
     args = ["publish", "--run", str(run.path), "--checkpoint", str(checkpoint), "--repo", repo,
             f"--name={slug(name)}", f"--description={description}"]
-    if event.sweep.lo < event.sweep.hi:
+    if event.sweep and event.sweep.lo < event.sweep.hi:
         args += ["--twist-help", SPEED_TWIST]
     if allow_dirty:
         args.append("--allow-dirty")
