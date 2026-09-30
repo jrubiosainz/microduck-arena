@@ -7,7 +7,7 @@ import { renderHome } from "./home.js";
 
 vi.mock("./api.js", () => ({
   getEvents: async () => [{
-    id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", rig: "legs",
+    id: "sprint-2m", title: "2 m Sprint", category: "race", rig: "legs",
     length_m: 2, slope_deg: 0,
     sweep_lo: 0.2, sweep_hi: 1.2, sweep_step: 0.05, sweep_count: 21,
   }],

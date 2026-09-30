@@ -70,20 +70,11 @@ def _load_and_evaluate(path: Path, manifest, command_vx: float | None = None):
     return policy, evaluate_at(manifest, policy, command_vx)
 
 
-def _event_or_404(event_id: str, must_be_open: bool = False):
+def _event_or_404(event_id: str):
     try:
-        manifest = load_event(event_id)
+        return load_event(event_id)
     except ManifestError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    if must_be_open and manifest.status != "open":
-        # 409, not 404: the event exists, is on the programme, and has a page —
-        # it simply has no physics of its own yet. Its course is the sprint's, so
-        # a time recorded here would be a sprint time wearing another name.
-        raise HTTPException(
-            status_code=409,
-            detail=f"{manifest.title} is not open yet — its course has not been built.",
-        )
-    return manifest
 
 
 def _speed(manifest, value: str | None) -> float | None:
@@ -122,9 +113,7 @@ async def _race(
     the policy already lives with its author, so there is nothing here to
     store — `submit` records a link built from it rather than a blob.
     """
-    # must_be_open: `_race` is the single door both `try` and `submit` go
-    # through, so guarding here covers both without either having to remember.
-    manifest = _event_or_404(event_id, must_be_open=True)
+    manifest = _event_or_404(event_id)
 
     if repo_id:
         try:

@@ -201,44 +201,13 @@ def test_a_missing_sweep_section_is_rejected(tmp_path):
         load_manifest(path)
 
 
-def test_every_event_declares_a_status_and_the_shipped_ones_are_valid():
-    from arena.manifest import STATUSES
-
-    for m in all_events():
-        assert m.status in STATUSES, f"{m.id}: {m.status!r}"
-
-
-def test_the_open_events_are_the_three_originals_and_the_swag_contest():
-    assert {m.id for m in all_events() if m.status == "open"} == {
-        "sprint-2m",
-        "roller-sprint-2m",
-        "hill-climb-1m5",
-        "swag-contest",
-    }
-
-
-def test_the_four_new_ones_are_planned_rather_than_racing_a_borrowed_course():
-    """They copy the sprint's physics so they can exist on the programme. Open
-    would mean a time recorded under one of their names is a sprint time."""
-    assert {m.id for m in all_events() if m.status == "planned"} == {
-        "highest-jump",
-        "roller-slide",
-        "rough-ground",
-        "hold-your-ground",
-    }
-
-
-# The programme as designed on 2026-09-16. Written out rather than derived, so
+# The programme. Written out rather than derived, so
 # that adding an event fails this test until someone chooses its category on
 # purpose — which is the whole reason the field is required.
 EXPECTED_CATEGORIES = {
     "sprint-2m": "race",
     "roller-sprint-2m": "race",
     "hill-climb-1m5": "race",
-    "roller-slide": "race",
-    "highest-jump": "challenge",
-    "hold-your-ground": "challenge",
-    "rough-ground": "challenge",
     "swag-contest": "showcase",
 }
 
@@ -254,36 +223,23 @@ def test_an_unknown_category_is_refused(tmp_path):
 
 
 def test_a_missing_category_is_refused(tmp_path):
-    """No default: `status` and `order` have a safe one, `category` does not.
+    """No default: `order` has a safe one, `category` does not.
     Defaulting to "race" is exactly the bug this field exists to fix."""
     path = write_manifest(tmp_path, root=GOOD["root"].replace('category="race"\n', ""))
     with pytest.raises(ManifestError, match="missing 'category'"):
         load_manifest(path)
 
 
-def test_a_missing_status_defaults_to_open(tmp_path):
-    """Every manifest written before this field existed is a real event."""
-    assert load_manifest(write_manifest(tmp_path)).status == "open"
-
-
-def test_an_unknown_status_is_rejected(tmp_path):
-    with pytest.raises(ManifestError, match="status"):
-        load_manifest(write_manifest(tmp_path, root=GOOD["root"] + 'status="someday"\n'))
-
-
 def test_the_programme_has_a_declared_order_with_the_sprint_first():
     """Declared, not derived: neither alphabetical nor filesystem order is the
     order a person wants to read a race card in."""
     programme = sorted(all_events(), key=lambda m: (m.order, m.title))
-    assert [m.id for m in programme[:4]] == [
+    assert [m.id for m in programme] == [
         "sprint-2m",
         "swag-contest",
         "roller-sprint-2m",
         "hill-climb-1m5",
     ]
-    # Everything raceable comes before everything that is not.
-    statuses = [m.status for m in programme]
-    assert statuses == sorted(statuses, key=lambda s: s != "open")
 
 
 def test_an_event_without_an_order_sorts_last_rather_than_first():

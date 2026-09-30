@@ -159,11 +159,11 @@ describe("byEvent: the player's rounds, best first", () => {
     // A null rank compared as a number sorts before every real one, which
     // would put the round a player never placed on at the top of their page.
     const groups = byEvent([
-      pub({ run_id: "none", event_id: "rough-ground", event_title: "Rough Ground",
+      pub({ run_id: "none", event_id: "hill-climb-1m5", event_title: "1.5 m Hill Climb",
             rank: null, on_board: false }),
       pub({ run_id: "third", rank: 3 }),
     ]);
-    expect(groups.map((g) => g.eventId)).toEqual(["sprint-2m", "rough-ground"]);
+    expect(groups.map((g) => g.eventId)).toEqual(["sprint-2m", "hill-climb-1m5"]);
     expect(groups[1].best).toBeNull();
   });
 

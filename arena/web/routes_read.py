@@ -29,7 +29,6 @@ def event_summary(manifest: Manifest) -> dict:
         "id": manifest.id,
         "title": manifest.title,
         "rig": manifest.rig,
-        "status": manifest.status,
         # What kind of event this is, for the flyer's label and its shadow
         # colour. The board and the race page do not read it.
         "category": manifest.category,

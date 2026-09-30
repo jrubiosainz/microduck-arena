@@ -274,13 +274,8 @@ export async function renderHome(root, state) {
   // with it.
   renderLive(frame.querySelector(".season-live-stage"), state, { framed: true }).catch(() => {});
 
-  // Only an open event has a board worth asking for.
   const boards = await Promise.all(
-    events.map((event) =>
-      event.status === "planned"
-        ? Promise.resolve({ rows: [] })
-        : getLeaderboard(event.id).catch(() => ({ rows: [] })),
-    ),
+    events.map((event) => getLeaderboard(event.id).catch(() => ({ rows: [] }))),
   );
   const rounds = el("section", "chapter chapter--wall fx-scanlines");
   const wall = el("div", "cabinets");

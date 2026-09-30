@@ -29,7 +29,7 @@ export function renderGuides(root, { guideId = "index", eventId, event, section 
     const breadcrumbs = document.createElement("nav");
     breadcrumbs.className = "guide-breadcrumbs";
     breadcrumbs.setAttribute("aria-label", "Breadcrumb");
-    breadcrumbs.append(event?.status === "open"
+    breadcrumbs.append(event
       ? link("← Back to challenge", raceHref(eventId))
       : link("← Back to challenges", menuHref));
     main.append(breadcrumbs);

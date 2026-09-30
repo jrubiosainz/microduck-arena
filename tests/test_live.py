@@ -34,11 +34,10 @@ def entry(run_id, at="2026-09-10T10:00:00Z", replay_ms=8000, user="alice"):
     return Entry(run_id, user, "2 m Sprint", at, replay_ms, "20260916T100500Z")
 
 
-def test_the_pool_is_ready_clips_of_open_events_that_are_not_withdrawn(tmp_path):
+def test_the_pool_is_ready_clips_that_are_not_withdrawn(tmp_path):
     store = LocalStore(tmp_path)
-    for run_id, event in (("A", "sprint-2m"), ("B", "sprint-2m"), ("C", "sprint-2m"),
-                          ("D", "highest-jump"), ("E", "sprint-2m")):
-        store.append(make_record(run_id=run_id, event_id=event, user=run_id.lower()), b"t")
+    for run_id in ("A", "B", "C", "D"):
+        store.append(make_record(run_id=run_id, event_id="sprint-2m", user=run_id.lower()), b"t")
     clip = lambda seconds: json.dumps({"rendered_at": "2026-09-16T10:05:00Z",
                                        "layouts": {"landscape": {"seconds": seconds}}}).encode()
     # A commentary file sitting in the clip folder is not read by the pool at
@@ -47,10 +46,9 @@ def test_the_pool_is_ready_clips_of_open_events_that_are_not_withdrawn(tmp_path)
                          "commentary.json": json.dumps({"plan": {"duration_ms": 20000}}).encode()})
     store.put_clip("B", {"clip.json": clip(13.8)})
     store.put_clip("C", {"clip.json": clip(8.0)})
-    store.put_clip("D", {"clip.json": clip(8.0)})
     # A replay that is not a whole number of 40 ms frames cannot be laid on
-    # the grid: E stays off the programme, like a run with no clip.
-    store.put_clip("E", {"clip.json": clip(8.033)})
+    # the grid: D stays off the programme, like a run with no clip.
+    store.put_clip("D", {"clip.json": clip(8.033)})
     store.withdraw(Withdrawal(run_id="C", event_id="sprint-2m", user="c",
                               withdrawn_at="2026-09-14T12:00:00Z"))
     entries = {e.run_id: e for e in pool(store)}

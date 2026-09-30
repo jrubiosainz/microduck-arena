@@ -39,12 +39,10 @@ class Entry:
 
 
 def pool(store) -> list[Entry]:
-    """Every run of an open event with a ready clip, not withdrawn."""
+    """Every run with a ready clip, not withdrawn."""
     withdrawn = {w.run_id for w in store.withdrawals()}
     entries = []
     for manifest in all_events():
-        if manifest.status != "open":
-            continue
         for record in store.runs(manifest.id):
             if record.run_id in withdrawn:
                 continue

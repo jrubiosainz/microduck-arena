@@ -5,7 +5,7 @@ from arena.manifest import all_events
 from arena.points import counting, receipts
 from tests.test_commentary_context import run
 
-EVENTS = {m.id: m for m in all_events() if m.status == "open"}
+EVENTS = {m.id: m for m in all_events()}
 
 
 def facts_for(record, *others):

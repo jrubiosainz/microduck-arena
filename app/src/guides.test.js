@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { renderGuides } from "./guides.js";
 import { renderEntryPanel } from "./race.js";
-import { flyer } from "./flyer.js";
 
 afterEach(() => document.body.replaceChildren());
 
@@ -39,13 +38,10 @@ describe("public guides", () => {
   });
 
   it("keeps each challenge's help within its own context", () => {
-    for (const id of ["sprint-2m", "roller-sprint-2m", "hill-climb-1m5", "swag-contest",
-      "highest-jump", "roller-slide", "rough-ground", "hold-your-ground"]) {
-      const planned = ["highest-jump", "roller-slide", "rough-ground", "hold-your-ground"].includes(id);
-      const root = show(null, null, { id, status: planned ? "planned" : "open" });
+    for (const id of ["sprint-2m", "roller-sprint-2m", "hill-climb-1m5", "swag-contest"]) {
+      const root = show(null, null, { id });
       expect(root.querySelector("article h1").textContent).not.toBe("Guide not found");
-      if (!planned) expect(root.querySelector(`a[href="#/e/${id}"]`)).not.toBeNull();
-      else expect(root.querySelector('a[href^="#/e/"]')).toBeNull();
+      expect(root.querySelector(`a[href="#/e/${id}"]`)).not.toBeNull();
       const links = [...root.querySelectorAll("article a")].map(a => a.getAttribute("href"));
       expect(links.filter(href => href.startsWith("#/"))).toEqual(["#/guides/train-a-policy"]);
     }
@@ -76,13 +72,11 @@ describe("public guides", () => {
     expect(root.querySelector("#publish")).toBeNull();
   });
 
-  it("gives planned cards a preview link without a race entry link", () => {
-    const card = flyer({
-      id: "highest-jump", title: "Highest Jump", status: "planned", category: "challenge",
-      rig: "legs", length_m: 2, slope_deg: 0, seeds: 5, time_limit_s: 50,
-      sweep_lo: 0.2, sweep_hi: 1.2, sweep_step: 0.05, sweep_count: 21,
-    }, []);
-    expect(card.querySelector('a[href="#/e/highest-jump/guide"]')).not.toBeNull();
-    expect(card.querySelector('a[href="#/e/highest-jump"]')).toBeNull();
+  it("sends a stale link to a removed challenge's guide back to the rounds", () => {
+    const root = document.createElement("div");
+    renderGuides(root, { eventId: "highest-jump", event: undefined });
+    expect(root.querySelector("article h1").textContent).toBe("Guide not found");
+    expect(root.querySelector('.guide-breadcrumbs a[href="#/"]')).not.toBeNull();
+    expect(root.querySelector('a[href^="#/e/"]')).toBeNull();
   });
 });

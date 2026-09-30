@@ -22,22 +22,14 @@ def record_run(app, **overrides):
     return record
 
 
-def test_events_lists_the_whole_programme_open_and_planned(client):
-    """Pinned on WHICH events are raceable, not on how many exist. A test that
-    counts events fails every time one is added, which teaches people to edit
-    the number rather than read the assertion."""
+def test_events_lists_the_whole_programme(client):
     api, _ = client
-    events = api.get("/api/events").json()["events"]
-    by_status = {e["id"]: e["status"] for e in events}
-
-    assert {i for i, s in by_status.items() if s == "open"} == {
+    assert {e["id"] for e in api.get("/api/events").json()["events"]} == {
         "sprint-2m",
         "roller-sprint-2m",
         "hill-climb-1m5",
         "swag-contest",
     }
-    # Planned events are on the programme too — the menu draws them as cards.
-    assert {i for i, s in by_status.items() if s == "planned"}
 
 
 def test_an_event_carries_what_the_page_needs_to_describe_it(client):
@@ -500,12 +492,11 @@ def test_voting_puts_points_on_the_ladder(client):
 
 
 def test_every_event_tells_the_page_what_kind_it_is(client):
-    """The flyer used to label all eight "Race". Three are not, and one is not
-    even timed — so the page has to be told, not left to guess from `metric`."""
+    """The swag contest is not a race, and not even timed — so the page has to
+    be told, not left to guess from `metric`."""
     api, _ = client
     events = {e["id"]: e.get("category") for e in api.get("/api/events").json()["events"]}
     assert events["sprint-2m"] == "race"
-    assert events["rough-ground"] == "challenge"
     assert events["swag-contest"] == "showcase"
 
 

@@ -8,11 +8,10 @@ import {
 } from "./home.js";
 
 const open = {
-  id: "sprint-2m", title: "2 m Sprint", status: "open", category: "race", rig: "legs",
+  id: "sprint-2m", title: "2 m Sprint", category: "race", rig: "legs",
   length_m: 2, slope_deg: 0,
   sweep_lo: 0.2, sweep_hi: 1.2, sweep_step: 0.05, sweep_count: 21,
 };
-const planned = { ...open, id: "best-jump", title: "Best Jump", status: "planned", category: "challenge" };
 const held = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
 
 describe("the masthead", () => {
@@ -286,21 +285,6 @@ describe("an open event's flyer", () => {
   });
 });
 
-describe("a planned event's flyer", () => {
-  it("is on the wall but is not a link", () => {
-    const el = flyer(planned, []);
-    expect(el.querySelector("a.challenge-link")).toBeNull();
-    expect(el.querySelector("div.challenge-link")).not.toBeNull();
-    expect(el.classList.contains("challenge-note--planned")).toBe(true);
-  });
-
-  it("says why it cannot be entered and never invites one", () => {
-    const el = flyer(planned, []);
-    expect(el.textContent).toContain("course not built yet");
-    expect(el.textContent).not.toContain("be the first");
-  });
-});
-
 const voted = {
   ...open,
   id: "swag-contest",
@@ -326,11 +310,6 @@ describe("a votable flyer", () => {
     expect(note.querySelector(".flyer-leader").textContent).toContain("no votes yet");
   });
 
-  it("hides the button on a planned round -- there is no booth to send anyone to yet", () => {
-    const note = flyer({ ...voted, status: "planned" }, []);
-    expect(note.querySelector(".vote-button")).toBeNull();
-  });
-
   it("leaves a timed flyer alone", () => {
     const note = flyer(open, held);
     expect(note.querySelector(".vote-button")).toBeNull();
@@ -346,7 +325,6 @@ describe("the flyer's category", () => {
   it("colours the offset shadow by category", () => {
     const shadowOf = (category) => flyer({ ...open, category }, []).className;
     expect(shadowOf("race")).toContain("challenge-note--race");
-    expect(shadowOf("challenge")).toContain("challenge-note--challenge");
     expect(shadowOf("showcase")).toContain("challenge-note--showcase");
   });
 

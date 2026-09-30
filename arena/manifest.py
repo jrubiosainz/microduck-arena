@@ -14,14 +14,10 @@ from .constants import CMD_SIZE
 EVENTS_DIR = Path(__file__).parent / "events"
 
 RIGS = ("legs", "rollers")
-STATUSES = {"open", "planned"}
 
-# What KIND of event this is, which is not derivable from anything else the
-# manifest holds: `highest-jump` and `rough-ground` both score on
-# `mean_finish_time` today and are a challenge and a challenge only by
-# intent. A race is timed over a course, a challenge measures something
-# else, a showcase is judged by vote rather than measured at all.
-CATEGORIES = {"race", "challenge", "showcase"}
+# What KIND of event this is, for the front page's label. A race is timed over
+# a course, a showcase is judged by vote rather than measured at all.
+CATEGORIES = {"race", "showcase"}
 METRICS = ("mean_finish_time", "votes")
 COURSE_KINDS = ("lane",)
 
@@ -159,13 +155,7 @@ class Manifest:
     id: str
     title: str
     rig: str
-    # "open" or "planned". A planned event is real data — it appears on the
-    # programme and has a course — but it cannot be raced yet, because its
-    # physics is the sprint's and a time recorded under its name would be a
-    # false result on a board other people read. Flipping it to "open" is what
-    # makes it real, and is meant to happen alongside a real course.
-    status: str
-    # "race", "challenge" or "showcase". Presentation only: the front page
+    # "race" or "showcase". Presentation only: the front page
     # labels and colours a flyer by it. Nothing that scores a run may read it.
     category: str
     # Where this sits on the programme. Declared rather than derived, because
@@ -273,9 +263,6 @@ def load_manifest(path: Path) -> Manifest:
         raw = tomllib.load(fh)
 
     order = int(raw.get("order", 100))
-    status = raw.get("status", "open")
-    if status not in STATUSES:
-        raise ManifestError(f"{path}: unknown status {status!r}, expected one of {STATUSES}")
     category = _require(raw, "category", str(path))
     if category not in CATEGORIES:
         raise ManifestError(
@@ -349,7 +336,6 @@ def load_manifest(path: Path) -> Manifest:
         id=_require(raw, "id", str(path)),
         title=_require(raw, "title", str(path)),
         rig=rig,
-        status=status,
         category=category,
         order=order,
         time_limit_s=float(_require(raw, "time_limit_s", str(path))),

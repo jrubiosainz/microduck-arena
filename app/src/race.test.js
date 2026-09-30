@@ -361,8 +361,8 @@ describe("raceHall: the page's frame", () => {
   });
 
   it("names the kind of event over its title, as the flyer did", () => {
-    const hall = raceHall({ ...event, title: "2 m Sprint", category: "challenge" });
-    expect(hall.querySelector(".raceeyebrow").textContent).toBe("CHALLENGE");
+    const hall = raceHall({ ...event, title: "2 m Sprint", category: "showcase" });
+    expect(hall.querySelector(".raceeyebrow").textContent).toBe("SHOWCASE");
     // An event whose category the server did not send draws no empty line.
     expect(raceHall({ ...event, title: "x" }).querySelector(".raceeyebrow")).toBeNull();
   });
@@ -424,16 +424,14 @@ describe("raceHall: the page's frame", () => {
 describe("otherRounds: the way on, under the board", () => {
   // `event` at the top of this file carries what formatEventFacts reads; the
   // programme is what GET /api/events hands the page, so it carries it too.
-  const round = (id, title, status, category, rig = "legs", extra = {}) => ({
-    ...event, id, title, status, category, rig, ...extra,
+  const round = (id, title, category, rig = "legs", extra = {}) => ({
+    ...event, id, title, category, rig, ...extra,
   });
   const programme = [
-    round("sprint-2m", "2 m Sprint", "open", "race"),
-    round("roller-sprint-2m", "2 m Roller Sprint", "open", "race", "rollers"),
-    round("hill-climb-1m5", "1.5 m Hill Climb", "open", "race"),
-    round("swag-contest", "Swag Contest", "open", "showcase", "legs", { vote: {} }),
-    round("highest-jump", "Highest Jump", "planned", "challenge"),
-    round("rough-ground", "Rough Ground", "planned", "challenge"),
+    round("sprint-2m", "2 m Sprint", "race"),
+    round("roller-sprint-2m", "2 m Roller Sprint", "race", "rollers"),
+    round("hill-climb-1m5", "1.5 m Hill Climb", "race"),
+    round("swag-contest", "Swag Contest", "showcase", "legs", { vote: {} }),
   ];
   const here = programme[0];
 
@@ -461,8 +459,6 @@ describe("otherRounds: the way on, under the board", () => {
     const cards = [...strip.querySelectorAll(".challenge-note")];
     expect(cards[0].querySelector(".flyer-leader-name").textContent).toBe("ann");
     expect(cards[1].querySelector(".flyer-leader-name").textContent).toBe("be the first");
-    // A planned event says so rather than inviting an entry it cannot take.
-    expect(cards[3].querySelector(".flyer-leader-name").textContent).toBe("course not built yet");
   });
 });
 

@@ -625,13 +625,10 @@
 .challenge-note:nth-child(2n) { rotate: var(--rotate-1-0); }
 
 .challenge-note--race { --fx-shadow-color: var(--orange); }
-.challenge-note--challenge { --fx-shadow-color: var(--magenta); }
-/* The charter's shadow rule names the magenta/cyan pair, which covers two
-   categories. The third takes yellow bec, which the charter already spends on
-   stickers and bands. Recorded in the design doc as a deliberate extension. */
+/* Yellow bec is outside the charter's magenta/cyan shadow pair; the charter
+   already spends it on stickers and bands. Recorded in the design doc as a
+   deliberate extension. */
 .challenge-note--showcase { --fx-shadow-color: var(--yellow); }
-
-.challenge-note--planned { background: var(--warm-paper); color: var(--ink-70); }
 
 .challenge-link {
   display: block;

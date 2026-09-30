@@ -335,14 +335,13 @@ export function otherRounds(events, event, boards) {
  *
  * Separate from otherRounds so that the shape is testable without a network:
  * this is the part that fetches, and it asks for a leaderboard per card and a
- * still per card. A planned event has no board worth asking for.
+ * still per card.
  */
 export async function keepRacing(root, event) {
   const events = await getEvents();
   const others = events.filter((e) => e.id !== event.id);
   const boards = new Map();
   await Promise.all(others.map(async (e) => {
-    if (e.status === "planned") return;
     boards.set(e.id, (await getLeaderboard(e.id).catch(() => ({ rows: [] }))).rows);
   }));
   const strip = otherRounds(events, event, boards);

@@ -7,7 +7,7 @@
 // how a view ends up dragging a whole other view's imports behind it.
 
 import { formatEventFacts, formatScore } from "./format.js";
-import { eventGuideHref, raceHref } from "./router.js";
+import { raceHref } from "./router.js";
 import { voteButton } from "./votebutton.js";
 
 function el(tag, className, text) {
@@ -17,15 +17,11 @@ function el(tag, className, text) {
   return node;
 }
 
-const CATEGORIES = new Set(["race", "challenge", "showcase"]);
+const CATEGORIES = new Set(["race", "showcase"]);
 
 /** Who holds this event, at the size a person scans the wall by. */
-function leaderLine(event, planned, rows) {
+function leaderLine(event, rows) {
   const line = el("p", "flyer-leader");
-  if (planned) {
-    line.append(el("span", "flyer-leader-name", "course not built yet"));
-    return line;
-  }
   const star = el("img", "challenge-star");
   star.src = "/star-yellow.webp";
   star.alt = "";
@@ -45,20 +41,18 @@ function leaderLine(event, planned, rows) {
 
 /** One event on the wall: its still, who holds it, and what it is. */
 export function flyer(event, rows) {
-  const planned = event.status === "planned";
   const known = CATEGORIES.has(event.category);
   const classes = ["challenge-note", "fx-shadow-card"];
   // An unrecognised category keeps the neutral ink shadow the base rule sets,
   // rather than borrowing another category's colour.
   if (known) classes.push(`challenge-note--${event.category}`);
-  if (planned) classes.push("challenge-note--planned");
   const note = el("article", classes.join(" "));
   note.append(el("span", "flyer-tape"));
-  if (event.vote && !planned) {
+  if (event.vote) {
     note.append(voteButton(event, { variant: "sticker" }));
   }
-  const link = el(planned ? "div" : "a", "challenge-link");
-  if (!planned) link.href = raceHref(event.id);
+  const link = el("a", "challenge-link");
+  link.href = raceHref(event.id);
   const facts = formatEventFacts(event)
     .filter((fact) => fact.label !== "speed sweep")
     .map((fact) => fact.value)
@@ -67,14 +61,9 @@ export function flyer(event, rows) {
   if (known) link.append(el("span", "eyebrow", event.category.toUpperCase()));
   link.append(
     el("h4", "flyer-title", event.title),
-    leaderLine(event, planned, rows),
+    leaderLine(event, rows),
     el("p", "challenge-facts", facts),
   );
   note.append(link);
-  if (planned) {
-    const preview = el("a", "help-link", "Preview the challenge ?");
-    preview.href = eventGuideHref(event.id);
-    note.append(preview);
-  }
   return note;
 }

@@ -8,7 +8,7 @@ together for one run, at the moment the reserve needs it.
 
 from huggingface_hub import get_token
 
-from ..manifest import Manifest, all_events
+from ..manifest import all_events
 from ..points import counting, receipts
 from ..store import RunRecord
 from .context import Fact, result_facts
@@ -28,10 +28,6 @@ def router_provider(model: str, token: str):
 def hub_token(config) -> str | None:
     """The Space's HF_TOKEN, or the developer's own Hub session locally."""
     return config.hf_token or get_token()
-
-
-def open_events() -> dict[str, Manifest]:
-    return {m.id: m for m in all_events() if m.status == "open"}
 
 
 def find_run(store, run_id: str) -> RunRecord:
@@ -81,7 +77,7 @@ def gather(store, record: RunRecord, lore: Lore, book, callback: bool) -> list[F
     Read at the moment of writing, not at publish: the standings, the records
     and the memories are the ones true when Peter and Ray open their mouths.
     """
-    events = open_events()
+    events = {m.id: m for m in all_events()}
     withdrawn = frozenset(w.run_id for w in store.withdrawals())
     all_runs = [r for m in all_events() for r in store.runs(m.id)]
     s = situation(record, all_runs, withdrawn, events)

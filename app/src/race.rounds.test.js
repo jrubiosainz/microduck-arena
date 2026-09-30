@@ -9,8 +9,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-const event = (id, title, status = "open", category = "race") => ({
-  id, title, status, category, rig: "legs",
+const event = (id, title, category = "race") => ({
+  id, title, category, rig: "legs",
   seeds: 5, sweep_count: 5, sweep_lo: 0.2, sweep_hi: 1.2, sweep_step: 0.05,
   length_m: 2, slope_deg: 0,
 });
@@ -19,8 +19,7 @@ const PROGRAMME = [
   event("sprint-2m", "2 m Sprint"),
   event("roller-sprint-2m", "2 m Roller Sprint"),
   event("hill-climb-1m5", "1.5 m Hill Climb"),
-  event("swag-contest", "Swag Contest", "open", "showcase"),
-  event("highest-jump", "Highest Jump", "planned", "challenge"),
+  event("swag-contest", "Swag Contest", "showcase"),
 ];
 
 const asked = [];
@@ -48,14 +47,13 @@ describe("keepRacing", () => {
     expect(kinds).toEqual(["main.", "section.rounds-on", "footer."]);
   });
 
-  it("asks for a board per open card and none for a planned one", async () => {
+  it("asks for a board per other card", async () => {
     asked.length = 0;
     const root = document.createElement("div");
     root.append(document.createElement("footer"));
     await keepRacing(root, PROGRAMME[0]);
-    // Every other round is on the wall; only the open ones cost a board.
     expect(asked).toEqual(["roller-sprint-2m", "hill-climb-1m5", "swag-contest"]);
-    expect(root.querySelectorAll(".rounds-on .challenge-note")).toHaveLength(4);
+    expect(root.querySelectorAll(".rounds-on .challenge-note")).toHaveLength(3);
   });
 
   it("appends when there is no footer to sit before", async () => {
