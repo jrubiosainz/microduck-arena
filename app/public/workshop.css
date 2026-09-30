@@ -1,434 +1,74 @@
-/* The workshop: a local tool page, one column, readable at 1280 px and on a
-   narrow window. .flyer gives every zone its card (paper, ink border, offset
-   shadow); this sheet only places things and reopens the font size and width
-   a photocopy-sized flyer sets, since a zone here holds a form, not a caption.
-   Colour, type and spacing are all design/tokens.css — no raw hex. A note on
-   what a step is doing is ink; one on what went wrong (a missing tool, a
-   failed step: `.bad`) is orange-inked, as the race page's bad status is:
-   magenta is a signal colour, 3.2 : 1 as text on paper. */
-
-/* shell.css's two ground rules, which this page does not load: a zone's
-   width includes its padding and border, or a 100%-wide card runs past a
-   narrow window; and the attribute wins over any display set here, or a
-   hidden form (the token field once logged in) shows anyway. */
-*, *::before, *::after { box-sizing: border-box; }
-[hidden] { display: none !important; }
-
-html, body {
-  margin: 0;
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--body);
-}
-
-/* The browser's own 13 px, under 17 px labels, otherwise. */
-.workshop input {
-  font: inherit;
-}
-
-.workshop .bad {
-  color: var(--orange-inked);
-}
-
-.workshop {
-  max-width: var(--space-content-column);
-  margin: 0 auto;
-  padding: var(--space-gutter-max) var(--space-gutter-max) var(--space-chapter-bottom-min);
-}
-
-.workshop__head {
-  margin-bottom: var(--space-title-to-grid-max);
-}
-
-.workshop__head h1 {
-  margin: 4px 0 8px;
-  font-family: var(--type-section-title-family);
-  font-weight: var(--type-section-title-weight);
-  font-size: var(--type-section-title-size);
-  line-height: var(--type-section-title-line);
-  letter-spacing: var(--type-section-title-tracking);
-  text-transform: uppercase;
-}
-
-#arena-link {
-  color: var(--sky-inked);
-}
-
-/* Reopen the flyer's photocopy sizing: a zone is a full-width card that holds
-   a form and a log, not a small taped-up caption. */
-.zone {
-  width: 100%;
-  max-width: none;
-  margin-bottom: var(--space-gutter-max);
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line);
-}
-
-.zone > .eyebrow {
-  padding-bottom: 10px;
-  margin-bottom: var(--space-card-padding-min);
-  border-bottom: 2px solid var(--ink);
-}
-
-/* On a narrow window a button's label wraps rather than running past its card. */
-.zone .button {
-  max-width: 100%;
-  white-space: normal;
-}
-
-/* ── Preflight ──────────────────────────────────────────────────────────── */
-
-.preflight {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0 0 var(--space-card-padding-min);
-  padding: 0;
-  list-style: none;
-}
-
-.preflight__ok,
-.preflight__checking,
-.preflight__missing {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 10px;
-}
-
-/* The label wraps beside its tick rather than dropping under it. */
-.preflight li > span {
-  flex: 1 1 0;
-}
-
-.preflight__ok::before {
-  content: "✓";
-  color: var(--lime-inked);
-  font-weight: 700;
-}
-
-.preflight__checking {
-  color: var(--ink-70);
-}
-
-.preflight__missing {
-  color: var(--orange-inked);
-}
-
-.preflight__missing code {
-  flex-basis: 100%;
-  display: block;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-  color: var(--ink);
-  background: var(--warm-paper);
-  border: 1px solid var(--ink);
-  padding: 6px 8px;
-}
-
-.preflight__where,
-.preflight__gh {
-  margin: 0 0 8px;
-}
-
-.preflight__login {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-
-.preflight__login input {
-  border: 2px solid var(--ink);
-  background: var(--paper);
-  color: var(--ink);
-  padding: 6px 8px;
-}
-
-.preflight__note {
-  color: var(--orange-inked);
-  flex-basis: 100%;
-}
-
-.preflight__help { flex-basis: 100%; margin: 0; color: var(--ink); }
-
-/* ── Train ──────────────────────────────────────────────────────────────── */
-
-.train-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-card-padding-min);
-}
-
-.train-form fieldset {
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.field input {
-  border: 2px solid var(--ink);
-  background: var(--paper);
-  color: var(--ink);
-  padding: 6px 8px;
-}
-
-.knobs,
-.recipe {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* A knob is one grid row: its label, the range, and the value it reads. */
-.knob {
-  display: grid;
-  grid-template-columns: minmax(10em, 1fr) minmax(10em, 2fr) 3em;
-  align-items: center;
-  gap: 10px;
-}
-
-.knob output {
-  font-family: var(--mono);
-  text-align: right;
-}
-
-/* The orange button sits at its own width, as Test's and Publish's do,
-   rather than stretched across the column. */
-.train-form > .button {
-  align-self: flex-start;
-}
-
-.train-form__where,
-.train-form__status {
-  margin: 0;
-}
-
-.train-form__status {
-  color: var(--ink-70);
-}
-
-.training__head {
-  margin: 0 0 8px;
-}
-
-.training__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-/* Only ever why a Stop or a fetch failed. */
-.training__note {
-  margin: 8px 0 0;
-  color: var(--orange-inked);
-}
-
-/* Jobs launched before, the workshop closed since: each can still be fetched or stopped. */
-.job {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: var(--space-card-padding-min);
-}
-
-.job .mono-label,
-.job__note {
-  flex-basis: 100%;
-  margin: 0;
-}
-
-.job__note {
-  color: var(--ink-70);
-}
-
-.curve {
-  margin: var(--space-card-padding-min) 0 0;
-  padding: 0;
-}
-
-/* A poll that failed to reach the server: shown under the training header,
-   empty (and so invisible) once a poll succeeds again. */
-.follow-status {
-  margin: 0 0 var(--space-card-padding-min);
-  color: var(--orange-inked);
-}
-
-.curve svg {
-  display: block;
-  width: 100%;
-  height: 120px;
-  color: var(--orange-inked);
-}
-
-.curve figcaption {
-  margin-top: 6px;
-}
-
-.log {
-  margin: var(--space-card-padding-min) 0 0;
-  padding: var(--space-card-padding-min);
-  max-height: 18rem;
-  overflow: auto;
-  background: var(--ink);
-  color: var(--paper);
-  font-family: var(--mono);
-  font-size: 0.85rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-
-/* No training yet: no empty black band. */
-.log:empty {
-  display: none;
-}
-
-.failed {
-  padding: var(--space-card-padding-min);
-  margin-bottom: var(--space-gutter-max);
-  background: var(--paper);
-  border: 2px solid var(--magenta);
-  color: var(--orange-inked);
-}
-
-@media (max-width: 640px) {
-  .knob {
-    grid-template-columns: 1fr;
-    row-gap: 4px;
-  }
-}
-
-/* ── Test ───────────────────────────────────────────────────────────────── */
-
-.runs {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-card-padding-min);
-  margin-bottom: var(--space-card-padding-min);
-}
-
-.run {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.run .mono-label {
-  flex-basis: 100%;
-  margin: 0 0 2px;
-}
-
-.checkpoint {
-  border: 2px solid var(--ink);
-  background: var(--paper);
-  color: var(--ink);
-  border-radius: 999px;
-  padding: 4px 14px;
-  font-family: var(--mono);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.checkpoint[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-.runs__empty {
-  color: var(--ink-70);
-}
-
-.trial__status {
-  margin: var(--space-card-padding-min) 0 0;
-  color: var(--ink-70);
-}
-
-.trial__score {
-  margin: var(--space-card-padding-min) 0 4px;
-  font: 700 1.5rem/1.2 var(--display);
-}
-
-.trial__seeds {
-  margin: 0 0 4px;
-}
-
-.trial__caveat {
-  margin: 0;
-  color: var(--ink-70);
-}
-
-/* ── Publish ────────────────────────────────────────────────────────────── */
-
-.code__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: var(--space-card-padding-min) 0;
-}
-
-.code__actions input[type="url"] {
-  border: 2px solid var(--ink);
-  background: var(--paper);
-  color: var(--ink);
-  padding: 6px 8px;
-  flex: 1 1 16rem;
-}
-
-.code__output {
-  margin: 0;
-  color: var(--orange-inked);
-}
-
-.publish {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-card-padding-min);
-}
-
-.publish__what {
-  margin: 0;
-}
-
-.publish .livery { margin: 0 0 var(--space-2, 8px); }
-.publish__speed select { font: inherit; }
-
-.publish__dirty {
-  margin: 0;
-  padding: var(--space-card-padding-min);
-  background: var(--warm-paper);
-  border: 1px solid var(--magenta);
-  color: var(--orange-inked);
-}
-
-.publish__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.publish__status {
-  margin: 0;
-  color: var(--ink-70);
-}
-
-.publish__card {
-  margin: 0;
-  padding: var(--space-card-padding-min);
-  max-height: 18rem;
-  overflow: auto;
-  background: var(--ink);
-  color: var(--paper);
-  font-family: var(--mono);
-  font-size: 0.85rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
+/* The workshop's own pieces, over the Arena's sheets (club.css on the home, race.css on the other
+   pages): only what the Arena has no component for. Colours from design/tokens.css, the charter's
+   faces only. */
+
+/* The Arena's full-bleed bands reach past the window on its front; the workshop's pages do not scroll sideways. */
+html, body { overflow-x: clip; }
+
+/* ── a quiet button: the charter's small sticker, never a second orange block ─ */
+.quiet {
+  display: inline-block; padding: 4px 10px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink);
+  font-family: var(--type-sticker-family); font-size: var(--type-sticker-size); letter-spacing: var(--type-sticker-tracking);
+  text-transform: uppercase; text-decoration: none; cursor: pointer;
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) 0 var(--ink);
+}
+.quiet:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.quiet:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+.sticker-paper { background: var(--paper); }
+.note, .hint { margin: 0; font-size: 0.8rem; color: var(--ink-70); white-space: pre-wrap; }
+.note.bad, .hint.bad { color: var(--orange-inked); }
+
+/* ── the account: the Arena's player card, a button while logged out ─ */
+button.player-card-in { font: inherit; cursor: pointer; }
+/* Waiting, the plate is not a button: it does not rise under the pointer. */
+button.player-card-in:disabled { cursor: progress; translate: none; --fx-shadow-size: var(--shadow-card-min); }
+/* The Arena keeps its score on one line, as "to Hugging Face" stays; the two longer notes wrap in the plate. */
+button.player-card-in:not([data-phase="out"]) .player-card-score { white-space: normal; }
+.account-note { display: block; max-width: 10.5rem; margin: 8px 0 0; font-size: 0.75rem; color: var(--paper); }
+/* The login page's link hangs under the plate, so the plate does not move when it appears. */
+.player-card { position: relative; }
+a.account-note { position: absolute; top: 100%; margin-top: 10px; }
+.account-note--bad { color: var(--yellow); white-space: pre-wrap; }
+
+/* ── the home: the pitch on the left, the post-it on the right ─ */
+.door--ws { align-items: center; }
+.door--ws .door-pitch { max-width: 34rem; }
+.ws-running { position: absolute; top: 18px; right: -10px; rotate: 6deg; z-index: 1; cursor: default; }
+
+/* ── "Ready to train?": a yellow post-it, taped and tilted ─ */
+.todo {
+  position: relative; width: min(26rem, 100%); padding: 34px 28px 26px; background: var(--yellow); color: var(--ink);
+  border: 2px solid var(--ink); box-shadow: var(--shadow-card-max) var(--shadow-card-max) var(--shadow-blur) var(--ink);
+  rotate: -2.2deg; font-family: var(--body);
+}
+.todo .flyer-tape { top: -13px; rotate: 3deg; }
+.todo__title { margin: 0 0 14px; font-family: var(--display); font-weight: 400; font-size: 2.1rem; line-height: 1; text-transform: uppercase; }
+.todo ul, .checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+
+/* ── a line of a list and its hand-drawn box ─ */
+.check { font-size: 1.08rem; line-height: 1.35; }
+.check--plain, .check__row { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: start; }
+.check__row { list-style: none; cursor: pointer; }
+.check__row::-webkit-details-marker { display: none; }
+.check__row:hover .check__label { text-decoration: underline; text-decoration-thickness: 2px; }
+.check__note { display: block; margin-top: 2px; font-size: 0.8rem; color: var(--ink-70); overflow-wrap: anywhere; }
+.how {
+  align-self: center; padding: 1px 8px; border: 2px solid var(--ink); background: var(--paper);
+  font-family: var(--type-sticker-family); font-size: 0.66rem; letter-spacing: var(--type-sticker-tracking);
+  text-transform: uppercase; box-shadow: 2px 2px 0 var(--ink);
+}
+details[open] > .check__row .how { background: var(--ink); color: var(--yellow); box-shadow: none; }
+.box { width: 28px; height: 28px; margin-top: -2px; }
+.box .frame { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.box .tick { fill: none; stroke: var(--lime-inked); stroke-width: 3.6; stroke-linecap: round; stroke-linejoin: round; }
+.guide {
+  display: grid; gap: 8px; margin: 10px 0 4px 40px; padding: 12px 14px; background: var(--paper);
+  border: 2px solid var(--ink); font-size: 0.85rem; line-height: 1.45;
+}
+.guide ol { display: grid; gap: 6px; margin: 0; padding-left: 1.3em; }
+.guide p { margin: 0; }
+.guide code { padding: 1px 4px; background: var(--warm-paper); font-family: var(--mono); font-size: 0.78rem; }
+.guide a { color: var(--ink); font-weight: 600; }
+.guide__field { display: flex; gap: 8px; margin-top: 4px; }
+.guide__field input { flex: 1; min-width: 0; padding: 6px 8px; border: 2px solid var(--ink); background: var(--paper); font: inherit; font-size: 0.85rem; }
+.guide__error { color: var(--orange-inked); white-space: pre-wrap; }

@@ -15,7 +15,7 @@ import {
   rigGeometries,
   setJoint,
 } from "./rig.js";
-import { VARIANTS, VARIANT_SWATCH_HEX, meshMaterialsFor } from "./liveries.js";
+import { VARIANTS, meshMaterialsFor } from "./liveries.js";
 
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
 
@@ -494,12 +494,6 @@ describe("the robots' liveries", () => {
 
   it("ships the four the real robots come in", () => {
     expect(Object.keys(VARIANTS)).toEqual(["classic", "charcoal", "purple", "blue"]);
-  });
-
-  it("gives every livery a swatch for the picker", () => {
-    for (const name of Object.keys(VARIANTS)) {
-      expect(VARIANT_SWATCH_HEX[name]).toMatch(/^#[0-9a-f]{6}$/i);
-    }
   });
 
   it("paints each part its own material rather than one flat tint", async () => {

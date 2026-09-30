@@ -44,7 +44,6 @@ const PURPLE_SOLE = { color: [0.221, 0.134, 0.465], roughness: 0.45, metalness: 
 // Lavender trunk / leg shells: a notch lighter than the eye ring.
 const LAVENDER_SHELL = { color: [0.462, 0.367, 0.688], roughness: 0.35, metalness: 0.0 };  // #b4a4d4
 const SOFT_PURPLE = { color: [0.36, 0.23, 0.48], roughness: 0.45, metalness: 0.0 };       // #a489b5
-const PURPLE_FEET = { color: [0.164, 0.085, 0.584], roughness: 0.45, metalness: 0.0 };    // #7a5fc9
 const PALE_BLUE = { color: [0.441, 0.613, 0.723], roughness: 0.35, metalness: 0.0 };      // #b6cfdd
 const MEDIUM_BLUE = { color: [0.13, 0.321, 0.552], roughness: 0.35, metalness: 0.0 };     // #6f9ec4
 const BLUE_GRAY = { color: [0.183, 0.379, 0.565], roughness: 0.35, metalness: 0.0 };      // #7fa9c6
@@ -127,11 +126,6 @@ export const VARIANTS = {
     hips: GRAY,
     mechDark: DARK,
     mechGray: GRAY,
-    // UI swatch override: kept from when the head and body were gray/cream
-    // and only the accents carried the purple identity. The shells are
-    // lavender now, so this no longer diverges much - and nothing reads it
-    // anyway (the HUD picker uses VARIANT_SWATCH_HEX below).
-    swatch: PURPLE_FEET,
   },
   // Right robot: shares the classic colourway everywhere except its
   // shells - warm gray face plate, amber eye, orange beak, amber mouth
@@ -170,25 +164,12 @@ export const VARIANT_LABELS = {
   blue: "Sky",
 };
 
-// UI swatch hexes for the HUD colour picker: the press-kit sRGB shell
-// targets, pinned as literals. The sim's material specs above predate the
-// press-kit recalibration, so the picker does NOT derive from them - this
-// table is shared verbatim with the pollen-website landing picker so both
-// show byte-identical chips.
-
 export const randomVariantName = () =>
   VARIANT_NAMES[Math.floor(Math.random() * VARIANT_NAMES.length)];
 
 // Mesh filename -> material spec for one variant (mjlab model meshes).
 // Anything not listed is small mechanical hardware and falls back to
 // mechGray. Verified visually against the four-robot reference photo.
-
-export const VARIANT_SWATCH_HEX = {
-  classic: "#f7e6cb",
-  charcoal: "#6c6a68",
-  purple: "#bfa9cf",
-  blue: "#a9dbe8",
-};
 
 export function meshMaterialsFor(v) {
   return {

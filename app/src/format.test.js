@@ -4,7 +4,6 @@ import {
   formatScore,
   formatSeeds,
   formatSpeed,
-  speedChoices,
 } from "./format.js";
 
 describe("formatScore", () => {
@@ -57,7 +56,6 @@ const SPRINT = {
   slope_deg: 0,
   sweep_lo: 0.2,
   sweep_hi: 1.2,
-  sweep_step: 0.05,
   sweep_count: 21,
 };
 
@@ -88,35 +86,5 @@ describe("formatEventFacts", () => {
   it("calls a level course flat rather than saying 0°", () => {
     const facts = formatEventFacts({ ...SPRINT, slope_deg: 0 });
     expect(facts.find((f) => f.label === "surface").value).toBe("flat");
-  });
-});
-
-describe("speedChoices", () => {
-  it("offers the sweep first, as the default", () => {
-    // The trial should measure what the board measures unless you deliberately
-    // ask otherwise, so the sweep is choice zero and its value is empty.
-    const [first] = speedChoices(SPRINT);
-    expect(first.value).toBe("");
-    expect(first.label).toBe("Sweep all 21 — find the best");
-  });
-
-  it("lists exactly the speeds the harness actually scans", () => {
-    const choices = speedChoices(SPRINT);
-    // 21 speeds plus the sweep entry.
-    expect(choices).toHaveLength(22);
-    expect(choices[1].value).toBe("0.20");
-    expect(choices[1].label).toBe("0.20 m/s");
-    // The top of the range must be OFFERED. Stepping 0.05 twenty times from
-    // 0.20 lands on 1.2000000000000002, so without the epsilon the fastest
-    // speed the event declares would be missing from the picker.
-    expect(choices.at(-1).value).toBe("1.20");
-  });
-
-  it("is built from the event, not from a hardcoded range", () => {
-    const rollers = { sweep_lo: 0.3, sweep_hi: 2.0, sweep_step: 0.1, sweep_count: 18 };
-    const choices = speedChoices(rollers);
-    expect(choices).toHaveLength(19);
-    expect(choices[1].value).toBe("0.30");
-    expect(choices.at(-1).value).toBe("2.00");
   });
 });

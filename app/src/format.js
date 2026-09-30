@@ -47,28 +47,3 @@ export function formatEventFacts(event) {
     },
   ];
 }
-
-/**
- * The choices in the trial speed picker.
- *
- * Built from the event's own declared sweep rather than a hardcoded list, so
- * an event with a different range gets the right picker for free — the same
- * reason the sweep lives in the manifest at all.
- *
- * The first choice is the sweep itself, and it is the default: it is the
- * measurement the board uses, so "what would this score" and "what does the
- * picker do by default" should be the same question. An explicit speed is for
- * looking at ONE behaviour, and it is much quicker because it skips the scan.
- */
-export function speedChoices(event) {
-  const choices = [{ value: "", label: `Sweep all ${event.sweep_count} — find the best` }];
-  // Rebuilt by stepping, not by dividing the range, so this lands on exactly
-  // the speeds the harness scans. The epsilon is the same one the manifest
-  // carries: stepping 0.05 twenty times from 0.20 arrives at 1.2000000000000002,
-  // and without it the fastest speed the event offers goes missing.
-  for (let vx = event.sweep_lo; vx <= event.sweep_hi + 1e-9; vx += event.sweep_step) {
-    const value = vx.toFixed(2);
-    choices.push({ value, label: `${value} m/s` });
-  }
-  return choices;
-}

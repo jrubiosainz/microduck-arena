@@ -99,17 +99,6 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 .entry-col { display: flex; flex-direction: column; gap: 14px; }
 .entry-col .vote-button--panel { align-self: flex-end; }
 
-/* Every label styled here is an eyebrow, as the section heads are on the
-   front: the workshop's own livery picker shares this column's type. */
-.livery legend {
-  color: var(--orange-inked);
-  font-family: var(--type-eyebrow-family);
-  font-weight: var(--type-eyebrow-weight);
-  font-size: var(--type-eyebrow-size);
-  letter-spacing: var(--type-eyebrow-tracking);
-  text-transform: uppercase;
-}
-
 /* The way to training: the page's one call to action now that there is no
    entry form, open by default and sitting above the guide link in the entry
    column. Same padding, ink border and sticker shadow as anything else taped
@@ -415,23 +404,6 @@ table.board tr.tier-ghost { color: var(--ink-70); }
 table.board tr.tier-ghost .time { color: var(--ink-70); }
 table.board tr.tier-ghost .votes { color: var(--ink-70); }
 
-/* ── the colour picker ────────────────────────────────────────────────── */
-
-.livery { border: 0; margin: 0; padding: 0; }
-.livery legend { padding: 0 0 5px; }
-.livery__swatches { display: flex; gap: 8px; }
-
-/* Square, because radius 0 forbids a round chip. */
-.swatch {
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  cursor: pointer;
-  border: 2px solid var(--ink);
-  background: var(--swatch);
-}
-.swatch[aria-pressed="true"] { outline: 3px solid var(--orange-inked); outline-offset: 2px; }
-
 /* Download column. Quiet by default and orange on hover: it is an offer, not
    the point of the row. */
 /* The three icons at the end are one row of buttons, so they keep one
@@ -570,7 +542,6 @@ table.board .env a:hover,
 table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 
 /* The focus ring is cyan, on everything that takes focus — the club's rule. */
-.swatch:focus-visible,
 .controls button:focus-visible,
 .modes button:focus-visible,
 .pickall-box:focus-visible,
