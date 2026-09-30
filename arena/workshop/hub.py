@@ -1,6 +1,7 @@
-"""The three Hugging Face calls the workshop makes itself; everything else is a `uv run` subprocess."""
+"""The Hugging Face calls the workshop makes itself; everything else is a `uv run` subprocess."""
 
 import threading
+from dataclasses import dataclass
 
 # The Hub names the account in well under a second. huggingface_hub's own whoami has no time limit:
 # with the Hub unreachable it waits for the system's connect timeout, over a minute on macOS.
@@ -11,9 +12,16 @@ class HubUnreachable(RuntimeError):
     """huggingface.co did not answer."""
 
 
+@dataclass(frozen=True)
+class Account:
+    name: str
+    # whoami-v2's canPay: a payment method is on the account, so Hugging Face Jobs can bill it.
+    can_pay: bool
+
+
 class Hub:
-    def whoami(self) -> str | None:
-        """The account logged in on this machine; None with no token, or one the Hub refuses."""
+    def whoami(self) -> Account | None:
+        """The account logged in on this machine, and whether it can pay; None with no token, or one the Hub refuses."""
         import httpx
         from huggingface_hub import constants, get_token
         from huggingface_hub.utils import build_hf_headers
@@ -46,7 +54,15 @@ class Hub:
             return None
         if answer.status_code != 200:
             raise HubUnreachable(f"{constants.ENDPOINT} answered {answer.status_code}")
-        return answer.json()["name"]
+        body = answer.json()
+        return Account(body["name"], bool(body.get("canPay")))
+
+    def job_stage(self, job_id: str, namespace: str) -> str:
+        """SCHEDULING, RUNNING, COMPLETED, CANCELED, ERROR or DELETED: the Hub's word for the job."""
+        from huggingface_hub import HfApi
+
+        stage = HfApi().inspect_job(job_id=job_id, namespace=namespace).status.stage
+        return getattr(stage, "value", str(stage))
 
     def login(self, token: str) -> None:
         from huggingface_hub import login

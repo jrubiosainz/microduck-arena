@@ -77,10 +77,11 @@ def _workshop(request: Request) -> Workshop:
 
 def _hub_user(ws: Workshop) -> str | None:
     try:
-        return ws.hub.whoami()
+        account = ws.hub.whoami()
     except HubUnreachable as exc:
         raise HTTPException(status_code=503, detail=f"Hugging Face is unreachable: {exc}. "
                                                     "Check your connection, then try again.") from exc
+    return account.name if account else None
 
 
 @router.get("/status")
@@ -103,9 +104,10 @@ def status(request: Request) -> dict:
 @router.get("/hub")
 def hub_account(request: Request) -> dict:
     try:
-        return {"user": _workshop(request).hub.whoami(), "reachable": True}
+        account = _workshop(request).hub.whoami()
     except HubUnreachable:
-        return {"user": None, "reachable": False}
+        return {"user": None, "reachable": False, "can_pay": False}
+    return {"user": account.name if account else None, "reachable": True, "can_pay": bool(account and account.can_pay)}
 
 
 class Token(BaseModel):

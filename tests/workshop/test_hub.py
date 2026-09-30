@@ -11,7 +11,7 @@ import pytest
 from huggingface_hub import constants
 
 from arena.workshop import hub as hub_module
-from arena.workshop.hub import Hub, HubUnreachable
+from arena.workshop.hub import Account, Hub, HubUnreachable
 
 
 @pytest.fixture
@@ -37,8 +37,26 @@ def endpoint(monkeypatch):
     server.shutdown()
 
 
-def test_the_logged_in_account_is_named(endpoint):
-    assert Hub().whoami() == "alice"
+def test_the_logged_in_account_is_named_with_whether_it_can_pay(endpoint):
+    assert Hub().whoami() == Account("alice", False)
+    endpoint["body"] = {"name": "alice", "canPay": True}
+    assert Hub().whoami() == Account("alice", True)
+
+
+def test_a_jobs_stage_is_the_hubs_word_for_it(monkeypatch):
+    from types import SimpleNamespace
+
+    from huggingface_hub import HfApi
+
+    asked = []
+
+    def inspect_job(self, *, job_id, namespace=None, token=None):
+        asked.append((job_id, namespace))
+        return SimpleNamespace(status=SimpleNamespace(stage="RUNNING"))
+
+    monkeypatch.setattr(HfApi, "inspect_job", inspect_job)
+    assert Hub().job_stage("j1", "alice") == "RUNNING"
+    assert asked == [("j1", "alice")]
 
 
 def test_a_refused_token_is_logged_out(endpoint):

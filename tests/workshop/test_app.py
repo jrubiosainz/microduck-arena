@@ -32,22 +32,27 @@ def test_the_status_answers_without_asking_the_hub(workshop, hub):
 
 
 def test_the_hugging_face_account_is_asked_apart(workshop):
-    assert workshop.get("/api/workshop/hub").json() == {"user": "alice", "reachable": True}
+    assert workshop.get("/api/workshop/hub").json() == {"user": "alice", "reachable": True, "can_pay": True}
+
+
+def test_an_account_without_a_payment_method_is_said_so(workshop, hub):
+    hub.can_pay = False
+    assert workshop.get("/api/workshop/hub").json()["can_pay"] is False
+
+
+def test_a_logged_out_user_is_told_so(workshop, hub):
+    hub.user = None
+    assert workshop.get("/api/workshop/hub").json() == {"user": None, "reachable": True, "can_pay": False}
+
+
+def test_an_unreachable_hub_is_said_not_waited_for(workshop, hub):
+    hub.reachable = False
+    assert workshop.get("/api/workshop/hub").json() == {"user": None, "reachable": False, "can_pay": False}
 
 
 def test_with_an_nvidia_gpu_it_trains_here(workshop, fakes):
     fakes.gpu()
     assert workshop.get("/api/workshop/status").json()["mode"] == "local"
-
-
-def test_a_logged_out_user_is_told_so(workshop, hub):
-    hub.user = None
-    assert workshop.get("/api/workshop/hub").json() == {"user": None, "reachable": True}
-
-
-def test_an_unreachable_hub_is_said_not_waited_for(workshop, hub):
-    hub.reachable = False
-    assert workshop.get("/api/workshop/hub").json() == {"user": None, "reachable": False}
 
 
 def test_logging_in_with_a_token(workshop, hub):
