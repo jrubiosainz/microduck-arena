@@ -8,9 +8,9 @@ asks the network — what the Hub says of a job is in its record, written by the
 """
 
 from ..manifest import load_event
+from .evaluations import summary
 from .jobs import recorded_jobs
 from .runs import curve, find_runs
-from .trials import tested
 
 # What the Hub says of a job, as a ticket says it.
 HF_STAGES = {"SCHEDULING": "starting", "RUNNING": "running", "COMPLETED": "done",
@@ -56,9 +56,8 @@ def _progress(live, run, total, state) -> dict | None:
 
 
 def _checkpoints(run, voted: bool) -> tuple[list[dict], int | None]:
-    tried = tested(run) if run else {}
-    rows = [{"n": n, "status": "evaluated" if n in tried else "queued", **tried.get(n, {})}
-            for n in (run.checkpoints if run else ())]
+    done = summary(run) if run else {}
+    rows = [{"n": n, **done.get(n, {"status": "queued"})} for n in (run.checkpoints if run else ())]
     finishers = [r for r in rows if r["status"] == "evaluated" and r["seeds_finished"] > 0]
     # A voted event is not a clock: its best is the public's to say.
     best = None if voted or not finishers else min(finishers, key=lambda r: (r["score"], r["n"]))["n"]

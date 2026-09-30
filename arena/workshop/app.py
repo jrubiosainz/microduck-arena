@@ -9,6 +9,7 @@ import re
 import shutil
 import threading
 import webbrowser
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -19,10 +20,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..manifest import load_event
-from ..policy import PolicyError
 from ..web.routes_read import event_summary
 from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write_values
 from .code import code_state, code_url, commit, push, use_fork
+from .evaluations import evaluate_forever, stored
 from .hub import Hub, HubUnreachable
 from .jobs import TERMINAL, recorded_jobs, remember_job
 from .login import BrowserLogin, LoginError
@@ -31,7 +32,6 @@ from .runs import find_runs
 from .shell import ShellError, commit_all, git
 from .tickets import source, ticket, ticket_detail, tickets
 from .training import Training
-from .trials import TrialError, trial
 
 NO_SITE = (
     "The workshop's page has not been built.\n\n"
@@ -58,6 +58,8 @@ class Workshop:
     lock: threading.Lock = field(default_factory=threading.Lock)
     # One publish or preview at a time: two of one name race over ./publish-<name>/ and the Hub repo.
     publishing: threading.Lock = field(default_factory=threading.Lock)
+    # Set when the app stops: the background workers end.
+    stopping: threading.Event = field(default_factory=threading.Event)
 
 
 def has_gpu() -> bool:
@@ -243,20 +245,16 @@ def _run_or_404(ws: Workshop, challenge: Challenge, run_id: str):
     return run
 
 
-class TrialRequest(BaseModel):
-    checkpoint: int
-
-
-@router.post("/challenges/{event}/runs/{run_id}/trial")
-async def run_trial(event: str, run_id: str, body: TrialRequest, request: Request) -> dict:
+@router.get("/challenges/{event}/jobs/{ticket_id}/checkpoints/{n}")
+def checkpoint(event: str, ticket_id: str, n: int, request: Request) -> dict:
+    """A checkpoint's stored evaluation, its trace inline: the page replays it at once."""
     ws = _workshop(request)
-    challenge = _challenge_or_404(ws, event)
-    run = _run_or_404(ws, challenge, run_id)
-    try:
-        # Seconds of export and simulation: off the event loop, which keeps the log flowing.
-        return await run_in_threadpool(trial, ws.root, run, body.checkpoint, challenge.event)
-    except (TrialError, PolicyError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    found = source(ws, _challenge_or_404(ws, event), ticket_id)
+    run = found[3] if found else None
+    body = stored(run, n) if run is not None and n in run.checkpoints else None
+    if body is None:
+        raise HTTPException(status_code=404, detail=f"Checkpoint {n} is not evaluated yet.")
+    return {"checkpoint": n, "error": body["error"]} if "error" in body else body
 
 
 class CommitRequest(BaseModel):
@@ -367,6 +365,15 @@ def _only_its_own_page(app: FastAPI, port: int) -> None:
         return await call_next(request)
 
 
+@asynccontextmanager
+async def _background(app: FastAPI):
+    """The workers that keep the tickets up to date, for as long as the app serves."""
+    ws = app.state.workshop
+    threading.Thread(target=evaluate_forever, args=(ws,), name="workshop-evaluator", daemon=True).start()
+    yield
+    ws.stopping.set()
+
+
 def create_workshop_app(
     root: Path,
     challenges: list[Challenge],
@@ -378,7 +385,7 @@ def create_workshop_app(
 ) -> FastAPI:
     """`port` is the one the workshop serves on, on 127.0.0.1: requests must name it.
     `challenges`: the checkout's open ones."""
-    app = FastAPI(title="Microduck workshop", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Microduck workshop", docs_url=None, redoc_url=None, lifespan=_background)
     app.state.workshop = Workshop(root, {c.event: c for c in challenges}, arena, hub, open_browser,
                                   BrowserLogin(root, open_browser))
     _only_its_own_page(app, port)
