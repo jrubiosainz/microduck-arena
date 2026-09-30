@@ -5,13 +5,15 @@
 import { dress } from "../router.js";
 import { createAccount } from "./account.js";
 import * as api from "./api.js";
+import { mountChallenge } from "./challenge.js";
 import { el } from "./dom.js";
 import { mountHome } from "./home.js";
 import { parseRoute } from "./routes.js";
 
-const MOUNTS = { home: mountHome };
-// The Arena's sheet each page wears (router.js's dress): the club's, as on the Arena's front.
-const SHEETS = { home: "menu" };
+const MOUNTS = { home: mountHome, challenge: mountChallenge };
+// The Arena's sheet each page wears (router.js's dress): the club's on the home, as on the Arena's
+// front; trackside on a challenge's page, as on the Arena's own.
+const SHEETS = { home: "menu", challenge: "race" };
 
 const root = document.querySelector("#app");
 let page = null;

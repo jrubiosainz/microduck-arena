@@ -75,3 +75,110 @@ details[open] > .check__row .how { background: var(--ink); color: var(--yellow);
 .guide__field { display: flex; gap: 8px; margin-top: 4px; }
 .guide__field input { flex: 1; min-width: 0; padding: 6px 8px; border: 2px solid var(--ink); background: var(--paper); font: inherit; font-size: 0.85rem; }
 .guide__error { color: var(--orange-inked); white-space: pre-wrap; }
+
+/* ── a challenge's page: the head and the tickets on the left, the form in the entry column ─ */
+.wsgrid {
+  display: grid; grid-template-columns: minmax(0, 1fr) 19rem; grid-template-areas: "head side" "body side";
+  gap: 0 var(--space-title-to-grid-max); align-items: start;
+}
+.wsgrid > .head { grid-area: head; }
+.wsgrid > .side { grid-area: side; }
+.wsgrid > .body { grid-area: body; }
+.racecaveat .help-link { color: var(--ink); }
+
+/* Make it yours: the challenge's files, in the charter's terminal. */
+.yours { max-width: 46rem; margin: 6px 0 28px; }
+.yours p { margin: 0 0 10px; font-size: 0.95rem; }
+.yours .terminal-body { white-space: normal; font-size: 0.8rem; line-height: 1.75; }
+/* 15ch: the longest name, challenge.toml, and a space: the terminal is monospaced. */
+.yours__line { display: grid; grid-template-columns: 15ch 1fr; gap: 0 12px; }
+.yours__line b { color: var(--yellow); font-weight: 600; }
+
+/* The form: the entry column's cream card. */
+.panel {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px; background: var(--cream);
+  border: 2px solid var(--ink); box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
+}
+.panel__title { margin: 0; font-family: var(--display); font-weight: 400; font-size: 1.6rem; line-height: 1; text-transform: uppercase; }
+.panel .field { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; font-weight: 600; }
+.panel input:not([type]), .panel input[type=url], .panel textarea {
+  padding: 7px 9px; border: 2px solid var(--ink); background: var(--paper); font: inherit; font-weight: 400; font-size: 0.9rem;
+}
+.panel textarea { min-height: 6.5rem; resize: vertical; }
+.panel .button { align-self: stretch; padding: 10px 14px; font-size: 1.35rem; text-align: center; }
+.panel .button:disabled { background: var(--warm-paper); color: var(--ink-70); box-shadow: none; cursor: not-allowed; }
+.gate { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--paper); border: 2px dashed var(--ink); }
+.gate__say { margin: 0; font-size: 0.85rem; }
+.gate__files { margin: 0; padding: 0; list-style: none; font-family: var(--mono); font-size: 0.75rem; line-height: 1.6; color: var(--sky-inked); overflow-wrap: anywhere; }
+.gate__files li { display: grid; grid-template-columns: 1.8em 1fr; }
+.gate__files li > span:first-child { color: var(--orange-inked); font-weight: 700; }
+.gate__identity pre { margin: 4px 0 0; padding: 8px; background: var(--deep-ink); color: var(--sky); font-family: var(--mono); font-size: 0.72rem; white-space: pre-wrap; }
+.committed { margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--lime-inked); }
+.committed code { font-family: var(--mono); }
+fieldset.form { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; border: 0; }
+fieldset.form:disabled { opacity: 0.4; }
+.seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg button {
+  flex: 1; padding: 6px 8px; border: 2px solid var(--ink); background: var(--paper); cursor: pointer;
+  font-family: var(--type-sticker-family); font-size: 0.8rem; letter-spacing: var(--type-sticker-tracking); text-transform: uppercase;
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) 0 var(--ink);
+}
+.seg button[aria-pressed=true] { background: var(--yellow); }
+.seg button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+details.settings summary, details.output summary {
+  cursor: pointer; color: var(--orange-inked); font-family: var(--type-eyebrow-family); font-weight: var(--type-eyebrow-weight);
+  font-size: var(--type-eyebrow-size); letter-spacing: var(--type-eyebrow-tracking); text-transform: uppercase;
+}
+details.settings[open] summary { margin-bottom: 10px; }
+.settings h4 { margin: 12px 0 6px; font-family: var(--display); font-weight: 400; font-size: 1.05rem; letter-spacing: 0.02em; text-transform: uppercase; }
+.settings h4 small { margin-left: 6px; font-family: var(--body); font-size: 0.72rem; letter-spacing: 0; text-transform: none; color: var(--ink-70); }
+.knob { display: grid; grid-template-columns: 1fr 2.4rem; gap: 2px 8px; align-items: center; margin-bottom: 6px; font-size: 0.82rem; font-weight: 400; }
+.knob input { grid-column: 1 / -1; width: 100%; accent-color: var(--orange); }
+.knob output { grid-row: 1; grid-column: 2; justify-self: end; font-family: var(--mono); font-size: 0.78rem; }
+.recipe-row { display: grid; grid-template-columns: 1fr 5.5rem; gap: 8px; align-items: center; margin-bottom: 6px; font-size: 0.82rem; font-weight: 400; }
+.recipe-row input { width: 100%; padding: 4px 6px; border: 2px solid var(--ink); background: var(--paper); font-family: var(--mono); font-size: 0.8rem; }
+
+/* The tickets: one taped paper card per training. */
+.trainings-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin: 8px 0 22px; }
+.trainings-head h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 1.9rem; text-transform: uppercase; }
+.tickets { display: grid; grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr)); gap: 34px 26px; }
+.tickets__empty { margin: 0; color: var(--ink-70); }
+.ticket {
+  position: relative; display: flex; flex-direction: column; gap: 9px; padding: 22px 16px 14px; background: var(--paper);
+  border: 2px solid var(--ink); color: var(--ink); text-decoration: none;
+  box-shadow: var(--shadow-card-min) var(--shadow-card-min) 0 var(--orange);
+}
+.ticket:nth-child(odd) { rotate: -0.9deg; }
+.ticket:nth-child(even) { rotate: 0.7deg; }
+.ticket:hover { translate: 0 -4px; }
+.ticket:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+.ticket .flyer-tape { left: calc(50% - 26px); top: -10px; width: 52px; height: 16px; }
+.ticket--running { background: color-mix(in srgb, var(--yellow) 22%, var(--paper)); box-shadow: var(--shadow-card-min) var(--shadow-card-min) 0 var(--lime-inked); }
+.ticket--failed { box-shadow: var(--shadow-card-min) var(--shadow-card-min) 0 var(--magenta); }
+.ticket__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ticket__top .sticker { padding: 2px 8px; font-size: 0.66rem; box-shadow: none; cursor: default; }
+.ticket__name { margin: 0; font-family: var(--display); font-weight: 400; font-size: 1.45rem; line-height: 1; text-transform: uppercase; overflow-wrap: anywhere; }
+.ticket__line { margin: 0; font-size: 0.8rem; }
+.ticket__line b { font-family: var(--display); font-weight: 400; font-size: 1.1rem; letter-spacing: 0.02em; }
+.ticket__muted { color: var(--ink-70); }
+.ticket__pub { margin: 0; font-size: 0.78rem; color: var(--ink-70); }
+.ticket__pub--yes { font-weight: 600; color: var(--lime-inked); }
+.ticket__stop { position: absolute; right: 12px; bottom: 12px; }
+.progress { position: relative; height: 18px; border: 2px solid var(--ink); background: var(--paper); }
+.progress i { position: absolute; inset: 0 auto 0 0; background: var(--orange); }
+.progress span { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-size: 0.66rem; font-weight: 700; }
+
+/* A bar per checkpoint: the higher, the faster. Magenta stub: no finisher. Hatched: not evaluated yet. */
+.bars { display: flex; align-items: flex-end; gap: 3px; height: 34px; padding-bottom: 2px; border-bottom: 2px solid var(--ink); }
+.bars i { position: relative; flex: 1; min-height: 3px; background: var(--ink); }
+.bars i.dnf, .bars i.failed { height: 3px; background: var(--magenta); }
+.bars i.queued { height: 30%; background: repeating-linear-gradient(45deg, var(--ink-70) 0 2px, transparent 2px 5px); }
+.bars i.best { background: var(--orange); }
+.bars i.best::after { content: "★"; position: absolute; top: -15px; left: 50%; translate: -50% 0; font-size: 0.72rem; color: var(--orange-inked); }
+.bars .slot { flex: 1; height: 100%; border: 2px dotted var(--ink-70); border-bottom: 0; opacity: 0.5; }
+
+@media (max-width: 760px) {
+  .wsgrid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "side" "body"; gap: 28px; }
+  .tickets { grid-template-columns: 1fr; }
+  .yours__line { grid-template-columns: 1fr; }
+}

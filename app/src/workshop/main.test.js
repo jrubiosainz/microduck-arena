@@ -18,6 +18,7 @@ const { api, CODE } = vi.hoisted(() => {
     getLogin: async () => ({ state: "waiting", output: "" }),
     getCode: vi.fn(),
     useFork: async () => ({ ...CODE, fork: "alice/microduck-challenges" }),
+    getJobs: async () => [],
   };
   return { api, CODE };
 });
@@ -32,6 +33,8 @@ const settled = async () => {
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
+  history.replaceState(null, "", "/");
+  document.head.innerHTML = '<link rel="stylesheet" data-theme="club" /><link rel="stylesheet" data-theme="race" disabled />';
   document.body.innerHTML = '<div id="app"></div>';
   api.getCode.mockImplementation(async () => CODE);
 });
@@ -78,5 +81,18 @@ describe("the workshop's home", () => {
     app.querySelector(".masthead button.player-card-in").click();
     await settle();
     expect(app.querySelector(".masthead button.player-card-in").textContent).toContain("Waiting");
+  });
+});
+
+describe("a challenge's page in the workshop", () => {
+  it("is mounted from its address and wears the Arena's trackside sheet", async () => {
+    history.replaceState(null, "", "/#/c/sprint-2m");
+    await import("./main.js");
+    await settled();
+    const app = document.querySelector("#app");
+    expect(app.querySelector(".racetitle").textContent).toBe("2 m Sprint");
+    expect(app.querySelector(".signage .wordmark").textContent).toBe("MicroduckWorkshop");
+    expect(document.querySelector("link[data-theme=race]").disabled).toBe(false);
+    expect(document.querySelector("link[data-theme=club]").disabled).toBe(true);
   });
 });

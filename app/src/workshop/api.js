@@ -18,3 +18,11 @@ export const startLogin = () => post("/api/workshop/login");
 export const getLogin = () => json("/api/workshop/login");
 export const getCode = () => json("/api/workshop/code");
 export const useFork = (url) => post("/api/workshop/code/fork", { url });
+
+const challengeUrl = (event) => `/api/workshop/challenges/${encodeURIComponent(event)}`;
+const jobUrl = (event, id) => `${challengeUrl(event)}/jobs/${encodeURIComponent(id)}`;
+
+export const commitCode = (message) => post("/api/workshop/code/commit", { message });
+export const train = (event, body) => post(`${challengeUrl(event)}/train`, body);
+export const getJobs = (event) => json(`${challengeUrl(event)}/jobs`).then((body) => body.jobs);
+export const stopJob = (event, id) => post(`${jobUrl(event, id)}/stop`);
