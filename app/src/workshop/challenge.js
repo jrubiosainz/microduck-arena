@@ -112,17 +112,19 @@ export async function mountChallenge(root, { status, account, route }) {
     await refresh();
   }
 
-  // One card per ticket, by id, rebuilt only when its own answer changed; a card already in its place
-  // is never moved, so it keeps its focus, its hover and a press under way.
-  let cards = new Map(); // id -> { answer, card }
+  // One card per ticket, by id, updated in place; a card already in its place is never moved, so it
+  // keeps its focus, its hover and a press under way.
+  let cards = new Map(); // id -> ticketCard
   const empty = el("p", "tickets__empty", "No training yet: the first one starts from the form.");
   function drawWall(jobs) {
-    cards = new Map(jobs.map((ticket) => {
-      const answer = JSON.stringify(ticket);
-      const kept = cards.get(ticket.id);
-      return [ticket.id, kept?.answer === answer ? kept : { answer, card: ticketCard(ticket, { event, voted, onStop }) }];
-    }));
-    const wanted = jobs.length ? [...cards.values()].map((c) => c.card) : [empty];
+    const next = new Map();
+    for (const ticket of jobs) {
+      const card = cards.get(ticket.id) ?? ticketCard(ticket, { event, voted, onStop });
+      card.update(ticket);
+      next.set(ticket.id, card);
+    }
+    cards = next;
+    const wanted = jobs.length ? [...cards.values()].map((card) => card.el) : [empty];
     // The cards that go leave first, so a kept one slides into place without being moved.
     const keep = new Set(wanted);
     for (const child of [...wall.children]) if (!keep.has(child)) child.remove();

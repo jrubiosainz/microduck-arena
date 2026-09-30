@@ -34,7 +34,7 @@ describe("a ticket", () => {
 
   it("leads to its job page, says where it runs and how far it is, and stops after a confirm", () => {
     const onStop = vi.fn();
-    const card = ticketCard(TICKET, { event: "sprint-2m", voted: false, onStop });
+    const card = ticketCard(TICKET, { event: "sprint-2m", voted: false, onStop }).el;
     expect(card.getAttribute("href")).toBe("#/c/sprint-2m/j/first");
     expect(card.querySelector(".sticker").textContent).toBe("Training");
     expect(card.querySelector(".ticket__top .mono-label").textContent).toBe("HF Jobs · L4");
@@ -47,14 +47,14 @@ describe("a ticket", () => {
 
   it("a finished ticket has no Stop and says it is published", () => {
     const card = ticketCard({ ...TICKET, state: "done", progress: null, published: { entered: "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s" } },
-      { event: "sprint-2m", voted: false, onStop: vi.fn() });
+      { event: "sprint-2m", voted: false, onStop: vi.fn() }).el;
     expect(card.querySelector(".ticket__stop")).toBeNull();
     expect(card.querySelector(".progress")).toBeNull();
     expect(card.querySelector(".ticket__pub").textContent).toBe("★ Published · 4.89 s on the Arena");
   });
 
   it("a run from a shell says so", () => {
-    const card = ticketCard({ ...TICKET, where: null, state: "done" }, { event: "sprint-2m", voted: false, onStop: vi.fn() });
+    const card = ticketCard({ ...TICKET, where: null, state: "done" }, { event: "sprint-2m", voted: false, onStop: vi.fn() }).el;
     expect(card.querySelector(".ticket__top .mono-label").textContent).toBe("From a shell");
   });
 
@@ -62,7 +62,7 @@ describe("a ticket", () => {
     let finish;
     const onStop = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const card = ticketCard(TICKET, { event: "sprint-2m", voted: false, onStop });
+    const card = ticketCard(TICKET, { event: "sprint-2m", voted: false, onStop }).el;
     document.body.append(card);
     const before = location.hash;
     const stop = card.querySelector(".ticket__stop");
@@ -83,7 +83,7 @@ describe("a ticket", () => {
   it("stops from the keyboard, and a local training says it cannot be resumed", async () => {
     const onStop = vi.fn(async () => {});
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const stop = ticketCard({ ...TICKET, where: "local" }, { event: "sprint-2m", voted: false, onStop }).querySelector(".ticket__stop");
+    const stop = ticketCard({ ...TICKET, where: "local" }, { event: "sprint-2m", voted: false, onStop }).el.querySelector(".ticket__stop");
     const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
     stop.dispatchEvent(enter);
     expect(enter.defaultPrevented).toBe(true);
@@ -91,5 +91,21 @@ describe("a ticket", () => {
     await flush();
     stop.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
     expect(onStop).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps its card and its Stop, focus included, while its progress moves; its Stop goes when it ends", () => {
+    const ticket = ticketCard(TICKET, { event: "sprint-2m", voted: false, onStop: vi.fn() });
+    document.body.append(ticket.el);
+    const stop = ticket.el.querySelector(".ticket__stop");
+    stop.focus();
+    ticket.update({ ...TICKET, progress: { done: 1500, total: 3000 } });
+    expect(ticket.el.querySelector(".progress span").textContent).toBe("1500 / 3000");
+    expect(ticket.el.querySelector(".ticket__stop")).toBe(stop);
+    expect(document.activeElement).toBe(stop);
+    ticket.update({ ...TICKET, state: "done", progress: null });
+    expect(ticket.el.querySelector(".ticket__stop")).toBeNull();
+    expect(ticket.el.classList.contains("ticket--running")).toBe(false);
+    expect(ticket.el.querySelector(".sticker").textContent).toBe("Done");
+    ticket.el.remove();
   });
 });

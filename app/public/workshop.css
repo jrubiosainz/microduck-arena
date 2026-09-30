@@ -153,6 +153,8 @@ details.settings[open] summary { margin-bottom: 10px; }
 .ticket:hover { translate: 0 -4px; }
 .ticket:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 .ticket .flyer-tape { left: calc(50% - 26px); top: -10px; width: 52px; height: 16px; }
+/* What a ticket redraws as its training moves; laid out as if it were not there, in the card's column. */
+.ticket__content { display: contents; }
 .ticket--running { background: color-mix(in srgb, var(--yellow) 22%, var(--paper)); box-shadow: var(--shadow-card-min) var(--shadow-card-min) 0 var(--lime-inked); }
 .ticket--failed { box-shadow: var(--shadow-card-min) var(--shadow-card-min) 0 var(--magenta); }
 .ticket__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

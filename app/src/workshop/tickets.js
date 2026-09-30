@@ -88,43 +88,71 @@ export function progress({ done, total }) {
   return bar;
 }
 
-export function ticketCard(ticket, { event, voted, onStop }) {
-  const running = ticket.state === "starting" || ticket.state === "running";
-  const card = el("a", `ticket${running ? " ticket--running" : ""}${ticket.state === "failed" ? " ticket--failed" : ""}`);
-  card.href = jobHref(event, ticket.id);
-  const [word, colour] = STICKERS[ticket.state];
-  const top = el("div", "ticket__top");
-  top.append(el("span", `sticker ${colour}`, word), el("span", "mono-label", WHERE[ticket.where] ?? "From a shell"));
-  card.append(el("span", "flyer-tape"), top, el("h4", "ticket__name", ticket.name));
-  if (running && ticket.progress) card.append(progress(ticket.progress));
-  if (ticket.checkpoints.length) card.append(bars(ticket.checkpoints, voted ? null : ticket.best));
-  card.append(summary(ticket, voted));
-  card.append(ticket.published
-    ? el("p", "ticket__pub ticket__pub--yes", `★ Published · ${officialTime(ticket.published.entered)} on the Arena`)
-    : el("p", "ticket__pub", "Not published"));
-  if (running) {
-    // A span, not a button: the whole card is a link, and a button may not sit inside one.
-    const stop = el("span", "quiet ticket__stop", "Stop");
-    stop.setAttribute("role", "button");
-    stop.tabIndex = 0;
+/** Stop, on a running ticket: confirmed, and once pressed it waits for its answer (a second press asks nothing). */
+function stopButton(current, onStop) {
+  // A span, not a button: the whole card is a link, and a button may not sit inside one.
+  const stop = el("span", "quiet ticket__stop", "Stop");
+  stop.setAttribute("role", "button");
+  stop.tabIndex = 0;
+  const ask = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ticket = current();
     const lost = ticket.where === "hf-jobs" ? "A stopped Hugging Face job cannot be resumed." : "It cannot be resumed.";
-    // Pressed once, it waits for its answer: a second press asks nothing more.
-    const ask = async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (stop.getAttribute("aria-disabled") === "true" || !window.confirm(`Stop ${ticket.name}? ${lost}`)) return;
-      stop.setAttribute("aria-disabled", "true");
-      try {
-        await onStop(ticket.id);
-      } finally {
-        stop.removeAttribute("aria-disabled");
-      }
-    };
-    stop.addEventListener("click", ask);
-    stop.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") ask(e);
-    });
-    card.append(stop);
+    if (stop.getAttribute("aria-disabled") === "true" || !window.confirm(`Stop ${ticket.name}? ${lost}`)) return;
+    stop.setAttribute("aria-disabled", "true");
+    try {
+      await onStop(ticket.id);
+    } finally {
+      stop.removeAttribute("aria-disabled");
+    }
+  };
+  stop.addEventListener("click", ask);
+  stop.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") ask(e);
+  });
+  return stop;
+}
+
+/**
+ * A ticket's card, updated in place as its training moves: the card and its Stop are never replaced
+ * nor moved (either would drop the focus, or a press under way); only what is drawn beside the Stop is.
+ */
+export function ticketCard(first, { event, voted, onStop }) {
+  const card = el("a", "ticket");
+  card.href = jobHref(event, first.id);
+  const content = el("div", "ticket__content");
+  card.append(el("span", "flyer-tape"), content);
+  let ticket = null;
+  let shown = null; // the ticket as last drawn: the same answer draws nothing
+  let stop = null;
+
+  function update(next) {
+    const answer = JSON.stringify(next);
+    if (answer === shown) return;
+    ticket = next;
+    shown = answer;
+    const running = ticket.state === "starting" || ticket.state === "running";
+    card.classList.toggle("ticket--running", running);
+    card.classList.toggle("ticket--failed", ticket.state === "failed");
+    const [word, colour] = STICKERS[ticket.state];
+    const top = el("div", "ticket__top");
+    top.append(el("span", `sticker ${colour}`, word), el("span", "mono-label", WHERE[ticket.where] ?? "From a shell"));
+    content.replaceChildren(top, el("h4", "ticket__name", ticket.name));
+    if (running && ticket.progress) content.append(progress(ticket.progress));
+    if (ticket.checkpoints.length) content.append(bars(ticket.checkpoints, voted ? null : ticket.best));
+    content.append(summary(ticket, voted), ticket.published
+      ? el("p", "ticket__pub ticket__pub--yes", `★ Published · ${officialTime(ticket.published.entered)} on the Arena`)
+      : el("p", "ticket__pub", "Not published"));
+    if (running && !stop) {
+      stop = stopButton(() => ticket, onStop);
+      card.append(stop);
+    } else if (!running && stop) {
+      stop.remove();
+      stop = null;
+    }
   }
-  return card;
+
+  update(first);
+  return { el: card, update };
 }

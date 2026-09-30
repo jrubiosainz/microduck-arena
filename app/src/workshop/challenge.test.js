@@ -60,7 +60,7 @@ describe("a challenge's page", () => {
     page.leave();
   });
 
-  it("redraws only the tickets whose answer changed: a Stop keeps its focus", async () => {
+  it("keeps each ticket's card, and a running one's Stop and its focus, while its answer changes", async () => {
     const a = { ...TICKET, id: "a", name: "a", progress: { done: 10, total: 3000 } };
     const b = { ...TICKET, id: "b", name: "b", state: "done" };
     const c = { ...TICKET, id: "c", name: "c" };
@@ -72,17 +72,26 @@ describe("a challenge's page", () => {
     const [cardA, cardB] = root.querySelectorAll(".ticket");
     const stop = cardA.querySelector(".ticket__stop");
     stop.focus();
-    api.getJobs.mockResolvedValue([c, a, { ...b, published: { entered: "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s" } }]);
+    api.getJobs.mockResolvedValue([c, { ...a, progress: { done: 20, total: 3000 } },
+      { ...b, published: { entered: "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s" } }]);
     await vi.advanceTimersByTimeAsync(POLL_MS);
     expect(names()).toEqual(["c", "a", "b"]);
-    expect(root.querySelectorAll(".ticket")[1]).toBe(cardA);
-    expect(root.querySelectorAll(".ticket")[2]).not.toBe(cardB);
+    const [, nowA, nowB] = root.querySelectorAll(".ticket");
+    expect(nowA).toBe(cardA);
+    expect(nowA.querySelector(".progress span").textContent).toBe("20 / 3000");
+    expect(nowA.querySelector(".ticket__stop")).toBe(stop);
     expect(document.activeElement).toBe(stop);
-    api.getJobs.mockResolvedValue([a]);
+    expect(nowB).toBe(cardB);
+    expect(nowB.querySelector(".ticket__pub").textContent).toBe("★ Published · 4.89 s on the Arena");
+    api.getJobs.mockResolvedValue([{ ...a, progress: { done: 30, total: 3000 } }]);
     await vi.advanceTimersByTimeAsync(POLL_MS);
     expect(names()).toEqual(["a"]);
     expect(root.querySelector(".ticket")).toBe(cardA);
     expect(document.activeElement).toBe(stop);
+    api.getJobs.mockResolvedValue([{ ...a, state: "done", progress: null }]);
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(root.querySelector(".ticket")).toBe(cardA);
+    expect(cardA.querySelector(".ticket__stop")).toBeNull();
     page.leave();
     root.remove();
   });
