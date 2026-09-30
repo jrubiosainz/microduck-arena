@@ -19,25 +19,46 @@ TERMINAL = frozenset({"COMPLETED", "CANCELED", "ERROR", "DELETED"})
 _WRITING = threading.Lock()  # a launch, the log it follows and the watcher all write
 
 
-def recorded_jobs(root: Path, task: str | None = None) -> list[dict]:
-    """Newest first; only `task`'s when given. What does not read as a job — a hand-edited file, a
-    record from before trainings were written down by task — is left out."""
+def _raw(root: Path) -> list:
+    """The file's list as it is, whatever entries it holds; never raises, never anything but a list."""
     try:
         jobs = json.loads((root / JOBS).read_text())
     except (OSError, ValueError):
         return []
-    if not isinstance(jobs, list):
-        return []
-    return [job for job in jobs
-            if isinstance(job, dict) and "name" in job and "task" in job and task in (None, job["task"])]
+    return jobs if isinstance(jobs, list) else []
+
+
+def _is_job(entry) -> bool:
+    """Enough shape to build a ticket from without raising — a hand-edited file, or a record from
+    before trainings were written down by task, is not."""
+    if not isinstance(entry, dict) or not isinstance(entry.get("name"), str) or not isinstance(entry.get("task"), str):
+        return False
+    if entry.get("where") not in ("local", "hf-jobs"):
+        return False
+    recipe = entry.get("recipe")
+    if recipe is not None and not (isinstance(recipe, dict) and isinstance(recipe.get("max_iterations"), int)):
+        return False
+    return entry.get("ended") in (None, "finished", "failed", "stopped")
+
+
+def recorded_jobs(root: Path, task: str | None = None) -> list[dict]:
+    """Newest first; only `task`'s when given. What does not read as a job is left out."""
+    return [job for job in _raw(root) if _is_job(job) and task in (None, job["task"])]
 
 
 def remember_job(root: Path, task: str, name: str, **fields) -> None:
-    """Write down `task`'s training called `name`, or update the fields of the one written down."""
+    """Write down `task`'s training called `name` — `fields` carries `where`: this is a launch — or
+    update the fields of the one already there. Nothing else (a job id, an ended state, a stage) is
+    a launch, so with no record yet to update, there is nothing to write. Every other raw entry —
+    one `recorded_jobs` would leave out, an older record, a hand-edited one — is kept as it is: it
+    may still hold the id of a Hugging Face job that is billed regardless of what reads here.
+    """
     with _WRITING:
-        jobs = recorded_jobs(root)
-        job = next((j for j in jobs if (j["task"], j["name"]) == (task, name)), None)
+        jobs = _raw(root)
+        job = next((j for j in jobs if isinstance(j, dict) and j.get("task") == task and j.get("name") == name), None)
         if job is None:
+            if "where" not in fields:
+                return
             jobs.insert(0, {"task": task, "name": name, **fields})
         else:
             job.update(fields)

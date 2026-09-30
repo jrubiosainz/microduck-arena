@@ -136,15 +136,42 @@ def test_a_recorded_name_is_not_reused_before_its_run_is_fetched(workshop, fakes
     '{"first": "not a list"}',
     '[1, "two", {"no": "name"}]',
     '[{"name": "legacy", "ckpt_repo": "alice/x", "namespace": "alice", "job_id": "j0"}]',  # before tasks
+    f'[{{"task": "{TASK}", "name": "x", "ended": "finished"}}]',  # no "where"
+    f'[{{"task": "{TASK}", "name": "y", "where": "local", "recipe": {{"num_envs": 1}}}}]',  # recipe without max_iterations
+    f'[{{"task": "{TASK}", "name": "z", "where": "local", "ended": "done"}}]',  # "done" is not a training's ended state
+    f'[{{"task": "{TASK}", "name": ["a"], "where": "local"}}]',  # name is not a string
 ])
 def test_an_older_or_hand_edited_jobs_file_keeps_only_what_reads_as_a_job(workshop, fakes, checkout, junk, monkeypatch):
     """Review focus: never a 500, and a launch still works."""
     (checkout / "logs").mkdir()
     (checkout / "logs" / "workshop-jobs.json").write_text(junk)
     assert jobs(workshop) == []
+    assert workshop.get("/api/workshop/status").status_code == 200
     monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")
     assert workshop.post(f"{SPRINT_URL}/train", json=HF).status_code == 200
     assert [t["name"] for t in jobs(workshop)] == ["first"]
+
+
+def test_a_launch_keeps_an_older_raw_entry_in_the_file(workshop, fakes, checkout):
+    """A record `recorded_jobs` leaves out may still hold the id of a Hugging Face job that is
+    billed regardless: a launch must not erase it from the file."""
+    (checkout / "logs").mkdir()
+    legacy = {"name": "legacy", "ckpt_repo": "alice/x", "namespace": "alice", "job_id": "j0"}
+    (checkout / "logs" / "workshop-jobs.json").write_text(json.dumps([legacy]))
+    fakes.gpu()
+    assert workshop.post(f"{SPRINT_URL}/train", json=LOCAL).status_code == 200
+    raw = json.loads((checkout / "logs" / "workshop-jobs.json").read_text())
+    assert legacy in raw
+
+
+def test_updating_a_record_that_was_never_launched_writes_nothing(checkout):
+    """A job id, an ended state, a stage: none of these is a launch. With no record yet to update,
+    there is nothing to write — not even a partial one, which would never read as a job anyway."""
+    from arena.workshop.jobs import recorded_jobs, remember_job
+
+    remember_job(checkout, TASK, "ghost", job_id="j9")
+    assert recorded_jobs(checkout) == []
+    assert not (checkout / "logs" / "workshop-jobs.json").exists()
 
 
 def test_an_unknown_ticket_is_404(workshop):
