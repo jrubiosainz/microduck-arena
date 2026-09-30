@@ -105,6 +105,15 @@ def test_the_authors_words_are_a_fact_when_they_read_as_prose():
     assert note.kind == "notable"
 
 
+def test_the_authors_words_on_several_lines_are_quoted_on_one():
+    """A textarea's line breaks are layout, not markup: the words still read as prose."""
+    manifest = load_event("sprint-2m")
+    mine = run("alice", 12.40, "2026-09-11T10:00:00Z", run_id="R1",
+               description="It leans into every step.\n\nThen it  sprints,\tlow.  ")
+    (note,) = [f for f in result_facts(mine, manifest, [mine], []) if f.ref == "run#/note"]
+    assert note.text == '@alice says about the policy: "It leans into every step. Then it sprints, low."'
+
+
 @pytest.mark.parametrize("description", [None, "see https://example.com", "tuned track_linear_velocity", "x" * 281, "<b>fast</b>"])
 def test_no_note_when_the_words_are_missing_or_machine_shaped(description):
     manifest = load_event("sprint-2m")

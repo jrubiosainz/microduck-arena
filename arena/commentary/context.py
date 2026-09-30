@@ -131,9 +131,10 @@ NOTE_MAX = 280
 
 def _note(record: RunRecord) -> Fact | None:
     """The author's own words about the policy, quoted as theirs: never a result, and only when they
-    read as prose (the same checks as any submitter text), so no turn that cites it is refused."""
-    text = record.description
-    if not text or not label(text, limit=NOTE_MAX):
+    read as prose (the same checks as any submitter text), so no turn that cites it is refused. Its
+    line breaks and runs of spaces are a textarea's layout: quoted as single spaces."""
+    text = " ".join((record.description or "").split())
+    if not label(text, limit=NOTE_MAX):
         return None
     return Fact("run#/note", f'@{record.user} says about the policy: "{text}"', "notable",
                 identities=(record.user,))
