@@ -18,12 +18,12 @@ export function revisionMessage(event, now = new Date()) {
   return `${event} training revision ${day} ${two(now.getHours())}:${two(now.getMinutes())}`;
 }
 
-/** Why a place to train is not available, or null when it is. */
+/** Why a place to train is not available, or null when it is: a sentence that reads alone under the stickers. */
 export function unavailable(where, { account, gpu }) {
-  if (where === "local") return gpu ? null : "No NVIDIA GPU on this machine: train on Hugging Face Jobs.";
+  if (where === "local") return gpu ? null : "No NVIDIA GPU here, so this machine cannot train.";
   if (account.phase === "checking") return "Checking your Hugging Face account…";
   if (account.phase === "unreachable") return "Hugging Face is unreachable: check your connection.";
-  if (account.phase !== "in") return "Log in to Hugging Face first (top right).";
+  if (account.phase !== "in") return "Log in to Hugging Face (top right) to train on its Jobs.";
   if (!account.canPay) return "Hugging Face Jobs need a payment method: see Ready to train on the home page.";
   return null;
 }
@@ -61,7 +61,7 @@ export function trainForm({ challenge, gpu }, { onCommit, onTrain }) {
     <fieldset class="form">
       <div class="field"><span class="field__name">Train on</span>
         <div class="seg"><button type="button" data-where="hf-jobs">Hugging Face Jobs</button><button type="button" data-where="local">This machine</button></div>
-        <p class="hint where-hint"></p></div>
+        <p class="hint where-hint"></p><p class="hint where-why" hidden></p></div>
       <label class="field">Run name <input name="run" spellcheck="false" maxlength="40" /></label>
       <details class="settings"><summary>Settings</summary>
         <h4>Rewards <small>how much each behaviour pays</small></h4><div class="rewards"></div>
@@ -126,6 +126,10 @@ export function trainForm({ challenge, gpu }, { onCommit, onTrain }) {
     }
     const blocked = unavailable(where, { account, gpu });
     say(".where-hint", blocked ?? (where === "local" ? "Trains on this machine's NVIDIA GPU." : `One L4 GPU, billed to ${account.user}.`), Boolean(blocked));
+    // The other place, when it cannot be chosen, says why under the stickers too, not only in a tooltip.
+    const other = unavailable(where === "local" ? "hf-jobs" : "local", { account, gpu });
+    $(".where-why").textContent = other ?? "";
+    $(".where-why").hidden = !other;
     $(".train-go").disabled = dirty || pending || Boolean(blocked);
   }
 

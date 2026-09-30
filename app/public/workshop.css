@@ -164,6 +164,7 @@ details.settings[open] summary { margin-bottom: 10px; }
 .ticket__pub { margin: 0; font-size: 0.78rem; color: var(--ink-70); }
 .ticket__pub--yes { font-weight: 600; color: var(--lime-inked); }
 .ticket__stop { position: absolute; right: 12px; bottom: 12px; }
+.ticket__stop[aria-disabled="true"] { opacity: 0.45; cursor: progress; box-shadow: none; }
 .progress { position: relative; height: 18px; border: 2px solid var(--ink); background: var(--paper); }
 .progress i { position: absolute; inset: 0 auto 0 0; background: var(--orange); }
 .progress span { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-size: 0.66rem; font-weight: 700; }

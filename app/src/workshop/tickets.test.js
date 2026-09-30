@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { bars, officialTime, summary, ticketCard } from "./tickets.js";
 
 const row = (n, score, finished = 5, status = "evaluated") => ({ n, status, score, seeds_finished: finished, seeds_total: 5, command_vx: 0.55 });
@@ -6,6 +6,11 @@ const TICKET = {
   id: "first", name: "first", where: "hf-jobs", state: "running", progress: { done: 1250, total: 3000 },
   started: "2026-09-30T09:15:00+00:00", run_id: "2026-09-30_09-15-00_first", dirty: false,
   checkpoints: [row(0, 50, 0), row(250, 8.1), row(500, 5.62), { n: 750, status: "queued" }], best: 500, published: null,
+};
+
+afterEach(() => vi.restoreAllMocks());
+const flush = async () => {
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
 };
 
 describe("a ticket", () => {
@@ -51,5 +56,40 @@ describe("a ticket", () => {
   it("a run from a shell says so", () => {
     const card = ticketCard({ ...TICKET, where: null, state: "done" }, { event: "sprint-2m", voted: false, onStop: vi.fn() });
     expect(card.querySelector(".ticket__top .mono-label").textContent).toBe("From a shell");
+  });
+
+  it("stops once, after a confirm, without following the card's link", async () => {
+    let finish;
+    const onStop = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const card = ticketCard(TICKET, { event: "sprint-2m", voted: false, onStop });
+    document.body.append(card);
+    const before = location.hash;
+    const stop = card.querySelector(".ticket__stop");
+    expect(stop.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))).toBe(false);
+    expect(location.hash).toBe(before);
+    expect(confirm).toHaveBeenCalledWith("Stop first? A stopped Hugging Face job cannot be resumed.");
+    expect(stop.getAttribute("aria-disabled")).toBe("true");
+    stop.click();
+    stop.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(onStop).toHaveBeenCalledTimes(1);
+    finish();
+    await flush();
+    expect(stop.hasAttribute("aria-disabled")).toBe(false);
+    card.remove();
+  });
+
+  it("stops from the keyboard, and a local training says it cannot be resumed", async () => {
+    const onStop = vi.fn(async () => {});
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const stop = ticketCard({ ...TICKET, where: "local" }, { event: "sprint-2m", voted: false, onStop }).querySelector(".ticket__stop");
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    stop.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+    expect(confirm).toHaveBeenCalledWith("Stop first? It cannot be resumed.");
+    await flush();
+    stop.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+    expect(onStop).toHaveBeenCalledTimes(2);
   });
 });

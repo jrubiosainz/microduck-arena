@@ -41,6 +41,8 @@ async function show() {
     dress(SHEETS[view]);
     root.replaceChildren(box);
     page = next;
+    // The account may have answered while the page was being drawn, when there was no page to tell.
+    page.accountChanged();
     window.scrollTo(0, 0);
   } catch (error) {
     if (mine === shown) root.replaceChildren(el("p", "failed", `The workshop's server did not answer: ${error.message}`));

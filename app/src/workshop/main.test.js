@@ -13,7 +13,7 @@ const { api, CODE } = vi.hoisted(() => {
       { event: SPRINT, folder: "sprint_2m", task: "S", recipe: {}, knobs: [], running: 1 },
       { event: SWAG, folder: "swag_contest", task: "W", recipe: {}, knobs: [], running: 0 },
     ] }),
-    getHub: async () => ({ user: null, reachable: true, can_pay: false }),
+    getHub: vi.fn(),
     startLogin: vi.fn(async () => ({ url: "https://huggingface.co/oauth/device?user_code=X", code: "X" })),
     getLogin: async () => ({ state: "waiting", output: "" }),
     getCode: vi.fn(),
@@ -37,6 +37,7 @@ beforeEach(() => {
   document.head.innerHTML = '<link rel="stylesheet" data-theme="club" /><link rel="stylesheet" data-theme="race" disabled />';
   document.body.innerHTML = '<div id="app"></div>';
   api.getCode.mockImplementation(async () => CODE);
+  api.getHub.mockImplementation(async () => ({ user: null, reachable: true, can_pay: false }));
 });
 
 describe("the workshop's home", () => {
@@ -94,5 +95,26 @@ describe("a challenge's page in the workshop", () => {
     expect(app.querySelector(".signage .wordmark").textContent).toBe("MicroduckWorkshop");
     expect(document.querySelector("link[data-theme=race]").disabled).toBe(false);
     expect(document.querySelector("link[data-theme=club]").disabled).toBe(true);
+  });
+
+  it("shows the account that answered while it was being drawn", async () => {
+    // Opened straight on a challenge (`workshop <id>`): the Hub answers after the page drew its chip,
+    // before the page is on screen.
+    let answerHub;
+    api.getHub.mockImplementation(() => new Promise((resolve) => { answerHub = resolve; }));
+    let openCode;
+    const code = new Promise((resolve) => { openCode = resolve; });
+    api.getCode.mockImplementation(async () => {
+      await code;
+      return CODE;
+    });
+    history.replaceState(null, "", "/#/c/sprint-2m");
+    await import("./main.js");
+    await settled();
+    answerHub({ user: "alice", reachable: true, can_pay: true });
+    await settled();
+    openCode();
+    await settled();
+    expect(document.querySelector("#app .signage .profile-chip").textContent).toBe("alice");
   });
 });

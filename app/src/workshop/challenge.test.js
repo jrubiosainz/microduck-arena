@@ -60,6 +60,75 @@ describe("a challenge's page", () => {
     page.leave();
   });
 
+  it("redraws only the tickets whose answer changed: a Stop keeps its focus", async () => {
+    const a = { ...TICKET, id: "a", name: "a", progress: { done: 10, total: 3000 } };
+    const b = { ...TICKET, id: "b", name: "b", state: "done" };
+    const c = { ...TICKET, id: "c", name: "c" };
+    const names = () => [...root.querySelectorAll(".ticket__name")].map((h) => h.textContent);
+    api.getJobs.mockResolvedValue([a, b]);
+    const root = document.createElement("div");
+    document.body.append(root);
+    const page = await mountChallenge(root, { status: STATUS, account, route: { view: "challenge", event: "sprint-2m" } });
+    const [cardA, cardB] = root.querySelectorAll(".ticket");
+    const stop = cardA.querySelector(".ticket__stop");
+    stop.focus();
+    api.getJobs.mockResolvedValue([c, a, { ...b, published: { entered: "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s" } }]);
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(names()).toEqual(["c", "a", "b"]);
+    expect(root.querySelectorAll(".ticket")[1]).toBe(cardA);
+    expect(root.querySelectorAll(".ticket")[2]).not.toBe(cardB);
+    expect(document.activeElement).toBe(stop);
+    api.getJobs.mockResolvedValue([a]);
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(names()).toEqual(["a"]);
+    expect(root.querySelector(".ticket")).toBe(cardA);
+    expect(document.activeElement).toBe(stop);
+    page.leave();
+    root.remove();
+  });
+
+  it("asks again only once the last answer is in, and a left page draws nothing more", async () => {
+    api.getJobs.mockResolvedValue([TICKET]);
+    const root = document.createElement("div");
+    const page = await mountChallenge(root, { status: STATUS, account, route: { view: "challenge", event: "sprint-2m" } });
+    let answer;
+    api.getJobs.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(api.getJobs).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+    expect(api.getJobs).toHaveBeenCalledTimes(2);
+    answer([TICKET]);
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(api.getJobs).toHaveBeenCalledTimes(3);
+    page.leave();
+    answer([{ ...TICKET, state: "done" }]);
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+    expect(api.getJobs).toHaveBeenCalledTimes(3);
+    expect(root.querySelector(".ticket .sticker").textContent).toBe("Training");
+  });
+
+  it("never lets an older answer bring a stopped training back", async () => {
+    api.getJobs.mockResolvedValue([TICKET]);
+    const root = document.createElement("div");
+    const page = await mountChallenge(root, { status: STATUS, account, route: { view: "challenge", event: "sprint-2m" } });
+    const answers = [];
+    api.getJobs.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
+    await vi.advanceTimersByTimeAsync(POLL_MS); // a poll is out when Stop is pressed
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    api.stopJob.mockResolvedValue({});
+    root.querySelector(".ticket__stop").click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(api.stopJob).toHaveBeenCalledWith("sprint-2m", "first");
+    expect(answers).toHaveLength(2);
+    answers[1]([{ ...TICKET, state: "stopped" }]);
+    await vi.advanceTimersByTimeAsync(0);
+    answers[0]([TICKET]); // the poll sent before Stop answers last
+    await vi.advanceTimersByTimeAsync(0);
+    expect(root.querySelector(".ticket .sticker").textContent).toBe("Stopped");
+    page.leave();
+    confirm.mockRestore();
+  });
+
   it("says so for a challenge that is not open here", async () => {
     const root = document.createElement("div");
     await mountChallenge(root, { status: STATUS, account, route: { view: "challenge", event: "moon-landing" } });

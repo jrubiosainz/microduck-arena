@@ -1,6 +1,6 @@
 // One challenge: how to make its training yours, the form that launches one, and one ticket per
 // training, asked again every few seconds (the tickets fill in as checkpoints are saved and
-// evaluated). Only what changed is redrawn: what is typed in the form stays.
+// evaluated). Only what changed is redrawn: what is typed in the form, and a focused ticket, stay.
 
 import { formatEventFacts } from "../format.js";
 import { footer } from "../signage.js";
@@ -85,10 +85,12 @@ export async function mountChallenge(root, { status, account, route }) {
   grid.append(head(challenge, status.arena), side, body);
   hall.append(grid);
 
+  // Every write (a commit, a launch, a stop) is followed by a fresh look, which also drops any poll
+  // still out: its answer predates the write.
   const form = trainForm({ challenge, gpu: status.gpu }, {
     onCommit: async (message) => {
-      code = await api.commitCode(message);
-      redrawForm();
+      await api.commitCode(message);
+      await refresh();
     },
     onTrain: async (values) => {
       await api.train(event, values);
@@ -110,31 +112,54 @@ export async function mountChallenge(root, { status, account, route }) {
     await refresh();
   }
 
-  let drawn = null; // the tickets on the wall, as last answered: an unchanged answer redraws nothing
+  // One card per ticket, by id, rebuilt only when its own answer changed; a card already in its place
+  // is never moved, so it keeps its focus, its hover and a press under way.
+  let cards = new Map(); // id -> { answer, card }
+  const empty = el("p", "tickets__empty", "No training yet: the first one starts from the form.");
+  function drawWall(jobs) {
+    cards = new Map(jobs.map((ticket) => {
+      const answer = JSON.stringify(ticket);
+      const kept = cards.get(ticket.id);
+      return [ticket.id, kept?.answer === answer ? kept : { answer, card: ticketCard(ticket, { event, voted, onStop }) }];
+    }));
+    const wanted = jobs.length ? [...cards.values()].map((c) => c.card) : [empty];
+    // The cards that go leave first, so a kept one slides into place without being moved.
+    const keep = new Set(wanted);
+    for (const child of [...wall.children]) if (!keep.has(child)) child.remove();
+    wanted.forEach((card, i) => {
+      if (wall.children[i] !== card) wall.insertBefore(card, wall.children[i] ?? null);
+    });
+  }
+
+  // Polls never overlap: the next is set once the latest answer is in. An answer older than the
+  // latest question, or one landing after the page was left, draws nothing.
+  let asked = 0;
+  let timer = null;
+  let left = false;
+  const latest = (mine) => mine === asked && !left;
   async function refresh() {
+    const mine = ++asked;
+    clearTimeout(timer);
     try {
-      const [jobs, latest] = await Promise.all([api.getJobs(event), api.getCode()]);
-      code = latest; // files edited meanwhile lock the form again
+      const [jobs, now] = await Promise.all([api.getJobs(event), api.getCode()]);
+      if (!latest(mine)) return;
+      code = now; // files edited meanwhile lock the form again
       redrawForm();
-      const answer = JSON.stringify(jobs);
-      if (answer === drawn) return;
-      drawn = answer;
       const running = jobs.filter((t) => t.state === "starting" || t.state === "running").length;
       count.textContent = `${jobs.length} run${jobs.length === 1 ? "" : "s"}${running ? ` · ${running} training now` : ""}`;
-      wall.replaceChildren(...(jobs.length
-        ? jobs.map((ticket) => ticketCard(ticket, { event, voted, onStop }))
-        : [el("p", "tickets__empty", "No training yet: the first one starts from the form.")]));
+      drawWall(jobs);
     } catch (error) {
-      drawn = null; // the count now says the workshop is lost: the next answer redraws it
-      count.textContent = `Lost touch with the workshop: ${error.message}`;
+      if (latest(mine)) count.textContent = `Lost touch with the workshop: ${error.message}`;
+    } finally {
+      if (latest(mine)) timer = setTimeout(refresh, POLL_MS);
     }
   }
   await refresh();
-  const timer = setInterval(refresh, POLL_MS);
 
   return {
     leave() {
-      clearInterval(timer);
+      left = true;
+      clearTimeout(timer);
     },
     accountChanged() {
       drawAccount();

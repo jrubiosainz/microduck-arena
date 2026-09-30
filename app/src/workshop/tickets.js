@@ -107,10 +107,18 @@ export function ticketCard(ticket, { event, voted, onStop }) {
     const stop = el("span", "quiet ticket__stop", "Stop");
     stop.setAttribute("role", "button");
     stop.tabIndex = 0;
-    const ask = (e) => {
+    const lost = ticket.where === "hf-jobs" ? "A stopped Hugging Face job cannot be resumed." : "It cannot be resumed.";
+    // Pressed once, it waits for its answer: a second press asks nothing more.
+    const ask = async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (window.confirm(`Stop ${ticket.name}? A stopped Hugging Face job cannot be resumed.`)) onStop(ticket.id);
+      if (stop.getAttribute("aria-disabled") === "true" || !window.confirm(`Stop ${ticket.name}? ${lost}`)) return;
+      stop.setAttribute("aria-disabled", "true");
+      try {
+        await onStop(ticket.id);
+      } finally {
+        stop.removeAttribute("aria-disabled");
+      }
     };
     stop.addEventListener("click", ask);
     stop.addEventListener("keydown", (e) => {

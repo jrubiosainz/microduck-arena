@@ -65,6 +65,23 @@ describe("the training form", () => {
     expect(pressed(withGpu)).toBe("local");
   });
 
+  it("says under the stickers why the other place is not available", () => {
+    const why = (form) => form.el.querySelector(".where-why");
+    const onGpu = trainForm({ challenge: CHALLENGE, gpu: true }, { onCommit: vi.fn(), onTrain: vi.fn() });
+    onGpu.update({ code: CLEAN, account: { phase: "out" } });
+    expect(onGpu.el.querySelector(".where-hint").textContent).toBe("Trains on this machine's NVIDIA GPU.");
+    expect(why(onGpu).hidden).toBe(false);
+    expect(why(onGpu).textContent).toContain("Log in");
+    expect(onGpu.el.querySelector(".train-go").disabled).toBe(false);
+    onGpu.update({ code: CLEAN, account: { ...IN, canPay: false } });
+    expect(why(onGpu).textContent).toContain("payment method");
+    onGpu.update({ code: CLEAN, account: IN });
+    expect(why(onGpu).hidden).toBe(true);
+    const noGpu = trainForm({ challenge: CHALLENGE, gpu: false }, { onCommit: vi.fn(), onTrain: vi.fn() });
+    noGpu.update({ code: CLEAN, account: IN });
+    expect(why(noGpu).textContent).toContain("No NVIDIA GPU");
+  });
+
   it("keeps Train shut while the chosen place is not available", () => {
     const form = trainForm({ challenge: CHALLENGE, gpu: false }, { onCommit: vi.fn(), onTrain: vi.fn() });
     form.update({ code: CLEAN, account: { phase: "out" } });
