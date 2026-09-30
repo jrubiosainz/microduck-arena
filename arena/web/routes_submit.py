@@ -165,7 +165,9 @@ def _description(fetched: FetchedPolicy) -> str | None:
     if not isinstance(text, str):
         return None
     text = text.strip()
-    defaults = {str(manifest.get("name") or ""), str((manifest.get("training") or {}).get("task_id") or "")}
+    training = manifest.get("training")
+    task_id = training.get("task_id") if isinstance(training, dict) else None
+    defaults = {str(manifest.get("name") or "").strip(), str(task_id or "").strip()}
     return text if 1 <= len(text) <= DESCRIPTION_MAX and text not in defaults else None
 
 

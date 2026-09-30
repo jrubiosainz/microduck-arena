@@ -392,6 +392,17 @@ def test_a_description_that_is_missing_a_default_or_too_long_is_not_kept(api, mo
     assert _entered_with(api, monkeypatch, manifest).description is None
 
 
+def test_a_manifest_whose_training_is_not_an_object_still_enters_and_keeps_a_description(api, monkeypatch):
+    record = _entered_with(api, monkeypatch, {"name": "strider", "training": "Mjlab-Sprint2m-MicroDuck",
+                                              "description": "It leans into every step."})
+    assert record.description == "It leans into every step."
+
+
+def test_a_description_that_only_repeats_the_trimmed_name_is_not_kept(api, monkeypatch):
+    manifest = {"name": "  strider  ", "description": "strider"}
+    assert _entered_with(api, monkeypatch, manifest).description is None
+
+
 def test_publishing_honours_a_pinned_speed(api):
     """Reversed deliberately. This test previously asserted the opposite — that a
     published time is always the full sweep — on the reasoning that letting
