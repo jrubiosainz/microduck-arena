@@ -239,13 +239,6 @@ def stop(event: str, ticket_id: str, request: Request) -> dict:
         ws.lock.release()
 
 
-def _run_or_404(ws: Workshop, challenge: Challenge, run_id: str):
-    run = next((r for r in find_runs(ws.root, challenge.task) if r.id == run_id), None)
-    if run is None:
-        raise HTTPException(status_code=404, detail=f"No run {run_id} in logs/rsl_rl/.")
-    return run
-
-
 @router.get("/challenges/{event}/jobs/{ticket_id}/checkpoints/{n}")
 def checkpoint(event: str, ticket_id: str, n: int, request: Request) -> dict:
     """A checkpoint's stored evaluation, its trace inline: the page replays it at once."""
@@ -298,23 +291,27 @@ def code_push(request: Request) -> dict:
 
 
 class PublishRequest(BaseModel):
-    run: str
     checkpoint: int
     name: str
-    description: str = ""
+    description: str
     allow_dirty: bool = False
     dry_run: bool = False
-    livery: str = "classic"
-    speed: float | None = None
 
 
-@router.post("/challenges/{event}/publish")
-async def publish_route(event: str, body: PublishRequest, request: Request) -> dict:
+@router.post("/challenges/{event}/jobs/{ticket_id}/publish")
+async def publish_route(event: str, ticket_id: str, body: PublishRequest, request: Request) -> dict:
     ws = _workshop(request)
     challenge = _challenge_or_404(ws, event)
-    run = _run_or_404(ws, challenge, body.run)
+    found = source(ws, challenge, ticket_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"No training {ticket_id} for {event}.")
+    run = found[3]
+    if run is None:
+        raise HTTPException(status_code=409, detail=f"{ticket_id} has no checkpoint yet.")
     if body.checkpoint not in run.checkpoints:
         raise HTTPException(status_code=400, detail=f"{run.id} has no model_{body.checkpoint}.pt")
+    if not body.name.strip() or not body.description.strip():
+        raise HTTPException(status_code=400, detail="A name and a word for the commentators are both needed.")
     if run.provenance.get("dirty") and not body.allow_dirty:
         raise HTTPException(
             status_code=400,
@@ -323,25 +320,22 @@ async def publish_route(event: str, body: PublishRequest, request: Request) -> d
         )
     user = await run_in_threadpool(_hub_user, ws)
     if not user:
-        raise HTTPException(status_code=400, detail="Log in to Hugging Face first (Preflight).")
-    manifest = load_event(challenge.event)
+        raise HTTPException(status_code=400, detail="Log in to Hugging Face first.")
     repo = repo_for(user, body.name)
-    args = (ws.root, run, body.checkpoint, repo, body.name, body.description.strip() or manifest.title,
-            challenge.event, body.allow_dirty)
+    args = (ws.root, run, body.checkpoint, repo, body.name, body.description.strip(), challenge.event, body.allow_dirty)
     env = code_url(ws.root, run.provenance.get("commit"))
     if not ws.publishing.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="A publish is already running.")
     try:
         if body.dry_run:
             return {"repo": repo, **await run_in_threadpool(preview, *args)}
-        published = await run_in_threadpool(publish, *args, arena=ws.arena, livery=body.livery,
-                                            speed=body.speed, code_url=env)
+        entered = await run_in_threadpool(publish, *args, arena=ws.arena, code_url=env)
     except PublishError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
         ws.publishing.release()
-    ws.open_browser(published["page_url"])  # the entry's page on the Arena, where its reveal plays
-    return {**published, "env": env}
+    ws.open_browser(entered["page_url"])  # the entry's page on the Arena, where its reveal plays
+    return {**entered, "env": env}
 
 
 def _only_its_own_page(app: FastAPI, port: int) -> None:

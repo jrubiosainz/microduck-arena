@@ -8,8 +8,10 @@ asks the network — what the Hub says of a job is in its record, written by the
 """
 
 from ..manifest import load_event
+from .code import code_url
 from .evaluations import summary
 from .jobs import recorded_jobs
+from .publishing import published
 from .runs import curve, find_runs
 
 # What the Hub says of a job, as a ticket says it.
@@ -109,6 +111,7 @@ def _ticket(source_, voted: bool) -> dict:
         "checkpoints": rows,
         "best": best,
         "job_url": _job_url(live, record),
+        "published": (published(run) or [None])[-1] if run else None,
     }
 
 
@@ -143,6 +146,7 @@ def ticket_detail(ws, challenge, ticket_id: str, since: int = 0) -> dict | None:
         "log": lines, "next": following, "following": live is not None,
         "curve": curve(run) if run else [],
         "commit": run.provenance.get("commit") if run else None,
+        "code_url": code_url(ws.root, run.provenance.get("commit")) if run else None,
         "recipe": (record or {}).get("recipe"),
         "params": (record or {}).get("params"),
     }

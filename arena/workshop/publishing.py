@@ -3,12 +3,14 @@
 The workshop writes no manifest, uploads nothing and calls no Arena itself: `publish --run
 --enter` does all three, exactly as from a shell. It runs twice — `--dry-run` for the preview
 of the Hub card, then for real — and the real one prints the commit it made and the entry's
-time and page, which the workshop opens.
+time and page, which the workshop opens and remembers next to the run.
 """
 
 import json
+import os
 import re
 import shutil
+from datetime import UTC, datetime
 
 from ..manifest import load_event
 from .shell import uv_run
@@ -63,19 +65,40 @@ def preview(root, run, checkpoint, repo, name, description, event_id, allow_dirt
         shutil.rmtree(out, ignore_errors=True)
 
 
+PUBLISHED = "published.json"
+
+
+def published(run) -> list[dict]:
+    """Every entry published from this run, oldest first."""
+    try:
+        entries = json.loads((run.path / "workshop" / PUBLISHED).read_text())
+    except (OSError, ValueError):
+        return []
+    return [e for e in entries if isinstance(e, dict)] if isinstance(entries, list) else []
+
+
+def _remember(run, entry: dict) -> None:
+    path = run.path / "workshop" / PUBLISHED
+    path.parent.mkdir(exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps([*published(run), entry], indent=1))
+    os.replace(tmp, path)
+
+
 def publish(root, run, checkpoint, repo, name, description, event_id, allow_dirty, *,
-            arena: str, livery: str, speed: float | None, code_url: str | None) -> dict:
+            arena: str, code_url: str | None) -> dict:
     args = publish_args(run, checkpoint, repo, name, description, load_event(event_id), allow_dirty)
-    # Public, or the Arena cannot read it; --force because publishing a name again is a new
-    # commit on the same repo, and the Arena pins the commit it raced.
-    args += ["--no-private", "--force", "--enter", "--arena", arena, "--livery", livery]
-    if speed is not None:
-        args += ["--speed", f"{speed:g}"]
+    # Public, or the Arena cannot read it; --force because publishing a name again is a new commit on
+    # the same repo, and the Arena pins the commit it raced. No --livery (every workshop entry wears
+    # the default) and no --speed (a race is always swept).
+    args += ["--no-private", "--force", "--enter", "--arena", arena]
     if code_url:
         args += ["--code-url", code_url]
     output = _run(root, args)
     commit, entered = _COMMIT.search(output), _ENTERED.search(output)
     if not commit or not entered:
         raise PublishError(output + "\n[workshop] publish printed no entry for the workshop to open")
-    return {"repo": repo, "revision": commit.group(1), "entered": entered.group(1),
-            "page_url": entered.group(2), "output": output}
+    entry = {"checkpoint": checkpoint, "repo": repo, "revision": commit.group(1), "entered": entered.group(1),
+             "page_url": entered.group(2), "at": datetime.now(UTC).isoformat(timespec="seconds")}
+    _remember(run, entry)
+    return {**{k: entry[k] for k in ("repo", "revision", "entered", "page_url")}, "output": output}
