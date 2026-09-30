@@ -1,9 +1,9 @@
 """Publish a run's checkpoint with `uv run publish`, which also enters it on the Arena.
 
 The workshop writes no manifest, uploads nothing and calls no Arena itself: `publish --run
---enter` does all three, exactly as from a shell. It runs twice — `--dry-run` for the preview
-of the Hub card, then for real — and the real one prints the commit it made and the entry's
-time and page, which the workshop opens and remembers next to the run.
+--enter` does all three, exactly as from a shell. The preview of the Hub card is the same command
+with `--dry-run`. The real one prints the commit it made and the entry's time and page, which the
+workshop opens and remembers next to the run.
 """
 
 import json
@@ -56,11 +56,10 @@ def _run(root, args: list[str]) -> str:
 
 def preview(root, run, checkpoint, repo, name, description, event_id, allow_dirty) -> dict:
     args = publish_args(run, checkpoint, repo, name, description, load_event(event_id), allow_dirty)
-    output = _run(root, [*args, "--dry-run"])
+    _run(root, [*args, "--dry-run"])
     out = root / f"publish-{slug(name)}"
     try:
-        return {"readme": (out / "README.md").read_text(),
-                "manifest": json.loads((out / "manifest.json").read_text()), "output": output}
+        return {"readme": (out / "README.md").read_text()}
     finally:
         shutil.rmtree(out, ignore_errors=True)
 

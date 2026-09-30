@@ -8,7 +8,7 @@ import threading
 import time
 
 from arena.constants import TRACE_WIDTH
-from arena.workshop.evaluations import evaluate_checkpoint, evaluate_next, next_checkpoint
+from arena.workshop.evaluations import evaluate_next, next_checkpoint
 from tests.workshop.conftest import make_run, store_evaluation
 
 SPRINT_URL = "/api/workshop/challenges/sprint-2m"
@@ -76,6 +76,21 @@ def test_a_failed_export_is_stored_and_tried_again_only_once_the_file_changes(wo
     assert picked(workshop) == (run.name, 0)
 
 
+def test_any_failure_while_measuring_is_stored_and_the_worker_moves_on(workshop, fakes, checkout, monkeypatch):
+    """One checkpoint that breaks the evaluator must not keep the worker on it forever."""
+    from arena.workshop import evaluations
+
+    def breaks(event, policy):
+        raise FloatingPointError("the simulation diverged")
+
+    run = make_run(checkout, "first", checkpoints=(0,))
+    monkeypatch.setattr(evaluations, "evaluate", breaks)
+    assert evaluate_next(state(workshop)) is True
+    body = workshop.get(f"{SPRINT_URL}/jobs/{run.name}/checkpoints/0").json()
+    assert "FloatingPointError: the simulation diverged" in body["error"]
+    assert rows(workshop) == [(0, "failed")] and picked(workshop) is None
+
+
 def test_a_result_from_another_runner_version_is_measured_again(workshop, checkout):
     run = make_run(checkout, "first", checkpoints=(0,))
     store_evaluation(run, 0)
@@ -98,28 +113,6 @@ def test_a_checkpoint_not_evaluated_yet_is_404(workshop, checkout):
     response = workshop.get(f"{SPRINT_URL}/jobs/{run.name}/checkpoints/0")
     assert response.status_code == 404 and "not evaluated yet" in response.json()["detail"]
     assert workshop.get(f"{SPRINT_URL}/jobs/{run.name}/checkpoints/7").status_code == 404
-
-
-def test_two_evaluations_of_one_checkpoint_export_it_once(workshop, fakes, checkout):
-    run = make_run(checkout, "first", checkpoints=(1,))
-    results = []
-
-    def go():
-        results.append(evaluate_checkpoint(checkout, run_of(workshop, run), 1, "sprint-2m"))
-
-    threads = [threading.Thread(target=go) for _ in range(2)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-    assert len(results) == 2 and results[0]["score"] == results[1]["score"]
-    assert len(fakes.calls("publish")) == 1
-
-
-def run_of(client, path):
-    from arena.workshop.runs import find_runs
-
-    return next(r for r in find_runs(state(client).root, "Mjlab-Sprint2m-MicroDuck") if r.path == path)
 
 
 def test_a_stale_staging_dir_is_not_reused(workshop, fakes, checkout, monkeypatch):

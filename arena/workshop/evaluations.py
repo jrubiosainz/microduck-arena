@@ -6,34 +6,31 @@ nothing. `arena.evaluate` is the code the Space runs, on this machine's MuJoCo: 
 indicative — only the Space times an entry, and replays drift apart between machines after a few
 seconds.
 
-A worker evaluates every checkpoint of the open challenges' runs, one at a time: the newest run
-first, its checkpoints in order, so a training's tickets fill in as it goes. A result is stored next
-to its checkpoint, per Arena runner version, trace included, so a page replays it at once. A failed
-export is stored too, with the checkpoint file's modification time, and tried again only once that
-file changes. A checkpoint file younger than FRESH_S waits: a local training may still be writing it.
+A worker evaluates every checkpoint of the open challenges' runs, one at a time (the export always
+stages in the same ./publish-workshop-evaluation/): the newest run first, its checkpoints in order,
+so a training's tickets fill in as it goes. A result is stored next to its checkpoint, per Arena
+runner version, trace included, so a page replays it at once. A checkpoint that cannot be measured
+— a failed export, a policy that does not load, a race that breaks — is stored as a failure, with the
+checkpoint file's modification time, and tried again only once that file changes. A checkpoint file
+younger than FRESH_S waits: a local training may still be writing it.
 """
 
 import base64
 import json
 import os
 import shutil
-import threading
 import time
 
 from ..constants import RUNNER_VERSION
 from ..evaluate import evaluate
 from ..manifest import load_event
-from ..policy import PolicyError, load_policy
+from ..policy import load_policy
 from .runs import find_runs
 from .shell import uv_run
 
 NAME = "workshop-evaluation"
 FRESH_S = 30.0
 IDLE_S = 5.0
-# One evaluation at a time, start to finish: the dry run always writes the same
-# ./publish-workshop-evaluation/, and holding this around the race too means a second request for
-# a checkpoint being measured waits for it and returns what it stored.
-_ONE = threading.Lock()
 
 
 class EvaluationError(RuntimeError):
@@ -77,7 +74,7 @@ def summary(run) -> dict[int, dict]:
 
 
 def _write(run, n: int, body: dict) -> None:
-    """Atomically: a reader (a ticket, another evaluation) must never see a half-written file."""
+    """Atomically: a reader (a ticket, a replay) must never see a half-written file."""
     path = _path(run, n)
     path.parent.mkdir(exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -115,24 +112,15 @@ def _measure(root, run, n: int, event_id: str) -> dict:
     }
 
 
-def evaluate_checkpoint(root, run, n: int, event_id: str) -> dict:
-    if n not in run.checkpoints:
-        raise EvaluationError(f"{run.id} has no model_{n}.pt")
-    with _ONE:
-        # Re-checked under the lock: a request that waited behind another evaluation of the SAME
-        # checkpoint returns what that one just stored, rather than exporting again.
-        if (found := stored(run, n)) is not None:
-            if "error" in found:
-                raise EvaluationError(found["error"])
-            return found
-        mtime = _mtime(run, n)
-        try:
-            body = _measure(root, run, n, event_id)
-        except (EvaluationError, PolicyError) as exc:
-            _write(run, n, {"checkpoint": n, "error": str(exc), "mtime": mtime, "runner_version": RUNNER_VERSION})
-            raise EvaluationError(str(exc)) from exc
-        _write(run, n, body)
-        return body
+def _evaluate(root, run, n: int, event_id: str) -> None:
+    """Measure checkpoint n and store what came of it: its result, or why there is none."""
+    mtime = _mtime(run, n)
+    try:
+        body = _measure(root, run, n, event_id)
+    except Exception as exc:  # noqa: BLE001 — stored, so the worker moves on to the next checkpoint
+        error = str(exc) if isinstance(exc, EvaluationError) else f"{type(exc).__name__}: {exc}"
+        body = {"checkpoint": n, "error": error, "mtime": mtime, "runner_version": RUNNER_VERSION}
+    _write(run, n, body)
 
 
 def next_checkpoint(root, challenges, now: float | None = None):
@@ -158,10 +146,7 @@ def evaluate_next(ws) -> bool:
     if found is None:
         return False
     challenge, run, n = found
-    try:
-        evaluate_checkpoint(ws.root, run, n, challenge.event)
-    except EvaluationError:
-        pass  # stored as a failure: its ticket says so
+    _evaluate(ws.root, run, n, challenge.event)
     return True
 
 

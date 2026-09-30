@@ -24,8 +24,7 @@ def _ticket(workshop):
 def test_the_preview_is_a_dry_run_showing_the_hub_card(workshop, fakes, checkout):
     run = make_run(checkout, "first")
     body = _publish(workshop, run, dry_run=True).json()
-    assert body["repo"] == "alice/microduck-my-walker"
-    assert body["readme"] == "# my-walker\n" and body["manifest"]["kind"] == "perpetual"
+    assert body == {"repo": "alice/microduck-my-walker", "readme": "# my-walker\n"}
     (call,) = fakes.calls("publish")
     assert "--dry-run" in call and "--no-private" not in call and "--enter" not in call
     assert not (checkout / "publish-my-walker").exists()
