@@ -125,7 +125,7 @@ Arena's entry column) holds the form. At 420 px the form comes between the head 
 
 - **Head:** *Back to <challenge>*, eyebrow *Training · Hugging Face Jobs · L4* (or *This
   machine*), the run name as title, facts (started, code commit, robots, rewards), and while
-  it runs a progress bar with the time left when known.
+  it runs a progress bar.
 - **The deck:** the Arena's stage and transport, replaying the chosen checkpoint's best seed.
 - **Checkpoints:** a bar per checkpoint slot of the run (saved ones evaluated, queued or failed;
   future ones dotted), the iteration under each. A click replays that checkpoint at once, from
@@ -163,7 +163,8 @@ Arena's entry column) holds the form. At 420 px the form comes between the head 
 `http://127.0.0.1:<port>/#/c/<id>`, or `/` without an id; an unknown id is an error, as today.
 The terminal list of challenges goes: the home is the chooser. `/status` answers the open
 challenges (each with its event summary, its settings and how many of its trainings run), the
-Arena's address, whether there is an NVIDIA GPU, and the fork state; nothing in it asks the network.
+Arena's address and whether there is an NVIDIA GPU; nothing in it asks the network (`/code` says
+where the checkout stands, the fork included).
 
 ### Logging in
 
@@ -226,9 +227,9 @@ the recipe's iterations, stopped otherwise.
 its checkpoint repo every 2 minutes, and once more when it ends, after a restart as well. The
 *Fetch checkpoints* buttons go.
 
-**Progress.** From the followed log (`Learning iteration X/Y`); otherwise the newest step in the
-run's TensorBoard files or its newest checkpoint, over the recipe's iterations (the recorded
-recipe, else `--agent.max-iterations` in `provenance.json`'s command).
+**Progress.** From the followed log (`Learning iteration X/Y`); otherwise the run's newest
+checkpoint, over the recipe's iterations (the recorded recipe, else `--agent.max-iterations` in
+`provenance.json`'s command).
 
 ### Evaluating every checkpoint
 
