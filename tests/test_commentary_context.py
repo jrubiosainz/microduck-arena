@@ -1,5 +1,7 @@
 """Facts are sentences with references; nothing invented, nothing technical."""
 
+import pytest
+
 from arena.commentary.context import label, nature, result_facts, technical_text
 from arena.evaluate import SeedResult
 from arena.manifest import load_event
@@ -93,3 +95,18 @@ def test_a_dnf_by_timeout_is_not_a_fall_and_a_voted_event_has_no_board():
     voted = run("eve", 20.0, "2026-09-11T10:00:00Z", event="swag-contest")
     refs = [f.ref for f in result_facts(voted, swag, [voted], [])]
     assert "run#/board" not in refs
+
+
+def test_the_authors_words_are_a_fact_when_they_read_as_prose():
+    manifest = load_event("sprint-2m")
+    mine = run("alice", 12.40, "2026-09-11T10:00:00Z", run_id="R1", description="It leans into every step.")
+    (note,) = [f for f in result_facts(mine, manifest, [mine], []) if f.ref == "run#/note"]
+    assert note.text == '@alice says about the policy: "It leans into every step."'
+    assert note.kind == "notable"
+
+
+@pytest.mark.parametrize("description", [None, "see https://example.com", "tuned track_linear_velocity", "x" * 281, "<b>fast</b>"])
+def test_no_note_when_the_words_are_missing_or_machine_shaped(description):
+    manifest = load_event("sprint-2m")
+    mine = run("alice", 12.40, "2026-09-11T10:00:00Z", run_id="R1", description=description)
+    assert not [f for f in result_facts(mine, manifest, [mine], []) if f.ref == "run#/note"]

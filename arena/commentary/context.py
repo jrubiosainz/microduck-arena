@@ -126,6 +126,19 @@ def _points(record: RunRecord, receipts: list[Receipt]) -> Fact | None:
     return Fact("run#/points", f"This run earned {total} points: {parts}.", "result", tags)
 
 
+NOTE_MAX = 280
+
+
+def _note(record: RunRecord) -> Fact | None:
+    """The author's own words about the policy, quoted as theirs: never a result, and only when they
+    read as prose (the same checks as any submitter text), so no turn that cites it is refused."""
+    text = record.description
+    if not text or not label(text, limit=NOTE_MAX):
+        return None
+    return Fact("run#/note", f'@{record.user} says about the policy: "{text}"', "notable",
+                identities=(record.user,))
+
+
 def result_facts(record: RunRecord, manifest: Manifest, event_runs, receipts) -> tuple[Fact, ...]:
     """The run itself: the event, who ran, what the clock says, where it stands
     and what it earned. `event_runs` are the counting runs of the event as they
@@ -134,6 +147,7 @@ def result_facts(record: RunRecord, manifest: Manifest, event_runs, receipts) ->
     what, tags = nature(manifest)
     who = f"@{record.user}"
     policy = record.policy_name if label(record.policy_name) else None
+    note = _note(record)
     facts = [
         Fact("run#/event", f"The event is the {manifest.title}, {what}.", "result", tags),
         Fact("run#/participant",
@@ -142,6 +156,8 @@ def result_facts(record: RunRecord, manifest: Manifest, event_runs, receipts) ->
              "result", ("participant",), identities=(record.user,)),
         _result(record, manifest),
     ]
+    if note:
+        facts.append(note)
     if manifest.metric != "votes":
         facts.append(_board(record, manifest, event_runs))
     points = _points(record, receipts)

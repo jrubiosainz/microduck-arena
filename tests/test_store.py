@@ -106,6 +106,14 @@ def test_a_livery_round_trips():
     assert RunRecord.from_dict(record.to_dict()).livery == "purple"
 
 
+def test_a_description_survives_the_round_trip_and_an_older_record_has_none():
+    record = make_record(description="It leans into every step.")
+    assert RunRecord.from_dict(record.to_dict()).description == "It leans into every step."
+    older = record.to_dict()
+    del older["description"]
+    assert RunRecord.from_dict(older).description is None
+
+
 def test_a_published_model_is_stored_and_read_back(tmp_path):
     store = LocalStore(tmp_path)
     record = make_record(model_stored=True)

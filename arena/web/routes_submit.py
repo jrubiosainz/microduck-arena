@@ -154,6 +154,21 @@ def _hub_name(fetched: FetchedPolicy) -> str:
     return named or fetched.repo_id.rsplit("/", 1)[-1].removeprefix("microduck-")
 
 
+DESCRIPTION_MAX = 500
+
+
+def _description(fetched: FetchedPolicy) -> str | None:
+    """What the author wrote for the commentators, from the manifest: None when it is missing, too
+    long, or only one of the defaults `publish` falls back to (the training task's id, the name)."""
+    manifest = fetched.manifest or {}
+    text = manifest.get("description")
+    if not isinstance(text, str):
+        return None
+    text = text.strip()
+    defaults = {str(manifest.get("name") or ""), str((manifest.get("training") or {}).get("task_id") or "")}
+    return text if 1 <= len(text) <= DESCRIPTION_MAX and text not in defaults else None
+
+
 def _label(name: str | None, fallback: str) -> str:
     # Capped: this is submitter-supplied text that ends up on a shared board, and
     # nothing downstream bounds it. 80 characters is generous for a policy name.
@@ -314,6 +329,7 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         model_stored=False,
         env_url=link,
         livery=_livery(livery),
+        description=_description(fetched),
     )
     store.append(record, trace_codec.encode(result.trace, result.settle))
 

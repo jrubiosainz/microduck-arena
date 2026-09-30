@@ -371,6 +371,27 @@ def test_an_absurd_livery_is_capped_rather_than_stored_whole(api):
     assert len(response.json()["livery"]) == 32
 
 
+def _entered_with(api, monkeypatch, manifest):
+    monkeypatch.setattr("arena.web.routes_submit._fetch_from_hub",
+                        lambda repo_id, revision, event: _fetched(repo_id="alice/walker", manifest=manifest))
+    run_id = api.post("/api/events/sprint-2m/submit", data={"repo_id": "alice/walker"}).json()["run_id"]
+    return next(r for r in api.app.state.store.runs("sprint-2m") if r.run_id == run_id)
+
+
+def test_the_manifests_description_is_kept_for_the_commentators(api, monkeypatch):
+    record = _entered_with(api, monkeypatch, {"name": "strider", "description": "  It leans into every step. ",
+                                              "training": {"task_id": "Mjlab-Sprint2m-MicroDuck"}})
+    assert record.description == "It leans into every step."
+
+
+@pytest.mark.parametrize("description", [None, 42, "", "   ", "strider", "Mjlab-Sprint2m-MicroDuck", "x" * 501])
+def test_a_description_that_is_missing_a_default_or_too_long_is_not_kept(api, monkeypatch, description):
+    manifest = {"name": "strider", "training": {"task_id": "Mjlab-Sprint2m-MicroDuck"}}
+    if description is not None:
+        manifest["description"] = description
+    assert _entered_with(api, monkeypatch, manifest).description is None
+
+
 def test_publishing_honours_a_pinned_speed(api):
     """Reversed deliberately. This test previously asserted the opposite — that a
     published time is always the full sweep — on the reasoning that letting

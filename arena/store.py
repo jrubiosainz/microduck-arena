@@ -100,6 +100,10 @@ class RunRecord:
     # already falls back to `classic` for one it does not know, so duplicating
     # that list here would buy a second source of truth for nothing.
     livery: str = "classic"
+    # What the author wrote about the policy for the commentators, from the manifest at the pinned
+    # revision; None when it wrote nothing of its own. Submitter text: only the commentary quotes it,
+    # as the author's words, after its own checks.
+    description: str | None = None
 
     @property
     def offers_download(self) -> bool:
@@ -132,6 +136,7 @@ class RunRecord:
             "model_stored": self.model_stored,
             "env_url": self.env_url,
             "livery": self.livery,
+            "description": self.description,
         }
 
     @classmethod
@@ -158,6 +163,9 @@ class RunRecord:
             # .get, not [..]: runs recorded before liveries existed have no such
             # key, and an append-only log means those files are never rewritten.
             livery=raw.get("livery", "classic"),
+            # .get, not [..]: runs recorded before descriptions existed have no such
+            # key, and an append-only log means those files are never rewritten.
+            description=raw.get("description"),
         )
 
 
