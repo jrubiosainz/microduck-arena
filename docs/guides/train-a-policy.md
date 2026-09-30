@@ -8,16 +8,18 @@ need a physical robot.
 
 Open a challenge and copy the line under **Train my own robot** into a terminal. It clones
 [microduck-challenges](https://github.com/pollen-robotics/microduck-challenges) and opens the
-workshop in your browser, which asks for what it needs as it goes:
+workshop in your browser, on that challenge:
 
-1. **Preflight** checks your tools and your Hugging Face login.
-2. **Train** starts from the challenge's own recipe. Change a knob if you like, then launch.
-   With an NVIDIA GPU it trains on your machine; without one it runs on Hugging Face Jobs,
-   billed to your account, and brings the checkpoints back as they are saved.
-3. **Test** exports a checkpoint and races it with this Arena's own rules, on your machine.
-   The time is indicative: only the Arena times an entry.
-4. **Publish and enter** puts the policy, its manifest and its recipe in your Hugging Face
-   account, enters it here in the colour and at the speed you chose, and opens its result.
+1. **Ready to train?**, on the workshop's home, says what is set up: Hugging Face Jobs billing,
+   your fork of the challenges, an NVIDIA GPU. Log in to Hugging Face with the button at the top
+   right: it opens huggingface.co, where you approve.
+2. **New training**, on the challenge's page: change the challenge's files if you like, commit them
+   (the workshop asks), choose Hugging Face Jobs or this machine, and train. Each training gets a
+   ticket; several can run at once.
+3. **Every checkpoint is evaluated** with this Arena's rules, on your machine, as it arrives. The
+   time is indicative: only the Arena times an entry.
+4. Open a ticket, pick a checkpoint, and **Publish and compete**: the policy goes to your Hugging
+   Face account and is entered here, with a word for the commentators, and its result opens.
 
 ## From a shell
 
