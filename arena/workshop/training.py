@@ -1,11 +1,10 @@
-"""One training at a time, as `uv run --no-sync train …` in the checkout.
+"""A training this workshop launched and follows, as `uv run --no-sync train …` in the checkout.
 
-With an NVIDIA GPU the process IS the training. Without one it is `train …
---hf-jobs`, which submits the job and streams its log until the job ends. The
-job's uploader pushes the run to a Hub repo that mirrors logs/rsl_rl/; this
-pulls that repo back into logs/rsl_rl/ every few minutes and once more at the
-end, so Test and Publish find an HF run exactly where they find a local one.
-Every launch is written down (jobs.py): it outlives this process.
+On this machine the process IS the training. On Hugging Face Jobs it is `train … --hf-jobs`, which
+submits the job and streams its log until the job ends. The job's uploader pushes the run to a Hub
+repo that mirrors logs/rsl_rl/; this pulls that repo back into logs/rsl_rl/ every two minutes and
+once more at the end, so the evaluator and Publish find an HF run exactly where they find a local
+one. Every launch is written down (jobs.py): it outlives this process.
 """
 
 import os
@@ -23,7 +22,7 @@ from .shell import child_env, uv
 PULL_EVERY_S = 120.0
 _JOB_ID = re.compile(r"^\[job\] id:\s+(\S+)")
 _ITERATION = re.compile(r"Learning iteration (\d+)/(\d+)")
-# Every download into logs/rsl_rl/ in turn: the periodic pull, a button press, a recorded job's.
+# Every download into logs/rsl_rl/ in turn: a followed job's pulls, and the watcher's (watch.py).
 _PULLING = threading.Lock()
 
 
@@ -68,8 +67,8 @@ class Training:
         self._lines = [f"$ {shlex.join(command)}"]
         self._job_id: str | None = None
         self._progress: tuple[int, int] | None = None
-        # Reentrant: `state` reads under it while `log` already holds it.
-        self._lock = threading.RLock()
+        # The log, the job id and the progress: written by the follower, read by the pages.
+        self._lock = threading.Lock()
         self._ended = threading.Event()
         self._stopped = False
         self.proc = subprocess.Popen(
@@ -107,8 +106,8 @@ class Training:
             self.pull()  # whatever the job saved last
         with self._lock:
             self.returncode = code  # read by `state`; set with the log so a snapshot is never torn
-        if not self.ckpt_repo:
-            # How a local training ended, for its ticket after a restart; an HF job's end is the Hub's word.
+        if not self.ckpt_repo or not self.job_id:
+            # How it ended, for its ticket after a restart. An HF job with an id ends by the Hub's word.
             remember_job(self.root, self.task, self.name, ended=self.state)
 
     def _pull_while_running(self) -> None:
@@ -153,6 +152,7 @@ class Training:
             return
         if self.ckpt_repo and (job := self.job_id):
             hub.cancel_job(job, self.namespace)  # the only call in this method the caller need worry about
+            remember_job(self.root, self.task, self.name, stage="CANCELED")  # nothing left to ask the Hub
             self._say(f"[workshop] cancelled job {job}")
         self._stopped = True
         try:

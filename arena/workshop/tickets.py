@@ -34,13 +34,24 @@ def _iterations(record, run) -> int | None:
     return None
 
 
+def left_to_the_hub(live, record) -> bool:
+    """An HF job with an id that no process of this workshop follows now: the workshop was restarted,
+    or `train --hf-jobs` ended without a Stop — a network blip ends it while the job runs on, billed.
+    The Hub's word for it, kept in its record by the watcher, says how it stands."""
+    return (record is not None and record.get("where") == "hf-jobs" and bool(record.get("job_id"))
+            and (live is None or live.state in ("finished", "failed")))
+
+
 def _state(live, record, run, total) -> str:
+    # A follower that just ended keeps its own word until the Hub has been asked.
+    if left_to_the_hub(live, record) and (live is None or record.get("stage")):
+        return HF_STAGES.get(record.get("stage"), "running")
     if live is not None:
         return LIVE_STATES[live.state]
-    if record and record.get("where") == "hf-jobs":
-        return HF_STAGES.get(record.get("stage"), "running")
     if record and record.get("ended"):
         return LIVE_STATES[record["ended"]]
+    if record and record.get("where") == "hf-jobs":
+        return "failed"  # it ended, or the workshop closed, before Hugging Face named a job
     # A local training whose workshop was closed, or a run from a shell: its checkpoints say.
     last = run.checkpoints[-1] if run and run.checkpoints else None
     return "done" if total and last is not None and last + 1 >= total else "stopped"
@@ -122,6 +133,12 @@ def _voted(challenge) -> bool:
 def source(ws, challenge, ticket_id: str) -> tuple | None:
     """(id, live, record, run) of one ticket, or None."""
     return next((s for s in _sources(ws, challenge) if s[0] == ticket_id), None)
+
+
+def ticket_state(source_) -> str:
+    """What the ticket of `source_`, an (id, live, record, run), says of its training."""
+    _, live, record, run = source_
+    return _state(live, record, run, _iterations(record, run))
 
 
 def tickets(ws, challenge) -> list[dict]:

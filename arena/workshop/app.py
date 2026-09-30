@@ -25,12 +25,12 @@ from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write
 from .code import code_state, code_url, commit, push, use_fork
 from .evaluations import evaluate_forever, stored
 from .hub import Hub, HubUnreachable
-from .jobs import TERMINAL, recorded_jobs, remember_job
+from .jobs import recorded_jobs, remember_job
 from .login import BrowserLogin, LoginError
 from .publishing import PublishError, preview, publish, repo_for
 from .runs import find_runs
 from .shell import ShellError, commit_all, git
-from .tickets import source, ticket, ticket_detail, tickets
+from .tickets import source, ticket, ticket_detail, ticket_state, tickets
 from .training import Training
 from .watch import watch_forever
 
@@ -235,19 +235,21 @@ def stop(event: str, ticket_id: str, request: Request) -> dict:
         found = source(ws, challenge, ticket_id)
         if found is None:
             raise HTTPException(status_code=404, detail=f"No training {ticket_id} for {event}.")
-        _, live, record, _ = found
-        recorded_hf = (live is None and record is not None and record.get("where") == "hf-jobs"
-                       and record.get("job_id") and record.get("stage") not in TERMINAL)
-        if not (live is not None and live.state == "running") and not recorded_hf:
+        if ticket_state(found) not in ("starting", "running"):
             raise HTTPException(status_code=409, detail=f"{ticket_id} is not running.")
+        _, live, record, _ = found
+        # The job was NOT cancelled if any of this raises, and is still billed: say so; the ticket
+        # still says running.
         try:
-            if live is not None:
+            if live is not None and live.state == "running":
                 live.stop(ws.hub)  # an HF job is cancelled on the Hub first; only that can raise
-            else:
+            else:  # an HF job no process of this workshop follows now
                 ws.hub.cancel_job(record["job_id"], record["namespace"])
                 remember_job(ws.root, challenge.task, record["name"], stage="CANCELED")
+        except HubUnreachable as exc:
+            raise HTTPException(status_code=503, detail=f"Hugging Face is unreachable: {exc}. The job was not "
+                                                        "cancelled: check your connection, then try again.") from exc
         except Exception as exc:
-            # The job was NOT cancelled and is still billed: say so; the ticket still says running.
             raise HTTPException(status_code=502, detail=f"Could not cancel the Hugging Face job: {exc}") from exc
         return ticket(ws, challenge, ticket_id)
     finally:

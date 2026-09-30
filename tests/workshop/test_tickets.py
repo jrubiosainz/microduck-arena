@@ -124,6 +124,27 @@ def test_a_local_training_that_ended_says_how_after_a_restart(workshop, fakes, c
     assert jobs(reopen(checkout, hub))[0]["state"] == "failed"
 
 
+def test_an_hf_launch_that_ended_before_its_job_id_reads_failed_after_a_restart(workshop, fakes, checkout, hub, monkeypatch):
+    """No job id, nothing for the Hub to be asked of: the record says how the launch ended."""
+    monkeypatch.setenv("FAKE_UV_FAIL_TRAIN", "1")
+    workshop.post(f"{SPRINT_URL}/train", json=HF)
+    record = checkout / "logs" / "workshop-jobs.json"
+    assert wait_for(lambda: json.loads(record.read_text())[0].get("ended")) == "failed"
+    reopened = reopen(checkout, hub)
+    assert jobs(reopened)[0]["state"] == "failed"
+    assert reopened.get("/api/workshop/status").json()["challenges"][0]["running"] == 0
+    assert reopened.post(f"{SPRINT_URL}/jobs/first/stop").status_code == 409
+
+
+def test_an_hf_job_whose_id_never_came_reads_failed(workshop, checkout):
+    """The workshop closed before `train --hf-jobs` printed the job's id: nothing to follow it by."""
+    (checkout / "logs").mkdir()
+    (checkout / "logs" / "workshop-jobs.json").write_text(json.dumps([{
+        "task": TASK, "name": "first", "where": "hf-jobs", "recipe": HF["recipe"], "started": "2026-09-30T09:00:00+00:00",
+        "ckpt_repo": "alice/mjlab-sprint2m-microduck-first", "namespace": "alice", "job_id": None}]))
+    assert jobs(workshop)[0]["state"] == "failed"
+
+
 def test_a_recorded_name_is_not_reused_before_its_run_is_fetched(workshop, fakes, checkout, hub, monkeypatch):
     """The name is also the checkpoint repo's: a second job under it would upload into the first's."""
     monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")

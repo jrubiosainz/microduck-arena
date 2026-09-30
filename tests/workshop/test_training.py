@@ -1,10 +1,13 @@
 """Launching: every training starts from a commit, on this machine's NVIDIA GPU or on Hugging Face
 Jobs; any number of HF jobs run at once, one training at most on this machine."""
 
+import json
 import threading
 
 import pytest
 
+from arena.workshop.hub import HubUnreachable
+from arena.workshop.watch import watch_once
 from tests.workshop.conftest import SPRINT, edit_by_hand, git, make_run, reopen, wait_for
 
 SPRINT_URL = "/api/workshop/challenges/sprint-2m"
@@ -191,6 +194,48 @@ def test_stop_cancels_the_resubmitted_job_not_the_dead_first_one(workshop, fakes
     wait_for(lambda: live(workshop).job_id == "fakejob43")
     workshop.post(f"{SPRINT_URL}/jobs/first/stop")
     assert hub.cancelled == [("fakejob43", "alice")]
+
+
+def test_the_record_keeps_the_resubmitted_jobs_id(workshop, fakes, checkout, monkeypatch):
+    """After a restart, the record's id is the only way to the job still billed."""
+    monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")
+    monkeypatch.setenv("FAKE_UV_RESUBMIT", "1")
+    launch(workshop, HF)
+    record = checkout / "logs" / "workshop-jobs.json"
+    assert wait_for(lambda: json.loads(record.read_text())[0].get("job_id") == "fakejob43")
+
+
+def test_a_stopped_hf_job_is_written_down_as_cancelled(workshop, fakes, checkout, hub, monkeypatch):
+    monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")
+    launch(workshop, HF)
+    wait_for(lambda: live(workshop).job_id)
+    assert workshop.post(f"{SPRINT_URL}/jobs/first/stop").status_code == 200
+    (record,) = json.loads((checkout / "logs" / "workshop-jobs.json").read_text())
+    assert record["stage"] == "CANCELED"
+    assert wait_for(lambda: ended(workshop))["state"] == "stopped"
+    watch_once(workshop.app.state.workshop, now=1000.0)
+    assert hub.asked == []  # nothing left to ask of it
+
+
+def test_a_stop_while_the_hub_is_unreachable_says_so_and_keeps_following(workshop, fakes, hub, monkeypatch):
+    monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")
+    real_cancel_job = hub.cancel_job
+    attempts = []
+
+    def unreachable_once(job_id, namespace):
+        attempts.append(job_id)
+        if len(attempts) == 1:
+            raise HubUnreachable("https://huggingface.co did not answer within 5 s")
+        return real_cancel_job(job_id, namespace)
+
+    hub.cancel_job = unreachable_once
+    launch(workshop, HF)
+    wait_for(lambda: live(workshop).job_id)
+    response = workshop.post(f"{SPRINT_URL}/jobs/first/stop")
+    assert response.status_code == 503 and "unreachable" in response.json()["detail"]
+    assert workshop.get(f"{SPRINT_URL}/jobs/first").json()["state"] == "running"
+    assert workshop.post(f"{SPRINT_URL}/jobs/first/stop").status_code == 200
+    assert hub.cancelled == [("fakejob42", "alice")]
 
 
 def test_a_cancel_that_fails_502s_and_keeps_following(workshop, fakes, hub, monkeypatch):

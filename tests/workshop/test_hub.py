@@ -59,6 +59,33 @@ def test_a_jobs_stage_is_the_hubs_word_for_it(monkeypatch):
     assert asked == [("j1", "alice")]
 
 
+def test_a_cancel_the_hub_never_answers_is_unreachable_within_the_limit(monkeypatch):
+    """A Stop holds the workshop's lock: it must never wait for the system's own connect timeout."""
+    from huggingface_hub import HfApi
+
+    monkeypatch.setattr(hub_module, "HUB_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(HfApi, "cancel_job", lambda self, **kwargs: time.sleep(5))
+    started = time.monotonic()
+    with pytest.raises(HubUnreachable):
+        Hub().cancel_job("j1", "alice")
+    assert time.monotonic() - started < 2
+
+
+def test_a_cancel_the_hub_refuses_is_said_in_its_words(monkeypatch):
+    from huggingface_hub import HfApi
+
+    cancelled = []
+
+    def refuse(self, *, job_id, namespace=None, token=None):
+        cancelled.append((job_id, namespace))
+        raise RuntimeError("403: not your job")
+
+    monkeypatch.setattr(HfApi, "cancel_job", refuse)
+    with pytest.raises(RuntimeError, match="not your job"):
+        Hub().cancel_job("j1", "alice")
+    assert cancelled == [("j1", "alice")]
+
+
 def test_a_refused_token_is_logged_out(endpoint):
     endpoint.update(status=401, body={"error": "Invalid credentials"})
     assert Hub().whoami() is None
@@ -77,7 +104,7 @@ def test_a_hub_that_errs_is_unreachable(endpoint):
 
 
 def test_a_hub_that_never_answers_is_unreachable_within_the_limit(monkeypatch):
-    monkeypatch.setattr(hub_module, "WHOAMI_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(hub_module, "HUB_TIMEOUT_S", 0.3)
     monkeypatch.setenv("HF_TOKEN", "hf_x")
     with socket.socket() as silent:  # the kernel accepts the connection; nothing ever answers
         silent.bind(("127.0.0.1", 0))
@@ -94,7 +121,7 @@ def test_the_limit_covers_the_whole_call_not_each_step(monkeypatch):
     that drops them all, one whoami took half a minute."""
     import httpx
 
-    monkeypatch.setattr(hub_module, "WHOAMI_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(hub_module, "HUB_TIMEOUT_S", 0.3)
     monkeypatch.setenv("HF_TOKEN", "hf_x")
     monkeypatch.setattr(httpx, "get", lambda *args, **kwargs: time.sleep(5))
     started = time.monotonic()
