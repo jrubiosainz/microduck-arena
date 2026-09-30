@@ -14,8 +14,10 @@
  * picture. `cover` is the front page's, at the charter's hero step and with
  * the aberration the charter draws on its own cover — over deep ink, which is
  * the only ground the charter ever puts a yellow word on.
+ *
+ * `word` is the second line: Arena on the site, Workshop on the workshop's pages.
  */
-export function wordmark({ variant = "strip" } = {}) {
+export function wordmark({ variant = "strip", word = "Arena" } = {}) {
   const el = document.createElement("h1");
   el.className = variant === "cover" ? "wordmark wordmark--cover fx-aberration" : "wordmark";
   const solid = document.createElement("span");
@@ -23,7 +25,7 @@ export function wordmark({ variant = "strip" } = {}) {
   solid.textContent = "Microduck";
   const arena = document.createElement("span");
   arena.className = "wordmark__arena";
-  arena.textContent = "Arena";
+  arena.textContent = word;
   el.append(solid, arena);
   return el;
 }

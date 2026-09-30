@@ -39,8 +39,14 @@ function leaderLine(event, rows) {
   return line;
 }
 
-/** One event on the wall: its still, who holds it, and what it is. */
-export function flyer(event, rows) {
+/**
+ * One event on the wall: its still, who holds it, and what it is.
+ *
+ * The workshop pins the same sheet on its own wall: there `rows` is null (the sheet is about
+ * training, not results: no leader line), `href` leads to the challenge's workshop page, and
+ * `corner` is what sits in the top corner instead of VOTE HERE (null: nothing).
+ */
+export function flyer(event, rows, { href = raceHref(event.id), corner } = {}) {
   const known = CATEGORIES.has(event.category);
   const classes = ["challenge-note", "fx-shadow-card"];
   // An unrecognised category keeps the neutral ink shadow the base rule sets,
@@ -48,22 +54,19 @@ export function flyer(event, rows) {
   if (known) classes.push(`challenge-note--${event.category}`);
   const note = el("article", classes.join(" "));
   note.append(el("span", "flyer-tape"));
-  if (event.vote) {
-    note.append(voteButton(event, { variant: "sticker" }));
-  }
+  const sticker = corner !== undefined ? corner : event.vote ? voteButton(event, { variant: "sticker" }) : null;
+  if (sticker) note.append(sticker);
   const link = el("a", "challenge-link");
-  link.href = raceHref(event.id);
+  link.href = href;
   const facts = formatEventFacts(event)
     .filter((fact) => fact.label !== "speed sweep")
     .map((fact) => fact.value)
     .join(" · ");
   link.append(el("div", "challenge-art"));
   if (known) link.append(el("span", "eyebrow", event.category.toUpperCase()));
-  link.append(
-    el("h4", "flyer-title", event.title),
-    leaderLine(event, rows),
-    el("p", "challenge-facts", facts),
-  );
+  link.append(el("h4", "flyer-title", event.title));
+  if (rows !== null) link.append(leaderLine(event, rows));
+  link.append(el("p", "challenge-facts", facts));
   note.append(link);
   return note;
 }

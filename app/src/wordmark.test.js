@@ -13,6 +13,12 @@ describe("the wordmark", () => {
   it("is an h1, because it is the page's heading and not decoration", () => {
     expect(wordmark().tagName).toBe("H1");
   });
+
+  it("can read Microduck Workshop", () => {
+    const mark = wordmark({ word: "Workshop" });
+    expect(mark.querySelector(".wordmark__arena").textContent).toBe("Workshop");
+    expect(mark.querySelector(".wordmark__solid").textContent).toBe("Microduck");
+  });
 });
 
 describe("the duck head", () => {
