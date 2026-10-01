@@ -177,6 +177,10 @@ def save_timeline(challenge: Challenge, text: str) -> None:
         candidate.write_text(text, encoding="utf-8")
         load_timeline(candidate, load_event(challenge.event).time_limit_s)
     path = timeline_file(challenge)
-    staged = path.with_name(f".{TIMELINE}.tmp")
-    staged.write_text(text, encoding="utf-8")
-    os.replace(staged, path)
+    # A temp file unique to this save: two writers of the same timeline never race on one temp name.
+    staged = tempfile.NamedTemporaryFile(dir=path.parent, delete=False, prefix=f".{TIMELINE}", suffix=".tmp")
+    try:
+        staged.write(text.encode("utf-8"))
+    finally:
+        staged.close()
+    os.replace(staged.name, path)

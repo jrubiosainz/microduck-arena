@@ -3,11 +3,17 @@ checkpoint plays it, an edit replays the chosen checkpoint at once, and Publish 
 
 import base64
 import hashlib
+import json
+import os
+import threading
+import time
 
 import pytest
 
 from arena.constants import TRACE_WIDTH
-from arena.workshop.evaluations import evaluate_next, next_checkpoint
+from arena.workshop import evaluations
+from arena.workshop.evaluations import evaluate_checkpoint, evaluate_next, next_checkpoint
+from arena.workshop.runs import find_runs
 from tests.workshop.conftest import git, make_run, reopen
 
 TALENT = """\
@@ -64,6 +70,55 @@ def test_a_stage_checkpoint_plays_the_challenges_timeline(stage, checkout):
     assert body["timeline"] == hashlib.sha256(TWO_SECONDS.encode()).hexdigest()
     assert set(body["stage"]) == {"fell_at", "seated_s", "standing_s"}
     assert (body["seeds_finished"], body["seeds_total"]) == (1, 1)
+
+
+def test_two_threads_evaluating_the_same_checkpoint_never_race_on_one_temp_file(stage, checkout, monkeypatch):
+    """The worker and the checkpoint route right after Save and play can both measure the same stale
+    checkpoint at once: each write must use its own temp file, never a name the other is also using."""
+    run = make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
+    evaluated(stage, run)  # exports the ONNX once, so both threads go straight to evaluate()
+
+    # Widen the race: both threads finish measuring together, then both pause right before replacing
+    # the stored file — long enough that, with a shared temp name, one thread's replace would steal
+    # the file out from under the other's.
+    barrier = threading.Barrier(2)
+    real_measure = evaluations._measure
+
+    def synced_measure(*args):
+        body = real_measure(*args)
+        barrier.wait(timeout=5)
+        return body
+
+    real_replace = os.replace
+
+    def slow_replace(src, dst):
+        time.sleep(0.05)
+        real_replace(src, dst)
+
+    monkeypatch.setattr(evaluations, "_measure", synced_measure)
+    monkeypatch.setattr(os, "replace", slow_replace)
+
+    (found,) = find_runs(checkout, TASK)
+    challenge = stage.app.state.workshop.challenges["got-a-talent"]
+    results, errors = [], []
+
+    def go():
+        try:
+            results.append(evaluate_checkpoint(checkout, found, 1, challenge))
+        except Exception as exc:  # noqa: BLE001 — collected, so both threads are accounted for below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=go) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(results) == 2
+    stored_body = json.loads((run / "workshop" / "model_1.json").read_text())
+    assert stored_body["checkpoint"] == 1
+    assert stored_body["timeline"] == hashlib.sha256(TWO_SECONDS.encode()).hexdigest()
 
 
 def test_the_page_reads_and_saves_the_timeline_and_the_checkpoint_replays_without_a_new_export(stage, checkout, fakes):

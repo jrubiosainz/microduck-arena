@@ -281,8 +281,7 @@ def checkpoint(event: str, ticket_id: str, n: int, request: Request) -> dict:
         raise HTTPException(status_code=404, detail=f"Checkpoint {n} is not evaluated yet.")
     body = stored(run, n, timeline_key(challenge))
     if body is None and is_stage(challenge) and exported(run, n):
-        evaluate_checkpoint(ws.root, run, n, challenge)
-        body = stored(run, n, timeline_key(challenge))
+        body = evaluate_checkpoint(ws.root, run, n, challenge)
     if body is None:
         raise HTTPException(status_code=404, detail=f"Checkpoint {n} is not evaluated yet.")
     return {"checkpoint": n, "error": body["error"]} if "error" in body else body

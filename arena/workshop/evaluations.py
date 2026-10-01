@@ -23,6 +23,7 @@ import base64
 import json
 import os
 import shutil
+import tempfile
 import time
 
 from ..constants import RUNNER_VERSION
@@ -52,7 +53,7 @@ def _mtime(run, n: int) -> float:
     return (run.path / f"model_{n}.pt").stat().st_mtime
 
 
-def stored(run, n: int, timeline: str | None = None) -> dict | None:
+def stored(run, n: int, timeline: str | None) -> dict | None:
     """The stored evaluation of checkpoint n on this runner version, played with this timeline — a
     result, or a failure still true of the checkpoint file as it is — or None: never evaluated,
     stale, or unreadable."""
@@ -80,7 +81,7 @@ def exported(run, n: int) -> bool:
         return False
 
 
-def summary(run, timeline: str | None = None) -> dict[int, dict]:
+def summary(run, timeline: str | None) -> dict[int, dict]:
     """What each evaluated checkpoint of `run` shows on its ticket, without its trace."""
     keep = ("score", "seeds_finished", "seeds_total", "command_vx")
     found = {}
@@ -95,12 +96,16 @@ def summary(run, timeline: str | None = None) -> dict[int, dict]:
 
 
 def _write(run, n: int, body: dict) -> None:
-    """Atomically: a reader (a ticket, a replay) must never see a half-written file."""
+    """Atomically: a reader (a ticket, a replay) must never see a half-written file. The temp file is
+    unique to this write, so two writers of the same checkpoint never race on one temp name."""
     path = _path(run, n)
     path.parent.mkdir(exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(body))
-    os.replace(tmp, path)
+    tmp = tempfile.NamedTemporaryFile(dir=path.parent, delete=False, prefix=path.name, suffix=".tmp")
+    try:
+        tmp.write(json.dumps(body).encode())
+    finally:
+        tmp.close()
+    os.replace(tmp.name, path)
 
 
 def _measure(root, run, n: int, challenge, key: str | None) -> dict:
@@ -140,8 +145,9 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
     return body
 
 
-def evaluate_checkpoint(root, run, n: int, challenge) -> None:
-    """Measure checkpoint n with the challenge's timeline as it is now, and store what came of it."""
+def evaluate_checkpoint(root, run, n: int, challenge) -> dict:
+    """Measure checkpoint n with the challenge's timeline as it is now, store what came of it, and
+    return that body."""
     mtime = _mtime(run, n)
     key = timeline_key(challenge)
     try:
@@ -150,6 +156,7 @@ def evaluate_checkpoint(root, run, n: int, challenge) -> None:
         error = str(exc) if isinstance(exc, EvaluationError) else f"{type(exc).__name__}: {exc}"
         body = {"checkpoint": n, "error": error, "mtime": mtime, "runner_version": RUNNER_VERSION, "timeline": key}
     _write(run, n, body)
+    return body
 
 
 def next_checkpoint(root, challenges, now: float | None = None):
