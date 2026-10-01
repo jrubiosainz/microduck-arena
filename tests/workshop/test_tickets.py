@@ -106,6 +106,24 @@ def test_a_cancel_the_hub_refuses_says_so_in_its_words(workshop, fakes, checkout
     hub.cancel_job = cancel
 
 
+def test_a_stop_without_a_network_says_the_hub_is_unreachable(workshop, fakes, checkout, monkeypatch):
+    import httpx2
+    from huggingface_hub import HfApi
+
+    from arena.workshop.hub import Hub
+
+    monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")
+    workshop.post(f"{SPRINT_URL}/train", json=HF)
+    wait_for(lambda: live(workshop).job_id)
+
+    def offline(self, **kwargs):
+        raise httpx2.ConnectError("[Errno 8] nodename nor servname provided, or not known")
+
+    monkeypatch.setattr(HfApi, "cancel_job", offline)
+    response = reopen(checkout, Hub()).post(f"{SPRINT_URL}/jobs/first/stop")
+    assert response.status_code == 503 and "unreachable" in response.json()["detail"]
+
+
 def test_a_local_training_whose_workshop_closed_reads_as_stopped(workshop, fakes, checkout, hub, monkeypatch):
     fakes.gpu()
     monkeypatch.setenv("FAKE_UV_TRAIN_S", "30")

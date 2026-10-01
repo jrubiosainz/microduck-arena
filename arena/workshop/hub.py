@@ -23,6 +23,7 @@ def _in_time(call):
     several — and to each step. Past it the thread is left to give up on its own.
     """
     import httpx
+    import httpx2
     from huggingface_hub import constants
 
     asked = {}
@@ -30,7 +31,9 @@ def _in_time(call):
     def ask() -> None:
         try:
             asked["answer"] = call()
-        except httpx.TransportError:  # no route, no name resolution, a refused connection
+        # No route, no name resolution, a refused connection. whoami asks with httpx;
+        # huggingface_hub's own calls raise httpx2's errors, which are not httpx's.
+        except (httpx.TransportError, httpx2.TransportError):
             pass
         except Exception as exc:  # noqa: BLE001 — raised again below, on the caller's thread
             asked["error"] = exc

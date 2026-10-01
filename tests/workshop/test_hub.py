@@ -71,6 +71,19 @@ def test_a_cancel_the_hub_never_answers_is_unreachable_within_the_limit(monkeypa
     assert time.monotonic() - started < 2
 
 
+def test_a_cancel_without_a_network_is_unreachable(monkeypatch):
+    """huggingface_hub raises httpx2's errors, and an httpx2 error is not an httpx one."""
+    import httpx2
+    from huggingface_hub import HfApi
+
+    def offline(self, **kwargs):
+        raise httpx2.ConnectError("[Errno 8] nodename nor servname provided, or not known")
+
+    monkeypatch.setattr(HfApi, "cancel_job", offline)
+    with pytest.raises(HubUnreachable):
+        Hub().cancel_job("j1", "alice")
+
+
 def test_a_cancel_the_hub_refuses_is_said_in_its_words(monkeypatch):
     from huggingface_hub import HfApi
 
