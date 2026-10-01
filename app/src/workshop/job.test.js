@@ -98,7 +98,20 @@ describe("a training's page", () => {
     root.querySelector(".ckpts .bars i").click();
     await settle();
     expect(root.querySelector(".score__value").textContent).toBe("No fall");
-    expect(root.querySelector(".score__seeds").textContent).toBe("seated 7.90 s · standing 11.50 s");
+    expect(root.querySelector(".score__seeds").textContent).toBe("seated 7.90 s · standing 11.50 s");
+    expect(root.querySelector("#stage-hint").textContent).toBe("Checkpoint 500");
+  });
+
+  it("a Save and play's fresh evaluation counts even while the ticket row still says queued", async () => {
+    const stageEvent = { ...TALENT, metric: "time" }; // so the best checkpoint is picked at once, as on a race
+    api.getJob.mockResolvedValue({ ...JOB, checkpoints: [{ n: 500, status: "queued" }], best: 500 });
+    api.getCheckpoint.mockResolvedValue({ checkpoint: 500, trace: new Float32Array(8),
+      stage: { fell_at: 3.2, seated_s: 1, standing_s: 2 } });
+    const root = document.createElement("div");
+    await open(root, stageEvent);
+    await settle();
+    expect(root.querySelector(".score__value").textContent).toBe("Fell at 3.20 s");
+    expect(root.querySelector(".score__seeds").textContent).toBe("seated 1.00 s · standing 2.00 s");
   });
 
   it("a race has no performance to edit", async () => {

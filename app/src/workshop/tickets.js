@@ -146,7 +146,8 @@ export function ticketCard(first, { event, voted, onStop }) {
     if (running && ticket.progress) content.append(progress(ticket.progress));
     if (ticket.checkpoints.length) content.append(bars(ticket.checkpoints, voted ? null : ticket.best));
     content.append(summary(ticket, voted), ticket.published
-      ? el("p", "ticket__pub ticket__pub--yes", `★ Published · ${officialTime(ticket.published.entered)} on the Arena`)
+      ? el("p", "ticket__pub ticket__pub--yes", voted ? "★ Published"
+          : `★ Published · ${officialTime(ticket.published.entered)} on the Arena`)
       : el("p", "ticket__pub", "Not published"));
     if (running && !stop) {
       stop = stopButton(() => ticket, onStop);

@@ -21,6 +21,25 @@ describe("the performance panel", () => {
     expect(box.querySelector(".performance__save").hidden).toBe(false);
   });
 
+  it("is disabled until the file has loaded, so a save can never overwrite what the author never saw", async () => {
+    let settle;
+    const box = performancePanel({ guide: "#" },
+      { load: () => new Promise((resolve) => { settle = resolve; }), save: vi.fn(), onSaved: vi.fn() });
+    expect(box.querySelector("textarea").disabled).toBe(true);
+    settle({ text: TEXT });
+    await flush();
+    expect(box.querySelector("textarea").disabled).toBe(false);
+  });
+
+  it("stays disabled when the load fails, and shows the error", async () => {
+    const box = performancePanel({ guide: "#" },
+      { load: async () => { throw new Error("timeline.json: could not be read"); }, save: vi.fn(), onSaved: vi.fn() });
+    await flush();
+    expect(box.querySelector("textarea").disabled).toBe(true);
+    expect(box.querySelector(".performance__why").hidden).toBe(false);
+    expect(box.querySelector(".performance__why").textContent).toContain("could not be read");
+  });
+
   it("saves, then plays: the button goes until the next change", async () => {
     const save = vi.fn(async (text) => ({ text }));
     const onSaved = vi.fn();
@@ -45,5 +64,17 @@ describe("the performance panel", () => {
     expect(box.querySelector(".performance__why").textContent).toContain("longer than this event's 20 s");
     expect(box.querySelector("textarea").value).toContain("25.0");
     expect(box.querySelector(".performance__save").hidden).toBe(false);
+  });
+
+  it("hides the refusal once the text is edited back to the saved file", async () => {
+    const save = vi.fn(async () => { throw new Error("duration_s: 25 s is longer than this event's 20 s"); });
+    const box = performancePanel({ guide: "#" }, { load: async () => ({ text: TEXT }), save, onSaved: vi.fn() });
+    await flush();
+    edit(box, TEXT.replace("20.0", "25.0"));
+    box.querySelector(".performance__save").click();
+    await flush();
+    expect(box.querySelector(".performance__why").hidden).toBe(false);
+    edit(box, TEXT);
+    expect(box.querySelector(".performance__why").hidden).toBe(true);
   });
 });

@@ -206,7 +206,7 @@ details.output summary { margin: 26px 0 8px; }
 /* The performance: timeline.json in the Arena's terminal box, edited in place. */
 .performance { margin-top: 16px; }
 .performance__text { display: block; width: 100%; min-height: 16em; resize: vertical; border: 0; outline: 0;
-  font: inherit; color: inherit; background: transparent; white-space: pre; }
+  color: inherit; background: transparent; }
 
 /* Publish & compete: the commentators' badge, the two checks, the result. */
 .booth { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }

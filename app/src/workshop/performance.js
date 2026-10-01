@@ -12,7 +12,7 @@ export function performancePanel({ guide }, { load, save, onSaved }) {
       <a class="hint" target="_blank" rel="noopener">What the numbers mean ↗</a></div>
     <div class="terminal">
       <div class="terminal-bar mono-label">timeline.json</div>
-      <textarea class="terminal-body performance__text" spellcheck="false" rows="14"></textarea>
+      <textarea class="terminal-body performance__text" spellcheck="false" rows="14" disabled></textarea>
     </div>
     <p class="note bad performance__why" hidden></p>
     <div class="actions"><button class="button performance__save" type="button" hidden>Save and play</button></div>`;
@@ -24,6 +24,7 @@ export function performancePanel({ guide }, { load, save, onSaved }) {
   let saved = "";
   const changed = () => {
     button.hidden = text.value === saved;
+    if (text.value === saved) why.hidden = true;
   };
   const refuse = (error) => {
     why.textContent = error.message;
@@ -46,6 +47,7 @@ export function performancePanel({ guide }, { load, save, onSaved }) {
   load().then(({ text: current }) => {
     saved = current;
     text.value = current;
+    text.disabled = false;
     changed();
   }, refuse);
   return box;

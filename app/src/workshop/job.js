@@ -102,7 +102,7 @@ export async function mountJob(root, { status, account, route }) {
     </div>
     <div class="entry-col">
       <div class="figure score"><span class="mono-label score__label"></span><span class="figure-value score__value"></span>
-        <span class="mono-label score__seeds"></span><p class="score__caveat">Indicative: only the Arena times an entry.</p></div>
+        <span class="mono-label score__seeds"></span><p class="score__caveat"></p></div>
       <button class="quiet job-stop" type="button" hidden>Stop this training</button>
     </div>`;
   hall.append(grid);
@@ -204,16 +204,18 @@ export async function mountJob(root, { status, account, route }) {
     }
     const row = job.checkpoints.find((c) => c.n === selected);
     label.textContent = `Checkpoint ${selected}${!voted && selected === job.best ? " · ★ best" : ""}`;
-    if (!row || row.status === "queued") {
+    // A performance just fetched (Save and play) counts as evaluated even while the row still says queued.
+    const done = stage ? evaluations.get(selected)?.stage ?? row?.stage : null;
+    if (stage && done) {
+      const at = (s) => `${s.toFixed(2)} s`;
+      value.textContent = done.fell_at == null ? "No fall" : `Fell at ${at(done.fell_at)}`;
+      seeds.textContent = `seated ${at(done.seated_s)} · standing ${at(done.standing_s)}`;
+    } else if (!row || row.status === "queued") {
       value.textContent = "…";
       seeds.textContent = "Not evaluated yet.";
     } else if (row.status === "failed") {
       value.textContent = "Failed";
       seeds.textContent = "It could not be evaluated.";
-    } else if (stage) {
-      const done = row.stage;
-      value.textContent = done.fell_at == null ? "No fall" : `Fell at ${seconds(done.fell_at)}`;
-      seeds.textContent = `seated ${seconds(done.seated_s)} · standing ${seconds(done.standing_s)}`;
     } else {
       value.textContent = row.seeds_finished ? seconds(row.score) : "No finish";
       seeds.textContent = `${row.seeds_finished}/${row.seeds_total} seeds${row.seeds_finished ? ` · at ${row.command_vx.toFixed(2)} m/s` : ""}`;
@@ -221,7 +223,8 @@ export async function mountJob(root, { status, account, route }) {
   }
 
   function drawHint() {
-    grid.querySelector("#stage-hint").textContent = unplayable || (playing !== null ? `Checkpoint ${playing} · its best seed`
+    grid.querySelector("#stage-hint").textContent = unplayable || (playing !== null
+      ? (stage ? `Checkpoint ${playing}` : `Checkpoint ${playing} · its best seed`)
       : job.checkpoints.length ? "Pick a checkpoint below to watch it." : "No checkpoint yet.");
   }
 
@@ -267,7 +270,6 @@ export async function mountJob(root, { status, account, route }) {
     selected = n;
     unplayable = "";
     draw();
-    if (job.checkpoints.find((c) => c.n === n)?.status !== "evaluated") return;
     let body = evaluations.get(n);
     if (!body) {
       try {
@@ -281,6 +283,7 @@ export async function mountJob(root, { status, account, route }) {
       }
       if (body.error) return;
       evaluations.set(n, body);
+      drawScore(); // the ticket row may still say queued; the fetch just answered for it
     }
     await play(body);
   }

@@ -53,6 +53,13 @@ describe("a ticket", () => {
     expect(card.querySelector(".ticket__pub").textContent).toBe("★ Published · 4.89 s on the Arena");
   });
 
+  it("a voted ticket's published line has no entered sentence: a performance has no time", () => {
+    const card = ticketCard({ ...TICKET, state: "done", progress: null,
+      published: { entered: "entered on got-a-talent: a 20.00 s performance" } },
+      { event: "got-a-talent", voted: true, onStop: vi.fn() }).el;
+    expect(card.querySelector(".ticket__pub").textContent).toBe("★ Published");
+  });
+
   it("a run from a shell says so", () => {
     const card = ticketCard({ ...TICKET, where: null, state: "done" }, { event: "sprint-2m", voted: false, onStop: vi.fn() }).el;
     expect(card.querySelector(".ticket__top .mono-label").textContent).toBe("From a shell");
