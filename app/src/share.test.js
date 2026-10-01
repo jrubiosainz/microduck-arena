@@ -45,6 +45,18 @@ describe("postText", () => {
   });
 });
 
+describe("postText for a performance", () => {
+  it("shares a performance as one", () => {
+    const stageRun = { event: { title: "MicroDuck Got a Talent", course: "stage" }, seeds_total: 1, seeds_finished: 1,
+      score: 20, receipts: [{ points: 100 }], per_seed: [], run_id: "r1", rank: 1, on_board: true, policy_url: null };
+    const text = postText(stageRun, { origin: "https://arena.test", network: "linkedin" });
+    expect(text).toContain("I coded a robot duck to perform. On MicroDuck Got a Talent it gave a 20.00 s performance (+100 pts).");
+    expect(text).toContain("Watch it: https://arena.test/r/r1");
+    expect(postText({ ...stageRun, seeds_finished: 0, receipts: [] }, { origin: "https://arena.test", network: "linkedin" }))
+      .toContain("Its performance on MicroDuck Got a Talent was cut short.");
+  });
+});
+
 describe("intentUrl", () => {
   it("opens the two composers that take a text", () => {
     expect(intentUrl("x", "a b")).toBe("https://x.com/intent/post?text=a%20b");

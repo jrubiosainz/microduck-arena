@@ -8,7 +8,7 @@ import { getClip, getMe, getRun, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { boardsheetMarkup, wireBoardsheet } from "./boardsheet.js";
 import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
-import { formatSpeed } from "./format.js";
+import { formatSpeed, isStage } from "./format.js";
 import { colourLanes, lanesFor } from "./lanes.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
@@ -33,12 +33,21 @@ function el(tag, className, text) {
   return node;
 }
 
-/** Which seed the stored replay is, and why that one. */
-function replayLine(run) {
+/** Which seed the stored replay is, and why that one; a performance is played once. */
+export function replayLine(run) {
+  if (isStage(run.event)) return "replay: the whole performance";
   const finishers = run.per_seed.filter((s) => s.status === "finish").length;
   const which =
     finishers > 1 ? "median finisher" : finishers === 1 ? "the one finisher" : "first seed";
   return `${formatSpeed(run.command_vx, { finished: run.seeds_finished })} m/s · replay: seed ${run.trace_seed}, ${which}`;
+}
+
+/** What the scoreboard says over its number, and the stamp it lands. A stage has no time and no
+ * finish: its number is the performance's length, and it was performed or cut short. */
+export function verdict(run) {
+  const dnf = run.seeds_finished === 0;
+  if (isStage(run.event)) return { label: "length", stamp: dnf ? "CUT SHORT" : "PERFORMED" };
+  return { label: "time", stamp: dnf ? "DNF" : `FINISHED ${run.seeds_finished}/${run.seeds_total}` };
 }
 
 /**
@@ -81,7 +90,7 @@ export function runHall() {
       ${deckMarkup}
       <section class="run-score">
         <div class="scoreboard" id="scoreboard">
-          <span class="mono-label">time</span>
+          <span class="mono-label" id="score-label">time</span>
           <div class="flip" id="flip"></div>
           <span class="stamp" id="stamp"></span>
         </div>
@@ -152,8 +161,10 @@ export async function renderRun(root, runId, state) {
   // tile count changes with it, but a width in this column costs no height.
   const score = dnf ? "DNF" : run.score.toFixed(3);
   $("flip").append(...flipTiles(revealing ? "00.000" : score));
+  const said = verdict(run);
+  $("score-label").textContent = said.label;
   const stamp = $("stamp");
-  stamp.textContent = dnf ? "DNF" : `FINISHED ${run.seeds_finished}/${run.seeds_total}`;
+  stamp.textContent = said.stamp;
   stamp.classList.add(dnf ? "stamp-fail" : "stamp-pass");
   stamp.classList.toggle("veiled", revealing);
   // "median finisher" says the run finished, so the caption waits for the stamp.
@@ -194,14 +205,19 @@ export async function renderRun(root, runId, state) {
   followClip();
 
   // One line per seed: the time, or how it ended. Folded away by default —
-  // it is a detail you go and look up, not a step of the show.
-  for (const s of run.per_seed) {
-    const row = el("li", s.seed === run.trace_seed ? "seed replayed" : "seed");
-    row.append(
-      el("span", "mono-label", `seed ${s.seed}`),
-      el("strong", null, s.time_s == null ? s.status : `${s.time_s.toFixed(3)}s`),
-    );
-    $("seeds").append(row);
+  // it is a detail you go and look up, not a step of the show. A performance
+  // is played once: there is no seed list to open.
+  if (isStage(run.event)) {
+    $("seedlist").remove();
+  } else {
+    for (const s of run.per_seed) {
+      const row = el("li", s.seed === run.trace_seed ? "seed replayed" : "seed");
+      row.append(
+        el("span", "mono-label", `seed ${s.seed}`),
+        el("strong", null, s.time_s == null ? s.status : `${s.time_s.toFixed(3)}s`),
+      );
+      $("seeds").append(row);
+    }
   }
 
   // The reveal's lifetime opens before the loads it must survive leaving
@@ -268,9 +284,7 @@ export async function renderRun(root, runId, state) {
     $("stage-hint").textContent = lanes.length ? "" : "Tick a row below to watch a replay.";
   }
   const sheet = wireBoardsheet(page, {
-    // A publication stands by its time even on a voted event — that is the
-    // standing the server sent — so the table reads time, never votes.
-    event: { ...run.event, metric: "mean_finish_time" },
+    event: run.event,
     me: me?.user ?? null,
     rows: () => run.board,
     opening: (rows) => lanesFor({ board: rows, event: run.event }).map((row) => row.run_id),
@@ -294,7 +308,8 @@ export async function renderRun(root, runId, state) {
     box.scrollTop = yourRow.offsetTop - (box.clientHeight - yourRow.offsetHeight) / 2;
   };
   // Your own time only goes up on the board once the split-flap has rolled it.
-  const yourScore = yourRow.querySelector(".time");
+  // A voted table has no `.time` cell.
+  const yourScore = yourRow.querySelector(".time, .votes");
   yourScore.classList.toggle("veiled", revealing);
   if (revealing) {
     // The board as it was before this run — you at the bottom, the rows under
