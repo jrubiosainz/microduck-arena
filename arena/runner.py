@@ -278,12 +278,27 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     )
 
 
+# MuJoCo answers a non-finite position, velocity or acceleration by resetting the whole
+# simulation to the model's defaults and counting a warning (mj_checkPos, mj_checkVel,
+# mj_checkAcc). The state stays finite, so a diverged run would carry on from the reset
+# pose; these counters are what says it happened.
+_RESET_WARNINGS = (
+    mujoco.mjtWarning.mjWARN_BADQPOS,
+    mujoco.mjtWarning.mjWARN_BADQVEL,
+    mujoco.mjtWarning.mjWARN_BADQACC,
+)
+
+
+def _reset_by_mujoco(data) -> bool:
+    return any(data.warning[w].number for w in _RESET_WARNINGS)
+
+
 def run_stage(manifest: Manifest, policy, timeline: Timeline, seed: int) -> RunOutcome:
     """Play a timeline on a stage: no line to cross, and no fall stops the show.
 
     The settle plays the first keyframe; timed step k plays the command at
-    k * CTRL_DT. Only a non-finite state ends a performance early — a solver
-    explosion is not a performance, and a trace cannot hold one.
+    k * CTRL_DT. Only a simulation MuJoCo had to reset ends a performance early:
+    a solver explosion is not a performance, and the trace stops before it.
     """
     sim, settle = _start(manifest, policy, seed, None, np.asarray(timeline.command_at(0.0), dtype=np.float64))
     steps = round(timeline.duration_s / CTRL_DT)
@@ -291,11 +306,11 @@ def run_stage(manifest: Manifest, policy, timeline: Timeline, seed: int) -> RunO
     status, time_s, written = "finish", steps * CTRL_DT, 0
     for step in range(steps):
         sim.step(np.asarray(timeline.command_at(step * CTRL_DT), dtype=np.float64))
-        sim.record(frames[written])
-        written += 1
-        if not np.all(np.isfinite(sim.data.qpos)):
+        if _reset_by_mujoco(sim.data):
             status, time_s = "fall", None
             break
+        sim.record(frames[written])
+        written += 1
     return RunOutcome(
         seed=seed,
         status=status,

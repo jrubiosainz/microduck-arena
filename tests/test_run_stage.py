@@ -77,3 +77,31 @@ def test_a_stage_run_is_deterministic(talent, walker):
     b = run_stage(talent, walker, timeline, seed=1)
     assert np.array_equal(a.trace, b.trace)
     assert np.array_equal(a.settle, b.settle)
+
+
+def test_a_simulation_mujoco_had_to_reset_ends_the_performance(talent, walker, monkeypatch):
+    """MuJoCo answers a non-finite state by resetting to the model's defaults and carrying on: the
+    state stays finite, and only its warning counters say the performance diverged."""
+    import mujoco
+
+    import arena.runner as runner
+
+    real_step, real_mj_step, calls, armed = runner._step, mujoco.mj_step, [], []
+
+    def counting(*args):
+        calls.append(None)
+        if len(calls) == 25 + 40:  # the settle's 25 steps, then the 40th timed step
+            armed.append(True)
+        return real_step(*args)
+
+    def exploding(model, data):
+        if armed:
+            armed.clear()
+            data.qvel[:] = 1e200  # inside MuJoCo's own step, past mjMAXVAL: a solver explosion
+        return real_mj_step(model, data)
+
+    monkeypatch.setattr(runner, "_step", counting)
+    monkeypatch.setattr(mujoco, "mj_step", exploding)
+    outcome = run_stage(talent, walker, constant_timeline(STILL, 3.0), seed=1)
+    assert (outcome.status, outcome.time_s) == ("fall", None)
+    assert len(outcome.trace) == 39  # the steps played before it, never the reset pose
