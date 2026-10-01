@@ -7,6 +7,7 @@
 
 import { castVote, getBallot, getBallotTrace, getMe } from "./api.js";
 import { LANE_COLORS, LANE_CSS } from "./course.js";
+import { isStage } from "./format.js";
 import { dress, raceHref } from "./router.js";
 import { signInHref } from "./session.js";
 import { credit, shower } from "./points.js";
@@ -275,7 +276,7 @@ export async function renderVote(root, { event, state }) {
       livery: "classic",
       colour: LANE_COLORS[lane % LANE_COLORS.length],
     }));
-    const solo = event.id === "got-a-talent";
+    const solo = isStage(event);
     viewer.setLanes(solo ? entries.slice(0, 1) : entries, event);
     booth.replaceChildren(
       votePanel(ballot, async (lane) => {

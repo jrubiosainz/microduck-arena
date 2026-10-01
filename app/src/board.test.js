@@ -382,6 +382,22 @@ describe("a voted board shows votes, not a time", () => {
   });
 });
 
+describe("a stage's board has no speed and no seeds: a performance has neither", () => {
+  it("drops the m/s and seeds columns and cells", () => {
+    const container = document.createElement("div");
+    renderBoard(container, {
+      event: { id: "got-a-talent", title: "MicroDuck Got a Talent", metric: "votes", course: "stage" },
+      rows: [{ rank: 1, user: "ann", policy_name: "p", score: 20, command_vx: 0, seeds_finished: 1, seeds_total: 1,
+               run_id: "r1", submitted_at: "2026-10-01T10:00:00Z", votes: 3 }],
+    });
+    const heads = [...container.querySelectorAll("th")].map((th) => th.textContent);
+    expect(heads).not.toContain("m/s");
+    expect(heads).not.toContain("seeds");
+    expect(container.querySelector("td.speed")).toBeNull();
+    expect(container.querySelector("td.votes").textContent).toBe("3");
+  });
+});
+
 describe("a timed board is unaffected -- renders exactly as before", () => {
   it("still heads the column time and shows the score, with no votes column at all", () => {
     const container = document.createElement("div");

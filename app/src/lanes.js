@@ -1,6 +1,7 @@
 // Which ducks a stage shows, and in what colour.
 
 import { LANE_CSS } from "./course.js";
+import { isStage } from "./format.js";
 
 /** How many of the ducks ranked just under a publication race beside it. */
 export const RIVALS = 3;
@@ -12,7 +13,7 @@ export const RIVALS = 3;
  */
 export function lanesFor(run) {
   const at = run.board.findIndex((row) => row.you);
-  if (run.event?.id === "got-a-talent") return [run.board[at]];
+  if (isStage(run.event)) return [run.board[at]];
   return [run.board[at], ...run.board.slice(at + 1, at + 1 + RIVALS)];
 }
 

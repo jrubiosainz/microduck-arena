@@ -30,7 +30,7 @@ async function sheet(options = {}) {
 
 describe("the board sheet", () => {
   it("replaces the MicroDuck Got a Talent solo performer when another row is selected", async () => {
-    const { root, board, wired, onRace } = await sheet({ event: { ...event, id: "got-a-talent" } });
+    const { root, board, wired, onRace } = await sheet({ event: { ...event, id: "got-a-talent", course: "stage" } });
     expect(root.querySelector(".pickall").hidden).toBe(true);
     expect(ticked(board)).toEqual(["r2"]);
     tick(board.querySelector('input[data-run-id="r3"]'));

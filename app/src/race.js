@@ -12,7 +12,7 @@ import { flyer } from "./flyer.js";
 import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
 import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
-import { formatEventFacts } from "./format.js";
+import { formatEventFacts, isStage } from "./format.js";
 import { dress, eventGuideHref, menuHref } from "./router.js";
 import { renderThumbnails } from "./thumbnail.js";
 import { footer, settleIdentity, signage } from "./signage.js";
@@ -56,10 +56,12 @@ export function renderEventFacts(root, event) {
 
   const caveat = document.createElement("p");
   caveat.className = "racecaveat";
-  caveat.textContent =
-    "Times are measured on this course, with this friction and this " +
-    "physics build. A policy tuned elsewhere can do worse here without " +
-    "being worse.";
+  caveat.textContent = isStage(event)
+    ? "Performances play on this stage, with this friction and this physics build. A " +
+      "policy tuned elsewhere can perform differently here."
+    : "Times are measured on this course, with this friction and this " +
+      "physics build. A policy tuned elsewhere can do worse here without " +
+      "being worse.";
   facts.after(caveat);
   return caveat;
 }
@@ -242,7 +244,7 @@ export async function renderRace(root, { event, state }) {
       // below decides whether it is shown.
       name: names.get(runId),
     }));
-    viewer.setLanes(arrangeLanes(board, event.id === "got-a-talent" ? lanes.slice(0, 1) : lanes), event);
+    viewer.setLanes(arrangeLanes(board, isStage(event) ? lanes.slice(0, 1) : lanes), event);
     deck.reset();
     root.querySelector("#stage-hint").textContent = lanes.length
       ? ""

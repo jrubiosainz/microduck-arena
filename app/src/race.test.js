@@ -45,6 +45,14 @@ describe("renderEventFacts: the caveat under the facts", () => {
     expect(facts.children.length).toBe(4);
     expect(facts.textContent).toMatch(/legs/);
   });
+
+  it("a stage's facts say what it is, and its caveat speaks of performances", () => {
+    const root = document.createElement("div");
+    root.innerHTML = '<dl id="facts"></dl>';
+    const caveat = renderEventFacts(root, { id: "got-a-talent", course: "stage", rig: "legs", time_limit_s: 20 });
+    expect([...root.querySelectorAll("dt")].map((n) => n.textContent)).toEqual(["stage", "performance", "rig"]);
+    expect(caveat.textContent).toContain("Performances play on this stage");
+  });
 });
 
 

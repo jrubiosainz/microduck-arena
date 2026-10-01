@@ -14,9 +14,12 @@
 import {
   ACESFilmicToneMapping,
   AmbientLight,
+  CircleGeometry,
   Color,
   DirectionalLight,
   HemisphereLight,
+  Mesh,
+  MeshStandardMaterial,
   PerspectiveCamera,
   PMREMGenerator,
   Scene,
@@ -25,6 +28,7 @@ import {
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { buildCourse, laneOffsetZ, laneSpacing } from "./course.js";
+import { isStage } from "./format.js";
 import { MODEL_DIR, attachMeshes, buildRigTree, loadKinematics, rigGeometries } from "./rig.js";
 
 export const WIDTH = 480;
@@ -41,6 +45,20 @@ export function cameraFor(lengthM) {
     position: [-0.55 - length * 0.12, 0.46 + length * 0.05, 1.25 + length * 0.16],
     target: [length * 0.42, 0.1, 0],
   };
+}
+
+/** Where the camera sits for a stage's still: the duck alone, front three-quarter. */
+const STAGE_VIEW = { position: [0.62, 0.3, 0.42], target: [0, 0.1, 0] };
+
+/** A stage's still: one duck on its spot, no lane, no line. */
+function onStage(scene, kinematics, geometries) {
+  const floor = new Mesh(new CircleGeometry(0.75, 48), new MeshStandardMaterial({ color: 0x1a1236, roughness: 0.7 }));
+  floor.rotation.x = -Math.PI / 2;
+  scene.add(floor);
+  const rig = buildRigTree(kinematics);
+  attachMeshes(rig, kinematics, geometries, { livery: "classic" });
+  scene.add(rig.placer);
+  return STAGE_VIEW;
 }
 
 function light(scene) {
@@ -124,18 +142,24 @@ function still(renderer, environment, { kinematics, geometries }, event, width, 
   scene.environment = environment;
   scene.background = new Color(0x0c0c11);
   light(scene);
-  const course = buildCourse(event, 2);
-  scene.add(course);
 
-  PAIR.forEach((livery, lane) => {
-    const rig = buildRigTree(kinematics);
-    attachMeshes(rig, kinematics, geometries, { livery });
-    // A little way down the lane, so the start line is visible behind them.
-    const along = (Number(event.length_m) || 1) * (0.22 + lane * 0.1);
-    standOnCourse(rig, course, along, laneOffsetZ(lane, 2, laneSpacing(event)));
-  });
+  let view;
+  if (isStage(event)) {
+    view = onStage(scene, kinematics, geometries);
+  } else {
+    const course = buildCourse(event, 2);
+    scene.add(course);
+    PAIR.forEach((livery, lane) => {
+      const rig = buildRigTree(kinematics);
+      attachMeshes(rig, kinematics, geometries, { livery });
+      // A little way down the lane, so the start line is visible behind them.
+      const along = (Number(event.length_m) || 1) * (0.22 + lane * 0.1);
+      standOnCourse(rig, course, along, laneOffsetZ(lane, 2, laneSpacing(event)));
+    });
+    view = cameraFor(event.length_m);
+  }
+  const { position, target } = view;
 
-  const { position, target } = cameraFor(event.length_m);
   const camera = new PerspectiveCamera(38, width / height, 0.02, 60);
   camera.position.set(...position);
   camera.lookAt(...target);

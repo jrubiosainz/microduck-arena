@@ -37,6 +37,7 @@ import {
 } from "./rig.js";
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
 import { attachStadium } from "./stadium.js";
+import { isStage } from "./format.js";
 import { buildJudges } from "./judges.js";
 import { buildTalentStage, stageCameraPose, placeStagePerformer, stageCameraTarget } from "./talent-stage.js";
 import { loadGymBranding } from "./gym-branding.js";
@@ -369,7 +370,7 @@ export async function createViewer(
 
   function setLanes(entries, event, playerOptions = {}) {
     clearScene();
-    const talent = event?.id === "got-a-talent";
+    const talent = isStage(event);
     if (talent) entries = entries.slice(0, 1);
     raceLights.forEach(light => { light.visible = !talent; });
     scene.background.set(talent ? 0x050716 : 0xb8dce7);

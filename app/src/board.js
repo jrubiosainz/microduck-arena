@@ -4,7 +4,7 @@
 // preselected, but a DNF never is, because a lane showing a duck that never
 // finished reads as a bug rather than a result.
 
-import { formatScore, formatSeeds, formatSpeed } from "./format.js";
+import { formatScore, formatSeeds, formatSpeed, isStage } from "./format.js";
 import { LANE_CSS } from "./course.js";
 import { runHref } from "./router.js";
 
@@ -116,6 +116,8 @@ export function renderBoard(
   // column reads "votes" and shows the count -- a finish time would be the
   // wrong fact about it, and does not appear on this board at all.
   const voted = event.metric === "votes";
+  // A performance has no speed and is played once: on a stage, neither column means anything.
+  const stage = isStage(event);
 
   const table = document.createElement("table");
   table.className = "board";
@@ -123,8 +125,8 @@ export function renderBoard(
     "<thead><tr><th class='tab'></th><th class='rank'>place</th><th>who</th>" +
     "<th>policy</th>" +
     (voted ? "<th class='votes'>votes</th>" : "<th class='time'>time</th>") +
-    "<th class='speed'>m/s</th>" +
-    "<th class='seeds'>seeds</th><th class='record'>record</th>" +
+    (stage ? "" : "<th class='speed'>m/s</th><th class='seeds'>seeds</th>") +
+    "<th class='record'>record</th>" +
     "<th class='env'></th><th class='grab'></th>" +
     "<th class='mine'></th></tr></thead>";
   const body = document.createElement("tbody");
@@ -230,8 +232,7 @@ export function renderBoard(
       voted
         ? cell(String(row.votes ?? 0), "votes")
         : cell(row.score, "time"),
-      cell(row.speed, "speed"),
-      cell(row.seeds, "seeds"),
+      ...(stage ? [] : [cell(row.speed, "speed"), cell(row.seeds, "seeds")]),
       record,
       env,
       grab,

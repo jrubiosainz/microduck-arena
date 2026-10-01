@@ -24,6 +24,10 @@ export function formatSpeed(vx, { finished } = {}) {
   return `${vx.toFixed(2)}`;
 }
 
+/** Whether an event is a stage: an open floor that plays each entry's timeline once, with no lane,
+ * no line and no speed. The event summary says so in `course`. */
+export const isStage = (event) => event?.course === "stage";
+
 /**
  * The event's parameters as labelled pairs.
  *
@@ -37,6 +41,14 @@ export function formatSpeed(vx, { finished } = {}) {
  * the score was measured at a speed it very likely was not.
  */
 export function formatEventFacts(event) {
+  // A stage plays a performance, never a race: no distance, no surface to climb, no sweep.
+  if (isStage(event)) {
+    return [
+      { label: "stage", value: "open floor" },
+      { label: "performance", value: `up to ${event.time_limit_s} s` },
+      { label: "rig", value: event.rig },
+    ];
+  }
   return [
     { label: "distance", value: `${event.length_m} m` },
     { label: "surface", value: event.slope_deg ? `${event.slope_deg}° climb` : "flat" },

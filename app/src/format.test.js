@@ -4,6 +4,7 @@ import {
   formatScore,
   formatSeeds,
   formatSpeed,
+  isStage,
 } from "./format.js";
 
 describe("formatScore", () => {
@@ -86,5 +87,22 @@ describe("formatEventFacts", () => {
   it("calls a level course flat rather than saying 0°", () => {
     const facts = formatEventFacts({ ...SPRINT, slope_deg: 0 });
     expect(facts.find((f) => f.label === "surface").value).toBe("flat");
+  });
+});
+
+const STAGE = { id: "got-a-talent", course: "stage", rig: "legs", time_limit_s: 20 };
+
+describe("a stage's facts", () => {
+  it("say what it is, never a distance or a speed", () => {
+    expect(formatEventFacts(STAGE)).toEqual([
+      { label: "stage", value: "open floor" },
+      { label: "performance", value: "up to 20 s" },
+      { label: "rig", value: "legs" },
+    ]);
+  });
+  it("isStage reads the course, not the id", () => {
+    expect(isStage(STAGE)).toBe(true);
+    expect(isStage({ ...STAGE, course: "lane" })).toBe(false);
+    expect(isStage(undefined)).toBe(false);
   });
 });

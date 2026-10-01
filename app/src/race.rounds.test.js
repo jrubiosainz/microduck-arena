@@ -19,7 +19,8 @@ const PROGRAMME = [
   event("sprint-2m", "2 m Sprint"),
   event("roller-sprint-2m", "2 m Roller Sprint"),
   event("hill-climb-1m5", "1.5 m Hill Climb"),
-  event("got-a-talent", "MicroDuck Got a Talent", "showcase"),
+  { id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", course: "stage",
+    rig: "legs", seeds: 1, time_limit_s: 20, metric: "votes", vote: { ballot_min: 2 } },
 ];
 
 const asked = [];

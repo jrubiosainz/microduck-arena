@@ -5,7 +5,8 @@ const SPRINT = {
   id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null,
   length_m: 2, slope_deg: 0, rig: "legs", sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21,
 };
-const TALENT = { ...SPRINT, id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", vote: { ballot_min: 2 } };
+const TALENT = { id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", course: "stage",
+  rig: "legs", time_limit_s: 20, metric: "votes", vote: { ballot_min: 2 } };
 
 describe("flyer", () => {
   it("leads to the race page and says who holds it, by default", () => {
@@ -30,5 +31,9 @@ describe("flyer", () => {
 
   it("can have no corner at all", () => {
     expect(flyer(TALENT, null, { corner: null }).querySelector(".vote-button")).toBeNull();
+  });
+
+  it("pins a stage's facts on its sheet", () => {
+    expect(flyer(TALENT, []).querySelector(".challenge-facts").textContent).toBe("open floor · up to 20 s · legs");
   });
 });
