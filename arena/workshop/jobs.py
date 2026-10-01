@@ -66,6 +66,10 @@ def remember_job(root: Path, task: str, name: str, **fields) -> None:
                 return
             jobs.insert(0, {"task": task, "name": name, **fields})
         else:
+            if job.get("stage") in TERMINAL:
+                # A job that ended stays ended: the watcher writes what the Hub said before its pull,
+                # and a Stop may have written CANCELED during that pull.
+                fields.pop("stage", None)
             job.update(fields)
         path = root / JOBS
         path.parent.mkdir(parents=True, exist_ok=True)

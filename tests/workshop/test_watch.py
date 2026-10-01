@@ -109,6 +109,24 @@ def test_one_record_that_breaks_the_watch_leaves_the_others_watched(checkout, fa
     assert {job["name"]: job.get("stage") for job in recorded_jobs(checkout)} == {"second": None, "first": "RUNNING"}
 
 
+def test_a_stop_while_the_checkpoints_come_down_stays_stopped(workshop, fakes, checkout, hub, monkeypatch):
+    """The watcher writes what the Hub said after the pull: a Stop in between must not read Training again."""
+    launched(workshop, monkeypatch)
+    reopened = reopen(checkout, hub)
+    real_fetch = watch.fetch
+    stops = []
+
+    def fetch(root, repo):
+        stops.append(reopened.post(f"{SPRINT_URL}/jobs/first/stop").status_code)
+        return real_fetch(root, repo)
+
+    monkeypatch.setattr(watch, "fetch", fetch)
+    watch_once(reopened.app.state.workshop, now=1000.0)
+    assert stops == [200] and hub.cancelled == [("fakejob42", "alice")]
+    (record,) = recorded_jobs(checkout)
+    assert record["stage"] == "CANCELED" and ticket(reopened)["state"] == "stopped"
+
+
 def test_an_unreachable_hub_leaves_the_tickets_as_they_were(workshop, fakes, checkout, hub, monkeypatch):
     """Review focus: the tickets never ask the network, and a watcher that cannot reach the Hub
     changes nothing but when it asks next."""
