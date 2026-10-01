@@ -79,12 +79,15 @@ def test_a_stage_run_is_deterministic(talent, walker):
     assert np.array_equal(a.settle, b.settle)
 
 
-def test_a_simulation_mujoco_had_to_reset_ends_the_performance(talent, walker, monkeypatch):
+def test_a_simulation_mujoco_had_to_reset_ends_the_performance(talent, walker, monkeypatch, tmp_path):
     """MuJoCo answers a non-finite state by resetting to the model's defaults and carrying on: the
     state stays finite, and only its warning counters say the performance diverged."""
     import mujoco
 
     import arena.runner as runner
+
+    # MuJoCo logs the warning to MUJOCO_LOG.TXT in the working directory.
+    monkeypatch.chdir(tmp_path)
 
     real_step, real_mj_step, calls, armed = runner._step, mujoco.mj_step, [], []
 
