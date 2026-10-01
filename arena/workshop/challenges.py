@@ -24,6 +24,10 @@ class ChallengeError(ValueError):
     """A challenge.toml the workshop cannot use, or a value it will not write."""
 
 
+class UnknownEvent(ChallengeError):
+    """A challenge.toml whose event this Arena version does not race."""
+
+
 @dataclass(frozen=True)
 class Knob:
     name: str
@@ -47,7 +51,7 @@ class Challenge:
 def read_challenge(toml: Path) -> Challenge:
     try:
         table = tomllib.loads(toml.read_text())  # a syntax error is a ValueError too
-        return Challenge(
+        challenge = Challenge(
             folder=toml.parent.name,
             toml=toml,
             event=str(table["event"]),
@@ -59,23 +63,28 @@ def read_challenge(toml: Path) -> Challenge:
                 for name, k in table.get("params", {}).items()
             ),
         )
+    except OSError as exc:
+        raise ChallengeError(f"{toml} cannot be read: {exc.strerror}") from exc
     except (KeyError, TypeError, ValueError) as exc:
         raise ChallengeError(
             f"{toml}: missing or unreadable {exc} — the workshop needs event, task, kind, "
             f"[recipe] {', '.join(RECIPE)}, and a label, value, min and max for each knob"
         ) from exc
+    try:
+        load_event(challenge.event)
+    except ManifestError as exc:
+        raise UnknownEvent(f"{toml}: this Arena does not race {challenge.event!r}") from exc
+    return challenge
 
 
 def open_challenges(root: Path) -> list[Challenge]:
     """The checkout's challenges whose event this Arena races, in folder order."""
     found = []
     for toml in sorted((root / PACKAGE).glob("*/challenge.toml")):
-        challenge = read_challenge(toml)
         try:
-            load_event(challenge.event)
-        except ManifestError:
-            continue  # an event this Arena version does not have
-        found.append(challenge)
+            found.append(read_challenge(toml))
+        except UnknownEvent:
+            continue
     return found
 
 

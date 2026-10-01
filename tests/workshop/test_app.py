@@ -27,15 +27,22 @@ def test_the_status_reads_challenge_toml_as_it_is_now(workshop, checkout):
     assert (sprint["knobs"][0]["value"], sprint["knobs"][0]["max"]) == (7.5, 8.0)
 
 
-def test_a_challenge_toml_that_does_not_read_keeps_the_page_drawing(workshop, checkout):
-    toml = checkout / "src" / "microduck_challenges" / "sprint_2m" / "challenge.toml"
-    toml.write_text(toml.read_text().replace("max_iterations = 3000", "max_iterations ="))
-    git(checkout, "commit", "-qam", "half an edit")
-    (sprint,) = workshop.get("/api/workshop/status").json()["challenges"]
-    assert sprint["recipe"]["max_iterations"] == 3000  # as it last read
+@pytest.mark.parametrize("edit, complaint", [
+    (lambda toml: toml.write_text(toml.read_text().replace("max_iterations = 3000", "max_iterations =")), "Invalid value"),
+    (lambda toml: toml.unlink(), "No such file"),
+    (lambda toml: toml.write_text(toml.read_text().replace('"sprint-2m"', '"sprint-3m"')), "sprint-3m"),
+], ids=["half an edit", "deleted", "an event this arena does not race"])
+def test_a_challenge_toml_that_does_not_read_keeps_the_page_drawing(workshop, checkout, edit, complaint):
+    edit(checkout / "src" / "microduck_challenges" / "sprint_2m" / "challenge.toml")
+    git(checkout, "commit", "-qam", "an edit")
+    status = workshop.get("/api/workshop/status")
+    assert status.status_code == 200
+    (sprint,) = status.json()["challenges"]
+    assert sprint["event"]["id"] == "sprint-2m" and sprint["recipe"]["max_iterations"] == 3000  # as it last read
     response = workshop.post("/api/workshop/challenges/sprint-2m/train", json={
         "name": "first", "where": "hf-jobs", "recipe": sprint["recipe"], "params": {}})
-    assert response.status_code == 400 and "challenge.toml" in response.json()["detail"]
+    assert response.status_code == 400
+    assert "challenge.toml" in response.json()["detail"] and complaint in response.json()["detail"]
 
 
 def test_a_knob_that_is_not_a_reward_goes_with_the_recipe(checkout, fakes, hub):

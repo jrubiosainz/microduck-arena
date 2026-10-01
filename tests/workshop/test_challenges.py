@@ -52,6 +52,20 @@ def test_a_challenge_without_a_recipe_is_refused_by_name(tmp_path):
         read_challenge(toml)
 
 
+def test_a_challenge_toml_that_is_gone_is_refused_by_name(tmp_path):
+    """Deleted, its folder renamed, another branch checked out: the workshop still holds its path."""
+    toml = _folder(tmp_path, "sprint_2m", SPRINT)
+    toml.unlink()
+    with pytest.raises(ChallengeError, match="sprint_2m.*No such file"):
+        read_challenge(toml)
+
+
+def test_a_challenge_for_an_event_this_arena_does_not_race_is_refused_by_name(tmp_path):
+    toml = _folder(tmp_path, "sprint_2m", SPRINT.replace('"sprint-2m"', '"no-such-event"'))
+    with pytest.raises(ChallengeError, match="no-such-event"):
+        read_challenge(toml)
+
+
 def test_values_are_written_in_place_keeping_every_comment(tmp_path):
     toml = _folder(tmp_path, "sprint_2m", SPRINT)
     changed = write_values(read_challenge(toml), {"num_envs": 1024, "max_iterations": 500, "seed": 7},
