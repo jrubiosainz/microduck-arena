@@ -4,7 +4,7 @@
 
 import { getRun, getSettle, getTrace } from "../api.js";
 import { LANE_COLORS } from "../course.js";
-import { formatScore } from "../format.js";
+import { formatScore, isStage } from "../format.js";
 import { lanesFor } from "../lanes.js";
 import { CTRL_DT, frameCount, leadIn } from "../replay.js";
 import { createViewer } from "../viewer.js";
@@ -34,6 +34,7 @@ function clock(step) {
 
 /** The words on the frame, from the run and nothing else. */
 function letter(run) {
+  const stage = isStage(run.event);
   const who = `@${run.user} · ${run.policy_name}`;
   const earned = run.receipts.reduce((sum, r) => sum + r.points, 0);
   const dnf = run.seeds_finished === 0;
@@ -43,11 +44,17 @@ function letter(run) {
   $("osd-rec").textContent = `REC · ${who}`;
   $("osd-event").textContent = run.event.title.toUpperCase();
   $("fig-time").textContent = formatScore(run.score, { finished: run.seeds_finished });
-  $("fig-place").textContent = run.on_board && !run.withdrawn ? `#${run.rank}` : "—";
+  // A performance's number is its length, and votes rank it: no place to give at publication.
+  if (stage) {
+    $("fig-time").nextElementSibling.textContent = "length";
+    $("fig-place").parentElement.hidden = true;
+  } else {
+    $("fig-place").textContent = run.on_board && !run.withdrawn ? `#${run.rank}` : "—";
+  }
   $("fig-points").textContent = earned > 0 ? `+${earned}` : "—";
   $("weights").textContent = run.policy_url ? run.policy_url.replace(/^https?:\/\//, "") : "";
   const stamp = $("stamp");
-  stamp.textContent = dnf ? "DNF" : "VICTORY";
+  stamp.textContent = dnf ? (stage ? "CUT SHORT" : "DNF") : stage ? "BRAVO" : "VICTORY";
   stamp.classList.add(dnf ? "stamp-fail" : "stamp-pass");
 }
 

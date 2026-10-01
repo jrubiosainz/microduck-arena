@@ -39,6 +39,13 @@ describe("the MicroDuck Got a Talent broadcast camera", () => {
       expect(new Vector3(...at(cut - 0.001).position).distanceTo(new Vector3(...at(cut).position))).toBeGreaterThan(0.2);
     }
   });
+  it("holds its last shot past the cycle: a clip's outro ends on the crane, not back on the opening", () => {
+    const subject = [new Vector3(0, 0.14, 0)];
+    const end = stageCameraPose(24, subject, 16 / 9, 42);
+    const after = stageCameraPose(25.5, subject, 16 / 9, 42);
+    expect(after.shot).toBe("crane");
+    expect(after.position).toEqual(end.position);
+  });
 });
 
 describe("theatre layout", () => {

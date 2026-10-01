@@ -425,6 +425,11 @@ def test_a_clip_section_pins_the_tape_a_fixed_camera_and_the_sounds(tmp_path):
     }
 
 
+def test_a_performance_is_filmed_whole_without_a_start_horn():
+    clip = load_event("got-a-talent").clip
+    assert (clip.tape_max_s, clip.sounds) == (20.0, ("crowd", "verdict"))
+
+
 @pytest.mark.parametrize(
     "section, said",
     [

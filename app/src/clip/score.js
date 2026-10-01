@@ -2,6 +2,7 @@
 // direction and every cue at its instant. Pure. Each sound source is a
 // function here and a name in the event's [clip] sounds.
 
+import { isStage } from "../format.js";
 import { CTRL_DT, frameAt } from "../replay.js";
 
 /** Cue gains, measured on a real render: the horn 5 dB over the crowd's surge,
@@ -49,7 +50,8 @@ export function clipScore({ run, plan, trace }) {
     // The same run always sounds the same, whichever layout renders it.
     seed: fnv(run.run_id),
     crowd: sounds.includes("crowd")
-      ? { start, end, verdict, progress: progress(trace, plan, run.event.length_m, start) }
+      // A stage has no course to go down: its crowd answers the verdict alone.
+      ? { start, end, verdict, progress: isStage(run.event) ? [] : progress(trace, plan, run.event.length_m, start) }
       : null,
     cues: sounds.flatMap((name) => SOURCES[name]?.(context) ?? []),
   };

@@ -31,4 +31,14 @@ describe("clipScore", () => {
     });
     expect(quiet.cues).toEqual([]);
   });
+
+  it("a stage's crowd answers the verdict alone: a performance goes down no course", () => {
+    const event = { id: "got-a-talent", course: "stage", clip: { tape_max_s: 20, sounds: ["crowd", "verdict"] } };
+    const run = { run_id: "r1", seeds_finished: 1, event };
+    const plan = clipPlan(1000, 20, 26);
+    const trace = new Float32Array(21 * 1026);
+    const score = clipScore({ run, plan, trace });
+    expect(score.crowd.progress).toEqual([]);
+    expect(score.cues.map((cue) => cue.file)).not.toContain("air-horn.mp3");
+  });
 });

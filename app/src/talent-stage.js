@@ -58,7 +58,9 @@ export function stageCameraPose(seconds, subjects, aspect, fov, depth = 2.6) {
   target.y = Math.max(0.14, target.y) + 0.04;
   const halfFov = Math.atan(Math.tan(fov * Math.PI / 360) * Math.min(1, aspect));
   const fit = 0.32 / Math.sin(halfFov) * 1.18;
-  const time = Math.max(0, seconds) % 24;
+  // One cycle of shots; a clip runs past it (titles and outro around a 20 s performance), and
+  // there the last shot holds rather than cutting back to the opening.
+  const time = Math.min(Math.max(0, seconds), 24);
   let shot, angle, distance, elevation;
   if (time < 3) {
     shot = "opening";

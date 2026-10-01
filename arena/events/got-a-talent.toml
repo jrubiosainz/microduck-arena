@@ -34,6 +34,13 @@ yaw_deg   = 2.0
 fall_gravity_z = -0.5
 fall_hold_s    = 0.3
 
+# The whole performance on tape, under the stage's own cameras (the viewer's,
+# for a stage). No start horn: nothing starts and nothing is raced; the crowd
+# answers the end.
+[clip]
+tape_max_s = 20.0
+sounds     = ["crowd", "verdict"]
+
 [vote]
 ballot_min  = 2
 ballot_max  = 4
