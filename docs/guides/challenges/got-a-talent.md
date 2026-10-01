@@ -43,7 +43,7 @@ without a timeline stands still for 20 s.
 Every performance played to the end goes to the ballots. The most votes over the **last seven
 days** wins; tied entries favour the earlier publication.
 
-Your **latest entry** represents you. Votes on an older entry do not transfer to its replacement.
+Your **latest performance played to the end** represents you. Votes on an older entry do not transfer to its replacement.
 
 Ballots offer two to four anonymous performances, excluding your own, watched one at a time on
 stage. You can cast **20 votes per UTC day**. Each accepted vote earns **2 player points** until it
