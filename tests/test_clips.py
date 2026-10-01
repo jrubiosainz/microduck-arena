@@ -534,3 +534,12 @@ def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
     assert all(chrome.closed for chrome in opened)
     assert set(run.layouts) == set(recorder.SIZES) and run.poster == b"png"
     assert steps[:2] == ["opening", "soundtrack"]
+
+
+def test_a_longer_clip_gets_as_much_time_per_frame_as_a_race():
+    """The 900 s budget was sized on a race's longest clip, 451 frames. A 20 s performance on the
+    stage has 651, and the first one on the Space failed at frame 649: it was slow at a race's
+    pace, not stuck. A longer clip gets the same time per frame; a race's keeps the whole budget."""
+    assert recorder.budget_for(900.0, 451) == 900.0
+    assert recorder.budget_for(900.0, 321) == 900.0
+    assert recorder.budget_for(900.0, 651) == pytest.approx(900.0 * 651 / 451)

@@ -200,6 +200,16 @@ JPEG_QUALITY = 92
 # has measured, and half the waiting the first sixty-second bound cost.
 CAPTURE_ATTEMPT_S = 30.0
 CAPTURE_TRIES = 3
+# The frames of a race's longest clip, a 12 s tape with its titles and outro: what
+# the render budget was sized on.
+BUDGETED_FRAMES = 451
+
+
+def budget_for(budget_s: float, frames: int) -> float:
+    """How long a clip of `frames` frames may take to render: `budget_s` for a
+    race's, and as much time per frame for a longer one — a 20 s performance on
+    the stage has 651, and the first one on the Space was cut at frame 649."""
+    return budget_s * max(1.0, frames / BUDGETED_FRAMES)
 
 
 def ffmpeg_args(fps: int, pcm: Path, out: Path) -> list[str]:
@@ -340,7 +350,8 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
     renders the soundtrack they all share, and they are recorded `parallel` at
     a time. The poster is the landscape clip's.
 
-    `budget_s` bounds the whole render, from here — a stuck tab or an
+    `budget_s` bounds the whole render of a race's clip, from here, and a
+    longer clip gets as much time per frame (`budget_for`) — a stuck tab or an
     overloaded machine fails the clip rather than occupying the worker
     forever and leaving every publish behind it stuck `pending`.
 
@@ -352,7 +363,7 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
         raise RuntimeError("no Chrome found: set $CHROME")
     if not ffmpeg_available():
         raise RuntimeError("no ffmpeg on the PATH")
-    deadline = time.monotonic() + budget_s
+    started = time.monotonic()
     on_progress("opening", 0, 0)
     with contextlib.ExitStack() as stack:
         work = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="arena-clip-")))
@@ -374,7 +385,9 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
         # Every layout plays the same plan, so the whole render's frame count is
         # known before its first frame: the bar only ever goes forward, whether
         # the layouts are recorded one at a time or together.
-        total = tabs["landscape"].evaluate("window.clip.plan")["frames"] * len(SIZES)
+        frames = tabs["landscape"].evaluate("window.clip.plan")["frames"]
+        total = frames * len(SIZES)
+        deadline = started + budget_for(budget_s, frames)
         done = dict.fromkeys(SIZES, 0)
         counted = threading.Lock()
 
