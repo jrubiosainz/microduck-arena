@@ -144,3 +144,16 @@ def standings(candidates, ballots) -> list[VotedRow]:
         VotedRow(rank=i, record=r, votes=votes[r.run_id], shown=seen[r.run_id])
         for i, r in enumerate(ranked, 1)
     ]
+
+
+def placed(records, run_id: str, ballots, withdrawn: frozenset[str]) -> tuple[int, bool, list[VotedRow]]:
+    """Where ONE run stands on the voted board, on it or not: `index.standing`'s rule, by votes.
+
+    The board holds each person's latest finished entry (`pool`). This run takes its author's
+    place at its rank by votes; `on_board` says whether it is the entry holding that place.
+    """
+    record = next(r for r in records if r.run_id == run_id)
+    entries = pool(records, withdrawn)
+    rows = standings([*(r for r in entries if r.user != record.user), record], ballots)
+    rank = next(row.rank for row in rows if row.record.run_id == run_id)
+    return rank, any(r.run_id == run_id for r in entries), rows

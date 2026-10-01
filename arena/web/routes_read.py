@@ -33,6 +33,9 @@ def event_summary(manifest: Manifest) -> dict:
         # colour. The board and the race page do not read it.
         "category": manifest.category,
         "metric": manifest.metric,
+        # "lane" or "stage": what the page draws, and how it words a result. A stage has no
+        # lane, no line and no speed (the lane fields below are a lane's alone).
+        "course": manifest.course.kind,
         # The whole vote configuration, or null. The page reads this to decide
         # whether the VOTE badge, the vote button and the #/v/ route exist.
         "vote": (
@@ -88,6 +91,17 @@ def _withdrawn(store) -> frozenset[str]:
 def _voted() -> dict:
     """Every event that takes ballots, with its rules. The fold needs both."""
     return {m.id: m.vote for m in all_events() if m.vote is not None}
+
+
+def _event_ballots(request: Request, manifest: Manifest, now: datetime) -> list:
+    """This event's ballots inside its own window: what its voted board counts."""
+    days = manifest.vote.window_days
+    # Filtered to THIS event, like points.boards_by_user already does — ballots.since() returns
+    # every votable event's ballots inside the window, and without this an event's tally would
+    # read another event's votes too. Correct today only because run ids are globally unique,
+    # which made the leak invisible rather than absent.
+    own = [b for b in request.app.state.ballots.since(votes.first_day(now, days)) if b.event_id == manifest.id]
+    return votes.window(own, now, days)
 
 
 def _ballots(request: Request, rules: dict, now: datetime) -> list:
@@ -153,16 +167,7 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
         # A separate function, not a parameterised leaderboard: index.sort_key
         # means "lower is better" and is correct for five live timed events.
         # Teaching it a second direction would put all of them at risk.
-        now = datetime.now(UTC)
-        days = manifest.vote.window_days
-        ballots = request.app.state.ballots
-        # Filtered to THIS event, like points.boards_by_user already does —
-        # ballots.since() returns every votable event's ballots inside the
-        # window, and without this an event's tally would read another
-        # event's votes too. Correct today only because run ids are globally
-        # unique, which made the leak invisible rather than absent.
-        own = [b for b in ballots.since(votes.first_day(now, days)) if b.event_id == event_id]
-        kept = votes.window(own, now, days)
+        kept = _event_ballots(request, manifest, datetime.now(UTC))
         rows = votes.standings(votes.pool(records, withdrawn), kept)
         out = [_board_row(row) for row in rows]
         for shaped, row in zip(out, rows):
@@ -273,10 +278,21 @@ def run_detail(run_id: str, request: Request) -> dict:
     record = _find_run(store, run_id)
     runs, withdrawn = _all_runs(store), _withdrawn(store)
     rules, now = _voted(), datetime.now(UTC)
-    place = standing(store.runs(record.event_id), run_id, withdrawn=withdrawn)
+    manifest = load_event(record.event_id)
+    if manifest.metric == "votes":
+        # A voted event's publication stands where its votes put it, as on the event's own board
+        # and the player's page: on a stage, a time would only be the performance's length.
+        rank, on_board, rows = votes.placed(store.runs(record.event_id), run_id,
+                                            _event_ballots(request, manifest, now), withdrawn)
+        board = [{**_board_row(row), "votes": row.votes, "shown": row.shown,
+                  "you": row.record.run_id == record.run_id} for row in rows]
+    else:
+        place = standing(store.runs(record.event_id), run_id, withdrawn=withdrawn)
+        rank, on_board = place.rank, place.on_board
+        board = [{**_board_row(row), "you": row.record.run_id == record.run_id} for row in place.board]
     return {
         "run_id": record.run_id,
-        "event": event_summary(load_event(record.event_id)),
+        "event": event_summary(manifest),
         "user": record.user,
         "policy_name": record.policy_name,
         "livery": record.livery,
@@ -294,13 +310,10 @@ def run_detail(run_id: str, request: Request) -> dict:
         "policy_url": (record.source or {}).get("url"),
         "env_url": record.env_url,
         "withdrawn": record.run_id in withdrawn,
-        "on_board": place.on_board,
-        "rank": place.rank,
+        "on_board": on_board,
+        "rank": rank,
         # The same columns as the event's board: the page draws the same table.
-        "board": [
-            {**_board_row(row), "you": row.record.run_id == record.run_id}
-            for row in place.board
-        ],
+        "board": board,
         # Podium receipts are HELD, so this list can change between two reads.
         "receipts": [
             {"act": r.act, "points": r.points}

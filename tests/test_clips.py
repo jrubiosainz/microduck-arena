@@ -266,6 +266,17 @@ def test_the_unfurl_escapes_what_a_submitter_typed_and_falls_back_to_the_request
     assert f'content="http://testserver/r/{record.run_id}"' in page
 
 
+def test_a_performance_is_described_as_one():
+    from arena.manifest import load_event
+    from arena.web.routes_unfurl import describe
+
+    talent = load_event("got-a-talent")
+    played = make_record(user="eve", event_id="got-a-talent", score=20.0, seeds_finished=1)
+    assert describe(played, None, talent) == "@eve's duck gave a 20.00 s performance on MicroDuck Got a Talent."
+    cut = make_record(user="eve", event_id="got-a-talent", score=20.0, seeds_finished=0)
+    assert describe(cut, None, talent) == "@eve's duck performed on MicroDuck Got a Talent; the performance was cut short."
+
+
 def test_the_worker_says_where_a_clip_stands(tmp_path):
     """The queue is a place in a line and a render is a fraction: both are read
     off the worker, never off the store, which knows only that one is owed."""

@@ -3,6 +3,7 @@ from collections import Counter
 from datetime import UTC, datetime
 
 from arena.constants import RUNNER_VERSION
+from arena.store import Ballot
 from arena.votes import (
     cast_today,
     draw,
@@ -125,3 +126,15 @@ def test_standings_rank_by_votes_then_by_who_published_first():
         (2, "cid", 0, 2),
         (3, "ann", 0, 2),
     ]
+
+
+def test_a_run_is_placed_by_votes_among_the_others_entries():
+    from arena.votes import placed
+
+    ann = make_record(user="ann", event_id="got-a-talent", submitted_at="2026-09-03T10:00:00Z")
+    bob = make_record(user="bob", event_id="got-a-talent", submitted_at="2026-09-04T10:00:00Z")
+    ballot = Ballot(ballot_id="b1", event_id="got-a-talent", voter="cid", cast_at="2026-09-05T10:00:00Z",
+                    candidates=(ann.run_id, bob.run_id), choice=bob.run_id)
+    rank, on_board, rows = placed([ann, bob], bob.run_id, [ballot], frozenset())
+    assert (rank, on_board) == (1, True)
+    assert [(row.record.user, row.votes) for row in rows] == [("bob", 1), ("ann", 0)]

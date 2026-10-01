@@ -376,6 +376,32 @@ def cast(app, choice, candidates, **overrides):
     app.state.ballots.cast(Ballot(**fields))
 
 
+def test_every_event_says_what_kind_of_course_it_is(client):
+    api, _ = client
+    courses = {e["id"]: e["course"] for e in api.get("/api/events").json()["events"]}
+    assert courses == {"sprint-2m": "lane", "roller-sprint-2m": "lane", "hill-climb-1m5": "lane",
+                       "got-a-talent": "stage"}
+
+
+def test_a_voted_events_publication_stands_where_its_votes_put_it(client):
+    api, app = client
+    ann = record_run(app, user="ann", event_id="got-a-talent", score=20.0, submitted_at="2026-09-03T10:00:00Z")
+    bob = record_run(app, user="bob", event_id="got-a-talent", score=20.0, submitted_at="2026-09-04T10:00:00Z")
+    cast(app, bob.run_id, [ann.run_id, bob.run_id])
+    body = api.get(f"/api/runs/{bob.run_id}").json()
+    assert (body["rank"], body["on_board"]) == (1, True)
+    assert [(r["user"], r["votes"], r["you"]) for r in body["board"]] == [("bob", 1, True), ("ann", 0, False)]
+
+
+def test_an_older_performance_finds_its_place_off_the_board(client):
+    api, app = client
+    old = record_run(app, user="ann", event_id="got-a-talent", score=20.0, submitted_at="2026-09-03T10:00:00Z")
+    record_run(app, user="ann", event_id="got-a-talent", score=20.0, submitted_at="2026-09-05T10:00:00Z")
+    body = api.get(f"/api/runs/{old.run_id}").json()
+    assert body["on_board"] is False
+    assert [r["you"] for r in body["board"]] == [True]
+
+
 def test_a_voted_board_ranks_on_votes_and_still_reports_the_time(client):
     api, app = client
     ann = record_run(app, user="ann", event_id="got-a-talent", score=12.0)

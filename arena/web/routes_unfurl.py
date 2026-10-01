@@ -18,13 +18,18 @@ from .routes_read import _find_run, _withdrawn, clip_url
 router = APIRouter()
 
 
-def describe(record, place, title: str) -> str:
+def describe(record, place, event) -> str:
     """One sentence for the card."""
+    if event.course.kind == "stage":
+        # A performance is never timed or ranked by its length; the public's votes rank it.
+        if record.seeds_finished == 0:
+            return f"@{record.user}'s duck performed on {event.title}; the performance was cut short."
+        return f"@{record.user}'s duck gave a {record.score:.2f} s performance on {event.title}."
     seeds = len(record.per_seed)
     if record.seeds_finished == 0:
-        return f"@{record.user}'s duck went down on {title}: 0/{seeds} seeds finished."
+        return f"@{record.user}'s duck went down on {event.title}: 0/{seeds} seeds finished."
     said = (f"@{record.user}'s duck finished {record.seeds_finished}/{seeds} seeds "
-            f"in {record.score:.3f} s on {title}")
+            f"in {record.score:.3f} s on {event.title}")
     return f"{said}, #{place.rank} on the board." if place.on_board else f"{said}."
 
 
@@ -37,7 +42,8 @@ def _meta(property_: str, content: str, name: bool = False) -> str:
 def unfurl(run_id: str, request: Request) -> HTMLResponse:
     store = request.app.state.store
     record = _find_run(store, run_id)
-    title = load_event(record.event_id).title
+    event = load_event(record.event_id)
+    title = event.title
     place = standing(store.runs(record.event_id), run_id, withdrawn=_withdrawn(store))
     origin = request.app.state.config.public_origin or str(request.base_url).rstrip("/")
     state, manifest = store.clip_state(run_id)
@@ -45,7 +51,7 @@ def unfurl(run_id: str, request: Request) -> HTMLResponse:
     tags = [
         _meta("og:type", "video.other"),
         _meta("og:title", f"@{record.user} · {record.policy_name} · {title}"),
-        _meta("og:description", describe(record, place, title)),
+        _meta("og:description", describe(record, place, event)),
         _meta("og:url", f"{origin}/r/{run_id}"),
         _meta("twitter:card", "summary_large_image", name=True),
     ]
