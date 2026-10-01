@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 import pytest
@@ -175,24 +176,26 @@ GOOD_MANIFEST = {
 }
 
 
-def _fetch(tmp_path, manifest, event_id="sprint-2m", revision=None, downloads=None):
-    """fetch_policy against a fake Hub holding policy.onnx and, unless None, this manifest."""
-    files = ["README.md", "policy.onnx"] + ([] if manifest is None else ["manifest.json"])
+def _fetch(tmp_path, manifest, event_id="sprint-2m", revision=None, downloads=None, timeline=None):
+    """fetch_policy against a fake Hub holding policy.onnx and, unless None, this manifest and this
+    timeline.json."""
+    files = (["README.md", "policy.onnx"] + ([] if manifest is None else ["manifest.json"])
+             + ([] if timeline is None else ["timeline.json"]))
     manifest_path = tmp_path / "manifest.json"
     if manifest is not None:
         manifest_path.write_text(manifest if isinstance(manifest, str) else json.dumps(manifest))
+    timeline_path = tmp_path / "timeline.json"
+    if timeline is not None:
+        timeline_path.write_text(timeline if isinstance(timeline, str) else json.dumps(timeline))
     seen = [] if downloads is None else downloads
 
     def download(repo_id, filename, rev):
         seen.append((filename, rev))
-        return str(manifest_path) if filename == "manifest.json" else "/tmp/x.onnx"
+        return {"manifest.json": str(manifest_path), "timeline.json": str(timeline_path)}.get(filename, "/tmp/x.onnx")
 
     return fetch_policy(
-        "alice/walker",
-        revision=revision,
-        event=load_event(event_id),
-        info=lambda repo_id, rev: (files, f"sha-of-{rev or 'main'}", {}),
-        download=download,
+        "alice/walker", revision=revision, event=load_event(event_id),
+        info=lambda repo_id, rev: (files, f"sha-of-{rev or 'main'}", {}), download=download,
     )
 
 
@@ -306,3 +309,43 @@ def test_the_rig_is_read_from_both_vocabularies(robot, rig):
 
 def test_check_manifest_is_silent_when_everything_agrees():
     check_manifest(GOOD_MANIFEST, load_event("sprint-2m"))
+
+
+PERFORMANCE = {"timeline_version": 1, "duration_s": 4.0,
+               "keyframes": [{"t": 0.0}, {"t": 2.0, "twist": [1, 0, 0]}]}
+
+
+def test_a_stage_entry_brings_its_timeline_from_the_pinned_revision(tmp_path):
+    downloads = []
+    fetched = _fetch(tmp_path, None, event_id="got-a-talent", revision="abc123", downloads=downloads,
+                     timeline=PERFORMANCE)
+    assert fetched.timeline.duration_s == 4.0
+    assert fetched.timeline.command_at(2.0)[0] == 1.0
+    assert fetched.timeline_sha256 == hashlib.sha256((tmp_path / "timeline.json").read_bytes()).hexdigest()
+    assert downloads == [("timeline.json", "sha-of-abc123"), ("policy.onnx", "sha-of-abc123")]
+
+
+def test_a_stage_entry_without_a_timeline_plays_the_events_command(tmp_path):
+    fetched = _fetch(tmp_path, None, event_id="got-a-talent")
+    assert (fetched.timeline, fetched.timeline_sha256) == (None, None)
+
+
+@pytest.mark.parametrize("content, reason", [
+    ("{not json", "not a JSON file"),
+    ({**PERFORMANCE, "duration_s": 25.0}, "longer than this event's 20 s"),
+    ({**PERFORMANCE, "keyframes": [{"t": 0.0, "head": [0, 0, 1]}]}, "keyframes[0].head"),
+])
+def test_a_timeline_the_arena_will_not_play_is_refused_before_the_weights(tmp_path, content, reason):
+    downloads = []
+    with pytest.raises(FetchError) as refused:
+        _fetch(tmp_path, None, event_id="got-a-talent", downloads=downloads, timeline=content)
+    assert "alice/walker/timeline.json" in str(refused.value)
+    assert reason in str(refused.value)
+    assert "policy.onnx" not in [name for name, _ in downloads]
+
+
+def test_a_race_never_reads_a_timeline(tmp_path):
+    downloads = []
+    fetched = _fetch(tmp_path, None, event_id="sprint-2m", downloads=downloads, timeline="{not json")
+    assert fetched.timeline is None
+    assert "timeline.json" not in [name for name, _ in downloads]

@@ -23,17 +23,26 @@ and, when the caller names the event, checked against it before the ONNX is
 downloaded: the observation and action sizes, the robot the event races, the
 kind of policy it takes — each one the manifest declares. A repo without one
 is accepted as before.
+
+A stage entry's `timeline.json` — the command it performs, and when — is read at
+the same revision too, when the event named is a stage, and checked with the
+Arena's own loader before the weights: a file the Arena will not play is refused
+with the reason. A repo without one plays the event's own command. A race never
+reads it.
 """
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
 
 from .constants import NUM_JOINTS, OBS_SIZE
 from .policy import MAX_MODEL_BYTES
+from .timeline import Timeline, TimelineError, load_timeline
 
 PREFERRED = "policy.onnx"
 MANIFEST = "manifest.json"
+TIMELINE = "timeline.json"
 # What this Arena's own publisher (removed) wrote for the roller rig, before
 # `uv run publish` described rollers as an accessory of the one microduck.
 LEGACY_ROLLERS_MODEL = "microduck passive rollers"
@@ -52,6 +61,11 @@ class FetchedPolicy:
     url: str
     # The repo's manifest.json, parsed, or None when it has none.
     manifest: dict | None = None
+    # A stage entry's performance (its timeline.json at the same revision), checked; None when the
+    # repo has none (the event's own command plays) or the event is a race, which never reads it.
+    timeline: Timeline | None = None
+    # The sha256 of that file's bytes: the same weights with another timeline are another entry.
+    timeline_sha256: str | None = None
 
 
 def parse_repo_ref(text: str) -> tuple[str, str | None]:
@@ -177,6 +191,18 @@ def _read_manifest(repo_id: str, revision: str, download) -> dict:
     return manifest
 
 
+def _read_timeline(repo_id: str, revision: str, download, event) -> tuple[Timeline, str]:
+    try:
+        path = Path(download(repo_id, TIMELINE, revision))
+    except Exception as exc:
+        raise FetchError(f"could not download {repo_id}/{TIMELINE}: {exc}") from exc
+    try:
+        timeline = load_timeline(path, event.time_limit_s)
+    except TimelineError as exc:
+        raise FetchError(f"{repo_id}/{TIMELINE} cannot be played: {exc}") from exc
+    return timeline, hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def fetch_policy(
     repo_ref: str,
     revision: str | None = None,
@@ -212,6 +238,11 @@ def fetch_policy(
     if manifest is not None and event is not None:
         check_manifest(manifest, event)  # before the weights: a refusal costs one small file
 
+    timeline = timeline_sha256 = None
+    if event is not None and event.course.kind == "stage" and TIMELINE in files:
+        # Before the weights too: a performance the Arena will not play costs one small file.
+        timeline, timeline_sha256 = _read_timeline(repo_id, pinned, download, event)
+
     try:
         path = Path(download(repo_id, filename, pinned))
     except Exception as exc:
@@ -224,4 +255,6 @@ def fetch_policy(
         path=path,
         url=f"https://huggingface.co/{repo_id}/resolve/{pinned}/{filename}",
         manifest=manifest,
+        timeline=timeline,
+        timeline_sha256=timeline_sha256,
     )
