@@ -5,12 +5,15 @@
 
 import { MIN } from "../brightness.js";
 import { deckMarkup, followKeyFor, wireDeck } from "../deck.js";
+import { isStage } from "../format.js";
+import { eventGuideHref } from "../router.js";
 import { footer } from "../signage.js";
 import { createViewer } from "../viewer.js";
 import * as api from "./api.js";
 import { renderCurve } from "./curve.js";
 import { el } from "./dom.js";
 import { accountChip, strip } from "./header.js";
+import { performancePanel } from "./performance.js";
 import { publishPanel } from "./publish.js";
 import { challengeHref, homeHref } from "./routes.js";
 import { bars, confirmStop, progress, seconds } from "./tickets.js";
@@ -70,6 +73,7 @@ export async function mountJob(root, { status, account, route }) {
   }
   const { event } = challenge;
   const voted = event.metric === "votes";
+  const stage = isStage(event);
   let code = await api.getCode();
   let since = job.next;
   let selected = voted ? null : job.best; // the checkpoint chosen: scored, published
@@ -104,7 +108,11 @@ export async function mountJob(root, { status, account, route }) {
   hall.append(grid);
   const $ = (selector) => grid.querySelector(selector);
   $(".racetitle").textContent = job.name;
-  $(".ckpts .hint").textContent = voted ? "Click one to watch it." : "The higher, the faster. Click one to watch it.";
+  $(".ckpts .hint").textContent = stage ? "Click one to watch it perform."
+    : voted ? "Click one to watch it." : "The higher, the faster. Click one to watch it.";
+  $(".score__caveat").textContent = stage
+    ? "Indicative: the Arena plays your entry again, on its own computer."
+    : "Indicative: only the Arena times an entry.";
   const log = el("pre", "terminal-body");
   // Opened, the output shows its latest lines.
   $(".output").addEventListener("toggle", () => {
@@ -125,6 +133,17 @@ export async function mountJob(root, { status, account, route }) {
     },
   });
   $(".score").after(panel.el);
+  if (stage) {
+    $(".ckpts").after(performancePanel({ guide: `${status.arena}/${eventGuideHref(event.id)}` }, {
+      load: () => api.getTimeline(event.id),
+      save: (text) => api.saveTimeline(event.id, text),
+      // The new moves on the stage at once: the checkpoint chosen is played again with them.
+      onSaved: () => {
+        evaluations.clear();
+        if (selected !== null) pick(selected);
+      },
+    }));
+  }
 
   // Each part of the page is redrawn only when what it shows changed.
   const painted = new Map(); // node -> what it was last drawn from
@@ -191,6 +210,10 @@ export async function mountJob(root, { status, account, route }) {
     } else if (row.status === "failed") {
       value.textContent = "Failed";
       seeds.textContent = "It could not be evaluated.";
+    } else if (stage) {
+      const done = row.stage;
+      value.textContent = done.fell_at == null ? "No fall" : `Fell at ${seconds(done.fell_at)}`;
+      seeds.textContent = `seated ${seconds(done.seated_s)} · standing ${seconds(done.standing_s)}`;
     } else {
       value.textContent = row.seeds_finished ? seconds(row.score) : "No finish";
       seeds.textContent = `${row.seeds_finished}/${row.seeds_total} seeds${row.seeds_finished ? ` · at ${row.command_vx.toFixed(2)} m/s` : ""}`;
@@ -217,10 +240,10 @@ export async function mountJob(root, { status, account, route }) {
     panel.update({ job, code, account: account.get(), selected });
   }
 
-  // The stage, made once, a replay waiting for it; until one plays, the empty stadium.
+  // The stadium, made once, a replay waiting for it; until one plays, it is empty.
   let viewer = null;
   let deck = null;
-  const stage = createViewer(grid.querySelector("#stage"), { rig: event.rig, onChaseChange: followKeyFor(grid) }).then((made) => {
+  const stadium = createViewer(grid.querySelector("#stage"), { rig: event.rig, onChaseChange: followKeyFor(grid) }).then((made) => {
     if (left) {
       made.dispose();
       return null;
@@ -233,7 +256,7 @@ export async function mountJob(root, { status, account, route }) {
   });
 
   async function play(body) {
-    if (!(await stage) || left || selected !== body.checkpoint) return;
+    if (!(await stadium) || left || selected !== body.checkpoint) return;
     viewer.setLanes([{ trace: body.trace, tier: "trial", livery: "classic", name: `checkpoint ${body.checkpoint}` }], event);
     deck.reset();
     playing = body.checkpoint;

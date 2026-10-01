@@ -120,6 +120,18 @@ describe("Publish & compete", () => {
     expect(p.el.querySelector(".checks input[name=fork]").value).toBe("https://github.com/alice/mi");
   });
 
+  it("a voted event's entry gives no official time", async () => {
+    const on = handlers();
+    on.onPublish.mockResolvedValue({ entered: "entered on got-a-talent: a 20.00 s performance", page_url: "http://arena.test/#/r/x" });
+    const p = publishPanel({ event: { id: "got-a-talent", title: "MicroDuck Got a Talent", metric: "votes" }, folder: "got_a_talent" }, on);
+    p.update({ job: JOB, code: CODE, account: IN, selected: 1000 });
+    type(p.el.querySelector("textarea"), "It sits and looks around.");
+    p.el.querySelector(".publish__go").click();
+    await flush();
+    expect(p.el.querySelector(".result b")).toBeNull();
+    expect(p.el.querySelector(".result").textContent).toContain("a 20.00 s performance");
+  });
+
   it("previews the Hub card as text, never as markup", async () => {
     const on = handlers();
     on.onPreview.mockResolvedValueOnce({ repo: "alice/microduck-sprint-2m-first", readme: "<img src=x onerror=alert(1)>" });

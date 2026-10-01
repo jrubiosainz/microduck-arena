@@ -2,7 +2,7 @@
 // training, asked again every few seconds (the tickets fill in as checkpoints are saved and
 // evaluated). Only what changed is redrawn: what is typed in the form, and a focused ticket, stay.
 
-import { formatEventFacts } from "../format.js";
+import { formatEventFacts, isStage } from "../format.js";
 import { footer } from "../signage.js";
 import * as api from "./api.js";
 import { el } from "./dom.js";
@@ -18,8 +18,9 @@ const FILES = [
   ["env.py", "the whole training: rewards, commands, randomisation, terrain"],
   ["rewards.py", "your own reward terms: create it, then add them to cfg.rewards in env.py"],
 ];
+const PERFORMANCE = ["timeline.json", "your performance: what the Arena commands, and when (a training's page edits it and plays it)"];
 
-function yours(folder) {
+function yours(folder, stage) {
   const box = el("div", "yours");
   const say = el("p");
   say.append(el("b", "", "Make it yours."), " Change a reward or write your own in these files, with your editor. "
@@ -27,7 +28,7 @@ function yours(folder) {
   const terminal = el("div", "terminal");
   terminal.append(el("div", "terminal-bar mono-label", `microduck-challenges / src / microduck_challenges / ${folder}`));
   const body = el("div", "terminal-body");
-  for (const [file, what] of FILES) {
+  for (const [file, what] of stage ? [...FILES, PERFORMANCE] : FILES) {
     const line = el("div", "yours__line");
     line.append(el("b", "", file), el("span", "", what));
     body.append(line);
@@ -52,7 +53,7 @@ function head(challenge, arena) {
   const board = el("a", "help-link", "See the board on the Arena ↗");
   Object.assign(board, { href: `${arena}/#/e/${event.id}`, target: "_blank", rel: "noopener" });
   caveat.append(board);
-  box.append(facts, caveat, yours(challenge.folder));
+  box.append(facts, caveat, yours(challenge.folder, isStage(event)));
   return box;
 }
 

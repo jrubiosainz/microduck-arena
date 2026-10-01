@@ -8,6 +8,8 @@ const api = vi.hoisted(() => ({
   pushCode: vi.fn(),
   useFork: vi.fn(),
   stopJob: vi.fn(),
+  getTimeline: vi.fn(async () => ({ text: "{}" })),
+  saveTimeline: vi.fn(async (event, text) => ({ text })),
 }));
 vi.mock("./api.js", () => api);
 const viewer = vi.hoisted(() => ({ setLanes: vi.fn(), setBrightness: vi.fn(), dispose: vi.fn(), player: { toggle() {}, playing: true },
@@ -27,7 +29,8 @@ const JOB = {
 const CODE = { fork: null, changes: [], identity: true, commit: "abc1234", unpushed: 0 };
 const SPRINT = { id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null, metric: "time", rig: "legs",
   length_m: 2, slope_deg: 0, sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21 };
-const TALENT = { ...SPRINT, id: "got-a-talent", title: "MicroDuck Got a Talent", metric: "votes", vote: { ballot_min: 2 } };
+const TALENT = { id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", course: "stage",
+  metric: "votes", rig: "legs", time_limit_s: 20, vote: { ballot_min: 2 } };
 const status = (event) => ({ arena: "https://arena.test", gpu: false, challenges: [{ event, folder: "sprint_2m", task: "S", recipe: {}, knobs: [], running: 1 }] });
 const account = { get: () => ({ phase: "in", user: "alice", canPay: true }), logIn: vi.fn(), check: vi.fn() };
 const settle = async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); };
@@ -81,6 +84,30 @@ describe("a training's page", () => {
     await settle();
     expect(root.querySelector(".score__label").textContent).toBe("No checkpoint chosen");
     expect(root.querySelector(".publish__go").textContent).toBe("Pick a checkpoint");
+  });
+
+  it("a stage's training page edits its performance and says what the checkpoint did", async () => {
+    const stageRow = { n: 500, status: "evaluated", score: 20, seeds_finished: 1, seeds_total: 1, command_vx: 0,
+      stage: { fell_at: null, seated_s: 7.9, standing_s: 11.5 } };
+    api.getJob.mockResolvedValue({ ...JOB, checkpoints: [stageRow], best: null });
+    const root = document.createElement("div");
+    await open(root, TALENT);
+    await settle();
+    expect(root.querySelector(".performance textarea")).not.toBeNull();
+    expect(api.getTimeline).toHaveBeenCalledWith("got-a-talent");
+    root.querySelector(".ckpts .bars i").click();
+    await settle();
+    expect(root.querySelector(".score__value").textContent).toBe("No fall");
+    expect(root.querySelector(".score__seeds").textContent).toBe("seated 7.90 s · standing 11.50 s");
+  });
+
+  it("a race has no performance to edit", async () => {
+    api.getJob.mockResolvedValue(JOB);
+    const root = document.createElement("div");
+    await open(root, SPRINT);
+    await settle();
+    expect(root.querySelector(".performance")).toBeNull();
+    expect(api.getTimeline).not.toHaveBeenCalled();
   });
 
   it("keeps what is typed while the page redraws every few seconds", async () => {

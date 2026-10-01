@@ -111,7 +111,9 @@ export function publishPanel({ event, folder }, { onPublish, onPreview, onPush, 
       say("");
       const link = el("a", "", "See it on the Arena ↗");
       Object.assign(link, { href: done.page_url, target: "_blank", rel: "noopener" });
-      $(".result").replaceChildren(el("span", "mono-label", `Entered on ${event.title}`), el("b", "", officialTime(done.entered)),
+      // A voted event's entry has no official time: votes rank it.
+      $(".result").replaceChildren(el("span", "mono-label", `Entered on ${event.title}`),
+        ...(event.metric === "votes" ? [] : [el("b", "", officialTime(done.entered))]),
         el("span", "", done.entered), link);
       $(".result").hidden = false;
     } catch (error) {

@@ -29,6 +29,8 @@ export const stopJob = (event, id) => post(`${jobUrl(event, id)}/stop`);
 export const getJob = (event, id, since = 0) => json(`${jobUrl(event, id)}?since=${since}`);
 export const publishJob = (event, id, body) => post(`${jobUrl(event, id)}/publish`, body);
 export const pushCode = () => post("/api/workshop/code/push");
+export const getTimeline = (event) => json(`${challengeUrl(event)}/timeline`);
+export const saveTimeline = (event, text) => post(`${challengeUrl(event)}/timeline`, { text });
 
 /** A checkpoint's stored evaluation, its trace decoded as the viewer takes it; `{checkpoint, error}` when it failed. */
 export async function getCheckpoint(event, id, n) {

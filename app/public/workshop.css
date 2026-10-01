@@ -203,6 +203,11 @@ details.output summary { margin: 26px 0 8px; }
 .score__caveat { margin: 0; font-size: 0.75rem; color: var(--paper-60); }
 .job-stop { align-self: flex-start; }
 
+/* The performance: timeline.json in the Arena's terminal box, edited in place. */
+.performance { margin-top: 16px; }
+.performance__text { display: block; width: 100%; min-height: 16em; resize: vertical; border: 0; outline: 0;
+  font: inherit; color: inherit; background: transparent; white-space: pre; }
+
 /* Publish & compete: the commentators' badge, the two checks, the result. */
 .booth { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
 .booth__heads { display: flex; }

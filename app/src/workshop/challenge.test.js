@@ -16,6 +16,9 @@ const SPRINT = { id: "sprint-2m", title: "2 m Sprint", category: "race", vote: n
   length_m: 2, slope_deg: 0, rig: "legs", sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21 };
 const STATUS = { arena: "https://arena.test", gpu: false, challenges: [
   { event: SPRINT, folder: "sprint_2m", task: "S", recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, knobs: [], running: 0 }] };
+const TALENT_CHALLENGE = { event: { id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", course: "stage",
+  metric: "votes", rig: "legs", time_limit_s: 20, vote: { ballot_min: 2 } }, folder: "got_a_talent", task: "T",
+  recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, knobs: [], running: 0 };
 const account = { get: () => ({ phase: "in", user: "alice", canPay: true }), logIn: vi.fn(), check: vi.fn() };
 const TICKET = { id: "first", name: "first", where: "hf-jobs", state: "running", progress: null,
   started: "", run_id: null, dirty: false, checkpoints: [], best: null, published: null };
@@ -160,6 +163,14 @@ describe("a challenge's page", () => {
     expect(api.getStatus).toHaveBeenCalledTimes(1);
     page.leave();
     api.getCode.mockResolvedValue({ fork: null, changes: [], identity: true, commit: "abc1234", unpushed: 0 });
+  });
+
+  it("a stage lists its performance among the files that make it yours", async () => {
+    const root = document.createElement("div");
+    await mountChallenge(root, { status: { ...STATUS, challenges: [TALENT_CHALLENGE] }, account,
+      route: { view: "challenge", event: "got-a-talent" } });
+    expect(root.querySelector(".yours").textContent).toContain("timeline.json");
+    expect(root.querySelector(".facts").textContent).toContain("open floor");
   });
 
   it("says so for a challenge that is not open here", async () => {
