@@ -52,10 +52,9 @@ def _print_stage(manifest, result, timeline, name: str | None) -> None:
         print(f"stage: {played:.2f} s played, {what}")
     else:
         print(f"stage: stopped at {played:.2f} s, the simulation diverged; {what}")
-    fell = stage.fell_at(result.trace, manifest.termination)
-    print("fell: no" if fell is None else f"fell: at {fell:.2f} s")
-    print(f"seated {stage.seated(result.trace).sum() * CTRL_DT:.1f} s · "
-          f"standing {stage.standing(result.trace).sum() * CTRL_DT:.1f} s")
+    done = stage.summary(result.trace, manifest.termination)
+    print("fell: no" if done["fell_at"] is None else f"fell: at {done['fell_at']:.2f} s")
+    print(f"seated {done['seated_s']:.1f} s · standing {done['standing_s']:.1f} s")
 
 
 def _cmd_score(args) -> int:

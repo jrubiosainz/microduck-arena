@@ -8,6 +8,7 @@ asks the network — what the Hub says of a job is in its record, written by the
 """
 
 from ..manifest import load_event
+from .challenges import timeline_key
 from .code import code_url
 from .evaluations import summary
 from .jobs import recorded_jobs
@@ -68,8 +69,8 @@ def _progress(live, run, total, state) -> dict | None:
     return {"done": run.checkpoints[-1] if run and run.checkpoints else 0, "total": total}
 
 
-def _checkpoints(run, voted: bool) -> tuple[list[dict], int | None]:
-    done = summary(run) if run else {}
+def _checkpoints(run, voted: bool, challenge) -> tuple[list[dict], int | None]:
+    done = summary(run, timeline_key(challenge)) if run else {}
     rows = [{"n": n, **done.get(n, {"status": "queued"})} for n in (run.checkpoints if run else ())]
     finishers = [r for r in rows if r["status"] == "evaluated" and r["seeds_finished"] > 0]
     # A voted event is not a clock: its best is the public's to say.
@@ -105,11 +106,11 @@ def _sources(ws, challenge) -> list[tuple]:
     return sorted(found, key=lambda s: _started(s[2], s[3]), reverse=True)
 
 
-def _ticket(source_, voted: bool) -> dict:
+def _ticket(source_, voted: bool, challenge) -> dict:
     ticket_id, live, record, run = source_
     total = _iterations(record, run)
     state = _state(live, record, run, total)
-    rows, best = _checkpoints(run, voted)
+    rows, best = _checkpoints(run, voted, challenge)
     return {
         "id": ticket_id,
         "name": record["name"] if record else run.name,
@@ -143,12 +144,12 @@ def ticket_state(source_) -> str:
 
 def tickets(ws, challenge) -> list[dict]:
     voted = _voted(challenge)
-    return [_ticket(s, voted) for s in _sources(ws, challenge)]
+    return [_ticket(s, voted, challenge) for s in _sources(ws, challenge)]
 
 
 def ticket(ws, challenge, ticket_id: str) -> dict | None:
     found = source(ws, challenge, ticket_id)
-    return _ticket(found, _voted(challenge)) if found else None
+    return _ticket(found, _voted(challenge), challenge) if found else None
 
 
 def ticket_detail(ws, challenge, ticket_id: str, since: int = 0) -> dict | None:
@@ -159,7 +160,7 @@ def ticket_detail(ws, challenge, ticket_id: str, since: int = 0) -> dict | None:
     _, live, record, run = found
     lines, following = live.log(since) if live is not None else ([], since)
     return {
-        **_ticket(found, _voted(challenge)),
+        **_ticket(found, _voted(challenge), challenge),
         "log": lines, "next": following, "following": live is not None,
         "curve": curve(run) if run else [],
         "commit": run.provenance.get("commit") if run else None,

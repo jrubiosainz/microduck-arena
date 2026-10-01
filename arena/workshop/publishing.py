@@ -35,12 +35,15 @@ def repo_for(user: str, name: str) -> str:
     return f"{user}/microduck-{slug(name)}"
 
 
-def publish_args(run, checkpoint: int, repo: str, name: str, description: str, event, allow_dirty: bool) -> list[str]:
+def publish_args(run, checkpoint: int, repo: str, name: str, description: str, event, allow_dirty: bool,
+                  timeline=None) -> list[str]:
     # `--description=<text>`: as two words, a description starting with "-" reads as an option.
     args = ["publish", "--run", str(run.path), "--checkpoint", str(checkpoint), "--repo", repo,
             f"--name={slug(name)}", f"--description={description}"]
     if event.sweep and event.sweep.lo < event.sweep.hi:
         args += ["--twist-help", SPEED_TWIST]
+    if timeline is not None:
+        args += ["--timeline", str(timeline)]  # A stage's performance, uploaded beside the weights
     if allow_dirty:
         args.append("--allow-dirty")
     return args
@@ -54,8 +57,8 @@ def _run(root, args: list[str]) -> str:
     return output
 
 
-def preview(root, run, checkpoint, repo, name, description, event_id, allow_dirty) -> dict:
-    args = publish_args(run, checkpoint, repo, name, description, load_event(event_id), allow_dirty)
+def preview(root, run, checkpoint, repo, name, description, event_id, allow_dirty, timeline=None) -> dict:
+    args = publish_args(run, checkpoint, repo, name, description, load_event(event_id), allow_dirty, timeline)
     _run(root, [*args, "--dry-run"])
     out = root / f"publish-{slug(name)}"
     try:
@@ -85,8 +88,8 @@ def _remember(run, entry: dict) -> None:
 
 
 def publish(root, run, checkpoint, repo, name, description, event_id, allow_dirty, *,
-            arena: str, code_url: str | None) -> dict:
-    args = publish_args(run, checkpoint, repo, name, description, load_event(event_id), allow_dirty)
+            arena: str, code_url: str | None, timeline=None) -> dict:
+    args = publish_args(run, checkpoint, repo, name, description, load_event(event_id), allow_dirty, timeline)
     # Public, or the Arena cannot read it; --force because publishing a name again is a new commit on
     # the same repo, and the Arena pins the commit it raced. No --livery (every workshop entry wears
     # the default) and no --speed (a race is always swept).

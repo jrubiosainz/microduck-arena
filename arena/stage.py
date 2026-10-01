@@ -54,3 +54,12 @@ def fell_at(trace: np.ndarray, termination: Termination) -> float | None:
         if run >= needed:
             return (frame + 1) * CTRL_DT
     return None
+
+
+def summary(trace: np.ndarray, termination: Termination) -> dict:
+    """What a performance did: when the fall rule first held (or None), and how long it sat and stood."""
+    return {
+        "fell_at": fell_at(trace, termination),
+        "seated_s": float(seated(trace).sum() * CTRL_DT),
+        "standing_s": float(standing(trace).sum() * CTRL_DT),
+    }

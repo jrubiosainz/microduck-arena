@@ -20,10 +20,22 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..manifest import load_event
+from ..timeline import TimelineError, load_timeline
 from ..web.routes_read import event_summary
-from .challenges import RECIPE, Challenge, ChallengeError, read_challenge, write_values
+from .challenges import (
+    RECIPE,
+    Challenge,
+    ChallengeError,
+    is_stage,
+    read_challenge,
+    read_timeline,
+    save_timeline,
+    timeline_file,
+    timeline_key,
+    write_values,
+)
 from .code import code_state, code_url, commit, push, use_fork
-from .evaluations import evaluate_forever, stored
+from .evaluations import evaluate_checkpoint, evaluate_forever, exported, stored
 from .hub import Hub, HubUnreachable
 from .jobs import recorded_jobs, remember_job
 from .login import BrowserLogin, LoginError
@@ -258,14 +270,49 @@ def stop(event: str, ticket_id: str, request: Request) -> dict:
 
 @router.get("/challenges/{event}/jobs/{ticket_id}/checkpoints/{n}")
 def checkpoint(event: str, ticket_id: str, n: int, request: Request) -> dict:
-    """A checkpoint's stored evaluation, its trace inline: the page replays it at once."""
+    """A checkpoint's stored evaluation, its trace inline: the page replays it at once. On a stage, a
+    checkpoint last played with another timeline is played again now, from its exported ONNX — a
+    second or two — so an edit to the performance shows on the stage straight away."""
     ws = _workshop(request)
-    found = source(ws, _challenge_or_404(ws, event), ticket_id)
+    challenge = _challenge_or_404(ws, event)
+    found = source(ws, challenge, ticket_id)
     run = found[3] if found else None
-    body = stored(run, n) if run is not None and n in run.checkpoints else None
+    if run is None or n not in run.checkpoints:
+        raise HTTPException(status_code=404, detail=f"Checkpoint {n} is not evaluated yet.")
+    body = stored(run, n, timeline_key(challenge))
+    if body is None and is_stage(challenge) and exported(run, n):
+        evaluate_checkpoint(ws.root, run, n, challenge)
+        body = stored(run, n, timeline_key(challenge))
     if body is None:
         raise HTTPException(status_code=404, detail=f"Checkpoint {n} is not evaluated yet.")
     return {"checkpoint": n, "error": body["error"]} if "error" in body else body
+
+
+class TimelineText(BaseModel):
+    text: str
+
+
+def _stage_or_409(ws: Workshop, event: str) -> Challenge:
+    challenge = _challenge_or_404(ws, event)
+    if not is_stage(challenge):
+        raise HTTPException(status_code=409, detail=f"{event} is a race: it plays the event's command, with no timeline.")
+    return challenge
+
+
+@router.get("/challenges/{event}/timeline")
+def get_timeline(event: str, request: Request) -> dict:
+    return {"text": read_timeline(_stage_or_409(_workshop(request), event))}
+
+
+@router.post("/challenges/{event}/timeline")
+def post_timeline(event: str, body: TimelineText, request: Request) -> dict:
+    """Save the performance the page typed; the Arena's own loader reads it first, and a refusal says where."""
+    challenge = _stage_or_409(_workshop(request), event)
+    try:
+        save_timeline(challenge, body.text)
+    except TimelineError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"text": body.text}
 
 
 class CommitRequest(BaseModel):
@@ -335,6 +382,13 @@ async def publish_route(event: str, ticket_id: str, body: PublishRequest, reques
             detail="This run started from uncommitted changes, so the code it records is not what "
                    "trained it. Train again from the workshop (it commits first), or publish anyway.",
         )
+    # A stage publishes its performance beside the weights; one the Arena would refuse is never uploaded.
+    timeline = timeline_file(challenge) if is_stage(challenge) and timeline_file(challenge).exists() else None
+    if timeline is not None:
+        try:
+            load_timeline(timeline, load_event(challenge.event).time_limit_s)
+        except TimelineError as exc:
+            raise HTTPException(status_code=400, detail=f"Your performance cannot be published: {exc}") from exc
     user = await run_in_threadpool(_hub_user, ws)
     if not user:
         raise HTTPException(status_code=400, detail="Log in to Hugging Face first.")
@@ -345,8 +399,8 @@ async def publish_route(event: str, ticket_id: str, body: PublishRequest, reques
         raise HTTPException(status_code=409, detail="A publish is already running.")
     try:
         if body.dry_run:
-            return {"repo": repo, **await run_in_threadpool(preview, *args)}
-        entered = await run_in_threadpool(publish, *args, arena=ws.arena, code_url=env)
+            return {"repo": repo, **await run_in_threadpool(preview, *args, timeline=timeline)}
+        entered = await run_in_threadpool(publish, *args, arena=ws.arena, code_url=env, timeline=timeline)
     except PublishError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:

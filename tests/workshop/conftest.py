@@ -67,10 +67,10 @@ def wait_for(predicate, timeout=10.0):
 
 
 def make_run(root, name="first", checkpoints=(0, 1), dirty=False, stamp="2026-09-28_10-00-00",
-             task="Mjlab-Sprint2m-MicroDuck", iterations=None, age_s=60):
+             task="Mjlab-Sprint2m-MicroDuck", iterations=None, age_s=60, experiment="sprint_2m"):
     """A run as mjlab writes it. `iterations`: the --agent.max-iterations its provenance records.
     Its checkpoint files are `age_s` old: an evaluation waits for a file younger than 30 s."""
-    run = root / "logs" / "rsl_rl" / "sprint_2m" / f"{stamp}_{name}"
+    run = root / "logs" / "rsl_rl" / experiment / f"{stamp}_{name}"
     run.mkdir(parents=True)
     day, time_of_day = stamp.split("_")
     provenance = {

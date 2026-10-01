@@ -49,3 +49,14 @@ def test_the_rule_is_the_runners():
     outcome = run_once(sprint, _ZeroPolicy(), seed=1)
     assert outcome.status == "fall"
     assert fell_at(outcome.trace, sprint.termination) == pytest.approx(outcome.trace.shape[0] * CTRL_DT)
+
+
+def test_a_summary_says_when_it_fell_and_how_long_it_sat_and_stood():
+    from arena.manifest import load_event
+    from arena.stage import summary
+
+    standing_frame = [0, 0, 0.115, 1, 0, 0, 0] + [0] * 14
+    seated_frame = [0, 0, 0.06, 1, 0, 0, 0] + [0] * 14
+    trace = np.array([standing_frame] * 50 + [seated_frame] * 25, dtype=np.float32)
+    done = summary(trace, load_event("got-a-talent").termination)
+    assert done == {"fell_at": None, "seated_s": pytest.approx(0.5), "standing_s": pytest.approx(1.0)}
