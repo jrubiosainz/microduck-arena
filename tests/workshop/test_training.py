@@ -233,6 +233,8 @@ def test_a_stop_while_the_hub_is_unreachable_says_so_and_keeps_following(worksho
     wait_for(lambda: live(workshop).job_id)
     response = workshop.post(f"{SPRINT_URL}/jobs/first/stop")
     assert response.status_code == 503 and "unreachable" in response.json()["detail"]
+    # Past the time limit the cancel may still have gone through: the workshop cannot know.
+    assert "The job may not have been cancelled" in response.json()["detail"]
     assert workshop.get(f"{SPRINT_URL}/jobs/first").json()["state"] == "running"
     assert workshop.post(f"{SPRINT_URL}/jobs/first/stop").status_code == 200
     assert hub.cancelled == [("fakejob42", "alice")]
