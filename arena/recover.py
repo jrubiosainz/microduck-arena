@@ -207,8 +207,11 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
     restored = []
     for candidate, event in work:
         try:
-            fetched = fetch_policy(candidate.repo_id)
-            result = evaluate(event, load_policy(fetched.path))
+            # At the revision the listing found and against its event: the record says that
+            # revision, and a stage's timeline.json is read with the weights it goes with.
+            fetched = fetch_policy(candidate.repo_id, revision=candidate.revision, event=event)
+            policy = load_policy(fetched.path)
+            result = evaluate(event, policy, fetched.timeline)
             record = RunRecord(
                 run_id=new_id(),
                 event_id=event.id,
@@ -222,7 +225,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
                     "revision": candidate.revision,
                     "url": fetched.url,
                 },
-                model_sha256=load_policy(fetched.path).sha256,
+                model_sha256=policy.sha256,
                 score=result.score,
                 command_vx=result.command_vx,
                 seeds_finished=result.seeds_finished,
@@ -231,6 +234,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
                 runner_version=result.runner_version,
                 model_stored=False,
                 livery="classic",
+                timeline_sha256=fetched.timeline_sha256,
             )
             store.append(record, trace_codec.encode(result.trace, result.settle))
             restored.append(record)

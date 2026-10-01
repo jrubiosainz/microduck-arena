@@ -104,6 +104,10 @@ class RunRecord:
     # revision; None when it wrote nothing of its own. Submitter text: only the commentary quotes it,
     # as the author's words, after its own checks.
     description: str | None = None
+    # The sha256 of the timeline.json a stage entry played, from its repo at the pinned revision;
+    # None for a race, or for a performance of the event's own command. The same weights with
+    # another timeline are another performance.
+    timeline_sha256: str | None = None
 
     @property
     def offers_download(self) -> bool:
@@ -137,6 +141,7 @@ class RunRecord:
             "env_url": self.env_url,
             "livery": self.livery,
             "description": self.description,
+            "timeline_sha256": self.timeline_sha256,
         }
 
     @classmethod
@@ -166,6 +171,9 @@ class RunRecord:
             # .get, not [..]: runs recorded before descriptions existed have no such
             # key, and an append-only log means those files are never rewritten.
             description=raw.get("description"),
+            # .get, not [..]: runs recorded before timelines existed have no such
+            # key, and an append-only log means those files are never rewritten.
+            timeline_sha256=raw.get("timeline_sha256"),
         )
 
 

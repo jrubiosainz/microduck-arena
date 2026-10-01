@@ -110,14 +110,15 @@ def _event_or_404(event_id: str):
 
 
 def _speed(manifest, value: str | None) -> float | None:
-    """A trial's chosen speed, or None for the full sweep.
+    """A trial's chosen speed, or None for the full sweep — and always None on a stage, which plays
+    its timeline at no speed: a speed sent to one is ignored.
 
     Clamped to the event's own declared range rather than rejected: the picker
     is built from that range, so a value outside it is a stale page or a hand-
     made request, and neither is worth a 400. Anything unparseable falls back to
     the sweep, which is the honest answer to "I don't know what you asked for".
     """
-    if value is None or str(value).strip() == "":
+    if manifest.sweep is None or value is None or str(value).strip() == "":
         return None
     try:
         vx = float(value)
@@ -184,8 +185,10 @@ def _seed_rows(per_seed) -> list[dict]:
     return [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in per_seed]
 
 
-def _evaluate(manifest, policy, command_vx: float | None):
-    return evaluate(manifest, policy) if command_vx is None else evaluate_at(manifest, policy, command_vx)
+def _evaluate(manifest, policy, command_vx: float | None, timeline):
+    if command_vx is None:
+        return evaluate(manifest, policy, timeline)
+    return evaluate_at(manifest, policy, command_vx)
 
 
 def _page_url(request: Request, run_id: str) -> str:
@@ -197,23 +200,24 @@ def _page_url(request: Request, run_id: str) -> str:
     return f"{str(request.base_url).rstrip('/')}/#/r/{run_id}"
 
 
-def _already_entered(store, event_id: str, user: str, sha256: str) -> RunRecord | None:
+def _already_entered(store, event_id: str, user: str, sha256: str, timeline_sha256: str | None) -> RunRecord | None:
     """This user's entry of this very policy, if one is on the board.
 
-    Keyed on the ONNX's sha256, not the revision or the speed: a retry after a lost answer is
-    the same file, and a pinned speed can only match or lose to the sweep, which already keeps
-    the best. An entry withdrawn, or raced by an older runner, is no longer on the board.
+    Keyed on the ONNX's sha256 and, on a stage, the timeline's: a retry after a lost answer is
+    the same files, while the same weights with another timeline are another performance. Not
+    the revision or the speed: a pinned speed can only match or lose to the sweep, which already
+    keeps the best. An entry withdrawn, or raced by an older runner, is no longer on the board.
     """
     withdrawn = _withdrawn(store)
     return next(
         (r for r in store.runs(event_id)
-         if r.user == user and r.model_sha256 == sha256
+         if r.user == user and r.model_sha256 == sha256 and r.timeline_sha256 == timeline_sha256
          and r.runner_version == RUNNER_VERSION and r.run_id not in withdrawn),
         None,
     )
 
 
-def _answer(record: RunRecord, page_url: str, already: bool) -> dict:
+def _answer(record: RunRecord, course: str, page_url: str, already: bool) -> dict:
     return {
         "run_id": record.run_id,
         "user": record.user,
@@ -230,6 +234,7 @@ def _answer(record: RunRecord, page_url: str, already: bool) -> dict:
         "trace_seed": record.trace_seed,
         "page_url": page_url,
         "already_entered": already,
+        "course": course,
     }
 
 
@@ -279,9 +284,9 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     store = request.app.state.store
-    kept = _already_entered(store, manifest.id, user, policy.sha256)
+    kept = _already_entered(store, manifest.id, user, policy.sha256, fetched.timeline_sha256)
     if kept is not None:
-        return _answer(kept, _page_url(request, kept.run_id), already=True)
+        return _answer(kept, manifest.course.kind, _page_url(request, kept.run_id), already=True)
 
     # `command_vx` pins the commanded speed for this entry; omit it for the full
     # sweep, which stays the default.
@@ -300,7 +305,9 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
     # hidden.
     try:
         # Five simulated runs per speed, CPU-bound: off the event loop.
-        result = await run_in_threadpool(_evaluate, manifest, policy, _speed(manifest, command_vx))
+        result = await run_in_threadpool(
+            _evaluate, manifest, policy, _speed(manifest, command_vx), fetched.timeline
+        )
     except PolicyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -332,6 +339,7 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         env_url=link,
         livery=_livery(livery),
         description=_description(fetched),
+        timeline_sha256=fetched.timeline_sha256,
     )
     store.append(record, trace_codec.encode(result.trace, result.settle))
 
@@ -348,7 +356,7 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         except Exception as exc:  # noqa: BLE001 — see above
             print(f"clip: {record.run_id} not queued ({type(exc).__name__}: {exc})")
 
-    return _answer(record, _page_url(request, record.run_id), already=False)
+    return _answer(record, manifest.course.kind, _page_url(request, record.run_id), already=False)
 
 
 @router.post("/runs/{run_id}/withdraw")

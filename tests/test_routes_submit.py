@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from arena.assets import ASSET_ROOT
 from arena.hub_fetch import FetchedPolicy
+from arena.timeline import Timeline
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
 
@@ -14,8 +15,12 @@ REFERENCE = ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"
 # fake Hub under a repo id; the autouse fixture below serves it back.
 _HUB: dict[str, Path] = {}
 
+# A repo id registered here also carries this timeline.json, as (Timeline, sha256).
+_TIMELINES: dict[str, tuple] = {}
 
-def _fetched(path=REFERENCE, repo_id="alice/walker", filename="policy.onnx", revision="rev1", manifest=None):
+
+def _fetched(path=REFERENCE, repo_id="alice/walker", filename="policy.onnx", revision="rev1", manifest=None,
+             timeline=None, timeline_sha256=None):
     return FetchedPolicy(
         repo_id=repo_id,
         filename=filename,
@@ -23,6 +28,8 @@ def _fetched(path=REFERENCE, repo_id="alice/walker", filename="policy.onnx", rev
         path=path,
         url=f"https://huggingface.co/{repo_id}/resolve/{revision}/{filename}",
         manifest=manifest,
+        timeline=timeline,
+        timeline_sha256=timeline_sha256,
     )
 
 
@@ -31,6 +38,7 @@ def hub(monkeypatch):
     """Stands in for the Hub: a repo id registered in _HUB comes back as that file, at the
     revision asked for. Records every call, so a test can see what reached it."""
     _HUB.clear()
+    _TIMELINES.clear()
     calls = []
 
     def fetch(repo_id, revision, event):
@@ -39,7 +47,9 @@ def hub(monkeypatch):
             from arena.hub_fetch import FetchError
 
             raise FetchError(f"{repo_id} has no .onnx file")
-        return _fetched(path=_HUB[repo_id], repo_id=repo_id, revision=revision or "rev1")
+        timeline, digest = _TIMELINES.get(repo_id, (None, None))
+        return _fetched(path=_HUB[repo_id], repo_id=repo_id, revision=revision or "rev1",
+                        timeline=timeline, timeline_sha256=digest)
 
     monkeypatch.setattr("arena.web.routes_submit._fetch_from_hub", fetch)
     return calls
@@ -122,6 +132,7 @@ def test_an_entry_is_credited_to_the_tokens_owner(spaced_api, hub_users):
     response = enter(spaced_api)
     assert response.status_code == 200, response.text
     assert response.json()["user"] == "alice"
+    assert response.json()["course"] == "lane"
     assert hub_users == ["hf_alice"]
 
 
@@ -544,3 +555,39 @@ def test_a_manifest_that_disagrees_is_a_400_naming_the_field(api, monkeypatch, s
     assert response.status_code == 400
     assert "kind" in response.json()["detail"]
     assert list(store_dir.rglob("*.json")) == []
+
+
+def performance(seconds, sit_at=None):
+    """A timeline of `seconds` standing, sitting from `sit_at` when given."""
+    stand, sit = (0.0,) * 13, (1.0,) + (0.0,) * 12
+    if sit_at is None:
+        return Timeline(seconds, (0.0,), (stand,))
+    return Timeline(seconds, (0.0, sit_at), (stand, sit))
+
+
+def test_a_stage_entry_plays_its_timeline(api):
+    _TIMELINES["alice/best_alpha_walking"] = (performance(2.0), "a" * 64)
+    response = submit(api, event="got-a-talent")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["course"] == "stage"
+    assert (body["score"], body["seeds_finished"], body["seeds_total"]) == (pytest.approx(2.0), 1, 1)
+    trace = api.get(f"/api/runs/{body['run_id']}/trace")
+    assert int(trace.headers["X-Frame-Count"]) == 100
+
+
+def test_the_same_weights_with_another_timeline_are_another_performance(api):
+    _TIMELINES["alice/best_alpha_walking"] = (performance(2.0), "a" * 64)
+    first = submit(api, event="got-a-talent").json()
+    again = submit(api, event="got-a-talent").json()
+    assert again["already_entered"] and again["run_id"] == first["run_id"]
+    _TIMELINES["alice/best_alpha_walking"] = (performance(2.0, sit_at=1.0), "b" * 64)
+    other = submit(api, event="got-a-talent").json()
+    assert not other["already_entered"] and other["run_id"] != first["run_id"]
+
+
+def test_a_speed_sent_to_a_stage_is_ignored_not_a_500(api):
+    _TIMELINES["alice/best_alpha_walking"] = (performance(1.0), "a" * 64)
+    response = submit(api, event="got-a-talent", command_vx="0.3")
+    assert response.status_code == 200, response.text
+    assert response.json()["command_vx"] == 0.0

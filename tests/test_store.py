@@ -38,6 +38,14 @@ def test_record_round_trips_through_a_dict():
     assert RunRecord.from_dict(record.to_dict()) == record
 
 
+def test_a_run_keeps_the_timeline_it_played():
+    record = make_record(event_id="got-a-talent", timeline_sha256="t" * 64)
+    assert RunRecord.from_dict(record.to_dict()).timeline_sha256 == "t" * 64
+    old = make_record().to_dict()
+    del old["timeline_sha256"]  # a run recorded before timelines existed
+    assert RunRecord.from_dict(old).timeline_sha256 is None
+
+
 def test_append_then_read_back(tmp_path):
     store = LocalStore(tmp_path)
     record = make_record()
