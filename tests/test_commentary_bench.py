@@ -94,7 +94,7 @@ def test_the_reserves_log_is_tallied_by_reason():
     lines = ["booth  on",
              "commentary: R1 written",
              "commentary: R2 refused (a number not in the cited facts)",
-             "commentary: R3 refused (a number not in the cited facts)",
+             "commentary: R3 refused (a number not in the cited facts: 20)",
              "commentary: R4 not written (ReadTimeout: timed out)",
              "commentary: R5 written, but the programme was not told (OSError: full)"]
     assert bench.landing(lines) == {

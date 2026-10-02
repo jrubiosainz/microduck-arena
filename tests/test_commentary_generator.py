@@ -216,6 +216,26 @@ def test_local_checks_reject_with_a_reason(turns, why):
         run_case(turns=turns)
 
 
+@pytest.mark.parametrize("said", ["20 seconds on the stage.", "20 s of it.", "20.0 s of it.",
+                                  "20.00 s of it."])
+def test_a_number_is_quoted_by_its_value_not_its_spelling(said):
+    # A whole performance prints "20.00 s", and "20 seconds" says exactly that: the
+    # reference's booth was refused for it on the Space.
+    facts = [*FACTS[:2], Fact("run#/result", "The performance lasts 20.00 s.", "result",
+                              ("performance",)), *FACTS[3:]]
+    turns = [{**TURNS[0], "text": "Alice on the 2 m Sprint, Ray!", "fact_refs": [0, 1]},
+             {**TURNS[1], "text": said, "fact_refs": [2]}, TURNS[2]]
+    written, _ = run_case(turns=turns, facts=facts)
+    assert written["turns"][1]["text"] == said
+
+
+def test_a_refused_number_is_named_in_the_reason():
+    # A rounder or a nearby value is still another number.
+    for said, named in (("12.41 s on the clock.", "12.41"), ("12 s on the clock.", "12")):
+        with pytest.raises(Rejected, match=rf"^a number not in the cited facts: {named}$"):
+            run_case(turns=[TURNS[0], {**TURNS[1], "text": said}, TURNS[2]])
+
+
 def test_a_player_at_the_line_or_in_the_lead_is_not_placed_in_the_booth():
     # Only naming the booth is a placement; ordinary grounded scene-setting
     # ("at the line", "in the lead") must not trip the same check.

@@ -331,9 +331,13 @@ def write(facts: list[Fact], drawn: dict, *, lore: Lore, provider, model: str) -
                      re.IGNORECASE):
             raise Rejected("a player placed in the booth")
         citable = [facts[n].text for n in refs if facts[n].kind != "recent"]
-        allowed = {n for cited_text in citable for n in NUMBERS.findall(cited_text)}
-        if not set(NUMBERS.findall(text)) <= allowed:
-            raise Rejected("a number not in the cited facts")
+        # By value, not by spelling: "20 seconds" quotes "20.00 s" exactly, while
+        # 12.41 for 12.40, a rounder 12 or a number no cited fact prints is
+        # still another number. Named, because the log is all a refusal leaves.
+        allowed = {float(n) for cited_text in citable for n in NUMBERS.findall(cited_text)}
+        unquoted = [n for n in NUMBERS.findall(text) if float(n) not in allowed]
+        if unquoted:
+            raise Rejected(f"a number not in the cited facts: {', '.join(unquoted)}")
         allowed_words = {w.lower() for cited_text in citable
                          for w in NUMBER_WORDS.findall(cited_text)}
         if not {w.lower() for w in NUMBER_WORDS.findall(text)} <= allowed_words:

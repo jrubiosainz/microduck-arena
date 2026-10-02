@@ -158,7 +158,8 @@ def props(session: list[dict], top: int = 20) -> list[tuple[str, float]]:
 
 def landing(lines) -> Counter:
     """The reserve's attempts by outcome and reason. An exception's message changes with
-    every call, so a dialogue that was not written is counted by the exception's type."""
+    every call, so a dialogue that was not written is counted by the exception's type, and
+    a refusal by its reason without the detail after the colon (the number it named)."""
     tally = Counter()
     for line in lines:
         found = LOG_LINE.search(line)
@@ -167,7 +168,7 @@ def landing(lines) -> Counter:
             if outcome == "written":
                 tally["written"] += 1
             elif outcome == "refused":
-                tally[f"refused: {why.rstrip().removesuffix(')')}"] += 1
+                tally[f"refused: {why.rstrip().removesuffix(')').partition(':')[0]}"] += 1
             else:
                 tally[f"not written: {why.partition(':')[0]}"] += 1
     return tally
