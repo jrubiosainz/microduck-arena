@@ -599,11 +599,15 @@
     radial-gradient(30% 20% at 80% 88%, rgba(255, 255, 255, 0.07), transparent 70%);
 }
 
-/* The set's own on-screen display, in the VCR's mono with a colour fringe. */
+/* The set's own on-screen display, in the VCR's mono with a colour fringe.
+   Centred in the black bar above the picture — 12.5% of the glass, the gap
+   between 4:3 and 16:9 — because over the picture it printed on the clips'
+   own top band. */
 .tv-osd {
   position: absolute;
   z-index: 2;
-  top: 11%;
+  top: 6.25%;
+  translate: 0 -50%;
   white-space: nowrap;
   font: 400 clamp(0.6rem, 1.1vw, 0.85rem)/1 var(--mono);
   letter-spacing: 0.14em;
