@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .manifest import all_events
-from .recorder import SIZES, RenderedRun, ffmpeg_available, find_chrome, record_run
+from .recorder import RenderedRun, ffmpeg_available, find_chrome, frame_size, record_run
 
 # Written into every clip.json. Bumping it does not re-render older clips.
 CLIP_VERSION = 1
@@ -36,7 +36,7 @@ def clip_manifest(run_id: str, rendered: RenderedRun, rendered_at: str) -> dict:
     prices a render on the machine that made it."""
     layouts = {}
     for name, layout in rendered.layouts.items():
-        width, height = SIZES[name]
+        width, height = frame_size(name)
         layouts[name] = {
             "file": f"{name}.mp4",
             "width": width,
