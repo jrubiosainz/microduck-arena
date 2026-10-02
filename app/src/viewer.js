@@ -346,6 +346,13 @@ export async function createViewer(
   let player = new Player([]);
   let crowdDirection = stadiumDirection();
 
+  // Whichever set is up, its crowd draws only the seats the camera about to
+  // render can see — the chase camera's and each roller-hall screen feed's
+  // alike — and has them all back once that render is done (stadium.js crowd).
+  const crowds = () => [audience, gym, stage].map((set) => set?.crowd).filter(Boolean);
+  scene.onBeforeRender = (_renderer, _scene, view) => crowds().forEach((one) => one.cull(view));
+  scene.onAfterRender = () => crowds().forEach((one) => one.restore());
+
   function clearScene() {
     stage?.dispose();
     stage = null;

@@ -295,6 +295,7 @@ export function buildRollerHall(length, span, branding, spectators) {
     floorMaterial,
     sponsorMaps,
     pose: audience.pose,
+    crowd: audience,
     renderScreens,
     camera: {
       kind: "fixed",

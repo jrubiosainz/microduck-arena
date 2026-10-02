@@ -18,11 +18,15 @@ import {
   BoxGeometry,
   BufferAttribute,
   DynamicDrawUsage,
+  Frustum,
   Group,
   InstancedMesh,
+  Matrix4,
   Mesh,
   MeshLambertMaterial,
   Object3D,
+  Sphere,
+  Vector3,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { OVERRUN } from "./course.js";
@@ -153,6 +157,10 @@ export function buildCones(length, edge, side) {
 // Full-scale spectators sit between waves; the shared clock controls standing.
 // A small sway keeps resting spectators alive without bouncing them off seats.
 const SWAY = 0.05;
+// A sphere this wide, this far above its seat, holds a whole spectator, standing
+// and cheering: what `cull` tests against a camera's frustum.
+const SEAT_REACH = 0.3;
+const SEAT_LIFT = 0.1;
 const TEMPO = 12;
 const PHASE_STEP = 2.39996;
 const REST = Float32Array.from([0, 0, TRUNK_HEIGHT, 1, 0, 0, 0, ...STAND]);
@@ -176,12 +184,15 @@ const paintOf = (name, shell) =>
  * One rig per shell colour, posed once and fused into a single geometry with
  * its parts' paint baked into the vertices, then drawn as one InstancedMesh
  * per side of the track: ten draws for the whole stadium. A side to itself,
- * with a sphere round its seats, so the near stand — behind the chase camera,
- * seen only when orbiting — is culled with the rest of what is out of frame
- * instead of costing its vertices every frame. What a spectator costs is
- * decided upstream — the crowd's lighter model (viewer.js) and the skin filter
- * (rig.js) — and the geometries handed in are the viewer's own, so nothing
- * downloads and none of them may be disposed of here.
+ * with a sphere round its seats, so a stand wholly out of frame is culled.
+ * That sphere is metres wide, though, and holds the chase camera: the near
+ * stand behind the lens, the stage's audience while the camera faces the
+ * stage, would still cost their vertices on every render — so `cull` keeps,
+ * for the camera about to render, only the seats it can see, and `restore`
+ * gives every seat back (the viewer calls both around each render). What a
+ * spectator costs is decided upstream — the crowd's lighter model (viewer.js)
+ * and the skin filter (rig.js) — and the geometries handed in are the
+ * viewer's own, so nothing downloads and none of them may be disposed of here.
  */
 export function crowd(kinematics, geometries, placed) {
   const group = new Group();
@@ -242,10 +253,63 @@ export function crowd(kinematics, geometries, placed) {
     mesh.boundingSphere.radius += 0.15;
   }
 
+  // Measured on clip frames under SwiftShader, the Space's renderer: a sixth
+  // (sprint) to two fifths (roller hall, whose screen feeds render the crowd
+  // too) of a frame's CPU, the frames byte for byte the same.
+  const frustum = new Frustum();
+  const seen = new Matrix4();
+  const at = new Matrix4();
+  const reach = new Sphere(new Vector3(), SEAT_REACH);
+  const kept = flocks.map(({ mesh }) => ({
+    count: mesh.count,
+    matrices: mesh.instanceMatrix.array.slice(),
+    morphs: mesh.morphTexture.image.data.slice(),
+  }));
+  let culled = false;
+  /** Each flock packs the seats `camera` can see at its front and draws only those. */
+  function cull(camera) {
+    seen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(seen);
+    flocks.forEach(({ mesh }, f) => {
+      const matrices = mesh.instanceMatrix.array;
+      const morphs = mesh.morphTexture.image.data;
+      const row = (morphs.length * 16) / matrices.length;
+      kept[f].matrices.set(matrices);
+      kept[f].morphs.set(morphs);
+      let shown = 0;
+      for (let k = 0; k < mesh.count; k += 1) {
+        at.fromArray(matrices, k * 16).premultiply(mesh.matrixWorld);
+        reach.center.setFromMatrixPosition(at).y += SEAT_LIFT;
+        if (!frustum.intersectsSphere(reach)) continue;
+        matrices.copyWithin(shown * 16, k * 16, k * 16 + 16);
+        morphs.copyWithin(shown * row, k * row, (k + 1) * row);
+        shown += 1;
+      }
+      mesh.count = shown;
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.morphTexture.needsUpdate = true;
+    });
+    culled = true;
+  }
+  /** Every seat back where `pose` left it. */
+  function restore() {
+    if (!culled) return;
+    flocks.forEach(({ mesh }, f) => {
+      mesh.count = kept[f].count;
+      mesh.instanceMatrix.array.set(kept[f].matrices);
+      mesh.morphTexture.image.data.set(kept[f].morphs);
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.morphTexture.needsUpdate = true;
+    });
+    culled = false;
+  }
+
   return {
     group,
     bubbles: bubbles.group,
     pose,
+    cull,
+    restore,
     dispose() {
       bubbles.dispose();
       for (const geometry of bodies.values()) geometry.dispose();
@@ -315,6 +379,7 @@ export function attachStadium(course, { kinematics, geometries }, clearance) {
   return {
     group: stadium,
     pose: audience.pose,
+    crowd: audience,
     dispose() {
       audience.dispose();
       const materials = new Set();

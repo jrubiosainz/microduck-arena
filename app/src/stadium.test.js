@@ -3,7 +3,7 @@
 
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { BoxGeometry, Matrix4, Vector3 } from "three";
+import { BoxGeometry, Matrix4, PerspectiveCamera, Vector3 } from "three";
 import { buildCourse } from "./course.js";
 import { PALETTE, SHELLS, colour } from "./palette.js";
 import { JURY_APRON, GAP, attachStadium, buildCones, buildRail, buildStand, crowd, seats } from "./stadium.js";
@@ -193,6 +193,41 @@ describe("crowd", () => {
       expect(sphere).not.toBeNull();
       for (const { at } of mine) expect(sphere.containsPoint(at)).toBe(true);
     }
+  });
+
+  it("keeps, for the camera about to render, only the seats it can see, and gives every seat back after", () => {
+    // A flock's sphere is metres wide and holds the chase camera, so three
+    // never culls the stand behind the lens. Seat by seat, it costs nothing.
+    const audience = crowd(kinematics, boxes(), placed);
+    audience.pose(7);
+    audience.group.updateMatrixWorld(true);
+    const standing = (mesh, k) => mesh.morphTexture.source.data.data[2 * k + 1];
+    const all = instances(audience).map((one) => ({ ...one, standing: standing(one.mesh, one.k) }));
+    expect(all.some((one) => one.standing > 0.9)).toBe(true);
+    const camera = new PerspectiveCamera(40, 16 / 9, 0.02, 50);
+    camera.position.set(LENGTH / 2, 0.3, 0);
+    camera.lookAt(LENGTH / 2, 0.3, -5);
+    camera.updateMatrixWorld();
+
+    audience.cull(camera);
+    const shown = instances(audience);
+    expect(shown.length).toBeGreaterThan(0);
+    expect(shown.length).toBeLessThan(placed.filter((seat) => seat.z < 0).length);
+    for (const { mesh, k, at, seat } of shown) {
+      expect(seat.z).toBeLessThan(0);
+      // Each seat keeps its own pose: the morph row travels with the matrix.
+      const was = all.find((one) => one.mesh === mesh && one.at.distanceTo(at) < 1e-9);
+      expect(standing(mesh, k)).toBe(was.standing);
+    }
+
+    audience.restore();
+    const back = instances(audience);
+    expect(back).toHaveLength(placed.length);
+    for (const [i, one] of back.entries()) {
+      expect(one.matrix.equals(all[i].matrix)).toBe(true);
+      expect(standing(one.mesh, one.k)).toBe(all[i].standing);
+    }
+    audience.dispose();
   });
 
   it("paints Duck Jam's duck: the shell its colour, the face orange, the feet yellow, the rest paper", () => {

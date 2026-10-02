@@ -298,7 +298,7 @@ export function buildTalentStage(event, spectators, reachy) {
     });
   }
   return {
-    group, layout, pose,
+    group, layout, pose, crowd: audience,
     dispose() {
       panel.dispose(); audience.dispose();
       geometries.forEach(geometry => geometry.dispose());
