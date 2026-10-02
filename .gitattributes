@@ -85,3 +85,4 @@ arena/assets/robot/rollers/assets/upper_leg_right.stl filter=lfs diff=lfs merge=
 arena/assets/robot/rollers/assets/yaw2roll.stl filter=lfs diff=lfs merge=lfs -text
 
 app/public/robot/reachy-mini/reachy-mini.glb filter=lfs diff=lfs merge=lfs -text
+app/public/cards/*.webp filter=lfs diff=lfs merge=lfs -text

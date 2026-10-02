@@ -69,7 +69,7 @@ describe("renderVoteButton: the way into the booth, at the top of the entry colu
   it("tops the entry column when the event takes votes", () => {
     const div = root();
     renderVoteButton(div, { id: "got-a-talent", vote: { ballot_min: 2 } });
-    const button = div.querySelector(".vote-button--panel");
+    const button = div.querySelector(".vote-button");
     expect(button).not.toBeNull();
     expect(button.getAttribute("href")).toBe("#/v/got-a-talent");
     // The column's first child: detached from the title on purpose (the
@@ -123,7 +123,7 @@ describe("raceHall: the page's frame", () => {
     expect(controls.querySelector("#stage-hint")).not.toBeNull();
   });
 
-  it("names the kind of event over its title, as the flyer did", () => {
+  it("names the kind of event over its title, as its card does", () => {
     const hall = raceHall({ ...event, title: "2 m Sprint", category: "showcase" });
     expect(hall.querySelector(".raceeyebrow").textContent).toBe("SHOWCASE");
     // An event whose category the server did not send draws no empty line.
@@ -208,7 +208,7 @@ describe("otherRounds: the way on, under the board", () => {
   it("leaves out the round you are already on", () => {
     // A card back to this page is a dead end dressed as a way forward.
     const strip = otherRounds(programme, here, new Map());
-    const links = [...strip.querySelectorAll("a.challenge-link")].map((a) => a.getAttribute("href"));
+    const links = [...strip.querySelectorAll("a.round-card__link")].map((a) => a.getAttribute("href"));
     expect(links).not.toContain("#/e/sprint-2m");
     expect(links[0]).toBe("#/e/roller-sprint-2m");
   });
@@ -217,7 +217,7 @@ describe("otherRounds: the way on, under the board", () => {
     // With the whole programme already here, a "see all" would only send you
     // to a page showing the same thing.
     const strip = otherRounds(programme, here, new Map());
-    expect(strip.querySelectorAll(".challenge-note")).toHaveLength(programme.length - 1);
+    expect(strip.querySelectorAll(".round-card")).toHaveLength(programme.length - 1);
     expect(strip.querySelector(".rounds-on__all")).toBeNull();
   });
 
@@ -226,9 +226,15 @@ describe("otherRounds: the way on, under the board", () => {
       ["roller-sprint-2m", [{ user: "ann", score: 3.216, seeds_finished: 5 }]],
     ]);
     const strip = otherRounds(programme, here, boards);
-    const cards = [...strip.querySelectorAll(".challenge-note")];
-    expect(cards[0].querySelector(".flyer-leader-name").textContent).toBe("ann");
-    expect(cards[1].querySelector(".flyer-leader-name").textContent).toBe("be the first");
+    const cards = [...strip.querySelectorAll(".round-card")];
+    expect(cards[0].querySelector(".round-card__holder").textContent).toBe("@ann");
+    expect(cards[1].querySelector(".round-card__score").textContent).toBe("be the first");
+  });
+
+  it("numbers each card by the whole programme, so it keeps its number on every wall", () => {
+    const strip = otherRounds(programme, here, new Map());
+    const numbers = [...strip.querySelectorAll(".round-card__num")].map((n) => n.textContent);
+    expect(numbers).toEqual(["#02", "#03", "#04"]);
   });
 });
 

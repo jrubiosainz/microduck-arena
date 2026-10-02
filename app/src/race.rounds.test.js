@@ -31,8 +31,6 @@ vi.mock("./api.js", () => ({
     return { rows: [{ user: "ann", score: 3.216, seeds_finished: 5 }] };
   },
 }));
-// No WebGL here, which is also what a real browser with it disabled gives.
-vi.mock("./thumbnail.js", () => ({ renderThumbnails: async () => new Map() }));
 
 const { keepRacing } = await import("./race.js");
 
@@ -54,7 +52,7 @@ describe("keepRacing", () => {
     root.append(document.createElement("footer"));
     await keepRacing(root, PROGRAMME[0]);
     expect(asked).toEqual(["roller-sprint-2m", "hill-climb-1m5", "got-a-talent"]);
-    expect(root.querySelectorAll(".rounds-on .challenge-note")).toHaveLength(3);
+    expect(root.querySelectorAll(".rounds-on .round-card")).toHaveLength(3);
   });
 
   it("appends when there is no footer to sit before", async () => {

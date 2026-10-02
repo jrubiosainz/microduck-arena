@@ -1,5 +1,5 @@
 // vi.mock is hoisted and applies to the whole file, so this end-to-end test
-// lives on its own rather than beside the unit tests that import `flyer` and
+// lives on its own rather than beside the unit tests that import `roundCard` and
 // `ladder` directly.
 
 import { describe, expect, it, vi } from "vitest";
@@ -15,11 +15,6 @@ vi.mock("./api.js", () => ({
   getMe: () => globalThis.__me,
   getLeaderboard: async () => ({ rows: [] }),
 }));
-
-// renderThumbnails needs WebGL, which jsdom does not provide. Under jsdom it
-// hits its own try/catch (thumbnail.js) and returns an empty Map rather than
-// throwing — the documented fallback, confirmed by thumbnail.test.js passing
-// unmocked — so no mock of ./thumbnail.js is needed here either.
 
 /** A stand-in for the sheets index.html carries, which jsdom has none of. */
 const sheet = (theme) => {
@@ -72,13 +67,13 @@ describe("the whole front page", () => {
     expect(hall[2]).toMatch(/^chapter\b/);
     expect(root.querySelector(".door-board .ladder-scroll")).not.toBeNull();
     expect(root.querySelector('a[href="#/guides/points"]')).toBeNull();
-    // The channel under the pitch, where the four colourways used to be, and
+    // The channel beside the standings, on one row under the pitch, and
     // nowhere else on the page: two stages would poll and draw twice.
-    expect(root.querySelector(".door-meet .season-live-stage")).not.toBeNull();
-    expect(root.querySelectorAll(".season-live")).toHaveLength(1);
+    expect(root.querySelector(".door-row > .door-meet .tv-stage")).not.toBeNull();
+    expect(root.querySelector(".door-row > .door-board .ladder-scroll")).not.toBeNull();
+    expect(root.querySelectorAll(".tv-stage")).toHaveLength(1);
     expect(root.querySelector(".door-squad")).toBeNull();
-    expect(root.querySelector(".ladder-scroll")).not.toBeNull();
-    expect(root.querySelector(".challenge-note--race")).not.toBeNull();
+    expect(root.querySelector(".round-cards .round-card .round-card__num").textContent).toBe("#01");
     // The strip and the footer belong to the pages you can come back FROM.
     expect(root.querySelector("header.signage")).toBeNull();
     expect(root.querySelector("footer")).toBeNull();

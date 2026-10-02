@@ -7,11 +7,10 @@
 
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { Euler, Group, Vector3 } from "three";
+import { Group, Vector3 } from "three";
 import { buildCourse, buildMarker } from "./course.js";
 import { applyFrame } from "./replay.js";
 import { buildRigTree } from "./rig.js";
-import { standOnCourse } from "./thumbnail.js";
 import { attachCourse, cameraSideOffset, placeLane, placeMarker, feetPosition } from "./viewer.js";
 
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
@@ -114,43 +113,6 @@ describe("a replayed duck's follow-spot on a slope", () => {
     const angle = HILL.slope_deg * Math.PI / 180;
     expect(normal.x).toBeCloseTo(-Math.sin(angle), 6);
     expect(normal.y).toBeCloseTo(Math.cos(angle), 6);
-  });
-});
-
-describe("a still's duck on a slope", () => {
-  it("stands ON the ramp rather than at height zero beneath it", () => {
-    // The opposite mistake to the replay's: a still has no trace, so it must
-    // inherit the course's tilt — and the first version placed it in world
-    // space at y=0, sinking it into a hill that had already climbed.
-    const course = buildCourse(HILL, 2);
-    const rig = buildRigTree(kinematics);
-    standOnCourse(rig, course, 0.5, 0);
-    course.updateMatrixWorld(true);
-
-    const p = new Vector3().setFromMatrixPosition(rig.placer.matrixWorld);
-    const tan = Math.tan((HILL.slope_deg * Math.PI) / 180);
-    // On the surface: its height is the ramp's height at its own x.
-    expect(p.y).toBeCloseTo(p.x * tan, 4);
-    expect(p.y).toBeGreaterThan(0.05);
-  });
-
-  it("leans with the hill, which is what the replay must not do", () => {
-    const course = buildCourse(HILL, 2);
-    const rig = buildRigTree(kinematics);
-    standOnCourse(rig, course, 0.5, 0);
-    course.updateMatrixWorld(true);
-    const e = new Euler().setFromRotationMatrix(rig.placer.matrixWorld);
-    expect(e.z).toBeCloseTo((HILL.slope_deg * Math.PI) / 180, 4);
-  });
-
-  it("sits flat on a flat course", () => {
-    const course = buildCourse({ ...HILL, slope_deg: 0 }, 2);
-    const rig = buildRigTree(kinematics);
-    standOnCourse(rig, course, 0.5, 0);
-    course.updateMatrixWorld(true);
-    const p = new Vector3().setFromMatrixPosition(rig.placer.matrixWorld);
-    expect(p.y).toBeCloseTo(0, 6);
-    expect(p.x).toBeCloseTo(0.5, 6);
   });
 });
 

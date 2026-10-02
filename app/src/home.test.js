@@ -2,17 +2,9 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { flyer } from "./flyer.js";
 import {
   demoAsked, demoRows, flockBand, ladder, liveFrame, masthead, pageTexture, playerCard,
 } from "./home.js";
-
-const open = {
-  id: "sprint-2m", title: "2 m Sprint", category: "race", rig: "legs",
-  length_m: 2, slope_deg: 0,
-  sweep_lo: 0.2, sweep_hi: 1.2, sweep_step: 0.05, sweep_count: 21,
-};
-const held = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
 
 describe("the masthead", () => {
   it("keeps the way out off the cover", () => {
@@ -252,163 +244,6 @@ describe("the ladder", () => {
   });
 });
 
-describe("an open event's flyer", () => {
-  it("links into the race and names it", () => {
-    const el = flyer(open, held);
-    expect(el.matches("article.challenge-note")).toBe(true);
-    expect(el.querySelector("a.challenge-link").getAttribute("href")).toBe("#/e/sprint-2m");
-    expect(el.querySelector(".flyer-title").textContent).toBe("2 m Sprint");
-    expect(el.querySelector(".eyebrow").textContent).toBe("RACE");
-  });
-
-  it("leaves the art frame empty until the still lands", () => {
-    const frame = flyer(open, held).querySelector(".challenge-art");
-    expect(frame).not.toBeNull();
-    expect(frame.childElementCount).toBe(0);
-  });
-
-  it("states the course facts without the sweep", () => {
-    expect(flyer(open, held).querySelector(".challenge-facts").textContent).toBe("2 m · flat · legs");
-  });
-
-  it("shows who holds it and in what time", () => {
-    const standing = flyer(open, held).querySelector(".flyer-leader");
-    expect(standing.querySelector(".challenge-star")).not.toBeNull();
-    expect(standing.textContent).toContain("cdeplanne");
-    expect(standing.textContent).toContain("9.456s");
-  });
-
-  it("invites an entry when nobody has finished", () => {
-    expect(flyer(open, []).textContent).toContain("be the first");
-    const dnf = [{ user: "a", policy_name: "p", score: 50, seeds_finished: 0 }];
-    expect(flyer(open, dnf).textContent).toContain("no finisher yet");
-  });
-});
-
-const voted = {
-  ...open,
-  id: "got-a-talent",
-  title: "MicroDuck Got a Talent",
-  metric: "votes",
-  vote: { ballot_min: 2, ballot_max: 4, window_days: 7, per_day: 20 },
-};
-
-describe("a votable flyer", () => {
-  it("wears a vote button and links to the booth", () => {
-    const note = flyer(voted, []);
-    expect(note.querySelector(".vote-button--sticker").textContent).toBe("VOTE HERE");
-    expect(note.querySelector(".vote-button--sticker").getAttribute("href")).toBe("#/v/got-a-talent");
-  });
-
-  it("counts the week's votes instead of a time", () => {
-    const note = flyer(voted, [{ user: "cdeplanne", votes: 43, seeds_finished: 5 }]);
-    expect(note.querySelector(".flyer-leader").textContent).toContain("43 votes");
-  });
-
-  it("says so when nothing has been voted for yet", () => {
-    const note = flyer(voted, [{ user: "cdeplanne", votes: 0, seeds_finished: 5 }]);
-    expect(note.querySelector(".flyer-leader").textContent).toContain("no votes yet");
-  });
-
-  it("leaves a timed flyer alone", () => {
-    const note = flyer(open, held);
-    expect(note.querySelector(".vote-button")).toBeNull();
-  });
-});
-
-describe("the flyer's category", () => {
-  it("labels the event with its own category, not 'Race'", () => {
-    expect(flyer({ ...open, category: "showcase" }, []).querySelector(".eyebrow").textContent)
-      .toBe("SHOWCASE");
-  });
-
-  it("colours the offset shadow by category", () => {
-    const shadowOf = (category) => flyer({ ...open, category }, []).className;
-    expect(shadowOf("race")).toContain("challenge-note--race");
-    expect(shadowOf("showcase")).toContain("challenge-note--showcase");
-  });
-
-  it("swings on its tape rather than sliding, and only where motion is wanted", () => {
-    // CSS-only. The pivot must be the tape's own position from components.css
-    // (left: calc(50% - 32px); top: -12px), or the sheet turns about its
-    // middle and reads as a spinning tile instead of hanging paper.
-    const css = readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
-      "utf8",
-    ).replace(/\/\*[\s\S]*?\*\//g, "");
-    const note = css.match(/\n\.challenge-note \{([^}]*)\}/);
-    expect(note[1], "the flyer does not pivot on its tape")
-      .toMatch(/transform-origin:\s*50% -12px/);
-    // Every bit of the swing lives inside the reduced-motion guard.
-    const guarded = [...css.matchAll(
-      /@media \(prefers-reduced-motion: no-preference\) \{\n([\s\S]*?)\n\}/g,
-    )].map(([, body]) => body).join("\n");
-    // Matched loosely on purpose: the hover may be one selector or a list of
-    // them, and pinning the exact shape of the selector is pinning the
-    // formatting, not the behaviour.
-    expect(guarded, "the flyer's hover swing is not behind the media query")
-      .toMatch(/\.challenge-note:has\(\.challenge-link\):hover/);
-    expect(guarded, "the hover does not rotate the sheet")
-      .toMatch(/rotate:\s*calc\(-1 \* var\(--rotate-2-5\)\)/);
-    const unguarded = css.replace(
-      /@media \(prefers-reduced-motion: no-preference\) \{\n[\s\S]*?\n\}/g,
-      "",
-    );
-    expect(unguarded, "a flyer hover transition escapes the media query")
-      .not.toMatch(/\.challenge-note[^{]*:hover/);
-  });
-
-  it("uses the charter's shadow primitive rather than its own box-shadow", () => {
-    expect(flyer(open, []).className).toContain("fx-shadow-card");
-
-    // The className check above would still pass with a literal box-shadow
-    // re-added alongside fx-shadow-card. Read the sheet's own source and
-    // scope the check to the rules this branch owns (the challenge-note
-    // family) — club.css still carries three PRE-EXISTING literal
-    // box-shadow declarations (.profile-duck, .profile-summary
-    // .sticker:active, .profile-results a), all on the player page, which
-    // this branch never touched, so a blanket search of the file would trip
-    // on those.
-    const cssPath = resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css");
-    const css = readFileSync(cssPath, "utf8");
-    const noteRules = [...css.matchAll(/([^{}]*\.challenge-note[^{}]*)\{([^}]*)\}/g)];
-    expect(noteRules.length).toBeGreaterThan(0);
-    for (const [, selector, body] of noteRules) {
-      expect(
-        body,
-        `${selector.trim()} declares a literal box-shadow — use fx-shadow-card instead`,
-      ).not.toMatch(/box-shadow\s*:/);
-    }
-  });
-
-  it("renders an unrecognised category without a label and without throwing", () => {
-    // One malformed manifest must not take the whole wall down. The server is
-    // where an unknown category is rejected; the page degrades.
-    const note = flyer({ ...open, category: "parade" }, []);
-    expect(note.className).not.toMatch(/challenge-note--/);
-    expect(note.querySelector(".eyebrow")).toBeNull();
-  });
-});
-
-describe("the polaroid caption", () => {
-  it("puts the event's title above the leader's handle", () => {
-    const note = flyer(open, [
-      { user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 },
-    ]);
-    const order = [...note.querySelectorAll(".flyer-leader, .flyer-title")]
-      .map((n) => n.className);
-    expect(order).toEqual(["flyer-title", "flyer-leader"]);
-    expect(note.querySelector(".flyer-leader").textContent).toContain("cdeplanne");
-    expect(note.querySelector(".flyer-title").textContent).toBe("2 m Sprint");
-  });
-
-  it("shows the still above the caption, polaroid-fashion", () => {
-    const note = flyer(open, []);
-    const parts = [...note.querySelector(".challenge-link").children].map((n) => n.className);
-    expect(parts.indexOf("challenge-art")).toBeLessThan(parts.indexOf("flyer-title"));
-  });
-});
-
 describe("the flock band", () => {
   it("carries the four ways out, in order, each opening safely", () => {
     const band = flockBand();
@@ -456,16 +291,18 @@ describe("the flock band", () => {
     // come back in any form. jsdom never loads club.css, so a check on the
     // rendered DOM (class names, computed style) cannot see an `animation`
     // declared in the stylesheet — it would pass right through a marquee
-    // re-added there. Read the sheet's own source instead: no @keyframes may
-    // exist anywhere in it, and no rule touching .flock-band may declare an
-    // `animation` or `animation-name` property.
+    // re-added there. Read the sheet's own source instead: the only
+    // @keyframes in it are the television's, and no rule touching .flock-band
+    // may declare an `animation` or `animation-name` property.
     // A plain `new URL(relative, import.meta.url)` resolves against jsdom's
     // window.URL here, not Node's, and silently lands on a fake
     // http://localhost origin instead of this file's real path — so the path
     // is built with node:path against this file's own directory instead.
     const cssPath = resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css");
     const css = readFileSync(cssPath, "utf8");
-    expect(css, "a @keyframes block exists in club.css — the marquee is back").not.toMatch(/@keyframes/);
+    const keyframes = [...css.matchAll(/@keyframes\s+([\w-]+)/g)].map(([, name]) => name);
+    expect(keyframes.filter((name) => !name.startsWith("tv-")), "a @keyframes block other than the television's — the marquee is back")
+      .toEqual([]);
     const flockRules = [...css.matchAll(/([^{}]*\.flock-band[^{}]*)\{([^}]*)\}/g)];
     expect(flockRules.length).toBeGreaterThan(0);
     for (const [, selector, body] of flockRules) {
@@ -589,19 +426,39 @@ describe("the duck's motion", () => {
 });
 
 
-describe("the channel's frame", () => {
-  it("is a stage to mount the channel in, with a button as the way into it", () => {
-    const frame = liveFrame();
-    expect(frame.matches("div.season-live")).toBe(true);
-    // Through the charter's shadow primitive, not a literal box-shadow.
-    expect(frame.className).toContain("fx-shadow-card");
-    expect(frame.querySelector(".season-live-stage")).not.toBeNull();
+describe("the channel's television", () => {
+  it("is a stage to mount the channel in, with a button on the glass as the way into it", () => {
+    const tv = liveFrame();
+    expect(tv.matches("div.tv")).toBe(true);
+    expect(tv.querySelector(".tv-glass .tv-stage")).not.toBeNull();
     // A button that says what it does, not an invisible link across the whole
     // picture: that one took a click anywhere on the channel and left the
     // front page for a page with no way back.
-    const door = frame.querySelector("a.season-live-full");
+    const door = tv.querySelector(".tv-glass a.tv-full");
     expect(door.getAttribute("href")).toBe("#/live");
     expect(door.textContent).toBe("Full screen");
-    expect(frame.querySelector(".season-live-door")).toBeNull();
+    expect(tv.querySelectorAll("a")).toHaveLength(1);
+  });
+
+  it("keeps the cabinet out of the accessible tree", () => {
+    // Knobs and a grille that do nothing are furniture, not controls.
+    const tv = liveFrame();
+    expect(tv.querySelector(".tv-side").getAttribute("aria-hidden")).toBe("true");
+    expect(tv.querySelector(".tv-feet").getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("moves only where motion is wanted, and never takes a click from the picture", () => {
+    const css = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "../public/club.css"),
+      "utf8",
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+    const unguarded = css.replace(
+      /@media \(prefers-reduced-motion: no-preference\) \{\n[\s\S]*?\n\}/g,
+      "",
+    );
+    expect(unguarded, "the set animates where motion was refused")
+      .not.toMatch(/\.tv[\w-]*[^{}]*\{[^}]*animation\s*:/);
+    // The sound button lives under the glass's layers; they must let it be pressed.
+    expect(css).toMatch(/\.tv-fx \{[^}]*pointer-events: none;/);
   });
 });

@@ -26,7 +26,6 @@ const { api, CODE } = vi.hoisted(() => {
   return { api, CODE };
 });
 vi.mock("./api.js", () => api);
-vi.mock("../thumbnail.js", () => ({ renderThumbnails: async () => new Map() }));
 vi.mock("../viewer.js", () => ({ createViewer: async () => ({ setLanes() {}, setBrightness() {}, dispose() {} }) }));
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -52,10 +51,10 @@ describe("the workshop's home", () => {
     expect(app.querySelector(".masthead .wordmark").textContent).toBe("MicroduckWorkshop");
     expect(app.querySelector(".todo__title").textContent).toBe("Ready to train?");
     expect(app.querySelector(".lede").textContent).toBe("Pick a challenge, then train, submit, compete, repeat.");
-    const links = [...app.querySelectorAll(".challenge-link")].map((a) => a.getAttribute("href"));
+    const links = [...app.querySelectorAll(".round-card__link")].map((a) => a.getAttribute("href"));
     expect(links).toEqual(["#/c/sprint-2m", "#/c/got-a-talent"]);
-    expect(app.querySelector(".flyer-leader")).toBeNull();
-    expect(app.querySelector(".vote-button")).toBeNull();
+    expect(app.querySelector(".round-card__score")).toBeNull();
+    expect(app.querySelector("a.round-card__cta")).toBeNull();
     expect(app.querySelector(".ws-running").textContent).toBe("1 training now");
     const plate = app.querySelector(".masthead button.player-card-in");
     expect(plate.textContent).toContain("Log in");

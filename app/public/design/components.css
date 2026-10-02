@@ -443,12 +443,10 @@
 
 /* ── Vote button — a ballot box you can press ───────────────────────────────── */
 
-/* The one way into a voting booth (see votebutton.js): a flyer's corner
-   sticker, or the panel atop a race's entry column. Pressable like the
-   sticker above it — a real shadow, a lift on hover, a press that flattens
-   it onto the shadow — because the old VOTE badge did not read as a button
-   at all. Shared here, not in club.css or race.css, because those two
-   sheets are never both enabled at once and this button appears on both. */
+/* The way into a voting booth from a race page (see votebutton.js), atop
+   its entry column. Pressable like the sticker above it — a real shadow, a
+   lift on hover, a press that flattens it onto the shadow — because the old
+   VOTE badge did not read as a button at all. */
 .vote-button {
   display: inline-flex;
   flex-direction: column;
@@ -464,7 +462,7 @@
   color: var(--ink);
   font-family: var(--type-sticker-family);
   font-weight: var(--type-sticker-weight);
-  font-size: var(--type-sticker-size);
+  font-size: 0.78rem;
   letter-spacing: var(--type-sticker-tracking);
   text-transform: uppercase;
   text-decoration: none;
@@ -480,20 +478,6 @@
    no ring at all for anyone arriving by keyboard. */
 .vote-button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 
-/* Tucked into the flyer's corner like the tape above it, at the charter's lean. */
-.vote-button--sticker {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
-  z-index: 2;
-  rotate: 4deg;
-  font-size: 0.62rem;
-  padding: 5px 9px;
-}
-
-/* Upright, in normal flow, atop the race page's entry column, above Train my
-   own robot. */
-.vote-button--panel { font-size: 0.78rem; }
 
 /* Once every 3 s, not continuously: the ballot twitches for the first ~12%
    of the cycle and rests for the remaining ~2.6 s, so it reads as a nudge

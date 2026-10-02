@@ -8,13 +8,12 @@ import {
   withdrawRun,
 } from "./api.js";
 import { boardsheetMarkup, podium, wireBoardsheet } from "./boardsheet.js";
-import { flyer } from "./flyer.js";
 import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
 import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
 import { formatEventFacts, isStage } from "./format.js";
+import { roundCard } from "./roundcard.js";
 import { dress, eventGuideHref, menuHref } from "./router.js";
-import { renderThumbnails } from "./thumbnail.js";
 import { footer, settleIdentity, signage } from "./signage.js";
 import { renderTrainPanel } from "./trainpanel.js";
 import { createViewer } from "./viewer.js";
@@ -78,7 +77,7 @@ export function renderEventFacts(root, event) {
  */
 export function renderVoteButton(root, event) {
   if (!event.vote) return;
-  root.querySelector(".entry-col").prepend(voteButton(event, { variant: "panel" }));
+  root.querySelector(".entry-col").prepend(voteButton(event));
 }
 
 /**
@@ -114,8 +113,8 @@ export function raceHall(event) {
 
 
 /**
- * The way on, under the board: every other round, as the same sheets the
- * front page pins to its wall.
+ * The way on, under the board: every other round, as the same cards the
+ * front page deals on its wall.
  *
  * All of them, wrapping onto a second row rather than a chosen four with a
  * button to the rest — with the whole programme already here, that button
@@ -139,8 +138,9 @@ export function otherRounds(events, event, boards) {
   titles.append(eyebrow, heading);
   head.append(titles);
   const wall = document.createElement("div");
-  wall.className = "rounds-on__wall";
-  wall.append(...others.map((e) => flyer(e, boards.get(e.id) ?? [])));
+  wall.className = "round-cards";
+  // Numbered by the whole programme, so a card keeps its number on every wall.
+  wall.append(...others.map((e) => roundCard(e, boards.get(e.id) ?? [], { number: events.indexOf(e) + 1 })));
   strip.append(head, wall);
   return strip;
 }
@@ -149,8 +149,7 @@ export function otherRounds(events, event, boards) {
  * Fill and hang the strip of other rounds, once the race above it is up.
  *
  * Separate from otherRounds so that the shape is testable without a network:
- * this is the part that fetches, and it asks for a leaderboard per card and a
- * still per card.
+ * this is the part that fetches, and it asks for a leaderboard per card.
  */
 export async function keepRacing(root, event) {
   const events = await getEvents();
@@ -162,16 +161,6 @@ export async function keepRacing(root, event) {
   const strip = otherRounds(events, event, boards);
   const foot = root.querySelector("footer");
   if (foot) foot.before(strip); else root.append(strip);
-
-  const stills = await renderThumbnails(others);
-  others.forEach((e, i) => {
-    const url = stills.get(e.id);
-    if (!url) return; // no WebGL, or this rig failed — the frame stays dark
-    const img = document.createElement("img");
-    img.src = url;
-    img.alt = "";
-    strip.querySelectorAll(".challenge-art")[i].replaceChildren(img);
-  });
 }
 
 export async function renderRace(root, { event, state }) {

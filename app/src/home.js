@@ -1,17 +1,16 @@
 // The club's front: who is ahead this season, and which round to pick.
 //
-// The ladder ranks PEOPLE by the points their publications earned; the flyers
+// The ladder ranks PEOPLE by the points their publications earned; the cards
 // are the events, each carrying the course, its facts and who holds it. The
-// race pages behind the flyers are unchanged — this page is the way in.
+// race pages behind the cards are unchanged — this page is the way in.
 
 import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
-import { flyer } from "./flyer.js";
 import { FLOCK, MICRODUCK, MICRODUCK_RL, STORE } from "./links.js";
 import { renderLive } from "./live.js";
+import { roundCard } from "./roundcard.js";
 import { dress, liveHref, playerHref } from "./router.js";
 import { signInHref } from "./session.js";
 import { avatar, chequer, pendingIdentity, settleIdentity } from "./signage.js";
-import { renderThumbnails } from "./thumbnail.js";
 import { duckHead, wordmark } from "./wordmark.js";
 
 const DEMO_ROWS = 15;
@@ -212,18 +211,50 @@ export function flockBand() {
 }
 
 
-/** The channel's frame beside the ladder: the stage the player mounts in, and
- * the picture over it as the way to the full screen. The button the player
- * raises stands above this door, so asking for the sound is not leaving. */
+/** The channel's set beside the ladder: a vintage television, the stage the
+ * player mounts in behind its glass, and a button on the glass as the way to
+ * the full screen. The button the player raises stands above that door, so
+ * asking for the sound is not leaving. The cabinet around the glass is
+ * decoration, hidden from assistive technology. */
 export function liveFrame() {
-  const frame = el("div", "season-live fx-shadow-card");
+  const glass = el("div", "tv-glass");
   // A button, not the whole picture. An invisible link across the box meant a
   // click anywhere on the channel left the front page without warning, and
   // the page it arrived at had no way back at all.
-  const door = el("a", "season-live-full", "Full screen");
+  const door = el("a", "tv-full", "Full screen");
   door.href = liveHref;
-  frame.append(el("div", "season-live-stage"), door);
-  return frame;
+  const signal = el("span", "tv-osd tv-osd--channel");
+  signal.append(el("span", "tv-rec"), "CH 03");
+  glass.append(
+    el("div", "tv-stage"),
+    ...["tv-mask", "tv-scan", "tv-roll", "tv-vignette", "tv-glare"].map((fx) => el("div", `tv-fx ${fx}`)),
+    el("span", "tv-osd tv-osd--play", "\u25B6 Play"),
+    signal,
+    door,
+  );
+  const bezel = el("div", "tv-bezel");
+  bezel.append(glass);
+
+  const side = el("div", "tv-side");
+  side.setAttribute("aria-hidden", "true");
+  const led = el("span", "tv-led-row");
+  led.append(el("span", "tv-led"), el("span", "tv-label", "On"));
+  side.append(
+    el("span", "tv-brand", "AV-1"),
+    el("span", "tv-knob"), el("span", "tv-label", "CH"),
+    el("span", "tv-knob"), el("span", "tv-label", "Vol"),
+    el("span", "tv-grille"),
+    led,
+  );
+  const cabinet = el("div", "tv-case");
+  cabinet.append(bezel, side);
+
+  const feet = el("div", "tv-feet");
+  feet.setAttribute("aria-hidden", "true");
+  feet.append(el("i"), el("i"));
+  const tv = el("div", "tv");
+  tv.append(cabinet, feet);
+  return tv;
 }
 
 export async function renderHome(root, state) {
@@ -236,70 +267,56 @@ export async function renderHome(root, state) {
   const hall = el("main", "hall");
   root.append(hall);
 
-  // The pitch and the season are ONE chapter: what this is, on the left, and
-  // who is winning it, on the right. They were two, and a rule between them
-  // divided a thing from its own scoreboard.
+  // The pitch and the season are ONE chapter: what this is, on top, and the
+  // channel and who is winning it, under it. They were two, and a rule
+  // between them divided a thing from its own scoreboard.
   const door = el("section", "door fx-grain");
 
   const pitch = el("div", "door-pitch");
+  const lede = el("p", "lede", "Train, submit, compete, ");
+  lede.append(el("b", null, "repeat"), ".");
   pitch.append(
     el("p", "eyebrow", "Official competition"),
     el("h2", "hero", "The pinnacle of Microducks athletics."),
-    el(
-      "p",
-      "lede",
-      "Train, submit, compete, repeat.",
-    ),
+    lede,
   );
-  // The channel under the pitch, where the four colourways used to sit. A
-  // photograph said "here is the robot"; a live feed says "here is one
-  // racing, now", which is the better argument for the paragraph above it.
+  // The channel and the standings on one row under the pitch, their headings
+  // level and the ladder as tall as the television. A live feed says "here is
+  // one racing, now", which is the better argument for the line above it.
   const meet = el("div", "door-meet");
-  const frame = liveFrame();
-  meet.append(el("h3", "eyebrow", "The channel"), frame);
-  pitch.append(meet);
+  const tv = liveFrame();
+  meet.append(el("h3", "eyebrow", "The channel"), tv);
 
   const board = el("div", "door-board");
   const rungs = demoRows(standings);
   board.append(el("h3", "eyebrow", "Season standings"), ladder(rungs));
 
-  door.append(pitch, board);
+  const row = el("div", "door-row");
+  row.append(meet, board);
+  door.append(pitch, row);
   // No rule above it: the band runs flush under the yellow strip, whose own
   // bottom border is the line there. A rule plus the hall's top padding put a
   // stripe of bare paper between the two, which was the thing to remove.
   hall.append(door);
-  // The channel plays beside the ladder, muted until the button asks for its
+  // The channel plays on the television, muted until the button asks for its
   // sound. It polls and draws itself; a browser without WebGL, or a channel
-  // that is down, leaves the frame dark rather than taking the front page
+  // that is down, leaves the glass dark rather than taking the front page
   // with it.
-  renderLive(frame.querySelector(".season-live-stage"), state, { framed: true }).catch(() => {});
+  renderLive(tv.querySelector(".tv-stage"), state, { framed: true }).catch(() => {});
 
   const boards = await Promise.all(
     events.map((event) => getLeaderboard(event.id).catch(() => ({ rows: [] }))),
   );
   const rounds = el("section", "chapter chapter--wall fx-scanlines");
-  const wall = el("div", "cabinets");
-  const flyers = events.map((event, i) => flyer(event, boards[i].rows));
-  wall.append(...flyers);
+  const wall = el("div", "round-cards");
+  wall.append(...events.map((event, i) => roundCard(event, boards[i].rows, { number: i + 1 })));
   rounds.append(el("h3", "eyebrow", "Pick your round"), wall);
   hall.append(chequer("chapter-checker"), rounds);
 
-  // After the wall is on screen: the stills replace the dark frames as they
-  // arrive, rather than holding the whole page for WebGL and a 1.3 MB GLB.
   // The plate, once the answer is in. Your own rung comes from the REAL
   // standings, never the padded ones — a demo rank beside your name would be
   // a score you did not earn.
   const me = await identity;
   const mine = me?.signed_in ? standings.find((row) => row.user === me.user) : undefined;
   settleIdentity(root, me, mine, playerCard);
-
-  const stills = await renderThumbnails(events);
-  events.forEach((event, i) => {
-    const url = stills.get(event.id);
-    if (!url) return; // no WebGL, or this rig failed — the frame stays dark
-    const img = document.createElement("img");
-    img.src = url;
-    img.alt = "";
-    flyers[i].querySelector(".challenge-art").replaceChildren(img);
-  });
 }

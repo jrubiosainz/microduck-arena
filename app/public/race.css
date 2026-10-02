@@ -11,7 +11,7 @@
 /* 15 px rather than the shell's body step: a timing board reads as one, and
    its density is part of what it is. The face stays the club's. */
 /* Warm paper for the ground, one step off the shell's white: the objects on
-   this page are all paper — the entry note, the board, the flyers under it —
+   this page are all paper — the entry note, the board, the cards under it —
    and on white they had nothing to sit on. The board goes the other way, to
    full paper, so the results read as the sheet pinned to the wall rather than
    as part of the wall. Scoped to this sheet, so the front page keeps its own
@@ -38,7 +38,7 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 .raceback:hover { text-decoration: underline; }
 .raceback:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 
-/* The kind of event, over its name — the same word the flyer on the front
+/* The kind of event, over its name — the same word the card on the front
    page carries, so arriving here confirms what was clicked. */
 .raceeyebrow {
   margin: 0;
@@ -50,7 +50,7 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
   text-transform: uppercase;
 }
 
-/* The display face, as on the flyers: this is the name of the race, and it
+/* The display face, as on the cards: this is the name of the race, and it
    should read like one rather than like a form label. A step up from the old
    2.8rem ceiling, to the charter's own section-title level — beside a stage
    this wide it was reading as a caption. */
@@ -95,9 +95,9 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 /* The vote button (when the event has one) and the entry note, stacked in
    the same 17rem grid column. Stretch is the flex default, so the note
    keeps the column's full width; only the button opts out, via
-   .vote-button--panel's align-self below, to sit right-aligned above it. */
+   .vote-button's align-self below, to sit right-aligned above it. */
 .entry-col { display: flex; flex-direction: column; gap: 14px; }
-.entry-col .vote-button--panel { align-self: flex-end; }
+.entry-col .vote-button { align-self: flex-end; }
 
 /* The way to training: the page's one call to action now that there is no
    entry form, open by default and sitting above the guide link in the entry
@@ -1082,12 +1082,9 @@ table.board .withdraw:focus-visible,
 /* ── the way on: the other rounds ─────────────────────────────────────── */
 
 /* A deep-ink band under the board, full width, with the front page's own
-   flyers pinned to it. The chequer over it is the finish line — the one place
-   on the site where a racing flag belongs, and it separates the paper above
-   from the ink below without needing a rule.
-   The sheets are club.css's `.challenge-note`, which the race theme does not
-   load: the few rules they need on ink are restated below rather than the
-   whole sheet being pulled in. */
+   cards dealt on it (cards.css). The chequer over it is the finish line — the
+   one place on the site where a racing flag belongs, and it separates the
+   paper above from the ink below without needing a rule. */
 .rounds-on {
   position: relative;
   width: 100vw;
@@ -1140,91 +1137,4 @@ table.board .withdraw:focus-visible,
   letter-spacing: var(--type-section-title-tracking);
   text-transform: uppercase;
   color: var(--paper);
-}
-/* Four across at the content column's width, the rest wrapping onto the row
-   below — auto-fit does the wrapping, and folds to two and then one on a
-   narrow window without being told to. */
-.rounds-on__wall {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-medium)), 1fr));
-  gap: var(--space-chapter-top-min) var(--space-gutter-max);
-  align-items: start;
-}
-
-/* The flyer, as club.css draws it. Restated because the race theme disables
-   that sheet — only what a sheet on ink actually needs, not a copy of it. */
-.rounds-on .challenge-note {
-  --fx-shadow-color: var(--ink);
-  --fx-shadow-size: var(--shadow-card-min);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: var(--space-card-padding-min);
-  border: 2px solid var(--ink);
-  background: var(--paper);
-  color: var(--ink);
-  rotate: calc(-1 * var(--rotate-1-0));
-  transform-origin: 50% -12px;
-}
-.rounds-on .challenge-note:nth-child(2n) { rotate: var(--rotate-1-0); }
-.rounds-on .challenge-note--race { --fx-shadow-color: var(--orange); }
-.rounds-on .challenge-note--showcase { --fx-shadow-color: var(--yellow); }
-.rounds-on .challenge-link { display: block; flex: 1; color: inherit; text-decoration: none; }
-.rounds-on .challenge-link:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
-.rounds-on .challenge-art {
-  display: block;
-  width: 100%;
-  aspect-ratio: 480 / 198;
-  border: 2px solid var(--ink);
-  background: var(--deep-ink);
-  overflow: hidden;
-}
-.rounds-on .challenge-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.rounds-on .challenge-link .eyebrow {
-  display: inline-block;
-  margin-top: var(--space-gutter-min);
-  padding: 2px 8px;
-  border: 2px solid var(--ink);
-  color: var(--ink);
-}
-.rounds-on .challenge-note--race .challenge-link .eyebrow { background: var(--orange); }
-.rounds-on .challenge-note--challenge .challenge-link .eyebrow {
-  background: var(--magenta);
-  color: var(--paper);
-}
-.rounds-on .challenge-note--showcase .challenge-link .eyebrow { background: var(--yellow); }
-.rounds-on .flyer-title {
-  margin: var(--space-gutter-min) 0 0;
-  font-family: var(--type-card-title-family);
-  font-weight: var(--type-card-title-weight);
-  font-size: min(var(--type-card-title-size), 1.6rem);
-  line-height: var(--type-card-title-line);
-  text-transform: uppercase;
-}
-.rounds-on .flyer-leader {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0 0;
-  font-family: var(--type-mono-label-family);
-  font-size: var(--type-mono-label-size);
-  letter-spacing: var(--type-mono-label-tracking);
-}
-.rounds-on .challenge-star { width: 16px; height: 16px; }
-.rounds-on .challenge-facts { display: none; }
-
-@media (prefers-reduced-motion: no-preference) {
-  .rounds-on .challenge-note {
-    transition:
-      rotate 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
-      translate 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
-  }
-  .rounds-on .challenge-note:has(.challenge-link):hover,
-  .rounds-on .challenge-note:nth-child(2n):has(.challenge-link):hover {
-    --fx-shadow-size: var(--shadow-card-max);
-    rotate: calc(-1 * var(--rotate-2-5));
-    translate: 0 -5px;
-  }
 }

@@ -1,8 +1,7 @@
 // The workshop's front: what this machine is connected to, and the challenges to train for.
 
-import { flyer } from "../flyer.js";
+import { roundCard } from "../roundcard.js";
 import { chequer, footer } from "../signage.js";
-import { renderThumbnails } from "../thumbnail.js";
 import * as api from "./api.js";
 import { billingGuide, checkLine, forkGuide } from "./checks.js";
 import { el } from "./dom.js";
@@ -43,10 +42,10 @@ export async function mountHome(root, { status, account }) {
     el("p", "lede", "Pick a challenge, then train, submit, compete, repeat."));
   const door = el("section", "door door--ws fx-grain");
   door.append(pitch, post);
-  const flyers = status.challenges.map((c) =>
-    flyer(c.event, null, { href: challengeHref(c.event.id), corner: runningSticker(c.running) }));
-  const wall = el("div", "cabinets");
-  wall.append(...flyers);
+  const wall = el("div", "round-cards");
+  wall.append(...status.challenges.map((c, i) => roundCard(c.event, null, {
+    number: i + 1, href: challengeHref(c.event.id), cta: "Train", corner: runningSticker(c.running),
+  })));
   const rounds = el("section", "chapter chapter--wall fx-scanlines");
   rounds.append(el("h3", "eyebrow", "Pick your challenge"), wall);
   const hall = el("main", "hall");
@@ -68,17 +67,6 @@ export async function mountHome(root, { status, account }) {
     }));
   }
   draw();
-
-  // The stills after the page is up: WebGL and a GLB must not hold it; without them the frames stay dark.
-  renderThumbnails(status.challenges.map((c) => c.event)).then((stills) => {
-    status.challenges.forEach((c, i) => {
-      const url = stills.get(c.event.id);
-      if (!url) return;
-      const img = el("img");
-      Object.assign(img, { src: url, alt: "" });
-      flyers[i].querySelector(".challenge-art").replaceChildren(img);
-    });
-  }).catch(() => {});
 
   return { leave() {}, accountChanged: draw };
 }

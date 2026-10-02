@@ -9,7 +9,7 @@
 /* Grain and scanlines cover the WHOLE window, as the charter asks — hung on
    the content column they stopped at 1120px and left the cover and the band
    bare. Fixed and pointer-events-none, above the page so the texture reads on
-   the deep-ink cover as well as on paper; z-index beats the flyers, which are
+   the deep-ink cover as well as on paper; z-index beats the cards, which are
    `position: relative` and would otherwise paint over it. */
 .page-fx {
   position: fixed;
@@ -40,7 +40,7 @@
   --dots-wash-up: linear-gradient(to top, transparent 0%, var(--warm-paper) 40%);
 }
 
-.ladder-row:focus-visible, .challenge-link:focus-visible,
+.ladder-row:focus-visible,
 .profile-results a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 
 /* ── Masthead: the charter's cover, whole ──────────────────────────────────── */
@@ -209,9 +209,9 @@
   .duck:hover .duckhead { rotate: calc(-1 * var(--rotate-4-0)); translate: 0 -4px; }
 }
 
-/* The locker RISES rather than turning. A flyer is taped to a wall and swings
-   from that tape; a plate is screwed flat and the only honest thing it can do
-   is come off the surface. The shadow steps up a token with it, which is what
+/* The locker RISES rather than turning. A card on the wall tilts toward the
+   hand reaching for it; a plate is screwed flat and the only honest thing it
+   can do is come off the surface. The shadow steps up a token with it, which is what
    makes the rise read as height rather than as a slide. */
 .player-card-you, .player-card-in { --fx-shadow-size: var(--shadow-card-min); }
 
@@ -343,11 +343,22 @@
   background-size: 100% 100%, var(--dots-grid);
   background-repeat: no-repeat, repeat;
 }
-/* The pitch keeps the charter's 66-character measure; the board takes what is
-   left and never drops below a readable frame. */
-.door-pitch { flex: 1 1 26rem; max-width: 34rem; min-width: 0; }
-.door-board { flex: 1 1 20rem; max-width: 26rem; min-width: 0; }
-.door-board > .eyebrow {
+/* The pitch keeps the charter's measure, alone on the band's first line. */
+.door-pitch { flex: 1 1 26rem; max-width: 38rem; min-width: 0; }
+
+/* The channel and the standings side by side under it, their headings level;
+   below 820px they stack, the channel first. The board is a column so the
+   ladder can stretch to the television's height. */
+.door-row {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: clamp(2rem, 4vw, 3rem);
+  align-items: stretch;
+}
+.door-meet { min-width: 0; }
+.door-board { display: flex; flex-direction: column; min-width: 0; }
+.door-row .eyebrow {
   display: block;
   margin-bottom: var(--space-gutter-min);
   font-family: var(--type-card-title-family);
@@ -357,23 +368,9 @@
   letter-spacing: var(--type-card-title-tracking);
   color: var(--ink);
 }
-
-/* The channel, under the pitch. A column and not a row: the heading names the
-   frame beneath it rather than standing beside it. */
-.door-meet {
-  margin-top: var(--space-gutter-max);
+@media (max-width: 820px) {
+  .door-row { grid-template-columns: 1fr; }
 }
-.door-meet > .eyebrow {
-  display: block;
-  margin-bottom: var(--space-gutter-min);
-  font-family: var(--type-card-title-family);
-  font-weight: var(--type-card-title-weight);
-  font-size: min(var(--type-card-title-size), 1.7rem);
-  line-height: var(--type-card-title-line);
-  letter-spacing: var(--type-card-title-tracking);
-  color: var(--ink);
-}
-
 
 .hero {
   margin: 4px 0 0;
@@ -397,6 +394,7 @@
   font-size: var(--type-lede-size);
   line-height: var(--type-lede-line);
 }
+.lede b { font-weight: 700; }
 
 /* The charter's own rhythm. These tokens were defined and referenced nowhere:
    a chapter opened on a 28 px grid gutter, which is why the hero, the ladder
@@ -466,6 +464,11 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+/* Beside the television, the frame stretches to its height and the rungs
+   scroll inside it. The 26px under it is the television's feet, so the
+   ladder's foot lines up with the cabinet's. */
+.door-board .ladders { flex: 1; position: relative; min-height: 22rem; margin-bottom: 26px; }
+.door-board .ladder-scroll { position: absolute; inset: 0; max-height: none; }
 
 
 .ladder-row {
@@ -497,72 +500,291 @@
 .ladder-name { font-weight: 600; overflow-wrap: anywhere; }
 .ladder-empty { margin: 0; padding: 12px var(--space-card-padding-min); }
 
-/* ── The channel, beside the standings ─────────────────────────────────────── */
+/* ── The channel: a vintage television beside the standings ────────────────── */
 
-/* The player on the left, the ladder on the right; under the wide grid's
-   measure they stack, the channel first. */
-.season {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-wide)), 1fr));
-  gap: var(--space-gutter-max);
-  align-items: start;
-}
-.season-column { min-width: 0; }
-.season-column > .eyebrow { display: block; margin-bottom: var(--space-gutter-min); }
-.season .ladders { max-width: none; }
-
-/* The set in the corner of the room: the stage behind glass, in the club's
-   own frame. The door over it is the picture itself -- the way to the full
-   screen -- with the player's own button standing above it. */
-.season-live {
-  /* Orange, the page's carrying accent: the channel is the one thing on the
-     front that moves, and it should cast what the rest of the page spends on
-     what matters. Through the charter's primitive rather than a literal
-     shadow — the 5px it used to write was off the token scale anyway. */
-  --fx-shadow-color: var(--orange);
+/* A set from the den rather than a screen from the charter: wood, a cream
+   bezel, curved glass, gold knobs. Its radii and its browns and golds are the
+   exception the redesign asked for — the television is an object, and an
+   object keeps its own shape. */
+.tv {
+  --wood: #5a3a22;
+  --wood-hi: #7a5030;
+  --wood-lo: #4a2e1a;
+  --cream-shell: linear-gradient(180deg, #e9dcc0, #cdbb94);
+  --gold: #d9b25a;
+  --gold-hi: #f6e3a1;
+  --gold-lo: #8a6a24;
   position: relative;
-  border: 3px solid var(--ink);
-  background: var(--deep-ink);
 }
-.season-live-stage { display: block; }
+.tv-case {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
+  gap: 18px;
+  padding: 22px;
+  border: 4px solid var(--ink);
+  border-radius: 34px;
+  background:
+    repeating-linear-gradient(92deg, rgba(0, 0, 0, 0.07) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, var(--wood-hi), var(--wood) 60%, var(--wood-lo));
+  /* Orange, the page's carrying accent: the channel is the one thing on the
+     front that moves. */
+  box-shadow:
+    10px 10px 0 var(--orange),
+    inset 0 3px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.25);
+}
+/* The gold hairline inlaid in the wood. */
+.tv-case::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 2px solid color-mix(in srgb, var(--gold-hi) 35%, transparent);
+  border-radius: 27px;
+  pointer-events: none;
+}
+.tv-bezel {
+  padding: 16px;
+  background: var(--cream-shell);
+  border: 3px solid var(--ink);
+  border-radius: 26px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), inset 0 -3px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* The tube. The channel draws 16:9 and the glass is 4:3, so the picture sits
+   letterboxed in it, as a broadcast did on a set like this one: cropped to
+   fill, it lost the LIVE bug and both ends of the commentators' caption. */
+.tv-glass {
+  position: relative;
+  display: grid;
+  align-content: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--deep-ink);
+  border: 3px solid var(--ink);
+  border-radius: 18% / 22%;
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.8);
+}
+.tv-stage { filter: saturate(1.05) contrast(1.05) sepia(0.18); }
+/* The set's own display says the channel is on, so the channel's LIVE bug
+   stands down rather than printing over it; off air, both are dark and the
+   card on the glass says so. */
+.tv-stage .live-bug { display: none; }
+.tv-glass:has(.live[data-live-state="off-air"]) .tv-osd { display: none; }
+
+/* What the glass lays over the picture, in order: the phosphor mask, the
+   scanlines, a slow rolling band, the vignette and the glare. None of them
+   takes a click — the sound button underneath must still be pressable. */
+.tv-fx { position: absolute; inset: 0; pointer-events: none; }
+.tv-mask {
+  background: repeating-linear-gradient(90deg,
+    color-mix(in srgb, var(--magenta) 7%, transparent) 0 1px,
+    color-mix(in srgb, var(--cyan) 7%, transparent) 1px 2px,
+    color-mix(in srgb, var(--yellow) 5%, transparent) 2px 3px);
+  mix-blend-mode: screen;
+}
+/* Taller than the glass by one period, so moving it never shows its edge. */
+.tv-scan { top: -3px; background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.32) 0 1px, transparent 1px 3px); }
+.tv-roll {
+  background: linear-gradient(to bottom, transparent 40%, rgba(255, 255, 255, 0.06) 48%,
+    rgba(255, 255, 255, 0.11) 50%, transparent 56%);
+  translate: 0 -100%;
+}
+.tv-vignette {
+  background: radial-gradient(110% 110% at 50% 50%, transparent 50%, rgba(0, 0, 0, 0.55) 80%, rgba(0, 0, 0, 0.92) 100%);
+}
+.tv-glare {
+  background:
+    radial-gradient(60% 40% at 30% 14%, rgba(255, 255, 255, 0.24), transparent 62%),
+    radial-gradient(30% 20% at 80% 88%, rgba(255, 255, 255, 0.07), transparent 70%);
+}
+
+/* The set's own on-screen display, in the VCR's mono with a colour fringe. */
+.tv-osd {
+  position: absolute;
+  z-index: 2;
+  top: 11%;
+  white-space: nowrap;
+  font: 400 clamp(0.6rem, 1.1vw, 0.85rem)/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper);
+  text-shadow:
+    2px 0 0 color-mix(in srgb, var(--magenta) 70%, transparent),
+    -2px 0 0 color-mix(in srgb, var(--cyan) 70%, transparent);
+  pointer-events: none;
+}
+.tv-osd--play { left: 11%; }
+.tv-osd--channel { right: 11%; display: flex; align-items: center; gap: 0.5em; }
+.tv-rec { width: 0.7em; height: 0.7em; border-radius: 50%; background: #ff3b30; }
+
 /* The way in, as a button that appears when the pointer is on the picture.
    It used to be a link across the whole box: clicking the channel anywhere
    left the front page with no warning, and the page it arrived at had no way
    back. Now nothing happens unless you press the thing that says what it
    does. */
-.season-live-full {
+.tv-full {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  z-index: 7;
+  right: 11%;
+  bottom: 10%;
+  z-index: 3;
   padding: 7px 14px;
   border: 2px solid var(--paper);
+  border-radius: 6px;
   background: rgba(8, 8, 12, 0.72);
   color: var(--paper);
-  font: 400 0.78rem/1 var(--display);
+  font: 400 0.8rem/1 var(--display);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-decoration: none;
   opacity: 0;
 }
-.season-live:hover .season-live-full,
-.season-live-full:focus-visible { opacity: 1; }
-.season-live-full:hover { background: var(--orange); border-color: var(--orange); color: var(--ink); }
-.season-live-full:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+.tv-glass:hover .tv-full,
+.tv-full:focus-visible { opacity: 1; }
+.tv-full:hover { background: var(--orange); border-color: var(--orange); color: var(--ink); }
+.tv-full:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 
-@media (prefers-reduced-motion: no-preference) {
-  .season-live-full { transition: opacity 140ms ease; }
+/* The control panel: a gold plate, two knobs, the speaker and the power
+   light. Decoration — nothing on it does anything. */
+.tv-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  background: var(--cream-shell);
+  border: 3px solid var(--ink);
+  border-radius: 20px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6);
+}
+.tv-label {
+  font: 700 0.62rem/1 var(--mono);
+  letter-spacing: 0.16em;
+  color: var(--wood);
+  text-transform: uppercase;
+}
+.tv-brand {
+  padding: 2px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 5px;
+  font: 400 0.95rem/1.2 var(--display);
+  letter-spacing: 0.06em;
+  background: linear-gradient(180deg, var(--gold-hi), var(--gold) 50%, var(--gold-lo));
+}
+.tv-knob {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(from 0deg, rgba(0, 0, 0, 0.12) 0 6deg, transparent 6deg 12deg),
+    radial-gradient(circle at 35% 28%, var(--gold-hi), var(--gold) 45%, var(--gold-lo) 90%);
+  border: 3px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink), inset 0 0 0 5px rgba(0, 0, 0, 0.08);
+}
+.tv-knob::before {
+  content: "";
+  position: absolute;
+  inset: 11px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, var(--gold-hi), var(--gold) 60%);
+  border: 2px solid rgba(0, 0, 0, 0.35);
+}
+.tv-knob::after {
+  content: "";
+  position: absolute;
+  left: calc(50% - 1.5px);
+  top: 3px;
+  width: 3px;
+  height: 10px;
+  background: var(--ink);
+  border-radius: 2px;
+}
+.tv-grille {
+  width: 70%;
+  flex: 1;
+  min-height: 60px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: radial-gradient(circle, #3a2616 1.4px, transparent 1.8px) 0 0 / 6px 6px, #cdbb94;
+}
+.tv-led-row { display: flex; align-items: center; gap: 6px; }
+.tv-led {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 8px var(--orange);
 }
 
-/* ── Flyers: one per event, taped up crooked ───────────────────────────────── */
+/* Two skewed gold legs, standing over the cabinet's orange shadow. */
+.tv-feet {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 22% 0 10%;
+}
+.tv-feet i {
+  width: 16px;
+  height: 26px;
+  background: linear-gradient(180deg, var(--gold), var(--gold-lo));
+  border: 3px solid var(--ink);
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+  transform: skewX(-14deg);
+}
+.tv-feet i:last-child { transform: skewX(14deg); }
+
+/* On a phone the panel lies under the screen instead of beside it. */
+@media (max-width: 560px) {
+  .tv-case { grid-template-columns: 1fr; padding: 12px; }
+  .tv-side { flex-direction: row; justify-content: space-between; gap: 8px; padding: 8px 12px; }
+  /* Smaller knobs, or the speaker between them shrinks to a sliver. */
+  .tv-knob { width: 38px; height: 38px; }
+  .tv-knob::before { inset: 8px; }
+  .tv-grille { flex: 1; min-height: 36px; height: 36px; }
+}
+
+/* Every movement on the set: transforms and opacity only, so the glass costs
+   the compositor rather than a repaint per frame. */
+@media (prefers-reduced-motion: no-preference) {
+  .tv-stage { animation: tv-jitter 6s steps(1) infinite; }
+  .tv-scan { animation: tv-scan 0.9s steps(4) infinite; }
+  .tv-roll { animation: tv-roll 7s linear infinite; }
+  .tv-rec { animation: tv-blink 1.2s steps(1) infinite; }
+  .tv-led { animation: tv-led 2.4s ease-in-out infinite; }
+  .tv-knob { transition: rotate 200ms cubic-bezier(0.4, 0, 0.2, 1); }
+  .tv-knob:hover { rotate: 35deg; }
+  .tv-full { transition: opacity 140ms ease; }
+}
+@keyframes tv-jitter {
+  0%, 100% { translate: 0 0; }
+  91% { translate: 1px 0; }
+  92% { translate: -2px 1px; }
+  93% { translate: 0 0; }
+}
+@keyframes tv-scan { to { translate: 0 3px; } }
+@keyframes tv-roll { from { translate: 0 -100%; } to { translate: 0 200%; } }
+@keyframes tv-blink { 50% { opacity: 0; } }
+@keyframes tv-led { 50% { opacity: 0.55; } }
+
+/* ── The wall: the rounds, dealt as cards (cards.css) ──────────────────────── */
 
 /* Scanlines on the wall alone, and BEHIND the sheets rather than over them:
-   they show in the gutters between flyers and stop at the paper. `fx-scanlines`
+   they show in the gutters between cards and stop at the paper. `fx-scanlines`
    is an ::after, which paints above in-flow content, so it drops to -1 and the
    section isolates itself rather than leaning on some ancestor's stacking
    context. Full width like everything else on this page; the chapter's own box
    is what scopes it vertically. */
-.chapter--wall { isolation: isolate; }
+/* Wider than the column, as wide as four cards need, and never past the
+   gutter: the cards are the page's widest row. */
+.chapter--wall {
+  isolation: isolate;
+  margin-inline: calc(50% - min(620px, 50vw - var(--space-gutter-min)));
+}
 .chapter--wall::after {
   z-index: -1;
   left: calc(50% - 50vw);
@@ -584,138 +806,6 @@
      the box on the left to the box itself on the right — which is exactly
      where the chequer's lower edge is at each end. */
   clip-path: polygon(0 var(--slant), 100% 0, 100% 100%, 0 100%);
-}
-
-.cabinets {
-  display: grid;
-  /* Three to a row, at a width between the two tried before: 355px was the
-     original and 259px was too narrow, so the gutter does the work instead of
-     the track. In the 1120px column, three tracks with a 104px gutter leave
-     (1120 - 208) / 3 = 304px a sheet; a fourth would need 4x230 + 3x104 =
-     1232, which does not fit, so auto-fit settles on three.
-     Both figures are the charter's own: the medium grid step and the
-     chapter-top space. Narrow the window and auto-fit folds to two, then one,
-     which a hard repeat(3) would not. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--space-grid-medium)), 1fr));
-  gap: var(--space-title-to-grid-max) var(--space-chapter-top-min);
-  align-items: stretch;
-  margin-top: var(--space-gutter-min);
-}
-
-/* A polaroid: white ground, the still at the top, the caption on the border
-   under it. The shadow is the charter's own primitive, coloured by category —
-   one glance sorts the wall. No rounded corner and no blur: both are in the
-   charter's À ÉVITER panel. */
-.challenge-note {
-  --fx-shadow-color: var(--ink);
-  /* Lying flat. It steps to the max token on hover, as the sheet lifts. */
-  --fx-shadow-size: var(--shadow-card-min);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: var(--space-card-padding-min);
-  border: 2px solid var(--ink);
-  background: var(--paper);
-  rotate: calc(-1 * var(--rotate-1-0));
-  /* The tape, which components.css puts at left: calc(50% - 32px); top: -12px
-     — so a hover turns the sheet about the point it is actually stuck by. */
-  transform-origin: 50% -12px;
-}
-.challenge-note:nth-child(2n) { rotate: var(--rotate-1-0); }
-
-.challenge-note--race { --fx-shadow-color: var(--orange); }
-/* Yellow bec is outside the charter's magenta/cyan shadow pair; the charter
-   already spends it on stickers and bands. Recorded in the design doc as a
-   deliberate extension. */
-.challenge-note--showcase { --fx-shadow-color: var(--yellow); }
-
-.challenge-link {
-  display: block;
-  flex: 1;
-  color: inherit;
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-
-/* The frame keeps the still's 480×198 shape so nothing moves when it lands. */
-.challenge-art {
-  display: block;
-  width: 100%;
-  aspect-ratio: 480 / 198;
-  border: 2px solid var(--ink);
-  background: var(--deep-ink);
-  overflow: hidden;
-}
-.challenge-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
-
-.challenge-facts {
-  margin: var(--space-gutter-min) 0 0;
-  font-family: var(--type-mono-label-family);
-  font-weight: var(--type-mono-label-weight);
-  font-size: var(--type-mono-label-size);
-  letter-spacing: var(--type-mono-label-tracking);
-}
-
-/* The caption. The EVENT is what a person picks off the wall, so its name
-   takes the card-title step and whoever holds it sits under, at body size. */
-.flyer-leader {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 6px 0 0;
-}
-.flyer-leader-name {
-  font-size: 1rem;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.flyer-leader-score {
-  font-family: var(--type-mono-label-family);
-  font-weight: var(--type-mono-label-weight);
-  font-size: var(--type-mono-label-size);
-  letter-spacing: var(--type-mono-label-tracking);
-}
-.flyer-title {
-  margin: var(--space-gutter-min) 0 0;
-  font-family: var(--type-card-title-family);
-  font-weight: var(--type-card-title-weight);
-  font-size: var(--type-card-title-size);
-  line-height: var(--type-card-title-line);
-  letter-spacing: var(--type-card-title-tracking);
-  /* Anton is the charter's display face and it is always capitals. */
-  text-transform: uppercase;
-}
-.challenge-star { width: 18px; height: 18px; align-self: center; }
-.challenge-link .eyebrow { display: block; margin-top: var(--space-gutter-min); color: var(--orange-inked); }
-
-/* Hovering a flyer swings it on its tape. The pivot is the tape itself —
-   `.flyer-tape` sits at `left: calc(50% - 32px); top: -12px` in
-   components.css, so the sheet turns about the point it is actually stuck by,
-   the way paper on a pinboard does. A straight lift moved the whole card as a
-   rigid tile, which is what it was doing before.
-   The tilt goes to the charter's 2.5° step and keeps the sign of the card's
-   own resting lean, so each flyer swings further the way it already hangs
-   rather than snapping across to the other side. The shadow steps up one
-   token as it lifts; it is not transitioned, because two pixels under a
-   turning card is not something an eye follows. */
-@media (prefers-reduced-motion: no-preference) {
-  .challenge-note {
-    transition:
-      rotate 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
-      translate 220ms cubic-bezier(0.2, 0.7, 0.3, 1);
-  }
-  /* One direction for every card, whichever way it rests: the wall swings as
-     one gesture rather than as each sheet doing its own thing. The
-     :nth-child(2n) override is deliberately absent — specificity (0,4,0)
-     against this rule's (0,3,0) is what would bring it back. */
-  .challenge-note:has(.challenge-link):hover,
-  .challenge-note:nth-child(2n):has(.challenge-link):hover {
-    --fx-shadow-size: var(--shadow-card-max);
-    rotate: calc(-1 * var(--rotate-2-5));
-    translate: 0 -5px;
-  }
 }
 
 /* ── Profile: a paper scrapbook ────────────────────────────────────────────── */
