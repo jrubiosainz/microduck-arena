@@ -1,7 +1,7 @@
 // Peter and Ray in their booth: two of the viewer's rigs in the STAND pose,
 // only neck and head moving, a beak on a pivot, on the booth's set, lit like
-// every race page. The set is authored z up under one root turned like the
-// rig's own; the camera is the one thing converted out of that frame.
+// a studio. The set is authored z up under one root turned like the rig's
+// own; the camera and the lights are converted out of that frame.
 
 import {
   ACESFilmicToneMapping,
@@ -12,11 +12,13 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  PCFSoftShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
   PMREMGenerator,
   Scene,
   ShadowMaterial,
+  SpotLight,
   SRGBColorSpace,
   TextureLoader,
   WebGLRenderer,
@@ -74,31 +76,39 @@ export async function createBooth(canvas) {
   renderer.setPixelRatio(Math.min(devicePixelRatio, PIXEL_RATIO_CAP));
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFSoftShadowMap;
   const pmrem = new PMREMGenerator(renderer);
   const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   pmrem.dispose();
 
   const scene = new Scene();
   scene.environment = environment;
-  scene.environmentIntensity = 0.35;
+  scene.environmentIntensity = 0.25;
   scene.background = token("deep-ink");
-  // The viewer's four lights; the key also throws the set's shadows.
-  scene.add(new AmbientLight(0xffffff, 0.18));
-  const key = new DirectionalLight(0xffffff, 1.7);
-  key.position.set(1.4, 2.6, 1.8);
+  // A studio's three lights, placed in the booth's own bearing: x along the
+  // desk, y up, +z towards the cameras. A warm key spot high on the right
+  // pools on the duo and throws their shadows on the set, a cool fill low on
+  // the left opens the shaded side, a back light rims the shells off the wall.
+  const lights = new Group();
+  lights.rotation.y = BOOTH_TURN;
+  scene.add(lights);
+  scene.add(new AmbientLight(0xffffff, 0.06));
+  const key = new SpotLight(0xfff1dc, 10, 0, 0.34, 0.8, 2);
+  key.position.set(0.9, 1.3, 1.1);
+  key.target.position.set(0, 0.15, 0);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
-  Object.assign(key.shadow.camera, { left: -1, right: 1, top: 1, bottom: -1, near: 0.1, far: 6 });
-  key.shadow.bias = -0.0005;
-  key.shadow.normalBias = 0.003;
-  scene.add(key);
-  const fill = new DirectionalLight(0xbfd2ff, 0.55);
-  fill.position.set(-1.6, 1.1, -1.3);
-  scene.add(fill);
-  const rim = new DirectionalLight(0xffd9b0, 0.5);
-  rim.position.set(-0.6, 0.9, 2.2);
-  scene.add(rim);
-  scene.add(new HemisphereLight(0xcfe0ff, 0x2b2b30, 0.12));
+  Object.assign(key.shadow.camera, { near: 0.5, far: 4 });
+  key.shadow.bias = -0.0002;
+  key.shadow.normalBias = 0.002;
+  lights.add(key, key.target);
+  const fill = new DirectionalLight(0xbfd2ff, 0.25);
+  fill.position.set(-1.2, 0.5, 1.0);
+  lights.add(fill);
+  const rim = new DirectionalLight(0xffe2c0, 0.6);
+  rim.position.set(-0.3, 1.2, -1.0);
+  lights.add(rim);
+  scene.add(new HemisphereLight(0xcfe0ff, 0x2b2b30, 0.15));
 
   // The set, z up under a root turned like the rig's duck_root.
   const root = new Group();
@@ -128,7 +138,7 @@ export async function createBooth(canvas) {
       const rig = buildRigTree(kinematics);
       attachMeshes(rig, kinematics, geometries, { livery: seat.livery });
       rig.placer.traverse((object) => {
-        if (object.isMesh) object.castShadow = true;
+        if (object.isMesh) object.castShadow = object.receiveShadow = true;
       });
       const jaw = jawPivot(rig);
       scene.add(rig.placer);
