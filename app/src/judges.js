@@ -74,7 +74,7 @@ export function buildJudges(model, length, edge, sponsorMaps, count = 4) {
     for (let n = 0; n <= i; n++) box(0.006, 0.023, 0.002, x + (n - i / 2) * 0.014, 0.31, z - 0.095, 1);
     const robot = model.clone(true);
     robot.name = `judge-${i + 1}`;
-    robot.traverse(node => { if (node.isMesh) node.receiveShadow = true; });
+    robot.traverse(node => { if (node.isMesh) node.castShadow = node.receiveShadow = true; });
     robot.position.set(x, 0.194, -seatZ);
     robot.rotation.y = -Math.PI / 2;
     group.add(robot);

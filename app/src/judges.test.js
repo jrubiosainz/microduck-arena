@@ -55,7 +55,7 @@ describe("official Reachy Mini asset", () => {
     expect(head.getObjectByName("antenna_right")).toBeTruthy();
     expect(head.getObjectByName("antenna_left")).toBeTruthy();
   });
-  it("casts cached furniture shadows without freezing the animated judges", () => {
+  it("casts and receives shadows, furniture and judges alike", () => {
     const panel = buildJudges(model, 2, 0.425, []);
     const furniture = panel.group.children.filter(node => node.isMesh);
     expect(furniture.length).toBeGreaterThan(0);
@@ -63,7 +63,7 @@ describe("official Reachy Mini asset", () => {
     for (const robot of panel.group.children.filter(node => node.name.startsWith("judge-"))) {
       robot.traverse(node => {
         if (!node.isMesh) return;
-        expect(node.castShadow).toBe(false);
+        expect(node.castShadow).toBe(true);
         expect(node.receiveShadow).toBe(true);
       });
     }

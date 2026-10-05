@@ -48,15 +48,22 @@ import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
 
-// Directional daylight supplies shape; the room supplies broad, soft reflections.
-// Keep indirect light modest so pale shells and parquet retain their colours.
+// The sun supplies shape and the shadows; the room only soft reflections. Much
+// more of the room and the racers' shadows wash out on the parquet, which
+// reflects it, and the shells read as flat white.
 const EXPOSURE = 0.9;
-const ENV_INTENSITY = 0.6;
-const KEY = 2.2;
-const FILL = 0.3;
-const RIM = 0.65;
+const ENV_INTENSITY = 0.2;
+// The stage is lit by its own rig, against the room as it always had it.
+const STAGE_ENV_INTENSITY = 0.6;
+const KEY = 3.2;
+const FILL = 0.25;
+const RIM = 0.3;
 const HEMI = 0.25;
 const GHOST_OPACITY = 0.5;
+// The sun behind the start line, high, on the camera's side: the racers'
+// shadows run ahead of them across the frame, and the far stand faces it.
+// From the far side, it left the crowd and the camera side of every duck dark.
+const SUN = new Vector3(-1.6, 2.6, 0.5).normalize();
 
 /**
  * Put one lane's rig where its trace says it is.
@@ -281,25 +288,25 @@ export async function createViewer(
   const scene = new Scene();
   scene.environment = environment.texture;
 
-  // Keep reflected light fixed: scaling it with exposure washes out pale surfaces.
+  // Reflected light stays fixed (setLanes): scaling it with exposure washes out pale surfaces.
   function setBrightness(value) {
     brightness = writeBrightness(value);
     renderer.toneMappingExposure = EXPOSURE * brightness;
-    scene.environmentIntensity = ENV_INTENSITY;
     return brightness;
   }
   scene.background = new Color(0xb8dce7);
 
-  // A warm window key, a quiet fill and a cool back light. Static scenery
-  // shadows are refreshed only when the course is rebuilt.
+  // A warm window key, a quiet fill and a cool back light.
   const key = new DirectionalLight(0xfff1dc, KEY);
-  key.position.set(-1.5, 2.8, 1.5);
+  key.position.copy(SUN);
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.normalBias = 0.003;
   key.shadow.bias = -0.0001;
   scene.add(key, key.target);
   const fill = new DirectionalLight(0xbfd2ff, FILL);
-  fill.position.set(1.8, 1.0, 1.0);
+  // Low, from the camera's side: it opens the shaded side of a duck and the
+  // crowd's faces without lifting the shadows on the floor.
+  fill.position.set(1.0, 0.6, 1.8);
   scene.add(fill);
   const rim = new DirectionalLight(0xdceaff, RIM);
   rim.position.set(0.8, 1.8, -2.2);
@@ -380,6 +387,7 @@ export async function createViewer(
     if (talent) entries = entries.slice(0, 1);
     raceLights.forEach(light => { light.visible = !talent; });
     scene.background.set(talent ? 0x050716 : 0xb8dce7);
+    scene.environmentIntensity = talent ? STAGE_ENV_INTENSITY : ENV_INTENSITY;
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
     slopeDeg = event?.slope_deg ?? 0;
@@ -420,29 +428,30 @@ export async function createViewer(
       }
     }
     key.castShadow = Boolean(gym);
-    // The followspot's shadow walks with the performer: redrawn every frame.
-    renderer.shadowMap.autoUpdate = talent;
     if (gym) {
-      // Cast only fixed scenery: animated spectators and judges must not leave
-      // frozen silhouettes in the cached map. Room walls/roof stay out too.
+      // Whatever of the stadium stands in the sun's frame casts too; the room's
+      // walls and roof stay out, or the sun would never get in.
       audience?.group.traverse(node => {
-        if (node.isMesh && !node.isInstancedMesh) node.castShadow = true;
+        if (node.isMesh) node.castShadow = true;
       });
       for (const root of [course, gym.group]) root.traverse(node => {
         if (node.isMesh) node.receiveShadow = true;
       });
-      const bounds = new Box3().setFromObject(course);
+      // The sun's shadow frames the track and the jury, where the camera
+      // looks: 2 mm a texel, where the whole stadium gave 5 and blurred a
+      // duck's shadow into a smudge.
+      const bounds = new Box3().setFromObject(course.getObjectByName("ground"));
       bounds.union(new Box3().setFromObject(judges.group));
+      bounds.max.y += 0.4;
       const centre = bounds.getCenter(new Vector3());
-      const radius = bounds.getSize(new Vector3()).length() / 2 + 0.5;
+      const radius = bounds.getSize(new Vector3()).length() / 2;
       key.target.position.copy(centre);
-      key.position.set(-1.5, 2.8, 1.5).normalize().multiplyScalar(radius * 2).add(centre);
+      key.position.copy(SUN).multiplyScalar(radius * 2).add(centre);
       Object.assign(key.shadow.camera, {
         left: -radius, right: radius, top: radius, bottom: -radius,
         near: 0.1, far: radius * 4,
       });
       key.shadow.camera.updateProjectionMatrix();
-      renderer.shadowMap.needsUpdate = true;
     }
     lanes = entries.map((entry, i) => {
       const tier = entry.tier ?? "ghost";
@@ -461,7 +470,7 @@ export async function createViewer(
       // own walls, not between someone else's.
       const z = laneOffsetZ(i, entries.length, spacing);
       rig.placer.traverse(node => {
-        if (node.isMesh) Object.assign(node, { receiveShadow: true, castShadow: talent });
+        if (node.isMesh) Object.assign(node, { receiveShadow: true, castShadow: true });
       });
       if (talent) placeStagePerformer(rig, entry.trace, stage.layout.centre);
       else placeLane(rig, z);
@@ -564,6 +573,9 @@ export async function createViewer(
     controls?.update();
     const lead = lanes.length ? Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0])) : courseLength / 2;
     gym?.renderScreens?.(renderer, scene, seconds, lead);
+    // Racers, judges and spectators move: their shadows are redrawn for every
+    // picture, once, here — a roller hall's screen feeds reuse the last one.
+    renderer.shadowMap.needsUpdate = true;
     renderer.render(scene, camera);
   }
 
