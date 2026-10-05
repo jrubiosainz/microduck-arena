@@ -158,22 +158,12 @@ def test_the_manifest_carries_the_live_contract_per_layout():
     assert manifest["poster"] == "poster.png"
     land = manifest["layouts"]["landscape"]
     assert land == {
-        "file": "landscape.mp4", "width": 1280, "height": 720, "fps": 25, "frames": 188,
+        "file": "landscape.mp4", "width": 1920, "height": 1080, "fps": 25, "frames": 188,
         "seconds": 7.52, "crowdMixed": True,
         "crowdDirection": {"start": 1.0, "end": 5.0, "verdict": "pass"},
         "timing": {"total_wall_ms": 1},
     }
-    assert manifest["layouts"]["vertical"]["width"] == 720
-
-
-def test_a_frame_is_its_layout_at_two_thirds_in_even_pixels():
-    """The page is laid out at 1080p and drawn at two thirds: under SwiftShader the 1080p frame
-    cost 27-30 % more CPU. H.264's 4:2:0 wants an even number of pixels each way."""
-    assert recorder.frame_size("landscape") == (1280, 720)
-    assert recorder.frame_size("vertical") == (720, 1280)
-    for layout in recorder.SIZES:
-        assert all(side % 2 == 0 for side in recorder.frame_size(layout))
-
+    assert manifest["layouts"]["vertical"]["width"] == 1080
 
 
 def test_a_clip_job_renders_its_run_and_records_a_failure(tmp_path):
@@ -280,7 +270,7 @@ def test_the_clip_route_says_none_queued_then_ready_with_its_files(tmp_path):
     # otherwise play as the old one for everyone who had watched it once.
     assert body["poster"] == f"{url}/poster.png?v=20260916T100500Z"
     assert body["layouts"]["vertical"] == {
-        "url": f"{url}/vertical.mp4?v=20260916T100500Z", "width": 720, "height": 1280,
+        "url": f"{url}/vertical.mp4?v=20260916T100500Z", "width": 1080, "height": 1920,
         "seconds": 7.52
     }
 
@@ -320,7 +310,7 @@ def test_a_run_link_unfurls_with_the_poster_once_the_clip_is_ready(tmp_path, mon
             f'{record.run_id}/clip/poster.png?v=20260916T100500Z">') in page
     assert (f'<meta property="og:video" content="https://arena.hf.space/api/runs/'
             f'{record.run_id}/clip/landscape.mp4?v=20260916T100500Z">') in page
-    assert '<meta property="og:video:width" content="1280">' in page
+    assert '<meta property="og:video:width" content="1920">' in page
     assert '<meta name="twitter:card" content="summary_large_image">' in page
     assert api.get("/r/NOPE").status_code == 404
 

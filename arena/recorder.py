@@ -50,7 +50,7 @@ class Tab:
     """One page in the browser, on a websocket of its own so tabs can be driven
     from separate threads without sharing a reader."""
 
-    def __init__(self, endpoint: str, width: int, height: int, scale: float = 1.0):
+    def __init__(self, endpoint: str, width: int, height: int):
         from websockets.sync.client import connect
 
         self.socket = connect(endpoint, max_size=None)
@@ -60,7 +60,7 @@ class Tab:
             "sessionId"
         ]
         self.send("Emulation.setDeviceMetricsOverride",
-                  {"width": width, "height": height, "deviceScaleFactor": scale, "mobile": False})
+                  {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": False})
         self.send("Page.enable")
 
     def _call(
@@ -181,8 +181,8 @@ class Chrome:
         for _ in self.process.stderr:
             pass
 
-    def tab(self, width: int, height: int, scale: float = 1.0) -> Tab:
-        return Tab(self.endpoint, width, height, scale)
+    def tab(self, width: int, height: int) -> Tab:
+        return Tab(self.endpoint, width, height)
 
     def close(self) -> None:
         try:
@@ -199,12 +199,7 @@ class Chrome:
         self.close()
 
 
-# Each layout's page, in CSS pixels: what clip.html is laid out at.
 SIZES = {"landscape": (1920, 1080), "vertical": (1080, 1920)}
-# A frame is that page drawn at two thirds, 1280×720. Measured on 2026-10-02
-# under SwiftShader, the Space's renderer: the 1080p frame cost 27–30 % more
-# CPU, on a sprint as on a performance, for a picture the stage draws the same.
-SCALE = 2 / 3
 # The soundtrack comes out of the page in pieces this big, base64 over the protocol.
 CHUNK = 4 << 20
 JPEG_QUALITY = 92
@@ -218,12 +213,6 @@ CAPTURE_TRIES = 3
 # The frames of a race's longest clip, a 12 s tape with its titles and outro: what
 # the render budget was sized on.
 BUDGETED_FRAMES = 451
-
-
-def frame_size(layout: str) -> tuple[int, int]:
-    """A layout's frame in pixels: its page at SCALE."""
-    width, height = SIZES[layout]
-    return round(width * SCALE), round(height * SCALE)
 
 
 def budget_for(budget_s: float, frames: int) -> float:
@@ -268,7 +257,7 @@ class RenderedRun:
 
 def _open(chrome: Chrome, origin: str, run_id: str, layout: str) -> Tab:
     width, height = SIZES[layout]
-    tab = chrome.tab(width, height, SCALE)
+    tab = chrome.tab(width, height)
     tab.navigate(f"{origin}/clip.html?run={run_id}&layout={layout}&frame=0")
     tab.wait_ready()
     return tab
@@ -297,7 +286,7 @@ def _record_layout(
     completed = False
 
     # Every call waits on what is left of the budget, never on a constant under
-    # it. A software-GL screenshot of the stage on a loaded machine can
+    # it. A software-GL screenshot of a 1920×1080 stage on a loaded machine can
     # take minutes, and a fixed minute here killed renders that were slow but
     # advancing — the budget is the one deadline, and the per-frame check below
     # is what enforces it.

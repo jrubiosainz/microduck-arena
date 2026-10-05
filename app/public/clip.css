@@ -1,7 +1,7 @@
-/* The clip: the frame the recorder photographs. ?layout=landscape is laid
-   out at 1920 × 1080, ?layout=vertical at 1080 × 1920; the recorder sets the
-   viewport to the same and draws it at two thirds (recorder.py SCALE). Only
-   placement lives here: colour, type and the stamp are the design system's. */
+/* The clip: the frame the recorder photographs. ?layout=landscape is
+   1920 × 1080, ?layout=vertical is 1080 × 1920, and the recorder sets the
+   viewport to the same. Only placement lives here: colour, type and the
+   stamp are the design system's. */
 * { box-sizing: border-box; border-radius: 0; }
 html { font-size: 28px; }
 html, body { margin: 0; background: var(--deep-ink); color: var(--paper); font-family: var(--body); }

@@ -243,10 +243,9 @@ export async function createViewer(
   // Under SwiftShader MSAA cost 2.7× per frame (401 → 151 ms at 1080p), and a
   // clip is encoded by x264 anyway, which softens edges; the interactive pages keep it.
   const renderer = new WebGLRenderer({ canvas, antialias: !manual });
-  // A clip is exactly its frame's pixels: the recorder lays the page out at
-  // 1080p and draws it at a device scale of its own (two thirds, recorder.py),
-  // and the drawing buffer follows that scale, never a screen's own cap.
-  renderer.setPixelRatio(manual ? devicePixelRatio : Math.min(devicePixelRatio, 2));
+  // A clip is exactly its layout's pixels: the recorder wants the drawing
+  // buffer to match the frame it is composing, not a device's own ratio.
+  renderer.setPixelRatio(manual ? 1 : Math.min(devicePixelRatio, 2));
   // The liveries' colours are linear and deliberately oversaturated because the
   // simulator tone-maps with ACES; without this every robot reads too hot.
   renderer.toneMapping = ACESFilmicToneMapping;
