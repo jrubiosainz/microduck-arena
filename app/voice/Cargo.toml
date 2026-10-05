@@ -1,0 +1,24 @@
+# The booth's voices: the microduck's own synthesiser, compiled for the page.
+#
+# Rebuild after any change here, from this directory:
+#   cargo build --release --target wasm32-unknown-unknown
+#   cp target/wasm32-unknown-unknown/release/microduck_voice.wasm ../public/sound/microduck-voice.wasm
+[package]
+name = "microduck-voice"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+sounds = { git = "https://github.com/pollen-robotics/microduck", rev = "e597877c5a9460f4c3837dc3cdab088705212c5d" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

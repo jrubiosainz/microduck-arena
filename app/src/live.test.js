@@ -115,7 +115,7 @@ describe("renderLive", () => {
     vi.useRealTimers();
     gate.open = Promise.resolve();
   });
-  const options = (getLive, sound = fakeSound({ running: true })) => ({ api: { getLive }, tones: async () => ({}), sound: () => sound });
+  const options = (getLive, sound = fakeSound({ running: true })) => ({ api: { getLive }, synth: async () => () => new Float32Array(0), sound: () => sound });
 
   it("is off air on an empty grid, keeps polling, and stops with the page", async () => {
     const root = document.createElement("div");

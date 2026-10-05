@@ -13,7 +13,7 @@ import { shouldReload } from "./live/grid.js";
 import { createInterlude } from "./live/interlude.js";
 import { createReplay } from "./live/replay.js";
 import { createShutter } from "./live/shutter.js";
-import { createVoice, loadTones } from "./live/voice.js";
+import { createVoice, loadSynth } from "./live/voice.js";
 import { isMuted } from "./sound.js";
 import { wordmark } from "./wordmark.js";
 
@@ -110,11 +110,11 @@ function follow({ api, clock, onGrid, onState }) {
  * rejecting it, so the promise is not what is waited on: the state is
  * followed, and `ask` is the click's way of resuming with a gesture in hand.
  */
-export function openSound(tones) {
+export function openSound(synth) {
   const context = new AudioContext();
   let opened = null;
   const ask = () => context.resume().catch(() => {});
-  // Neither a tone that would not load nor a context that was not running is a
+  // Neither a synth that would not load nor a context that was not running is a
   // verdict for the page's life: the attempt is forgotten, so the next ask
   // starts a fresh one.
   const forget = () => { opened = null; };
@@ -131,7 +131,7 @@ export function openSound(tones) {
           await new Promise((resolve) => context.addEventListener("statechange", resolve, { once: true }));
         }
         if (context.state !== "running") return null;
-        return { context, voice: createVoice(context, await tones()), ambience: await createAmbience(context) };
+        return { context, voice: createVoice(context, await synth()), ambience: await createAmbience(context) };
       })().then((audio) => {
         if (!audio) forget();
         return audio;
@@ -146,7 +146,7 @@ export function openSound(tones) {
   };
 }
 
-export async function renderLive(root, state, { api = { getLive }, tones = loadTones, sound: createSound = openSound, framed = false } = {}) {
+export async function renderLive(root, state, { api = { getLive }, synth = loadSynth, sound: createSound = openSound, framed = false } = {}) {
   // Only the full page wears the channel's sheet. Framed, this is a box on
   // the front page, which is wearing the club's and must keep it.
   if (!framed) dress("live");
@@ -169,7 +169,7 @@ export async function renderLive(root, state, { api = { getLive }, tones = loadT
   const clock = createClock();
   const shutter = createShutter(stage);
   const replay = createReplay(stage, { onRefused: () => { join.hidden = false; } });
-  const sound = createSound(tones);
+  const sound = createSound(synth);
   onTeardown(() => sound.close());
   let audio = null;
   const interlude = await createInterlude(stage, { audio: () => audio });
@@ -196,7 +196,7 @@ export async function renderLive(root, state, { api = { getLive }, tones = loadT
   onTeardown(() => poller.stop());
 
   let admitted = false;
-  // Sound the page could not reach — a tone that would not load, a context the
+  // Sound the page could not reach — a synth that would not load, a context the
   // phone is holding for a call — is never the page's last word: the picture
   // plays on, and the button is the way to ask for it again.
   function withheld() {

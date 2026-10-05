@@ -1,21 +1,29 @@
-// The booth's sound: the plan's notes sung from the two microduck tones into
-// one buffer, started at the join offset so every screen sings the same
-// sample at the same instant; and the shutter's wind, made in
-// the page.
+// The booth's sound: the plan's notes sung by the microduck's own synthesiser
+// into one buffer, started at the join offset so every screen sings the same
+// sample at the same instant; and the shutter's wind, made in the page.
 
 import { SAMPLE_RATE, synthesize } from "./score.js";
 
 const BREATHS_S = [0, 1.16];
 
-export async function loadTones(fetcher = fetch) {
-  const [peter, ray] = await Promise.all(
-    ["peter", "ray"].map(async (name) => {
-      const response = await fetcher(`/sound/commentator-${name}.f32`);
-      if (!response.ok) throw new Error(`No voice for ${name}`);
-      return new Float32Array(await response.arrayBuffer());
-    }),
-  );
-  return { peter, ray };
+/** The robot's synthesiser, built from app/voice: `sing(seed, note)` renders
+ * one note's syllable with that seed's microduck personality. The samples are
+ * a view into the synth's memory, good until the next call. */
+export async function loadSynth(fetcher = fetch) {
+  const response = await fetcher("/sound/microduck-voice.wasm");
+  if (!response.ok) throw new Error("No voice");
+  const { instance } = await WebAssembly.instantiate(await response.arrayBuffer());
+  const { memory, contour, syllable, samples } = instance.exports;
+  return (seed, note) => {
+    // Asked for first: making room may grow the memory, which detaches older views of it.
+    const points = contour(note.contour.length);
+    new Float32Array(memory.buffer, points, note.contour.length * 2).set(note.contour.flat());
+    const length = syllable(
+      seed, note.variant, (note.end_ms - note.start_ms) / 1000, note.held ? 1 : 0,
+      note.warble[0], note.warble[1], note.buzz,
+    );
+    return new Float32Array(memory.buffer, samples(), length);
+  };
 }
 
 /** 0.36 s of pink noise between 180 and 4 200 Hz, faded in over 0.1 s and out
@@ -46,7 +54,7 @@ export function windGust(random = Math.random, rate = SAMPLE_RATE) {
   return out;
 }
 
-export function createVoice(context, tones) {
+export function createVoice(context, sing) {
   const gain = context.createGain();
   gain.connect(context.destination);
   let source = null;
@@ -62,7 +70,9 @@ export function createVoice(context, tones) {
   return {
     start(plan, offsetMs) {
       stop();
-      const pcm = synthesize(plan, tones);
+      // Singing the plan takes a moment; it starts that much further in, so it stays on the clock.
+      const began = performance.now();
+      const pcm = synthesize(plan, sing);
       const buffer = context.createBuffer(2, pcm.length / 2, SAMPLE_RATE);
       for (let channel = 0; channel < 2; channel++) {
         const data = buffer.getChannelData(channel);
@@ -71,7 +81,7 @@ export function createVoice(context, tones) {
       source = context.createBufferSource();
       source.buffer = buffer;
       source.connect(gain);
-      source.start(0, Math.min(offsetMs, plan.duration_ms) / 1000);
+      source.start(0, Math.min(offsetMs + performance.now() - began, plan.duration_ms) / 1000);
     },
     stop,
     muted(flag) {

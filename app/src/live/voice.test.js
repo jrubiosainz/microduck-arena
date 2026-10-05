@@ -1,16 +1,20 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SAMPLE_RATE, prepare, synthesize } from "./score.js";
-import { createVoice, loadTones, windGust } from "./voice.js";
+import { createVoice, loadSynth, windGust } from "./voice.js";
 
-describe("loadTones", () => {
-  it("reads the two raw float32 files", async () => {
-    const bytes = new Float32Array(28800).fill(0.5).buffer;
-    const fetcher = async (url) => ({ ok: url.includes("commentator-"), arrayBuffer: async () => bytes });
-    const tones = await loadTones(fetcher);
-    expect(tones.peter).toHaveLength(28800);
-    expect(tones.ray[0]).toBe(0.5);
-    await expect(loadTones(async () => ({ ok: false }))).rejects.toThrow("No voice for peter");
+const wasm = async (url) => ({ ok: url === "/sound/microduck-voice.wasm", arrayBuffer: async () => readFileSync(`public${url}`) });
+
+describe("loadSynth", () => {
+  it("sings a note for exactly its length, at -6 dBFS, silent at both ends", async () => {
+    const sing = await loadSynth(wasm);
+    const note = { start_ms: 100, end_ms: 350, variant: 7, contour: [[0, 1], [0.5, 1.8], [1, 0.9]], held: false, warble: [12, 1], buzz: 0.5 };
+    const samples = sing(142, note);
+    expect(samples).toHaveLength(12000);
+    expect(Math.abs(samples[0])).toBe(0);
+    expect(Math.abs(samples.at(-1))).toBe(0);
+    expect(samples.reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0)).toBeCloseTo(10 ** (-6 / 20), 3);
+    await expect(loadSynth(async () => ({ ok: false }))).rejects.toThrow("No voice");
   });
 });
 
@@ -32,11 +36,7 @@ describe("windGust", () => {
 });
 
 describe("createVoice", () => {
-  const tone = (name) => {
-    const bytes = readFileSync(`public/sound/commentator-${name}.f32`);
-    return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
-  };
-  const tones = { peter: tone("peter"), ray: tone("ray") };
+  const voice = loadSynth(wasm);
   const plan = prepare({
     run_id: "01TESTRUN",
     turns: [
@@ -69,15 +69,19 @@ describe("createVoice", () => {
     };
   };
 
-  it("sings the plan's stereo samples from the join offset", () => {
+  it("sings the plan's stereo samples from the join offset, plus the time it took to sing them", async () => {
     const context = fakeContext();
-    createVoice(context, tones).start(plan, 1234);
+    const sing = await voice;
+    const began = performance.now();
+    createVoice(context, sing).start(plan, 1234);
+    const took = performance.now() - began;
     const [{ buffer, when, offset }] = context.starts;
     expect(when).toBe(0);
-    expect(offset).toBe(1.234);
+    expect(offset).toBeGreaterThan(1.234);
+    expect(offset).toBeLessThanOrEqual(1.234 + took / 1000);
     expect(buffer.sampleRate).toBe(SAMPLE_RATE);
     expect(buffer.length).toBe((plan.duration_ms * SAMPLE_RATE) / 1000);
-    const pcm = synthesize(plan, tones);
+    const pcm = synthesize(plan, sing);
     for (const channel of [0, 1]) {
       const planar = buffer.getChannelData(channel);
       expect(planar.findIndex((sample, i) => sample !== pcm[i * 2 + channel])).toBe(-1);
@@ -85,15 +89,15 @@ describe("createVoice", () => {
     expect(buffer.getChannelData(0).some((sample) => sample !== 0)).toBe(true);
   });
 
-  it("clamps a join past the plan's end to the end", () => {
+  it("clamps a join past the plan's end to the end", async () => {
     const context = fakeContext();
-    createVoice(context, tones).start(plan, 99999);
+    createVoice(context, await voice).start(plan, 99999);
     expect(context.starts[0].offset).toBe(plan.duration_ms / 1000);
   });
 
-  it("breathes the wind twice across the shutter", () => {
+  it("breathes the wind twice across the shutter", async () => {
     const context = fakeContext();
-    createVoice(context, tones).gust(7.5);
+    createVoice(context, await voice).gust(7.5);
     expect(context.starts).toHaveLength(2);
     expect(context.starts[0].when).toBe(7.5);
     expect(context.starts[1].when).toBeCloseTo(8.66, 10);
