@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, AmbientLight, BoxGeometry, CanvasTexture, Color,
+  AdditiveBlending, AmbientLight, BoxGeometry, CanvasTexture, CircleGeometry, Color,
   ConeGeometry, CylinderGeometry, DirectionalLight, DoubleSide, Group,
   Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry,
   ShaderMaterial, SphereGeometry, SpotLight, SRGBColorSpace, Vector3,
@@ -188,6 +188,7 @@ export function buildTalentStage(event, spectators, reachy) {
   floor.envMapIntensity = 0;
   const ground = mesh(new PlaneGeometry(width, depth), floor, [centre, 0, 0], "ground");
   ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
   for (const side of [-1, 1]) {
     box([width, 0.012, 0.025], [centre, 0.003, side * depth / 2], cyan);
     box([0.025, 0.012, depth], [centre + side * width / 2, 0.003, 0], violet);
@@ -266,10 +267,36 @@ export function buildTalentStage(event, spectators, reachy) {
   group.add(new AmbientLight(0x758bbb, 0.15));
   const fill = new DirectionalLight(0xaacbff, 0.45); fill.position.set(centre, 1.5, -3); group.add(fill);
   const rim = new DirectionalLight(0xc986ff, 0.8); rim.position.set(centre, 2, backZ); group.add(rim);
-  const followSpot = new SpotLight(0xfff0da, 22, 12, 0.16, 0.55, 2);
+  // A followspot hung at the end of the front truss: its operator keeps the
+  // performer in a tight pool, and the beam shows in the haze.
+  const FOLLOW_ANGLE = 0.07;
+  const followSpot = new SpotLight(0xfff0da, 150, 0, FOLLOW_ANGLE, 0.3, 2);
   followSpot.name = "follow-spot";
-  followSpot.position.set(centre + 0.7, 2.6, -depth / 2 + 0.15);
+  // Only the performer stands in its narrow cone: a shadow map cheap to redraw every frame.
+  followSpot.castShadow = true;
+  followSpot.shadow.mapSize.set(1024, 1024);
+  followSpot.shadow.camera.far = 8;
+  followSpot.shadow.bias = -0.0002;
+  followSpot.position.set(centre + width / 2 + 0.45, 2.8, -depth / 2);
   group.add(followSpot, followSpot.target);
+  const follow = new Object3D(); follow.position.copy(followSpot.position); group.add(follow);
+  // A unit cone from its apex along +Z: scaled to the throw, it widens with the light.
+  const shaftGeometry = new ConeGeometry(Math.tan(FOLLOW_ANGLE), 1, 32, 1, true)
+    .translate(0, -0.5, 0).rotateX(-Math.PI / 2);
+  const shaftMaterial = new ShaderMaterial({
+    uniforms: { tint: { value: new Color(0xfff0da) } }, transparent: true, depthWrite: false,
+    blending: AdditiveBlending, side: DoubleSide,
+    vertexShader: "varying vec2 vUv; varying vec3 vNormal, vView; void main(){vUv=uv;vNormal=normalMatrix*normal;vec4 p=modelViewMatrix*vec4(position,1.0);vView=-p.xyz;gl_Position=projectionMatrix*p;}",
+    // Faint at grazing angles so the cone reads as a volume, not a surface.
+    fragmentShader: "varying vec2 vUv; varying vec3 vNormal, vView; uniform vec3 tint; void main(){float facing=abs(dot(normalize(vNormal),normalize(vView)));gl_FragColor=vec4(tint,0.16*pow(facing,2.0)*mix(0.45,1.0,vUv.y));}",
+  });
+  const headGeometry = new CylinderGeometry(0.09, 0.12, 0.5, 16).rotateX(Math.PI / 2).translate(0, 0, -0.22);
+  const lensGeometry = new CircleGeometry(0.085, 20);
+  [shaftGeometry, headGeometry, lensGeometry].forEach(geometry => geometries.add(geometry));
+  materials.add(shaftMaterial);
+  const shaft = new Mesh(shaftGeometry, shaftMaterial); shaft.name = "follow-beam";
+  follow.add(shaft, new Mesh(headGeometry, black), new Mesh(lensGeometry, led(0xfff0da)));
+  const _axis = new Vector3();
   // Soft additive shafts show the moving lights in the theatrical haze.
   const beamGeometry = new ConeGeometry(0.48, 2.8, 24, 1, true);
   beamGeometry.translate(0, -1.4, 0); geometries.add(beamGeometry);
@@ -292,6 +319,12 @@ export function buildTalentStage(event, spectators, reachy) {
   function pose(seconds, subjects, mood) {
     panel.pose(seconds, subjects); audience.pose(seconds, mood);
     followSpot.target.position.copy(subjects[0] ?? new Vector3(centre, 0.1, 0));
+    // The shaft runs through the performer and sinks into the floor: long enough
+    // that the highest point of its open rim is below the stage, so no rim shows.
+    const source = followSpot.position;
+    _axis.subVectors(followSpot.target.position, source).normalize();
+    follow.lookAt(followSpot.target.position);
+    shaft.scale.setScalar(source.y / (-_axis.y - Math.tan(FOLLOW_ANGLE) * Math.sqrt(1 - _axis.y ** 2)));
     beams.forEach((beam, i) => {
       beam.rotation.set(0.25 + 0.16 * Math.sin(seconds * 0.43 + i), 0,
         0.35 * Math.sin(seconds * 0.37 + i * 1.3));
@@ -300,7 +333,7 @@ export function buildTalentStage(event, spectators, reachy) {
   return {
     group, layout, pose, crowd: audience,
     dispose() {
-      panel.dispose(); audience.dispose();
+      panel.dispose(); audience.dispose(); followSpot.dispose();
       geometries.forEach(geometry => geometry.dispose());
       materials.forEach(material => material.dispose());
       textures.forEach(texture => texture.dispose());

@@ -422,6 +422,8 @@ export async function createViewer(
       }
     }
     key.castShadow = Boolean(gym);
+    // The followspot's shadow walks with the performer: redrawn every frame.
+    renderer.shadowMap.autoUpdate = talent;
     if (gym) {
       // Cast only fixed scenery: animated spectators and judges must not leave
       // frozen silhouettes in the cached map. Room walls/roof stay out too.
@@ -460,7 +462,9 @@ export async function createViewer(
       // The same spacing buildCourse used: the ducks must stand between their
       // own walls, not between someone else's.
       const z = laneOffsetZ(i, entries.length, spacing);
-      rig.placer.traverse(node => { if (node.isMesh) node.receiveShadow = true; });
+      rig.placer.traverse(node => {
+        if (node.isMesh) Object.assign(node, { receiveShadow: true, castShadow: talent });
+      });
       if (talent) placeStagePerformer(rig, entry.trace, stage.layout.centre);
       else placeLane(rig, z);
       scene.add(rig.placer);

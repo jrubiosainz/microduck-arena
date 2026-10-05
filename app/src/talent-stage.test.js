@@ -109,6 +109,18 @@ describe("the solo stage", () => {
     expect(light.target.position.toArray()).toEqual(target.toArray());
     stage.pose(1, [new Vector3(-0.3, 0.08, 0.4)]);
     expect(light.target.position.toArray()).toEqual([-0.3, 0.08, 0.4]);
+    expect(light.castShadow).toBe(true);
+    // The beam's open rim sinks just below the stage, so its edge never shows.
+    const beam = stage.group.getObjectByName("follow-beam");
+    stage.group.updateMatrixWorld(true);
+    const positions = beam.geometry.attributes.position, vertex = new Vector3();
+    let rimTop = -Infinity;
+    for (let i = 0; i < positions.count; i++) {
+      vertex.fromBufferAttribute(positions, i);
+      if (vertex.z > 0.999) rimTop = Math.max(rimTop, vertex.applyMatrix4(beam.matrixWorld).y);
+    }
+    expect(rimTop).toBeLessThan(1e-6);
+    expect(rimTop).toBeGreaterThan(-0.01);
     expect(stage.group.getObjectByName("follow-pool")).toBeUndefined();
     const shared = vi.spyOn(reachy.getObjectByProperty("isMesh", true).geometry, "dispose");
     stage.dispose();
