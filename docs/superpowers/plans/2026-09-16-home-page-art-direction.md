@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - **Add no colour, face or effect the charter does not already name.** Every value comes from `app/public/design/tokens.css` or a class in `app/public/design/effects.css`.
-- **The charter's À ÉVITER panel is binding:** no rounded corner, no blurred shadow, no gradient, no rotation past 4°, no fifth shell tint, no accent outside the palette.
+- **The charter's AVOID panel is binding:** no rounded corner, no blurred shadow, no gradient, no rotation past 4°, no fifth shell tint, no accent outside the palette.
 - **Rotations alternate in sign** from one sibling to the next.
 - **`--fx-shadow-color` is how an offset shadow is coloured** — it is the documented knob on `.fx-shadow-card`; never write a literal `box-shadow`.
 - **No animation in the flock band.** A scrolling marquee was removed from this page on request and must not return.
@@ -356,7 +356,7 @@ In `app/public/club.css`, replace the `.challenge-note` rule and the three `:nth
 /* A polaroid: white ground, the still at the top, the caption on the border
    under it. The shadow is the charter's own primitive, coloured by category —
    one glance sorts the wall. No rounded corner and no blur: both are in the
-   charter's À ÉVITER panel. */
+   charter's AVOID panel. */
 .challenge-note {
   --fx-shadow-color: var(--ink);
   position: relative;
@@ -373,7 +373,7 @@ In `app/public/club.css`, replace the `.challenge-note` rule and the three `:nth
 .challenge-note--race { --fx-shadow-color: var(--cyan); }
 .challenge-note--challenge { --fx-shadow-color: var(--magenta); }
 /* The charter's shadow rule names the magenta/cyan pair, which covers two
-   categories. The third takes yellow bec, which the charter already spends on
+   categories. The third takes beak yellow, which the charter already spends on
    stickers and bands. Recorded in the design doc as a deliberate extension. */
 .challenge-note--showcase { --fx-shadow-color: var(--yellow); }
 
@@ -918,7 +918,7 @@ git commit -m "A band under the cover, and one home for every address"
 ```js
 describe("the chapter rules", () => {
   it("alternates the sense of the tilt from one rule to the next", () => {
-    // The charter: "réunir le sens des rotations d'un élément au suivant".
+    // The charter: "carry the direction of rotation from one element over to the next".
     expect(chapterRule(0).className).toContain("chapter-rule--left");
     expect(chapterRule(1).className).toContain("chapter-rule--right");
     expect(chapterRule(2).className).toContain("chapter-rule--left");

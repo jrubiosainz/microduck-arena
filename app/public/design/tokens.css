@@ -54,30 +54,30 @@
   --mono-tracking-max: 0.16em;
 
   /* Colour · ground — 70 % share */
-  --ink: #101018;                    /* Encre — Text, strokes, marquee boxes, scoreboard bodies, sticker shadows */
-  --deep-ink: #08080C;               /* Encre profonde — CRT screens, terminal, footer, the aberration's shadow */
-  --paper: #FAF8F2;                  /* Papier — The hall's ground, flyers, cabinet bodies, text on ink */
-  --warm-paper: #F2ECDD;             /* Papier chaud — Alternate floor tile, pegboard, recessed cards */
+  --ink: #101018;                    /* Ink — Text, strokes, marquee boxes, scoreboard bodies, sticker shadows */
+  --deep-ink: #08080C;               /* Deep ink — CRT screens, terminal, footer, the aberration's shadow */
+  --paper: #FAF8F2;                  /* Paper — The hall's ground, flyers, cabinet bodies, text on ink */
+  --warm-paper: #F2ECDD;             /* Warm paper — Alternate floor tile, pegboard, recessed cards */
 
   /* Colour · carrying accent — 20 % share */
-  --orange: #FF7A2F;                 /* Orange Pollen — The action. The one orange button per section; the ray fan; the sprite's beak */
-  --yellow: #FFD23F;                 /* Jaune bec — The shout. Marquee letters, default sticker, flyer bands, court posts, the sprite's body */
+  --orange: #FF7A2F;                 /* Pollen orange — The action. The one orange button per section; the ray fan; the sprite's beak */
+  --yellow: #FFD23F;                 /* Beak yellow — The shout. Marquee letters, default sticker, flyer bands, court posts, the sprite's body */
 
   /* Colour · electric signal — 20 % share */
   --magenta: #FF2FA8;                /* Magenta VHS — Hot signal. Right ghost, button shadow, LIVE, REC, the FAIL stamp */
   --cyan: #2FF0E6;                   /* Cyan VHS — Cold signal. Left ghost, focus ring, FORK, SOUND ON, replay and cabinet shadows, tape */
 
   /* Colour · shell — 20 % share */
-  --cream: #F7E6CB;                  /* Coque crème — Shell: a player's duck, trophy plastic */
-  --graphite: #101018;               /* Coque graphite — Shell: a player's duck, trophy plastic */
-  --lavender: #9D87E8;               /* Coque lavande — Shell; the NEW sticker; a court line */
-  --sky: #8FB8DC;                    /* Coque ciel — Shell; mono labels on ink (commands, on-screen display); a court line */
+  --cream: #F7E6CB;                  /* Cream shell — Shell: a player's duck, trophy plastic */
+  --graphite: #101018;               /* Graphite shell — Shell: a player's duck, trophy plastic */
+  --lavender: #9D87E8;               /* Lavender shell — Shell; the NEW sticker; a court line */
+  --sky: #8FB8DC;                    /* Sky shell — Shell; mono labels on ink (commands, on-screen display); a court line */
 
   /* Colour · inked text — 20 % share */
-  --orange-inked: #C2500A;           /* Orange encré — Orange as text on paper: eyebrows, the objective's emphasis, rank 1 */
-  --yellow-inked: #9A7200;           /* Jaune encré — Yellow as text on paper */
-  --sky-inked: #3A6C99;              /* Ciel encré — Sky as text on paper: repo paths, hashes, terminal frames */
-  --lavender-inked: #5F45B0;         /* Lavande encrée — Lavender as text on paper */
+  --orange-inked: #C2500A;           /* Inked orange — Orange as text on paper: eyebrows, the objective's emphasis, rank 1 */
+  --yellow-inked: #9A7200;           /* Inked yellow — Yellow as text on paper */
+  --sky-inked: #3A6C99;              /* Inked sky — Sky as text on paper: repo paths, hashes, terminal frames */
+  --lavender-inked: #5F45B0;         /* Inked lavender — Lavender as text on paper */
 
   /* Colour · extension — 10 % share */
   --lime: #C8FF2E;                   /* LIME HI-VIS · extension — Go. PASS, seeds cleared, ducks entered, "your duck", a new personal best */

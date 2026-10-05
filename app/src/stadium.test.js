@@ -239,7 +239,7 @@ describe("crowd", () => {
       expect(wears(mesh, PALETTE.face)).toBe(true);
       expect(wears(mesh, PALETTE.feet)).toBe(true);
       expect(wears(mesh, PALETTE.frame)).toBe(true);
-      // No other flock's shell — jaune bec excepted, since every duck's feet wear it.
+      // No other flock's shell — beak yellow excepted, since every duck's feet wear it.
       for (const other of SHELLS) {
         if (other !== shell && other !== PALETTE.feet) expect(wears(mesh, other)).toBe(false);
       }

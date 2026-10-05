@@ -68,7 +68,7 @@ export function renderEventFacts(root, event) {
 /**
  * The way into the booth, when this event takes votes.
  *
- * At the top of the entry column, not beside the title -- "détaché et plus
+ * At the top of the entry column, not beside the title -- "set apart and more
  * visible" was the owner's ask, and a button sharing a line with a heading
  * reads as a menu item, not a call to action. Its own function so the
  * placement is testable without a WebGL viewer or a leaderboard fetch: give

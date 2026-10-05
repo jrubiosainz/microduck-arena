@@ -17,7 +17,7 @@ measurements, taken on 2026-09-16 rather than assumed:
 | `effects.css` ships 16 classes. The front page uses **zero** (`signage.js` uses two tilts, and that is the strip). | No grain, no scanlines, no ray fan, no aberration. The charter's signature is absent from the page that should carry it most. |
 | `home.js` writes `el("span", "eyebrow", "Race")` on **every** flyer. | Highest Jump, Hold Your Ground, Rough Ground and the Swag Contest are all labelled races. Three of them are not, and one is not even timed. |
 
-Orange is the charter's carrying accent — "bouton principal, surtitres, halos". The front
+Orange is the charter's carrying accent — "main button, overlines, halos". The front
 page does not use it at all: the flyers cycle yellow, sky and cream as flat grounds.
 
 ## Decisions
@@ -26,7 +26,7 @@ page does not use it at all: the flyers cycle yellow, sky and cream as flat grou
 | --- | --- |
 | **`category` is a required manifest field** | `status` and `order` have safe defaults; `category` has none. Defaulting to `race` would let a new event become a race silently, which is the bug this fixes. A manifest that omits it fails at load, loudly, the way a missing `title` already does. |
 | **Three categories: `race`, `challenge`, `showcase`** | The user's own split, and it cuts where the events actually differ: a race is timed over a course, a challenge measures something else, a showcase is judged by vote rather than measured at all. Rules out inferring the category from `metric` — `highest-jump` and `rough-ground` both carry `mean_finish_time` today and land in different categories. |
-| **The category colours the polaroid's shadow** | One glance sorts the wall. The charter's shadow rule names the magenta/cyan pair, which covers two categories; the third takes **yellow bec**, which the charter already spends on stickers and bands. This is a deliberate, single-point extension of the shadow rule and is recorded here so it is a decision rather than a drift. |
+| **The category colours the polaroid's shadow** | One glance sorts the wall. The charter's shadow rule names the magenta/cyan pair, which covers two categories; the third takes **beak yellow**, which the charter already spends on stickers and bands. This is a deliberate, single-point extension of the shadow rule and is recorded here so it is a decision rather than a drift. |
 | **The front page drops the strip and the footer; player and race pages keep both** | The strip's job is to be the way back to the front. The front page does not need a way back to itself. Rules out deleting `signage()`/`footer()`, which two other views still wear. |
 | **The big mark gets `fx-aberration`; the strip's small mark does not** | `shell.css` already reasons that the chromatic offset "belongs on a cover" and reads as a printing fault beside a handle and a picture. The front page's title is the cover. Same component, two variants — not two components. |
 | **The flock band does not scroll** | A scrolling marquee was removed from this page on request. The band takes the charter's static yellow strip with ★ separators instead, so the information arrives without the motion that was rejected. |
@@ -89,8 +89,8 @@ behind the masthead. The fan is tilted by its own `--ray-fan-from` angle and nev
 and the one that makes the page read as printed rather than rendered.
 
 **The chapters.** Between them, a 3 px ink rule rotated by the charter's rotation tokens,
-alternating in sign from one rule to the next and never past 4°, per the charter's "réunir
-le sens des rotations d'un élément au suivant". `overflow-x: hidden` on `body` already
+alternating in sign from one rule to the next and never past 4°, per the charter's "carry
+the direction of rotation from one element over to the next". `overflow-x: hidden` on `body` already
 absorbs the overhang a rotated full-width rule creates. The four unused rhythm tokens are
 connected at the same time.
 
@@ -104,7 +104,7 @@ and never in `getStandings`.
 **The flyers.** Paper-white ground, the still in its frame at the top, then the leader's
 handle at card-title size, the event's title small beneath it, the facts in mono. The
 category's colour is the offset shadow. Tilts alternate. No rounded corner, no blurred
-shadow, no gradient — all three are in the charter's À ÉVITER panel.
+shadow, no gradient — all three are in the charter's AVOID panel.
 
 **The foot.** Nothing. `footer()` stays exactly as it is for `#/p/` and `#/e/`.
 

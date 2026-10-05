@@ -46,7 +46,7 @@ export function laneSpacing({ width_m = 0.8, walls = [] } = {}) {
 // robot's own colours, which carry the shape of the machine.
 // The lane's identity, on the stage's stripe and on the table's tab. Five of
 // the charter's own colours, in the same order in both lists: Pollen orange,
-// ciel, lime hi-vis, lavande, jaune bec.
+// sky, lime hi-vis, lavender, beak yellow.
 export const LANE_COLORS = [0xff7a2f, 0x8fb8dc, 0xc8ff2e, 0x9d87e8, 0xffd23f];
 export const LANE_CSS = ["#ff7a2f", "#8fb8dc", "#c8ff2e", "#9d87e8", "#ffd23f"];
 export const OVERRUN = 0.4; // ground extends this far past both lines
@@ -175,7 +175,7 @@ function line(x, span, color, name) {
 
 // Tier colours for the marker under a duck, and the charter's, so the key
 // beside the board can ink the same three and still name the same rings: the
-// trial takes lavande, the leader Pollen orange, a ghost plain paper — dimmed
+// trial takes lavender, the leader Pollen orange, a ghost plain paper — dimmed
 // to 0.4 below, which is what makes it a ghost.
 export const TIER_MARKER = { trial: 0x9d87e8, leader: 0xff7a2f, ghost: 0xfaf8f2 };
 

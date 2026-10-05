@@ -1056,7 +1056,7 @@ sounds     = ["crowd", "verdict"]
     $("fig-place").textContent = run.on_board && !run.withdrawn ? `#${run.rank}` : "—";
   }
   ...
-  stamp.textContent = dnf ? (stage ? "CUT SHORT" : "DNF") : stage ? "BRAVO" : "VICTORY";
+  stamp.textContent = dnf ? (stage ? "CUT SHORT" : "DNF") : stage ? "WELL DONE" : "VICTORY";
 ```
 
 `app/src/talent-stage.js`, `stageCameraPose`:
@@ -1076,7 +1076,7 @@ Expected: Python all pass. Front-end: only the 4 known `brightness` failures.
 
 ```bash
 /usr/bin/git add arena/events/got-a-talent.toml app/src/clip app/src/talent-stage.js app/src/talent-stage.test.js tests/test_manifest.py
-/usr/bin/git commit -m "A performance's clip runs its whole 20 s without a start horn, stamps BRAVO or CUT SHORT, shows its length, and ends on the crane"
+/usr/bin/git commit -m "A performance's clip runs its whole 20 s without a start horn, stamps WELL DONE or CUT SHORT, shows its length, and ends on the crane"
 ```
 
 ### Task 8: the workshop plays a stage checkpoint with the challenge's timeline, and publishes it
@@ -2069,7 +2069,7 @@ Watch the console for errors. Save the screenshots in `$SCRATCH/phase-b-shots/`.
 uv run --no-config --frozen arena clip <run_id> --store "$STORE"
 ```
 
-Watch both layouts: whole performance, no horn, BRAVO, length + points, ends on the crane. Write down the render time. The Space's budget is 900 s for both layouts: compare with a sprint clip rendered the same way.
+Watch both layouts: whole performance, no horn, WELL DONE, length + points, ends on the crane. Write down the render time. The Space's budget is 900 s for both layouts: compare with a sprint clip rendered the same way.
 
 - [ ] **Step 4: The workshop on the reference run, without `uv run`**
 1. Copy the downloaded reference run into the challenges worktree as `logs/rsl_rl/got_a_talent/<stamp>_reference/`, with `model_2000.pt` and `provenance.json` only. Edit its `provenance.json` task to `Mjlab-GotATalent-MicroDuck` (a local copy, for the rehearsal only).

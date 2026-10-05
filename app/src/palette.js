@@ -18,7 +18,7 @@ export const PALETTE = {
   stand: [0.227, 0.227, 0.275],
   paper: [0.98, 0.973, 0.949],
   ink: [0.063, 0.063, 0.094],
-  // The crowd's duck: Pollen orange face, jaune bec feet, warm paper frame,
+  // The crowd's duck: Pollen orange face, beak yellow feet, warm paper frame,
   // ink for what little of the mechanics shows.
   face: 0xff7a2f,
   feet: 0xffd23f,
@@ -26,7 +26,7 @@ export const PALETTE = {
   dark: 0x101018,
 };
 
-// The shells, seat after seat: crème, ciel, cyan VHS, magenta VHS, jaune bec.
+// The shells, seat after seat: cream, sky, cyan VHS, magenta VHS, beak yellow.
 export const SHELLS = [0xf7e6cb, 0x8fb8dc, 0x2ff0e6, 0xff2fa8, 0xffd23f];
 
 export const GAIN = 1.8;
