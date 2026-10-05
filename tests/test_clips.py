@@ -766,3 +766,34 @@ def test_a_restored_run_owes_a_clip_like_any_publication(tmp_path, monkeypatch):
             time.sleep(0.05)
     assert app.state.store.clip_state(record.run_id) == ("pending", None)
     assert app.state.clips.progress(record.run_id) == {"ahead": 0}
+
+
+def test_a_boot_that_cannot_see_its_jobs_still_reads_the_list(tmp_path):
+    """Listing the jobs left running can be refused (a token without job.read):
+    what is owed is still owed, read off the markers."""
+    store = LocalStore(tmp_path)
+    store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    api = FakeJobs()
+
+    def refused(**_):
+        raise RuntimeError("403 Forbidden: missing permissions: job.read")
+
+    api.list_jobs = refused
+    said = []
+    jobs = ClipJobs(store, space_id="o/s", dataset="o/d", token="t", api=api, log=said.append)
+    jobs.drain()
+    assert jobs.progress("R1") == {"ahead": 0}
+    assert any("job.read" in line for line in said)
+
+
+def test_the_jobs_are_launched_with_their_own_token_and_render_with_the_spaces(tmp_path):
+    """The token that launches jobs never enters one: the job writes to the
+    dataset with the Space's own."""
+    jobs = ClipJobs(LocalStore(tmp_path), space_id="o/s", dataset="o/d", token="hf_dataset",
+                    jobs_token="hf_jobs", log=lambda _: None)
+    assert jobs.api.token == "hf_jobs"
+    api = FakeJobs()
+    jobs.api = api
+    jobs.enqueue("R1")
+    jobs.tick()
+    assert api.launched[0]["secrets"] == {"HF_TOKEN": "hf_dataset"}

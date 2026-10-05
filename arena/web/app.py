@@ -86,7 +86,8 @@ def create_app(config: ArenaConfig) -> FastAPI:
 
     app.state.clips = ClipJobs(
         app.state.store, space_id=config.space_id, dataset=config.dataset_repo,
-        token=config.hf_token, namespace=config.clip_namespace, flavor=config.clip_flavor,
+        token=config.hf_token, jobs_token=config.clip_token, namespace=config.clip_namespace,
+        flavor=config.clip_flavor,
         running=config.clip_jobs, enabled=config.clips_enabled, backfill=config.clip_backfill,
         landed=lambda run_id: app.state.programme.landed(),
     )

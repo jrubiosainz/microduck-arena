@@ -141,7 +141,8 @@ class ClipJobs:
     the backfill, each in arrival order. `api` is an HfApi (or a stand-in)."""
 
     def __init__(self, store, *, space_id: str | None, dataset: str | None, token: str | None,
-                 namespace: str | None = None, flavor: str = JOB_FLAVOR, running: int = 4,
+                 jobs_token: str | None = None, namespace: str | None = None,
+                 flavor: str = JOB_FLAVOR, running: int = 4,
                  api=None, log=print, enabled: bool = True, backfill: bool = False,
                  landed=lambda run_id: None, now=time.monotonic):
         self.store = store
@@ -162,7 +163,9 @@ class ClipJobs:
         if api is None and self.available:
             from huggingface_hub import HfApi
 
-            api = HfApi(token=token)
+            # Launching jobs takes job permissions on the namespace that pays;
+            # the job itself writes to the dataset with the Space's own token.
+            api = HfApi(token=jobs_token or token)
         self.api = api
         self.queue: queue.PriorityQueue[tuple[int, int, str]] = queue.PriorityQueue()
         self._arrivals = itertools.count()
@@ -200,8 +203,13 @@ class ClipJobs:
         """At boot: the jobs a previous process left running, everything owed,
         every clip that failed once more, and with the backfill every run that
         never owed one, newest first."""
-        for job in self.api.list_jobs(status=["SCHEDULING", "RUNNING"], labels=JOB_LABEL,
-                                      namespace=self.namespace):
+        try:
+            left = list(self.api.list_jobs(status=["SCHEDULING", "RUNNING"], labels=JOB_LABEL,
+                                           namespace=self.namespace))
+        except Exception as exc:  # noqa: BLE001 — what is owed is still read below
+            self.log(f"clip: no look at the jobs left running ({type(exc).__name__}: {exc})")
+            left = []
+        for job in left:
             run_id = (job.labels or {}).get("run")
             if run_id:
                 with self._lock:

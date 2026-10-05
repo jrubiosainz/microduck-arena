@@ -111,6 +111,9 @@ class ArenaConfig:
     clip_flavor: str = JOB_FLAVOR
     clip_namespace: str | None = None
     clip_jobs: int = 4
+    # The token that launches them (ARENA_CLIP_TOKEN, HF_TOKEN by default): it
+    # needs job permissions on that account; the jobs write with HF_TOKEN.
+    clip_token: str | None = None
     # Owe a clip to every run that has none — the log as it stood before
     # clips existed. Set ARENA_CLIP_BACKFILL=1 on the deploy that brings clips
     # to a Space with history; the drain at each boot then owes the rest,
@@ -180,6 +183,7 @@ class ArenaConfig:
             clip_flavor=(os.environ.get("ARENA_CLIP_FLAVOR") or "").strip() or JOB_FLAVOR,
             clip_namespace=(os.environ.get("ARENA_CLIP_NAMESPACE") or "").strip() or None,
             clip_jobs=_positive("ARENA_CLIP_JOBS", 4),
+            clip_token=(os.environ.get("ARENA_CLIP_TOKEN") or "").strip() or None,
             clip_backfill=(os.environ.get("ARENA_CLIP_BACKFILL") or "").strip() in {"1", "true", "yes"},
             commentary_enabled=(os.environ.get("ARENA_COMMENTARY") or "1").strip()
             not in {"0", "false", "no"},
