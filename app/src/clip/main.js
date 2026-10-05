@@ -52,7 +52,6 @@ function letter(run) {
     $("fig-place").textContent = run.on_board && !run.withdrawn ? `#${run.rank}` : "—";
   }
   $("fig-points").textContent = earned > 0 ? `+${earned}` : "—";
-  $("weights").textContent = run.policy_url ? run.policy_url.replace(/^https?:\/\//, "") : "";
   const stamp = $("stamp");
   stamp.textContent = dnf ? (stage ? "CUT SHORT" : "DNF") : stage ? "WELL DONE" : "VICTORY";
   stamp.classList.add(dnf ? "stamp-fail" : "stamp-pass");

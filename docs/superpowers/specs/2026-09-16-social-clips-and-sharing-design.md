@@ -268,7 +268,7 @@ The recorder reads and calls nothing else.
 | --- | --- | --- |
 | Title | The waiting ducks on the stage, the author's in the foreground; over the sky, eyebrow `Microduck Arena`, the event title, `@user · policy` on a shade of ink. No OSD yet, and the vertical top band keeps its words for the horn | the crowd waiting; the air horn at the intro's end, as the title leaves |
 | Tape | The stage full frame, four named ducks. OSD: `● REC · @user · policy` top-left, the clock `00:00.00` bottom-right, the event title bottom-left (landscape). Vertical: a top band with eyebrow, title and `@user · policy`, and the figures band at the bottom throughout | the crowd |
-| Outro | The last frame frozen. The stamp `VICTORY` (lime) or `DNF` (magenta), `fx-tilt-2-5`, centred on the author's duck where the viewer's `spot` says it stands. The figures band: the time (`formatScore`), the place (`#rank`, or `—` off the board or withdrawn), the points (`+N`, or `—` at zero); under it the weights' address without its scheme when `policy_url` is set | `stamp.wav` at the tape end; `microduck-victory-echo.mp3` or `microduck-fall.wav` 160 ms later; the crowd turns to the verdict |
+| Outro | The last frame frozen. The stamp `VICTORY` (lime) or `DNF` (magenta), `fx-tilt-2-5`, centred on the author's duck where the viewer's `spot` says it stands. The figures band: the time (`formatScore`), the place (`#rank`, or `—` off the board or withdrawn), the points (`+N`, or `—` at zero) | `stamp.wav` at the tape end; `microduck-victory-echo.mp3` or `microduck-fall.wav` 160 ms later; the crowd turns to the verdict |
 
 Landscape shows the figures band only in the outro, over the frozen frame.
 

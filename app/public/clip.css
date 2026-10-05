@@ -28,7 +28,6 @@ html, body { margin: 0; background: var(--deep-ink); color: var(--paper); font-f
 .band-top .marquee-title { margin-top: 4px; }
 .participant { font-size: 1.7rem; line-height: 1.2; margin: 12px 0 0; overflow-wrap: anywhere; }
 .band-bottom .figures { grid-template-columns: repeat(3, 1fr); gap: 18px; }
-.band-bottom .weights { overflow-wrap: anywhere; margin: 12px 0 0; color: var(--sky); }
 [data-layout="landscape"] .band-top { display: none; }
 [data-layout="landscape"] .band-bottom { position: absolute; left: 0; right: 0; bottom: 0; }
 
