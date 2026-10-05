@@ -1,15 +1,14 @@
-// Duck Jam's runway stadium, along both sides of the track: a cyan rail on
+// The runway stadium, along both sides of the track: a cyan rail on
 // paper posts at each edge, five Pollen-orange cones behind it, six tiers of
-// bleachers, and in every seat the robot itself, instanced. Its proportions and
-// colours are `stadium()` in Duck Jam's round-01 challenge, verbatim; only the
-// track between the rails is the arena's own, at its own width.
+// bleachers, and in every seat the robot itself, instanced. The track between
+// the rails is the arena's own, at its own width.
 //
-// The one liberty is the near side. Duck Jam looked at this from a high seat
-// 2.6 m to the side, over the top of it; the arena's chase camera stands low at
-// the trackside, where Duck Jam's near rail and stand would be — and a rail
-// between the lens and the racers hides their feet. So the near side's rail,
-// cones and stand back off as one until they are behind the lens
-// (attachStadium's `clearance`), and are seen when you orbit.
+// The near side is laid for a viewer on a high seat 2.6 m to the side, looking
+// over the top of it; the arena's chase camera stands low at the trackside,
+// where that near rail and stand would be — and a rail between the lens and
+// the racers hides their feet. So the near side's rail, cones and stand back
+// off as one until they are behind the lens (attachStadium's `clearance`), and
+// are seen when you orbit.
 //
 // Course frame throughout (see course.js): +x down the track, +y up, +z the
 // camera's side of the track.
@@ -36,9 +35,8 @@ import { crowdBubbles } from "./crowd-bubbles.js";
 import { applyFrame } from "./replay.js";
 import { STAND, TRUNK_HEIGHT, attachMeshes, buildRigTree } from "./rig.js";
 
-// Duck Jam's stadium, in metres. The lane there ran 0.45 m past each end and
-// the stand 0.5; here the ground runs OVERRUN past each end, and the stand,
-// posts and seats keep the same margins beyond it.
+// The stadium, in metres. The ground runs OVERRUN past each end of the lane,
+// and the stand, posts, seats and cones are laid against the ground's ends.
 const TIERS = 6;
 const SEATS_PER_TIER = 18;
 const TIER_DEPTH = 0.28;
@@ -65,7 +63,7 @@ function tiers(inner, side) {
   }));
 }
 
-/** `n` points from `first` to `last`, the way Duck Jam spaced posts, seats and cones. */
+/** `n` points from `first` to `last`, evenly, as posts, seats and cones are spaced. */
 const along = (n, first, last) =>
   Array.from({ length: n }, (_, i) => first + ((last - first) * i) / (n - 1));
 
@@ -169,7 +167,7 @@ sitting[2] = -1.3; sitting[3] = 1.5; sitting[4] = -0.2;
 sitting[11] = 1.3; sitting[12] = -1.5; sitting[13] = 0.2;
 const SIT = Float32Array.from([0, 0, 0.055, 1, 0, 0, 0, ...sitting]);
 
-// Which colour a part of the spectator is painted: Duck Jam's `paintOf`.
+// Which colour a part of the spectator is painted.
 const PAINT = [
   [/jaw|mouth|face_part/, PALETTE.face],
   [/foot|sole/, PALETTE.feet],
@@ -355,7 +353,7 @@ function fused(kinematics, geometries, shell, frame = SIT) {
  * drew — so a wider arena pushes it out, without a second
  * copy of either sum. `clearance` is how far out on +z, the camera's side, the
  * near stand may start; its rail and cones keep their places in front of it.
- * Duck Jam's own distance is kept wherever it already clears. Returns the
+ * The stadium's own distance is kept wherever it already clears. Returns the
  * crowd, for the render loop to pose and the next re-race to dispose.
  */
 export function attachStadium(course, { kinematics, geometries }, clearance) {

@@ -1,5 +1,4 @@
-// Who the camera looks at, and from where. Ported from Duck Jam's
-// dome/media/commentators/direction.mjs: the duo wide by default; after ten
+// Who the camera looks at, and from where: the duo wide by default; after ten
 // seconds wide, one close shot on a speaker, held five to seven seconds to the
 // end of that reply, never within five seconds of the end and never while the
 // partner speaks inside it; a speaker change never interrupts a shot.

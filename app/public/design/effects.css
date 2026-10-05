@@ -1,11 +1,10 @@
-/* THE DUCK DOME — signature effect primitives.
+/* MICRODUCK ARENA — signature effect primitives.
  *
  * The VHS look is applied by adding a class. Every number here comes from design/tokens.css,
  * with one exception carrying its own reason below — the ink shadow's ceiling, which answers a
  * case the charter never draws. Nothing in this file re-derives a value from the charter.
  * Load tokens.css first.
- * Source: charte-microduck.svg, page 04, "The signature · Effects" — see design/effects.html,
- * which shows each primitive beside the charter's own swatch of it.
+ * Source: the MicroDuck charter, page 04, "The signature · Effects".
  *
  * Where the charter gives a range rather than a value, a primitive takes the charter's own
  * example — its maximum, which is what page 04 draws — and a surface that wants the tight end
@@ -20,16 +19,16 @@
    The ink shadow is a third matter. The charter draws the aberration twice — the swatch on
    page 04 at 46 px, and the cover's own MICRODUCK at 150 px — and both times over deep ink on a
    yellow word, where the ink shadow is the same colour as the ground and cannot be seen at all.
-   It never draws one behind an ink word, and the Dome sets every large title in ink on paper.
+   It never draws one behind an ink word, and the Arena sets every large title in ink on paper.
    There deep ink is sixteen away from ink out of a possible 441: the shadow is not behind the
    word, it is inside it. Past a couple of pixels it stops adding a printed edge and starts
    filling the channels the display face leaves between its strokes, and THE LADDERS welds into
-   one black slab. Measured on the widest words the Dome sets, those channels run from four to
+   one black slab. Measured on the widest words the Arena sets, those channels run from four to
    eight pixels at the charter's two largest steps, once the pairs that already touch are set
    aside. So the ink shadow keeps the charter's proportion up to a two-pixel ceiling and never
    grows past it: at the sticker and at the card it is the charter's own offset to the pixel —
    the ceiling only bites past 33 px — and at display size it is a hard edge that closes no
-   channel. design/check.mjs's shadow-closes-the-word measures exactly that.
+   channel.
 
    The recipe is a custom property because components.css's three lockups carry it too, and a
    fix to one that misses the others is how this defect shipped for weeks. */
@@ -90,14 +89,7 @@
 .fx-tilt-alternate > :nth-child(even) { --fx-tilt-sign: -1; }
 
 /* Scanlines and grain are overlays on their host: scanlines ride ::after, grain rides ::before,
-   so a surface that wants both — the charter asks for both over the whole page — can carry both.
-
-   One accepted exception to "over the whole page": the Dome's own pages, dome/web/index.html,
-   carry the grain and NOT the scanlines. The user decided it on 2026-09-08, looking at four
-   grounds side by side, because the tiled floor with its stripes made the page hard to read; the
-   scanlines stay at 18 % on every CRT, replay and clip through .fx-scanlines-screen, where they
-   read as tape rather than as texture under a paragraph. Do not put them back without asking:
-   docs/specs/dw1-shell-and-deploy.md §The ground. */
+   so a surface that wants both — the charter asks for both over the whole page — can carry both. */
 .fx-scanlines,
 .fx-grain {
   position: relative;
@@ -134,7 +126,7 @@
    widens the speckle without moving the mean, so the surface underneath keeps the tint the
    charter's own parameters give it.
    The tile is laid on plain: multiply and overlay both measure as exactly nothing over paper and
-   over deep ink, the Dome's two grounds, and the charter asks for grain over all of it. */
+   over deep ink, the Arena's two grounds, and the charter asks for grain over all of it. */
 .fx-grain::before {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='3' intercept='-1'/%3E%3CfeFuncG type='linear' slope='3' intercept='-1'/%3E%3CfeFuncB type='linear' slope='3' intercept='-1'/%3E%3CfeFuncA type='discrete' tableValues='1 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
   background-size: var(--grain-tile-max) var(--grain-tile-max);

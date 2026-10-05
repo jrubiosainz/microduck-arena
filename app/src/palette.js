@@ -1,13 +1,14 @@
-// Duck Jam's stadium colours, and how its scenery is lit.
+// The stadium's colours, and how its scenery is lit.
 //
-// Two kinds, kept as Duck Jam had them. The scenery boxes carried their colour
-// as MJCF rgba, which its renderer took as LINEAR floats; those are triples
-// here. The crowd's shells and paint came from the design tokens, sRGB hex.
+// Two kinds. The scenery boxes' colours are LINEAR floats, as MJCF rgba is
+// read: those are the triples here. The crowd's shells and paint are the
+// design tokens, sRGB hex.
 // Everything is a flat Lambert left out of the tone mapping: the arena's ACES
 // curve, right for its metallic racers, pulls a VHS cyan down to teal. And
-// mixed stronger: Duck Jam lit its scenery with a 2.2 sun over a 0.9 ambient,
-// the arena its racers with a 1.7 key over 0.3 — a top face there came out at
-// nine tenths of its paint, here at half, and orange at half is brown.
+// mixed stronger: the scenery's paint was chosen under a 2.2 sun over a 0.9
+// ambient, and the arena lights its racers with a 1.7 key over 0.3 — a top
+// face came out at nine tenths of its paint there, at half here, and orange at
+// half is brown.
 
 import { Color, MeshLambertMaterial } from "three";
 
@@ -35,6 +36,6 @@ export const GAIN = 1.8;
 export const colour = (paint) =>
   (Array.isArray(paint) ? new Color().setRGB(...paint) : new Color(paint)).multiplyScalar(GAIN);
 
-/** Duck Jam's flat paint, in one of the palette's colours. */
+/** Flat paint, in one of the palette's colours. */
 export const flat = (paint) =>
   new MeshLambertMaterial({ color: colour(paint), toneMapped: false });

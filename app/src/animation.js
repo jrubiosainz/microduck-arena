@@ -1,4 +1,4 @@
-// The theatre's primitives, ported from Duck Jam (dome/web/shared/animation.mjs).
+// The theatre's primitives.
 //
 // Every beat sequences on `animationend`, never on a timer: design/motion.css
 // owns the durations, and reduced motion sets them all to zero without a second

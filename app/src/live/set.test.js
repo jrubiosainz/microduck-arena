@@ -3,7 +3,7 @@ import { BOOTH_TURN } from "./direction.js";
 import { booth } from "./set.js";
 
 describe("booth", () => {
-  it("is Duck Jam's set, turned by a sixth of a turn, with every piece named", () => {
+  it("is the booth's set, turned by a sixth of a turn, with every piece named", () => {
     const set = booth();
     expect(set.rotation.z).toBe(BOOTH_TURN);
     const names = set.children.map((mesh) => mesh.name);

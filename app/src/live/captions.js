@@ -1,5 +1,5 @@
 // The caption panel under the booth: the charter's ink panel with a yellow
-// name tile and up to two lines. The split is Duck Jam's: 42 characters or
+// name tile and up to two lines. The split: 42 characters or
 // less stay on one line, longer ones break at the word boundary that
 // balances the two lines' widths. A line the panel has no room for is not
 // drawn at all, and the panel keeps what it has.

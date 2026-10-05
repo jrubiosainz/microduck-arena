@@ -1,12 +1,11 @@
-/* THE DUCK DOME — the component inventory.
+/* MICRODUCK ARENA — the component inventory.
  *
- * Every UI element the Dome needs, as one physical object in the hall. Load tokens.css and
+ * Every UI element the Arena needs, as one physical object in the hall. Load tokens.css and
  * effects.css first: every colour, size and effect parameter here is a token, and where an
  * object takes a VHS effect by choice — a tilt, a shadow colour, grain — it takes the .fx-*
  * primitive in its markup. Where an effect is mandatory on an object — scanlines on a CRT,
  * aberration on the signage, the marquee and the FAIL stamp — the object carries it here, so a
  * screen cannot forget it.
- * Source: Art_Direction.md §5 "The component inventory". Sheet: design/components.html.
  *
  * Heavy things sit square: never an .fx-tilt-* on a cabinet, a scoreboard, a CRT, a button, a
  * pegboard or a terminal. Paper and plastic tilt: stickers, flyers, stamps, trophies and confetti
@@ -48,9 +47,9 @@
 
 /* ── Floor — gym floor: checkerboard, painted court lines ──────────────────── */
 
-/* Paper and warm-paper tiles on a 56 px checker — two tiles per period, as the DJ6 render draws
-   it; a 56 px tile is a pattern that fights the text, a 28 px one is a floor. Two diagonal
-   gradients half a period apart draw it without a conic gradient, which the Dome reserves for
+/* Paper and warm-paper tiles on a 56 px checker — two tiles per period, so a
+   tile is 28 px; a 56 px tile is a pattern that fights the text, a 28 px one is a floor. Two diagonal
+   gradients half a period apart draw it without a conic gradient, which the Arena reserves for
    its one ray fan. */
 .floor {
   --floor-period: 56px;
@@ -548,8 +547,8 @@
   color: var(--paper-60);
 }
 
-/* Commands are copied, not read as labels: no tracking, and the DJ6 render's size, between the
-   mono label and body. */
+/* Commands are copied, not read as labels: no tracking, and a size between the mono label
+   and body. */
 .terminal-body {
   margin: 0;
   padding: 14px 16px;

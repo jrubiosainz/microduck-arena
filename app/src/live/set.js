@@ -1,4 +1,4 @@
-// The booth's set, Duck Jam's commentators/set.mjs box for box: a municipal
+// The booth's set: a municipal
 // gym's stage with a workshop's furniture, in metres, z up, the whole group
 // turned by π/6 so the duo faces the auditorium at an angle. Colours are the
 // design tokens, read from the page, so the set and the site share one paint.

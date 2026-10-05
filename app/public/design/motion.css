@@ -1,9 +1,9 @@
-/* THE DUCK DOME — motion primitives and the reveal beats.
+/* MICRODUCK ARENA — motion primitives and the reveal beats.
  *
- * Every beat of Art_Direction.md §7 as a class you add to an AD4 object: .flip-roll on a flip
+ * Every reveal beat as a class you add to a component: .flip-roll on a flip
  * digit, .tape-stop then .crt-sync on a CRT screen, .stamp-slam on a stamp, .confetti-fall over a
  * stage, .rank-climb and .rank-shuffle on pegboard rows. Load tokens.css, effects.css and
- * components.css first. Spec: docs/specs/ad6-motion-reveal-beats.md.
+ * components.css first.
  *
  * Every beat is a CSS animation on a token duration, so its cadence lives here and not in a
  * timer; every beat fills forwards to the object's own resting style, so its end state is the

@@ -9,7 +9,7 @@ export function slotAfter(slots, slot) {
   return slots.find((s) => s.at_ms === end) ?? null;
 }
 
-/** Duck Jam's servo, in seconds of media: a small error is left alone, a
+/** The servo, in seconds of media: a small error is left alone, a
  * larger one is chased at 3 % speed, past a second (or when forced, on
  * joining) the video seeks — but only to media it has buffered. */
 export function correction(current, target, ranges, force = false) {

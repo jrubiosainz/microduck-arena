@@ -1,4 +1,4 @@
-// The wipe between two segments, Duck Jam's motion.mjs: a 400 ms sweep in
+// The wipe between two segments: a 400 ms sweep in
 // from the left, 800 ms fully covering, a 400 ms sweep out to the right. The
 // slot underneath switches at 800 ms, while nothing shows through. On the way
 // out to a replay the panel carries the UP NEXT card, which is how the next

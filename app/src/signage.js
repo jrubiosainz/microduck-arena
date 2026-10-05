@@ -1,7 +1,7 @@
 // The strip over the door: the arena's mark on the left, the player on the
 // right. Every page wears it, races included — the mark is how you get back to
 // the front, so a race needs no back link of its own. Under every page, the
-// same strip on deep ink: Duck Jam's footer, with the two doors out of the
+// same strip on deep ink: the footer, with the two doors out of the
 // arena — the community, and the robot itself.
 
 import { flipTiles } from "./animation.js";

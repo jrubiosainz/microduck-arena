@@ -1,6 +1,6 @@
 // A clip in a <video>, servoed to the shared clock. Two elements alternate so
-// the next clip is buffering while this one plays; the servo is Duck Jam's
-// (grid.js `correction`): a nudge for a small error, a seek for a large one.
+// the next clip is buffering while this one plays; the servo is grid.js's
+// `correction`: a nudge for a small error, a seek for a large one.
 
 import { clipUrl } from "../api.js";
 import { isMuted } from "../sound.js";

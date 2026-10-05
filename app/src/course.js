@@ -141,7 +141,7 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   return course;
 }
 
-// Duck Jam's finish: a row of paper and ink tiles across the track, each 12 cm
+// The finish: a row of paper and ink tiles across the track, each 12 cm
 // along it and 13 across, as many as the span takes.
 const TILE = [0.12, 0.13];
 

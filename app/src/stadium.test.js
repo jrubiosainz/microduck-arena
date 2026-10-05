@@ -1,4 +1,4 @@
-// Duck Jam's runway stadium, in the course's own frame: +x down the track, +y
+// The runway stadium, in the course's own frame: +x down the track, +y
 // up, +z the chase camera's side of the track and -z the far side.
 
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -230,7 +230,7 @@ describe("crowd", () => {
     audience.dispose();
   });
 
-  it("paints Duck Jam's duck: the shell its colour, the face orange, the feet yellow, the rest paper", () => {
+  it("paints the crowd's duck: the shell its colour, the face orange, the feet yellow, the rest paper", () => {
     const audience = crowd(kinematics, boxes(), placed);
     for (const shell of SHELLS) {
       const mesh = flockOf(audience, shell);
@@ -296,9 +296,9 @@ describe("crowd", () => {
   });
 
   it("keeps only a small seated fidget between waves", () => {
-    // Duck Jam's 7 rad/s and 3.6 cm read from its high seat, over the near
-    // stand; from the arena's low chase the crowd is smaller and further, and
-    // that fidget did not read as moving at all.
+    // A 7 rad/s, 3.6 cm fidget reads from a high seat over the near stand;
+    // from the arena's low chase the crowd is smaller and further, and that
+    // fidget did not read as moving at all.
     const audience = crowd(kinematics, boxes(), placed);
     const mesh = audience.group.children[0];
     const step = 0.005;
@@ -384,9 +384,9 @@ describe("attachStadium", () => {
     expect(audience.group.getObjectByName("crowd").children.reduce((sum, mesh) => sum + mesh.count, 0)).toBe(216);
   });
 
-  it("backs the whole near side off behind the camera, Duck Jam's layout kept between its pieces", () => {
+  it("backs the whole near side off behind the camera, the layout kept between its pieces", () => {
     // The chase camera lives on the +z side at 1.3 m and more, exactly where
-    // Duck Jam's near rail and stand go, and a rail between the lens and the
+    // the near rail and stand go, and a rail between the lens and the
     // racers hides their feet. The viewer says how far out the camera stands;
     // the near stand starts beyond that, and its rail and cones move with it.
     // The far side is not moved.

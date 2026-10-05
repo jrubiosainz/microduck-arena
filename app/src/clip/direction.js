@@ -1,9 +1,6 @@
-// Ported from Duck Jam, design/sound/stadium-direction.mjs at 2d35443b, trimmed
-// to what soundtrack.js uses: `stadiumTransitions`, the reference's explicit-
-// target easing for live playback, has no caller here and is dropped. Changed
-// here: the crowd surges at the start horn and never settles back — it builds
-// with the duck's progress — and a verdict is in its voice just before the line,
-// as a real crowd sees it coming.
+// The stadium crowd's direction over a clip: the crowd surges at the start
+// horn and never settles back — it builds with the duck's progress — and a
+// verdict is in its voice just before the line, as a real crowd sees it coming.
 // Shared playback-time direction. Progress must come from the challenge, never
 // from elapsed time or a guess about what a robot's coordinates mean.
 const smooth = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x) }

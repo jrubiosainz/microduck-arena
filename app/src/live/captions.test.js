@@ -16,7 +16,7 @@ describe("splitCaption", () => {
     expect(Math.abs(measure(lines[0]) - measure(lines[1]))).toBeLessThanOrEqual(60);
   });
 
-  it("splits a caption of 43 characters even when it would fit, as Duck Jam did", () => {
+  it("splits a caption of 43 characters even when it would fit", () => {
     const text = "a".repeat(20) + " " + "b".repeat(22);
     expect(splitCaption(text, measure, 5000)).toHaveLength(2);
   });

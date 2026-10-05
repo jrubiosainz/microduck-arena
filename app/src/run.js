@@ -121,7 +121,7 @@ export async function renderRun(root, runId, state) {
 
   const page = runHall();
   // Which beat the page is in. Read by nothing yet: it is the hook a screenshot
-  // or a test waits on, as in Duck Jam. A reveal's first beat waits on the stage.
+  // or a test waits on. A reveal's first beat waits on the stage.
   page.dataset.act = revealing ? "load" : "rest";
   root.append(page, footer());
   const $ = (id) => page.querySelector(`#${id}`);

@@ -1,5 +1,4 @@
-// A name in a box, hung over a duck's head. Ported from Duck Jam,
-// dome/web/features/replay/plate.mjs at 2d35443b — the nameplate only.
+// A name in a box, hung over a duck's head.
 
 import { CanvasTexture, SRGBColorSpace, Sprite, SpriteMaterial } from "three";
 

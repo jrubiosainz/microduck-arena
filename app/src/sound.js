@@ -1,6 +1,5 @@
 // The arena's cues (see public/sound/PROVENANCE.md): the voting ceremony's
-// press, stamp and points, and the reveal's victory, climb and chirp. Duck
-// Jam's files at Duck Jam's volumes.
+// press, stamp and points, and the reveal's victory, climb and chirp.
 //
 // A fresh <audio> per play, so two cues can overlap — a tick per flap while a
 // counter rolls. What a cue CANNOT assume is that playback will succeed: a

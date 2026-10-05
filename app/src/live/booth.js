@@ -1,7 +1,7 @@
 // Peter and Ray in their booth: two of the viewer's rigs in the STAND pose,
-// only neck and head moving, a beak on a pivot, on Duck Jam's set, lit like
+// only neck and head moving, a beak on a pivot, on the booth's set, lit like
 // every race page. The set is authored z up under one root turned like the
-// rig's own; the camera is the one thing converted from Duck Jam's frame.
+// rig's own; the camera is the one thing converted out of that frame.
 
 import {
   ACESFilmicToneMapping,
@@ -36,7 +36,7 @@ const HEAD = { neck: ["neck_pitch", 5], pitch: ["head_pitch", 6], yaw: ["head_ya
 const SEATS = { peter: { x: -0.16, livery: "classic" }, ray: { x: 0.16, livery: "blue" } };
 // Facing the auditorium: a quarter turn out of the booth's own bearing.
 const FACING = BOOTH_TURN - Math.PI / 2;
-// The lower beak, hung on a pivot in the jaw body's frame, as Duck Jam's articulateMouth.
+// The lower beak, hung on a pivot in the jaw body's frame.
 const JAW_MESHES = new Set(["jaw.stl", "jaw_soft.stl"]);
 const JAW_PIVOT = [-0.008, 0, -0.025];
 const JAW_OPEN = 0.32;
@@ -65,7 +65,7 @@ function jawPivot(rig) {
   return pivot;
 }
 
-// Duck Jam's frame is z up; three.js is y up.
+// The set's frame is z up; three.js is y up.
 const toY = ([x, y, z]) => [x, z, -y];
 
 export async function createBooth(canvas) {

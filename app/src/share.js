@@ -1,7 +1,6 @@
 // Sharing a run: the post, the two composers that take a text, the two
-// networks that take uploads only, and the clip downloads. Ported from Duck
-// Jam's dome/web/features/results/sharing.mjs at 2d35443b, in the arena's
-// words. The row is markup: every link works with no script at all.
+// networks that take uploads only, and the clip downloads. The row is
+// markup: every link works with no script at all.
 
 import { isStage } from "./format.js";
 

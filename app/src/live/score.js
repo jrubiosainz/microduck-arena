@@ -1,7 +1,6 @@
 // A dialogue becomes a plan: captions, one voice note per syllable, head beats
 // and glances, at integral milliseconds so every screen that plays it computes
-// the same pose and the same sample. Ported from Duck Jam's
-// dome/media/commentators/score.mjs. `prepare` runs once, in the clip page the
+// the same pose and the same sample. `prepare` runs once, in the clip page the
 // worker drives; the live page only ever plays a stored plan.
 
 export const SAMPLE_RATE = 48000;

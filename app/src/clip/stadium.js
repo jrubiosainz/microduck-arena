@@ -1,8 +1,4 @@
-// Ported from Duck Jam, design/sound/stadium.mjs at 2d35443b, trimmed to what
-// soundtrack.js uses: `renderStadium`, the standalone offline-buffer helper,
-// has no caller here — soundtrack.js does its own offline render — and is
-// dropped.
-// Synthesizer extracted from stadium-crowd-source.html: sawtooth/breath formants,
+// The stadium crowd's synthesizer: sawtooth/breath formants,
 // independent voices, overlapping applause and filtered stereo echoes.
 import { stadiumDirection } from './direction.js';
 

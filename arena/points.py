@@ -20,8 +20,8 @@ from .index import by_user, leaderboard, sort_key
 from .manifest import Vote
 from .store import RunRecord
 
-# Duck Jam's own numbers for the acts that transfer to an arena that never
-# closes an event: the "top three at close" bonus becomes "while you hold it".
+# Points per act. The arena never closes an event, so a podium's bonus is
+# earned while you hold the place, not at a close.
 SCHEDULE = {
     "first_event": 100, "run": 10, "own_best": 25, "podium": (250, 150, 100), "ballot": 2,
 }

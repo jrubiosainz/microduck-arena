@@ -45,7 +45,7 @@ describe("buildCourse", () => {
     expect(course.getObjectByName("finish").position.x).toBeCloseTo(2, 12);
   });
 
-  it("lays Duck Jam's checker of paper and ink across the finish", () => {
+  it("lays a checker of paper and ink across the finish", () => {
     const finish = buildCourse({ length_m: 2, width_m: 0.8 }).getObjectByName("finish");
     const tiles = finish.children;
     expect(tiles.length).toBeGreaterThanOrEqual(6);

@@ -1,7 +1,7 @@
 // The shared clock: the server's now_ms against a local before and after. The
 // sample with the smallest round trip has the least room for error; every
 // screen that samples the same server lands within its round trip of the same
-// programme position. Duck Jam's estimateClock, kept over a short window.
+// programme position. The estimate is kept over a short window.
 
 const WINDOW = 5;
 

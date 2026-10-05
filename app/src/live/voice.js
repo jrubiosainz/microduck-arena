@@ -1,7 +1,7 @@
 // The booth's sound: the plan's notes sung from the two microduck tones into
 // one buffer, started at the join offset so every screen sings the same
-// sample at the same instant; and the shutter's wind, Duck Jam's
-// build-wind.mjs made in the page.
+// sample at the same instant; and the shutter's wind, made in
+// the page.
 
 import { SAMPLE_RATE, synthesize } from "./score.js";
 

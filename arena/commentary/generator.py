@@ -1,9 +1,8 @@
 """Peter and Ray's lines: written by a model, checked here.
 
-Ported from Duck Jam's dome/media/commentary/generator.py. The writer is
-given facts it must cite; the local checks read the cited facts back to
-verify every number, every name and every fall it speaks. None of it proves
-the prose true. All of it makes the false prose rare, and a rejection costs
+The writer is given facts it must cite; the local checks read the cited facts
+back to verify every number, every name and every fall it speaks. None of it
+proves the prose true. All of it makes the false prose rare, and a rejection costs
 the run its booth, never its clip. Nothing here waits for a second model:
 what judges a dialogue's tone does so after it has aired, from
 scripts/commentary_bench.py, and gates nothing.
