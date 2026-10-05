@@ -42,10 +42,13 @@ export const ended = (node, name, pseudo = "", signal) =>
     node.addEventListener("animationend", done);
     signal?.addEventListener("abort", finish, { once: true });
     if (typeof node.getAnimations !== "function") return;
+    // This node's own `pseudo`, not a sibling's: a tile's ::before rolls under
+    // the same name as its ::after.
     requestAnimationFrame(() => {
       const running = node
         .getAnimations({ subtree: Boolean(pseudo) })
-        .some((animation) => animation.animationName === name);
+        .some(({ animationName, effect }) =>
+          animationName === name && effect.target === node && (effect.pseudoElement ?? "") === pseudo);
       if (!running) finish();
     });
   });

@@ -99,11 +99,13 @@ body {
    The STRUCTURE stays — run.js replaces this .flip's children with tiles to
    roll the total up when a result is revealed, and the class is what it finds
    — so this is the look coming off, not the machinery. Giving the digits back
-   their tile is the two declarations below, inverted. */
+   their tile is the two declarations below, inverted. Only the resting seam
+   goes: a rolling tile's ::after is its bottom flap, and the reveal waits on
+   that flap's animationend to credit the next receipt. */
 .profile-chip { position: relative; }
 .profile-chip .flip { gap: 0; font-size: 1rem; }
 .profile-chip .flip-digit { width: auto; height: auto; background: transparent; }
-.profile-chip .flip-digit::after { display: none; }
+.profile-chip .flip-digit:not(.flip-roll)::after { display: none; }
 .profile-chip .chip-points::before { content: "✦"; color: var(--yellow); padding-right: 4px; }
 /* When it receives points it jolts as the CRT does, not as a cell does. */
 .profile-chip.jolt { --impact-distance: var(--impact-verdict); }
