@@ -133,13 +133,15 @@ class Chrome:
              "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox",
              "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows",
              "--disable-background-timer-throttling", "--remote-debugging-port=0")
-    # On a clip job's GPU: ANGLE on the NVIDIA Vulkan driver. Measured on a T4 on
-    # 2026-10-05: 83 ms a frame against SwiftShader's 3 153 ms on the same machine,
-    # the same picture. It needs the glvnd dispatchers (libegl1, libgles2: the
-    # Dockerfile) beside the driver the job's runtime mounts, or no WebGL at all.
+    # On a clip job's GPU: ANGLE on the NVIDIA driver through EGL. Measured on a T4
+    # on 2026-10-05: 84 ms a frame against SwiftShader's 3 153 ms on the same
+    # machine, the same picture. Not Vulkan, as fast: there the compositor drops
+    # the canvas's top strip, as tall as the opaque results band laid over its
+    # bottom at the outro — a black band on a landscape clip's last 2.5 s. It
+    # needs the glvnd dispatchers (libegl1, libgles2: the Dockerfile) beside the
+    # driver the job's runtime mounts, or no WebGL at all.
     GPU_FLAGS = (*(flag for flag in FLAGS if "swiftshader" not in flag),
-                 "--use-angle=vulkan", "--enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan",
-                 "--disable-vulkan-surface", "--ignore-gpu-blocklist", "--enable-gpu")
+                 "--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist", "--enable-gpu")
 
     def __init__(self, binary: str, nice: int = 10, gpu: bool = False):
         self.profile = tempfile.mkdtemp(prefix="arena-chrome-")
