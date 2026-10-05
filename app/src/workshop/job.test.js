@@ -12,8 +12,7 @@ const api = vi.hoisted(() => ({
   saveTimeline: vi.fn(async (event, text) => ({ text })),
 }));
 vi.mock("./api.js", () => api);
-const viewer = vi.hoisted(() => ({ setLanes: vi.fn(), setBrightness: vi.fn(), dispose: vi.fn(), player: { toggle() {}, playing: true },
-  follow() {}, setWallsVisible: () => false, setNamesVisible: () => false }));
+const viewer = vi.hoisted(() => ({ setLanes: vi.fn(), setBrightness: vi.fn(), dispose: vi.fn(), follow() {} }));
 vi.mock("../viewer.js", () => ({ createViewer: vi.fn(async () => viewer) }));
 
 import { POLL_MS, futureSlots, mountJob } from "./job.js";
@@ -62,7 +61,6 @@ describe("a training's page", () => {
     expect(root.querySelector(".score__value").textContent).toBe("5.62 s");
     expect(api.getCheckpoint).toHaveBeenCalledWith("sprint-2m", "first", 500);
     expect(viewer.setLanes).toHaveBeenLastCalledWith([expect.objectContaining({ name: "checkpoint 500", tier: "trial" })], SPRINT);
-    expect(root.querySelector("#stage-hint").textContent).toBe("Checkpoint 500 · its best seed");
     expect(root.querySelector(".output pre").textContent).toContain("uv run --no-sync train");
   });
 
@@ -99,7 +97,6 @@ describe("a training's page", () => {
     await settle();
     expect(root.querySelector(".score__value").textContent).toBe("No fall");
     expect(root.querySelector(".score__seeds").textContent).toBe("seated 7.90 s · standing 11.50 s");
-    expect(root.querySelector("#stage-hint").textContent).toBe("Checkpoint 500");
   });
 
   it("a Save and play's fresh evaluation counts even while the ticket row still says queued", async () => {
@@ -160,7 +157,7 @@ describe("a training's page", () => {
     root.remove();
   });
 
-  it("says on the stage why a checkpoint cannot play, until another is picked", async () => {
+  it("says in the score why a checkpoint cannot play, until another is picked", async () => {
     api.getJob.mockResolvedValue(JOB);
     const root = document.createElement("div");
     const page = await open(root);
@@ -169,10 +166,10 @@ describe("a training's page", () => {
     root.querySelectorAll(".ckpts .bars i")[1].click();
     await settle();
     await vi.advanceTimersByTimeAsync(POLL_MS);
-    expect(root.querySelector("#stage-hint").textContent).toBe("Checkpoint 250 is not evaluated yet.");
+    expect(root.querySelector(".score__seeds").textContent).toBe("Checkpoint 250 is not evaluated yet.");
     root.querySelectorAll(".ckpts .bars i")[2].click();
     await settle();
-    expect(root.querySelector("#stage-hint").textContent).toBe("Checkpoint 500 · its best seed");
+    expect(root.querySelector(".score__seeds").textContent).toBe("5/5 seeds · at 0.55 m/s");
     page.leave();
   });
 
@@ -188,7 +185,7 @@ describe("a training's page", () => {
     await settle();
     fail(new Error("Checkpoint 250 is not evaluated yet."));
     await settle();
-    expect(root.querySelector("#stage-hint").textContent).toBe("Checkpoint 500 · its best seed");
+    expect(root.querySelector(".score__seeds").textContent).toBe("5/5 seeds · at 0.55 m/s");
     page.leave();
   });
 

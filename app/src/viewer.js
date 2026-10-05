@@ -340,7 +340,6 @@ export async function createViewer(
   // The stadium's crowd, rebuilt with the course: posed in draw, disposed
   // with the course in clearScene.
   let audience = null;
-  let namesVisible = false;
   let sideOffset = 1.15;
   let slopeDeg = 0;
   let courseLength = 2;
@@ -478,16 +477,12 @@ export async function createViewer(
         marker.add(shadow);
       }
 
-      // The duck's name, hung over its head in its lane's colour: the clip
-      // has four ducks and no legend, so the name rides the duck.
+      // The duck's name, hung over its head in its lane's colour: there is
+      // no legend over the picture, so the name rides the duck.
       let plate = null;
       if (entry.name) {
         plate = nameplate(entry.name, `#${marker.material.color.getHexString()}`, "#08080c");
         plate.sprite.scale.set(PLATE_HEIGHT * plate.ratio, PLATE_HEIGHT, 1);
-        // Remembered on the viewer: setLanes rebuilds every
-        // lane on each replay, so a plate built after the toggle was pressed
-        // would come back showing whatever the default was.
-        plate.sprite.visible = namesVisible;
         scene.add(plate.sprite);
       }
       return { ...entry, rig, marker, plate, tier, gazeTarget: new Vector3() };
@@ -509,15 +504,6 @@ export async function createViewer(
     crowdDirection = stadiumDirection({ end: player.duration, progress,
       verdict: progress.some(sample => sample.value === 1) ? "pass" : null });
     player.play();
-  }
-
-  // Remember name visibility when setLanes rebuilds a replay.
-  function setNamesVisible(visible) {
-    namesVisible = Boolean(visible);
-    for (const lane of lanes) {
-      if (lane.plate) lane.plate.sprite.visible = namesVisible;
-    }
-    return namesVisible;
   }
 
   function follow() {
@@ -621,7 +607,6 @@ export async function createViewer(
   return {
     setLanes,
     follow,
-    setNamesVisible,
     setBrightness,
     frame,
     spot,

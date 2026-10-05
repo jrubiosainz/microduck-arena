@@ -4,48 +4,16 @@ import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
 function stage() {
   const root = document.createElement("div");
   root.innerHTML = deckMarkup;
-  const viewer = {
-    player: { playing: true, toggle() { this.playing = !this.playing; } },
-    follow: vi.fn(),
-    setNamesVisible: (visible) => visible,
-  };
-  return { root, viewer, deck: wireDeck(root, viewer) };
+  const viewer = { follow: vi.fn() };
+  wireDeck(root, viewer);
+  return { root, viewer };
 }
 
-describe("the deck under a replay", () => {
-  it("is one chassis: the picture, then the three keys and the hint", () => {
+describe("the deck a replay plays on", () => {
+  it("is the picture alone, the follow key riding it", () => {
     const { root } = stage();
-    expect(root.querySelector(".deck > .stage > canvas#stage")).not.toBeNull();
-    expect([...root.querySelectorAll(".deck > .controls button")].map((b) => b.id)).toEqual([
-      "playpause", "follow", "names",
-    ]);
-    expect(root.querySelector(".deck > .controls #stage-hint")).not.toBeNull();
-  });
-
-  it("toggles the names, saying so in the label and in aria-pressed", () => {
-    const { root } = stage();
-    for (const [id, thing] of [["names", "names"]]) {
-      const key = root.querySelector(`#${id}`);
-      expect(key.textContent).toBe(`Show ${thing}`);
-      key.click();
-      expect(key.textContent).toBe(`Hide ${thing}`);
-      expect(key.getAttribute("aria-pressed")).toBe("true");
-      key.click();
-      expect(key.textContent).toBe(`Show ${thing}`);
-      expect(key.getAttribute("aria-pressed")).toBe("false");
-    }
-  });
-
-  it("pauses and plays the replay, and a fresh replay reads Pause again", () => {
-    const { root, deck } = stage();
-    const key = root.querySelector("#playpause");
-    key.click();
-    expect(key.textContent).toBe("Play");
-    key.click();
-    expect(key.textContent).toBe("Pause");
-    key.click();
-    deck.reset();
-    expect(key.textContent).toBe("Pause");
+    const deck = root.querySelector(".deck.stage");
+    expect([...deck.children].map((n) => n.id)).toEqual(["stage", "follow"]);
   });
 
   it("shows the follow key only once the camera has been let go, and hands it back", () => {

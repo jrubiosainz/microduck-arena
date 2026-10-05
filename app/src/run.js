@@ -247,7 +247,6 @@ export async function renderRun(root, runId, state) {
     return traces.get(id);
   };
   let viewer = null;
-  let deck = null;
   let parked = null;
   async function race(runIds, tiers) {
     if (!viewer) {
@@ -261,12 +260,10 @@ export async function renderRun(root, runId, state) {
       trace: fetched[i],
       tier: tiers.get(id) ?? "ghost",
       livery: byId.get(id).livery,
-      // The plate over the duck, for the names key.
+      // The plate over the duck.
       name: byId.get(id).user,
     }));
     viewer.setLanes(colourLanes($("board"), lanes), run.event);
-    deck.reset();
-    $("stage-hint").textContent = lanes.length ? "" : "Tick a row below to watch a replay.";
   }
   const sheet = wireBoardsheet(page, {
     event: run.event,
@@ -317,7 +314,7 @@ export async function renderRun(root, runId, state) {
   }
   state.viewer = created;
   viewer = created;
-  deck = wireDeck(page, viewer);
+  wireDeck(page, viewer);
   await race(...parked);
   if (leaving.signal.aborted) return;
   if (!revealing) {

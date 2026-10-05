@@ -20,12 +20,10 @@ describe("a receipt", () => {
 });
 
 describe("a publication's frame", () => {
-  it("puts the stage in the same deck as the challenge page, keys included", () => {
+  it("puts the stage in the same deck as the challenge page", () => {
     const page = runHall();
-    expect(page.querySelector(".run-top > .deck > .stage > canvas#stage")).not.toBeNull();
-    expect([...page.querySelectorAll(".deck > .controls button")].map((b) => b.id)).toEqual([
-      "playpause", "follow", "names",
-    ]);
+    expect(page.querySelector(".run-top > .deck > canvas#stage")).not.toBeNull();
+    expect([...page.querySelectorAll(".deck button")].map((b) => b.id)).toEqual(["follow"]);
   });
 
   it("hangs the challenge page's board sheet under the picture, and no legend", () => {

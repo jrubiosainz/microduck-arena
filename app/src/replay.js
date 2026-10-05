@@ -77,14 +77,6 @@ export class Player {
     this._last = null;
   }
 
-  pause() {
-    this.playing = false;
-  }
-
-  toggle() {
-    this.playing ? this.pause() : this.play();
-  }
-
   /** Advance by wall-clock milliseconds; call once per animation frame. */
   advance(nowMs) {
     if (!this.playing) {

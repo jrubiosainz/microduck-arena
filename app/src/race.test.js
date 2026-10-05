@@ -105,22 +105,14 @@ describe("raceHall: the page's frame", () => {
   });
 
   it("frames the stage with the charter's shadow primitive", () => {
-    // On the chassis, which is the whole object: the screen and the transport
-    // under it share one frame and therefore one shadow.
     const deck = hall().querySelector(".deck");
     expect(deck.className).toContain("fx-shadow-card");
-    expect(deck.querySelector(".stage")).not.toBeNull();
+    expect(deck.classList.contains("stage")).toBe(true);
   });
 
-  it("puts the stage's buttons on the chassis, under the picture", () => {
-    // They control this picture, so they live on the same object rather than
-    // floating on the page below it.
-    const controls = hall().querySelector(".deck > .controls");
-    expect(controls).not.toBeNull();
-    expect([...controls.querySelectorAll("button")].map((b) => b.id)).toEqual([
-      "playpause", "follow", "names",
-    ]);
-    expect(controls.querySelector("#stage-hint")).not.toBeNull();
+  it("hangs no bar of keys under the picture: only the follow key, on it", () => {
+    const deck = hall().querySelector(".deck");
+    expect([...deck.querySelectorAll("button")].map((b) => b.id)).toEqual(["follow"]);
   });
 
   it("names the kind of event over its title, as its card does", () => {
@@ -128,14 +120,6 @@ describe("raceHall: the page's frame", () => {
     expect(hall.querySelector(".raceeyebrow").textContent).toBe("SHOWCASE");
     // An event whose category the server did not send draws no empty line.
     expect(raceHall({ ...event, title: "x" }).querySelector(".raceeyebrow")).toBeNull();
-  });
-
-  it("offers a toggle for the names over the ducks, off to begin with", () => {
-    const button = hall().querySelector("#names");
-    expect(button.textContent).toBe("Show names");
-    // aria-pressed rather than the label alone, so the state is readable
-    // without reading the text — as the walls button already does.
-    expect(button.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("hangs no key on the picture: the board's tabs already say which duck is whose", () => {

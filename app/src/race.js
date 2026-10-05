@@ -204,7 +204,7 @@ export async function renderRace(root, { event, state }) {
     onChaseChange: followKeyFor(root),
   });
   state.viewer = viewer;
-  const deck = wireDeck(root, viewer);
+  wireDeck(root, viewer);
 
   // No slider any more: the stage is pinned at the dimmest the module allows.
   // Worth knowing if this ever looks wrong — brightness.js says in its own
@@ -229,15 +229,10 @@ export async function renderRace(root, { event, state }) {
       tier: tiers.get(runId) ?? "ghost",
       // A published run keeps the colourway it raced in.
       livery: liveries.get(runId) ?? "classic",
-      // The viewer builds a plate only for a lane that has a name; the button
-      // below decides whether it is shown.
+      // The plate over the duck: the viewer builds one for a lane with a name.
       name: names.get(runId),
     }));
     viewer.setLanes(arrangeLanes(board, isStage(event) ? lanes.slice(0, 1) : lanes), event);
-    deck.reset();
-    root.querySelector("#stage-hint").textContent = lanes.length
-      ? ""
-      : "Tick a lane below to watch a replay.";
   }
 
   // The sheet keeps the lanes and the filters; the page races what is ticked.

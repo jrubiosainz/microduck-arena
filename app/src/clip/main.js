@@ -95,7 +95,6 @@ async function main() {
     run.event,
     { loop: false },
   );
-  viewer.setNamesVisible(true);
   const plan = clipPlan(frameCount(traces[0]), config.tape_max_s, settle);
   const score = clipScore({ run, plan, trace: replays[0] });
   const crowdDirection = stadiumDirection(score.crowd ?? {});

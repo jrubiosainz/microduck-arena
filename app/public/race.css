@@ -182,23 +182,12 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 
 /* ── the deck ─────────────────────────────────────────────────────────── */
 
-/* One chassis, the way a cassette deck is one object: the screen on top, the
-   transport under it, a single ink frame around both. The buttons used to
-   float on the page below the picture, which read as page furniture rather
-   than as the controls OF this picture.
-   The screen keeps its own rules because `vote.js` builds a bare
-   `.stage` with no deck around it — the frame moves out to the chassis only
-   where there IS one. */
-/* The panel takes the scene's own background — `viewer.js` clears to
-   #08080C, which is this token — so the chassis is one unbroken surface and
-   the picture ends without a seam under it. */
-.deck {
-  --fx-shadow-color: var(--cyan);
-  background: var(--deep-ink);
-  border: 5px solid var(--ink);
-  margin-bottom: 26px;
-}
-.deck .stage { border: 0; }
+/* The screen a replay plays on, and nothing under it. It used to be a chassis
+   with a transport below the picture; a replay always plays and the names
+   always ride the ducks, so that bar had only the follow key left to carry,
+   and the key now rides the picture. `vote.js` builds the same `.stage` bare,
+   without the shadow or the room under it. */
+.deck { margin-bottom: 26px; }
 
 /* ── the stage's vignette ─────────────────────────────────────────────── */
 
@@ -212,27 +201,17 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
   background: radial-gradient(130% 100% at 50% 50%, transparent 72%, rgba(0, 0, 0, 0.26) 100%);
 }
 
-/* ── the transport ───────────────────────────────────────────────────── */
+/* ── the follow key ───────────────────────────────────────────────────── */
 
-/* The deck below the screen: no rule between them, since the panel is now
-   the same deep ink the scene clears to and a line across it would be the
-   only thing marking a join that is not there. The hint sits at the far end
-   the way a counter sits apart from the keys. */
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  padding: 11px 12px;
-}
-/* Outlined rather than filled: four paper slabs across the panel shouted
-   louder than the picture above them. Hollow keys — a light grey rule, deep
-   ink inside, the same grey lettering — read as engraving on the chassis.
-   The grey is paper at 60%, which the charter already spends on secondary
-   labels over ink, so it is the palette's own quiet rather than a new colour.
-   Full paper is kept for the hover: the key you are pointing at is the only
-   one that brightens. */
-.controls button {
+/* In the picture's corner, over the vignette, which would otherwise dim it.
+   Hollow: a light grey rule, deep ink inside, the same grey lettering — the
+   charter's quiet for labels over ink, so the key reads as part of the
+   picture rather than as a slab over it. Full paper on hover. */
+.deck #follow {
+  position: absolute;
+  z-index: 1;
+  right: 18px;
+  bottom: 14px;
   font: 400 0.8rem/1 var(--display);
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -244,20 +223,8 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
   border: 2px solid var(--paper-60);
   box-shadow: none;
 }
-.controls button:hover { color: var(--paper); border-color: var(--paper); }
-.controls button:active { translate: 2px 2px; }
-/* No lit state: the names toggle says "Hide names" when enabled, so the
-   label carries it and a filled key would be saying it twice. The
-   `aria-pressed` attribute still carries it for anyone not reading the panel. */
-.controls .hint {
-  margin-left: auto;
-  color: var(--paper-60);
-  font-family: var(--type-mono-label-family);
-  font-weight: var(--type-mono-label-weight);
-  font-size: var(--type-mono-label-size);
-  letter-spacing: var(--type-mono-label-tracking);
-  text-transform: uppercase;
-}
+.deck #follow:hover { color: var(--paper); border-color: var(--paper); }
+.deck #follow:active { translate: 2px 2px; }
 
 /* ── the board ────────────────────────────────────────────────────────── */
 
@@ -542,7 +509,7 @@ table.board .env a:hover,
 table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 
 /* The focus ring is cyan, on everything that takes focus — the club's rule. */
-.controls button:focus-visible,
+.deck #follow:focus-visible,
 .modes button:focus-visible,
 .pickall-box:focus-visible,
 .train__open:focus-visible,
@@ -844,19 +811,12 @@ table.board .withdraw:focus-visible,
   min-height: 0;
 }
 /* The stage gives the rest of the page its slack, down to a floor below which
-   there is no picture left worth watching. It sits in the challenge page's
-   deck, keys and all — a grid here, so the picture is the part that gives
-   and the transport under it keeps its height. */
-.run-top .deck {
-  display: grid;
-  grid-template-rows: minmax(min-content, 1fr) auto;
-  margin: 0;
-}
-/* The floor is what leaves the deck's keys and an open seed list their room
-   on an 800 px window: any higher and the keys ran under the deck's own
-   frame the moment the seeds unfolded. `contain: size` keeps the canvas out
-   of the arithmetic: its drawing buffer is sized to the box it was last
-   given, and without this the box could never get smaller than that. */
+   there is no picture left worth watching. It is the challenge page's deck. */
+.run-top .deck { margin: 0; }
+/* The floor is what leaves an open seed list its room on an 800 px window.
+   `contain: size` keeps the canvas out of the arithmetic: its drawing buffer
+   is sized to the box it was last given, and without this the box could
+   never get smaller than that. */
 .run-top .stage { min-height: 196px; contain: size; }
 .run-top .stage canvas { height: 100%; min-height: 0; }
 .run-facts { grid-column: 1 / -1; margin: 0; color: var(--ink-70); }

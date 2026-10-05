@@ -77,7 +77,6 @@ export async function mountJob(root, { status, account, route }) {
   let code = await api.getCode();
   let since = job.next;
   let selected = voted ? null : job.best; // the checkpoint chosen: scored, published
-  let playing = null; // the checkpoint on the stage
   let unplayable = ""; // why the checkpoint picked last cannot play
   const evaluations = new Map(); // checkpoint -> its stored evaluation, once asked
   let left = false;
@@ -220,12 +219,7 @@ export async function mountJob(root, { status, account, route }) {
       value.textContent = row.seeds_finished ? seconds(row.score) : "No finish";
       seeds.textContent = `${row.seeds_finished}/${row.seeds_total} seeds${row.seeds_finished ? ` · at ${row.command_vx.toFixed(2)} m/s` : ""}`;
     }
-  }
-
-  function drawHint() {
-    grid.querySelector("#stage-hint").textContent = unplayable || (playing !== null
-      ? (stage ? `Checkpoint ${playing}` : `Checkpoint ${playing} · its best seed`)
-      : job.checkpoints.length ? "Pick a checkpoint below to watch it." : "No checkpoint yet.");
+    if (unplayable) seeds.textContent = unplayable;
   }
 
   function draw() {
@@ -238,14 +232,12 @@ export async function mountJob(root, { status, account, route }) {
     paint($(".curve"), [job.curve.length, job.curve.at(-1)], (node) => renderCurve(node, job.curve));
     paint($(".output__body"), [job.following, job.job_url], drawOutput);
     drawScore();
-    drawHint();
     $(".job-stop").hidden = !running;
     panel.update({ job, code, account: account.get(), selected });
   }
 
   // The stadium, made once, a replay waiting for it; until one plays, it is empty.
   let viewer = null;
-  let deck = null;
   const stadium = createViewer(grid.querySelector("#stage"), { rig: event.rig, onChaseChange: followKeyFor(grid) }).then((made) => {
     if (left) {
       made.dispose();
@@ -253,7 +245,7 @@ export async function mountJob(root, { status, account, route }) {
     }
     viewer = made;
     viewer.setBrightness(MIN); // as the Arena's race page
-    deck = wireDeck(grid, viewer);
+    wireDeck(grid, viewer);
     viewer.setLanes([], event);
     return viewer;
   });
@@ -261,9 +253,6 @@ export async function mountJob(root, { status, account, route }) {
   async function play(body) {
     if (!(await stadium) || left || selected !== body.checkpoint) return;
     viewer.setLanes([{ trace: body.trace, tier: "trial", livery: "classic", name: `checkpoint ${body.checkpoint}` }], event);
-    deck.reset();
-    playing = body.checkpoint;
-    drawHint();
   }
 
   async function pick(n) {
@@ -275,9 +264,9 @@ export async function mountJob(root, { status, account, route }) {
       try {
         body = await api.getCheckpoint(event.id, job.id, n);
       } catch (error) {
-        if (selected === n) { // a checkpoint picked since owns the stage's hint
+        if (selected === n) { // a checkpoint picked since owns the score
           unplayable = error.message;
-          drawHint();
+          drawScore();
         }
         return;
       }
