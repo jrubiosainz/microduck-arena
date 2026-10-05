@@ -52,17 +52,17 @@ export function setRanks(pegRows, order) {
  * flow hands its height to the stage, which makes the picture jump mid-beat.
  * So a beat unveils content, it never inserts it.
  *
- * Nothing but the race is readable until the author's lane reaches its last
- * frame (`raced`). Then, in order: the celebration, the stamp, the time, the
- * climb, and the points as showers of stars. `onSeen` is called once, when
- * the theatre ends or is skipped — not when the page is left mid-way
+ * It starts with the replay rather than after it: the author came for the
+ * result, not to sit through the run first. In order: the celebration, the
+ * stamp, the time, the climb, and the points as showers of stars. `onSeen` is
+ * called once, when the theatre ends or is skipped — not when the page is left mid-way
  * (`signal.reason === "leave"`), so the dot stays for a result that was not
  * actually seen.
  */
 export async function reveal(parts, show, signal) {
   const { page, chip, chipFlip, facts, scoreboard, stamp, flip, yourScore } = parts;
   const { pegboard, pegRows, cards, share } = parts;
-  const { run, plan, receipts, raced, startPoints, score, onSeen } = show;
+  const { run, plan, receipts, startPoints, score, onSeen } = show;
   const act = (name) => {
     page.dataset.act = name;
   };
@@ -89,10 +89,6 @@ export async function reveal(parts, show, signal) {
   };
 
   try {
-    act("race");
-    await raced;
-    if (signal.aborted) return;
-
     if (run.seeds_finished > 0) {
       act("celebrate");
       play("win");

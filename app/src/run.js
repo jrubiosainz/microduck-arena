@@ -10,7 +10,6 @@ import { boardsheetMarkup, wireBoardsheet } from "./boardsheet.js";
 import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
 import { formatSpeed, isStage } from "./format.js";
 import { colourLanes, lanesFor } from "./lanes.js";
-import { CTRL_DT, frameCount } from "./replay.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
 import { dress, guideHref, playerHref, raceHref } from "./router.js";
 import { shareStrip, wireShare } from "./share.js";
@@ -122,8 +121,8 @@ export async function renderRun(root, runId, state) {
 
   const page = runHall();
   // Which beat the page is in. Read by nothing yet: it is the hook a screenshot
-  // or a test waits on, as in Duck Jam.
-  page.dataset.act = revealing ? "race" : "rest";
+  // or a test waits on, as in Duck Jam. A reveal's first beat waits on the stage.
+  page.dataset.act = revealing ? "load" : "rest";
   root.append(page, footer());
   const $ = (id) => page.querySelector(`#${id}`);
 
@@ -250,15 +249,6 @@ export async function renderRun(root, runId, state) {
   let viewer = null;
   let deck = null;
   let parked = null;
-  let crossed;
-  const raced = revealing
-    ? new Promise((resolve) => {
-        crossed = resolve;
-      })
-    : null;
-  // Through a reveal the first replay plays once, and the theatre waits on the
-  // author's own duck reaching its last frame.
-  let firstReplay = revealing;
   async function race(runIds, tiers) {
     if (!viewer) {
       parked = [runIds, tiers];
@@ -274,12 +264,7 @@ export async function renderRun(root, runId, state) {
       // The plate over the duck, for the names key.
       name: byId.get(id).user,
     }));
-    const own = traces.get(run.run_id);
-    const options = firstReplay && own
-      ? { loop: false, onTick: (t) => t >= (frameCount(own) - 1) * CTRL_DT && crossed() }
-      : {};
-    firstReplay = false;
-    viewer.setLanes(colourLanes($("board"), lanes), run.event, options);
+    viewer.setLanes(colourLanes($("board"), lanes), run.event);
     deck.reset();
     $("stage-hint").textContent = lanes.length ? "" : "Tick a row below to watch a replay.";
   }
@@ -313,8 +298,8 @@ export async function renderRun(root, runId, state) {
   yourScore.classList.toggle("veiled", revealing);
   if (revealing) {
     // The board as it was before this run — you at the bottom, the rows under
-    // you a place higher — until the climb. Held still until then: a row
-    // ticked mid-theatre would restart the replay the theatre is waiting on.
+    // you a place higher — until the climb. Held still until the theatre ends:
+    // a filter redraws the table, and the climb moves these very rows.
     setRanks(pegRows, plan.start);
     tbody.replaceChildren(...plan.start.map((row) => pegRows.get(row.run_id)));
     sheet.setInert(true);
@@ -346,8 +331,6 @@ export async function renderRun(root, runId, state) {
   // The chip stays on screen so the stars have somewhere to fly to.
   root.querySelector(".signage").classList.add("signage--pinned");
   const startPoints = me.points - earned;
-  // Leaving mid-race must not park `reveal()` on `await raced` forever.
-  theatre.signal.addEventListener("abort", () => crossed(), { once: true });
 
   // The reveal. The chip starts at the total BEFORE this run, since /api/me
   // already counts it; Space skips; leaving the page abandons without marking.
@@ -385,15 +368,11 @@ export async function renderRun(root, runId, state) {
       run,
       plan,
       receipts: run.receipts,
-      raced,
       startPoints,
       score,
       onSeen: () => {
         markSeen(run.run_id).catch(() => {});
         if (me.unseen <= 1) chip.classList.remove("unread");
-        viewer.player.loop = true;
-        viewer.player.play();
-        deck.reset();
         sheet.setInert(false);
         showYourRow();
       },
