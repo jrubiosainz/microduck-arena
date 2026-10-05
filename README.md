@@ -98,34 +98,37 @@ author published themselves, raced at a pinned revision, and the board's
 
 ## Social clips
 
-Every published run gets two clips — landscape and vertical — rendered in the
-background, inside the Space itself, the moment the publish completes: a
-headless Chromium photographs the arena's own stage frame by frame and ffmpeg
-encodes the video, both under `nice`. That costs minutes of CPU per publish,
-and it is why the image carries Chromium and ffmpeg.
+Every published run gets two clips — landscape and vertical — and the Space
+renders none of them. The moment a publish completes it launches an HF Job of
+its own on its own image, which runs `arena clip <run>`: a headless Chromium
+photographs the arena's stage frame by frame on the job's GPU, ffmpeg encodes
+the video, and the job writes the clip into the dataset. That is why the image
+carries Chromium, ffmpeg and the EGL dispatchers (`libegl1`, `libgles2`).
 
-It needs the hardware to match. A clip is ~820 screenshots of a 1920×1080
-WebGL stage. On **cpu-upgrade** — eight vCPUs, software GL — that is 130 to
-330 s, well inside `RENDER_BUDGET_S`; this Space runs there and those are its
-own numbers. Whether **cpu-basic** can do it is untested. The one clip ever
-attempted on it died after 854 s, but to a browser that hung, not to the
-clock, so that run cannot tell the two apart. The publication page follows
-the render frame by frame, so a Space that is too slow says so on the page
-instead of going quiet.
+Measured on 2026-10-05 on a 386-frame sprint clip: 75 s on a **t4-small** job,
+against 588 s in SwiftShader on the Space's own eight vCPUs and 553 s on a
+sixteen-vCPU job; about a cent a clip. The publication page follows the job,
+frame by frame from its log. When the Jobs API refuses a launch, nothing is
+rendered elsewhere: the run stays owed — its `clips/<run>/pending.json` marker
+is the list — and is launched again later, and at every boot.
 
 | name | kind | value |
 | --- | --- | --- |
 | `CHROME` | variable | the browser binary, if not at one of the usual paths |
-| `ARENA_CLIPS` | variable | `0` turns rendering off |
-| `ARENA_CLIP_PARALLEL` | variable | layouts rendered at once, default half the cores |
-| `ARENA_CLIP_BACKFILL` | variable | `1` also renders every run that has no clip yet — the log as it stood before clips — newest first, behind fresh publishes; set it on the deploy that brings clips to a Space with history, and leave it: once caught up a boot finds nothing to do |
+| `ARENA_CLIPS` | variable | `0` stops owing clips |
+| `ARENA_CLIP_FLAVOR` | variable | the job's hardware, default `t4-small` |
+| `ARENA_CLIP_NAMESPACE` | variable | the account that runs and pays for the jobs, default the Space's owner; `HF_TOKEN` must be allowed to launch jobs there |
+| `ARENA_CLIP_JOBS` | variable | jobs running at once at most, default 4 |
+| `ARENA_CLIP_PARALLEL` | variable | layouts a job renders at once, default half its cores |
+| `ARENA_CLIP_BACKFILL` | variable | `1` also owes a clip to every run that has none — the log as it stood before clips — newest first, behind fresh publishes; once caught up a boot finds nothing to do |
 | `ARENA_ORIGIN` | variable | where the recorder's Chrome loads `clip.html`, if not this server's own loopback address |
 
 Each event's `[clip]` manifest section tunes its framing, duration and sounds
 — see `arena/manifest.py`.
 
 To render one run's clips by hand — a historical run, or a retry — run
-`arena clip <run_id> --store DIR`.
+`arena clip <run_id> --store DIR`; with `ARENA_DATASET` set it writes to the
+dataset, as a job does, and `ARENA_CLIP_GPU=1` draws on the machine's GPU.
 
 ## Recovering the board
 

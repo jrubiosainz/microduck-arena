@@ -1,17 +1,25 @@
-"""Clips: three write-once files per run, and a worker that owes one per publish."""
+"""Clips: three write-once files per run, rendered by an HF Job launched per publish."""
 
 import base64
 import io
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
 from arena import recorder
-from arena.clips import CLIP_VERSION, ClipRenderer, clip_manifest
+from arena.clips import (
+    CLIP_VERSION,
+    JOB_TRIES,
+    RETRY_S,
+    ClipJobs,
+    ClipRenderer,
+    clip_manifest,
+)
 from arena.recorder import RenderedLayout, RenderedRun, ffmpeg_args
 from arena.store import LocalStore, Withdrawal
 from arena.trace import encode as encode_trace
@@ -94,6 +102,56 @@ def rendered(seconds=7.52):
                        poster=b"png")
 
 
+class FakeJobs:
+    """The Jobs API as ClipJobs uses it: launches are recorded, and each job's
+    stage, message and log are the test's to set."""
+
+    def __init__(self, refuse=0, left=()):
+        self.launched = []
+        self.stage = {}
+        self.message = {}
+        self.logs = {}
+        self.refuse = refuse
+        self.left = list(left)
+
+    def run_job(self, **job):
+        if self.refuse:
+            self.refuse -= 1
+            raise RuntimeError("402 Payment Required")
+        job_id = f"J{len(self.launched) + 1}"
+        self.launched.append({"id": job_id, **job})
+        self.stage[job_id] = "SCHEDULING"
+        return SimpleNamespace(id=job_id)
+
+    def inspect_job(self, *, job_id, namespace=None):
+        return SimpleNamespace(status=SimpleNamespace(stage=self.stage[job_id],
+                                                      message=self.message.get(job_id)))
+
+    def fetch_job_logs(self, *, job_id, namespace=None, tail=None):
+        return self.logs.get(job_id, [])[-tail:]
+
+    def list_jobs(self, *, status=None, labels=None, namespace=None):
+        return self.left
+
+
+class Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
+def jobs_for(store, api, **options):
+    return ClipJobs(store, space_id="pollen-robotics/microduck-arena", dataset="pollen-robotics/runs",
+                    token="hf_x", api=api, log=lambda _: None, **options)
+
+
+def written(store, run_id):
+    """What a clip job leaves behind when its render succeeds."""
+    store.put_clip(run_id, {"clip.json": json.dumps({"run_id": run_id, "layouts": {}}).encode()})
+
+
 def test_the_manifest_carries_the_live_contract_per_layout():
     manifest = clip_manifest("R1", rendered(), "2026-09-16T10:00:00Z")
     assert manifest["version"] == CLIP_VERSION
@@ -117,22 +175,25 @@ def test_a_frame_is_its_layout_at_two_thirds_in_even_pixels():
         assert all(side % 2 == 0 for side in recorder.frame_size(layout))
 
 
-def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
+
+def test_a_clip_job_renders_its_run_and_records_a_failure(tmp_path):
     store = LocalStore(tmp_path)
     store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
     store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:01:00Z")
+    asked = []
 
-    def render(origin, run_id, parallel, budget_s, on_progress=None):
+    def render(origin, run_id, parallel, budget_s, gpu, on_progress):
+        asked.append(gpu)
         if run_id == "R2":
             raise RuntimeError("ffmpeg exited 1")
         return rendered()
 
     said = []
-    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=render, log=said.append)
-    worker.drain()
-    assert [item[2] for item in sorted(worker.queue.queue)] == ["R1", "R2"]
-    while not worker.queue.empty():
-        worker.render_one(worker.queue.get()[-1])
+    renderer = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, gpu=True, render=render,
+                            log=said.append)
+    assert renderer.render_one("R1") is True
+    assert renderer.render_one("R2") is False
+    assert asked == [True, True]
     state, manifest = store.clip_state("R1")
     assert state == "ready" and manifest["run_id"] == "R1"
     assert store.clip_file("R1", "vertical.mp4").read_bytes() == b"mp4"
@@ -140,14 +201,13 @@ def test_the_worker_renders_what_is_owed_and_records_a_failure(tmp_path):
     assert any("RuntimeError: ffmpeg exited 1" in line for line in said)
 
 
-def test_a_publish_owes_a_clip_only_where_a_renderer_exists(tmp_path, monkeypatch):
-    # An absent frontend_dir resolves to None regardless of what this machine
-    # has built, so `available` starts False whether or not app/dist exists.
-    config = ArenaConfig.from_env(
-        store_dir=tmp_path, dev_user="coralie", frontend_dir=tmp_path / "no-bundle",
-        clip_worker=False,
-    )
+
+def test_a_publish_owes_a_clip_only_where_jobs_can_run(tmp_path, monkeypatch):
+    # Off a Space there is no image for a job to run: nothing is owed.
+    monkeypatch.delenv("SPACE_ID", raising=False)
+    config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie", clip_worker=False)
     app = create_app(config)
+    assert app.state.clips.available is False
     api = TestClient(app)
     run_id = submit(api, REFERENCE).json()["run_id"]
     assert app.state.store.clip_state(run_id) == ("none", None)
@@ -159,7 +219,8 @@ def test_a_publish_owes_a_clip_only_where_a_renderer_exists(tmp_path, monkeypatc
     monkeypatch.setattr(app.state.clips, "available", True)
     run_id = submit(api, REFERENCE).json()["run_id"]
     assert app.state.store.clip_state(run_id) == ("pending", None)
-    assert [item[2] for item in app.state.clips.queue.queue] == [run_id]
+    assert app.state.clips.progress(run_id) == {"ahead": 0}
+
 
 
 def test_a_backfill_owes_every_run_without_a_clip_behind_the_fresh_ones(tmp_path):
@@ -175,13 +236,13 @@ def test_a_backfill_owes_every_run_without_a_clip_behind_the_fresh_ones(tmp_path
                               withdrawn_at="2026-09-15T00:00:00Z"))
     store.mark_clip_pending("R9", "erin", "sprint-2m", "2026-09-16T10:00:00Z")
 
-    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, backfill=True)
-    worker.drain()
+    jobs = jobs_for(store, FakeJobs(), backfill=True)
+    jobs.drain()
     # The fresh publish first, then the log newest first; the rendered and the
     # withdrawn are not owed.
-    assert [item[2] for item in sorted(worker.queue.queue)] == ["R9", newer.run_id, old.run_id]
+    assert [item[2] for item in sorted(jobs.queue.queue)] == ["R9", newer.run_id, old.run_id]
 
-    quiet = ClipRenderer(store, "http://127.0.0.1:1", tmp_path)
+    quiet = jobs_for(store, FakeJobs())
     quiet.drain()
     assert [item[2] for item in sorted(quiet.queue.queue)] == ["R9"]
 
@@ -286,72 +347,83 @@ def test_a_performance_is_described_as_one():
     assert describe(cut, None, talent) == "@eve's duck performed on MicroDuck Got a Talent; the performance was cut short."
 
 
-def test_the_worker_says_where_a_clip_stands(tmp_path):
-    """The queue is a place in a line and a render is a fraction: both are read
-    off the worker, never off the store, which knows only that one is owed."""
-    store = LocalStore(tmp_path)
-    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path)
-    assert worker.progress("R1") is None
 
-    worker.enqueue("R1")
-    worker.enqueue("R2")
+def test_the_jobs_say_where_a_clip_stands(tmp_path):
+    """A place on the list, then a job's stage and frames read off its log:
+    never off the store, which knows only that a clip is owed."""
+    store = LocalStore(tmp_path)
+    api = FakeJobs()
+    jobs = jobs_for(store, api, running=1)
+    assert jobs.progress("R1") is None
+
+    jobs.enqueue("R1")
+    jobs.enqueue("R2")
     # A backfill joins behind whatever a player just published, so the position
     # a page shows is the pop order, not the order things were put in.
-    worker.enqueue("R0", priority=1)
-    worker.enqueue("R3")
-    assert worker.progress("R1") == {"ahead": 0}
-    assert worker.progress("R3") == {"ahead": 2}
-    assert worker.progress("R0") == {"ahead": 3}
+    jobs.enqueue("R0", priority=1)
+    jobs.enqueue("R3")
+    jobs.enqueue("R1")
+    assert jobs.progress("R1") == {"ahead": 0}
+    assert jobs.progress("R3") == {"ahead": 2}
+    assert jobs.progress("R0") == {"ahead": 3}
 
-    # In flight: the worker took it off the queue first, so the line behind it
-    # counts from the front again.
-    assert worker.queue.get()[-1] == "R1"
-    worker.step("R1", "soundtrack", 0, 0)
-    assert worker.progress("R1") == {"stage": "soundtrack", "done": 0, "total": 0}
-    worker.step("R1", "frames", 310, 880)
-    assert worker.progress("R1") == {"stage": "frames", "done": 310, "total": 880}
-    assert worker.progress("R2") == {"ahead": 0}
-    assert worker.progress("R3") == {"ahead": 1}
-    # Nothing in flight, and R1 is neither queued nor rendering any more.
-    worker.step(None, "")
-    assert worker.progress("R1") is None
+    # Launched: off the list, so the line behind it counts from the front again.
+    jobs.tick()
+    assert jobs.progress("R1") == {"stage": "opening", "done": 0, "total": 0}
+    assert jobs.progress("R2") == {"ahead": 0}
+    api.stage["J1"] = "RUNNING"
+    api.logs["J1"] = ["clip: rendering R1", "clip: soundtrack 0/0", "clip: frames 300/880",
+                      "clip: frames 310/880", "a line of Chrome's own"]
+    jobs.tick()
+    assert jobs.progress("R1") == {"stage": "frames", "done": 310, "total": 880}
+    # Ended with its clip written: the store answers for it now.
+    written(store, "R1")
+    api.stage["J1"] = "COMPLETED"
+    jobs.tick()
+    assert jobs.progress("R1") is None
+    assert jobs.progress("R2") == {"stage": "opening", "done": 0, "total": 0}
 
 
-def test_a_render_reports_its_steps_and_a_failure_clears_them(tmp_path):
+
+def test_a_clip_job_logs_its_steps_for_the_space_to_read(tmp_path):
     store = LocalStore(tmp_path)
-    store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
-    store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:01:00Z")
-    seen = []
 
-    def render(origin, run_id, parallel, budget_s, on_progress=None):
+    def render(origin, run_id, parallel, budget_s, gpu, on_progress):
+        on_progress("opening", 0, 0)
         on_progress("soundtrack", 0, 0)
-        on_progress("frames", 188, 376)
-        seen.append(dict(worker.progress(run_id)))
-        if run_id == "R2":
-            raise RuntimeError("ffmpeg exited 1")
+        for done in range(1, 377):
+            on_progress("frames", done, 376)
         return rendered()
 
-    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=render, log=lambda _: None)
-    worker.render_one("R1")
-    assert seen[-1] == {"stage": "frames", "done": 188, "total": 376}
-    # A ready clip is not a render in flight: the store answers for it now.
-    assert worker.progress("R1") is None
-    worker.render_one("R2")
-    assert worker.progress("R2") is None
+    said = []
+    ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=render, log=said.append).render_one("R1")
+    steps = [line for line in said if line.startswith("clip: ") and "/" in line]
+    assert steps[:3] == ["clip: opening 0/0", "clip: soundtrack 0/0", "clip: frames 1/376"]
+    # Every twentieth frame, and the last: a log the Space reads, not one per frame.
+    assert steps[3] == "clip: frames 21/376" and steps[-1] == "clip: frames 376/376"
+    assert len(steps) < 30
 
 
-def test_the_clip_route_follows_a_render_and_says_why_one_failed(tmp_path):
+
+def test_the_clip_route_follows_a_job_and_says_why_one_failed(tmp_path):
     api, app, record = app_with_run(tmp_path)
     store = app.state.store
     url = f"/api/runs/{record.run_id}/clip"
     store.mark_clip_pending(record.run_id, "alice", "sprint-2m", "2026-09-16T10:00:00Z")
-
-    app.state.clips.step(record.run_id, "frames", 310, 880)
+    jobs = FakeJobs()
+    app.state.clips = jobs_for(store, jobs)
+    app.state.clips.enqueue(record.run_id)
+    app.state.clips.tick()
+    jobs.stage["J1"] = "RUNNING"
+    jobs.logs["J1"] = ["clip: frames 310/880"]
+    app.state.clips.tick()
     assert api.get(url).json() == {
         "state": "rendering", "stage": "frames", "done": 310, "total": 880
     }
 
     store.fail_clip(record.run_id, "2026-09-16T10:05:00Z", "TimeoutError: timed out in 60.0s")
+    jobs.stage["J1"] = "ERROR"
+    app.state.clips.tick()
     assert api.get(url).json() == {
         "state": "failed", "reason": "TimeoutError: timed out in 60.0s",
         "failed_at": "2026-09-16T10:05:00Z",
@@ -436,25 +508,23 @@ def test_a_render_past_its_budget_stops_at_the_next_frame(tmp_path, monkeypatch)
         )
 
 
+
 def test_a_run_being_backfilled_is_not_told_it_has_no_clip(tmp_path):
     """The backfill enqueues straight off the log and marks nothing pending, so
-    the store still says `none` for a run being photographed right now. Only the
-    worker knows; a page that trusted the store alone showed no clip row at all
+    the store still says `none` for a run being rendered right now. Only the
+    jobs know; a page that trusted the store alone showed no clip row at all
     while the clip was being made — the same silence as a render that failed."""
     api, app, record = app_with_run(tmp_path)
     url = f"/api/runs/{record.run_id}/clip"
     assert app.state.store.clip_state(record.run_id) == ("none", None)
 
+    app.state.clips = jobs_for(app.state.store, FakeJobs())
     app.state.clips.enqueue(record.run_id, priority=1)
     assert api.get(url).json() == {"state": "queued", "ahead": 0}
-    app.state.clips.step(record.run_id, "opening", 0, 0)
+    app.state.clips.tick()
     assert api.get(url).json() == {
         "state": "rendering", "stage": "opening", "done": 0, "total": 0
     }
-    # Off the queue and out of flight with nothing written: owed by nobody.
-    assert app.state.clips.queue.get()[-1] == record.run_id
-    app.state.clips.step(None, "")
-    assert api.get(url).json() == {"state": "none"}
 
 
 def test_a_screenshot_that_never_comes_back_is_asked_again(tmp_path, monkeypatch):
@@ -486,21 +556,22 @@ def test_a_capture_stuck_for_good_still_fails_the_clip(tmp_path, monkeypatch):
     assert [what for what, _ in tab.waited].count("Page.captureScreenshot") == recorder.CAPTURE_TRIES
 
 
+
 def test_a_failed_clip_is_owed_one_more_go_at_the_next_boot(tmp_path):
     """A failure here is a stuck browser far more often than a broken run, and
     it used to be forever: the marker is written once and the drain skipped it,
     so a transient hang cost a publication its clip until someone went into the
-    store by hand. A boot is a new browser; it is worth one more render."""
+    store by hand. A boot is a new job; it is worth one more render."""
     store = LocalStore(tmp_path)
     store.mark_clip_pending("P1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
     store.fail_clip("F1", "2026-09-16T10:05:00Z", "TimeoutError: timed out in 736.5s")
     store.put_clip("R1", {"clip.json": b"{}"})
 
-    worker = ClipRenderer(store, "http://127.0.0.1:1", tmp_path, render=None, log=lambda _: None)
-    worker.drain()
+    jobs = jobs_for(store, FakeJobs())
+    jobs.drain()
     # Behind what is owed, never in front of it: a fresh publish waits for
     # nobody's retry.
-    assert [(item[0], item[-1]) for item in sorted(worker.queue.queue)] == [(0, "P1"), (1, "F1")]
+    assert [(item[0], item[-1]) for item in sorted(jobs.queue.queue)] == [(0, "P1"), (1, "F1")]
 
 
 def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
@@ -513,7 +584,7 @@ def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
     opened = []
 
     class FakeChrome:
-        def __init__(self, binary, nice=10):
+        def __init__(self, binary, nice=10, gpu=False):
             self.closed = False
             opened.append(self)
 
@@ -552,3 +623,146 @@ def test_a_longer_clip_gets_as_much_time_per_frame_as_a_race():
     assert recorder.budget_for(900.0, 451) == 900.0
     assert recorder.budget_for(900.0, 321) == 900.0
     assert recorder.budget_for(900.0, 651) == pytest.approx(900.0 * 651 / 451)
+
+
+def test_a_clip_job_runs_this_spaces_image_and_writes_to_its_dataset(tmp_path):
+    store = LocalStore(tmp_path)
+    api = FakeJobs()
+    jobs = jobs_for(store, api)
+    jobs.enqueue("R1")
+    jobs.tick()
+    job = api.launched[0]
+    # The same code and browser as the Space, on a GPU, paid by the Space's owner.
+    assert job["image"] == "hf.co/spaces/pollen-robotics/microduck-arena"
+    assert job["command"] == ["arena", "clip", "R1", "--store", "/tmp/arena-board"]
+    assert job["env"] == {"ARENA_DATASET": "pollen-robotics/runs", "ARENA_COMMENTARY": "0",
+                          "ARENA_CLIP_GPU": "1"}
+    assert job["secrets"] == {"HF_TOKEN": "hf_x"}
+    assert job["flavor"] == "t4-small" and job["namespace"] == "pollen-robotics"
+    assert job["labels"] == {"arena": "clip", "run": "R1"}
+
+    cpu = FakeJobs()
+    on_cpu = jobs_for(store, cpu, flavor="cpu-upgrade", namespace="Nico-robot")
+    on_cpu.enqueue("R2")
+    on_cpu.tick()
+    assert cpu.launched[0]["env"]["ARENA_CLIP_GPU"] == "0"
+    assert cpu.launched[0]["namespace"] == "Nico-robot"
+
+
+def test_no_more_jobs_run_at_once_than_allowed(tmp_path):
+    store = LocalStore(tmp_path)
+    api = FakeJobs()
+    jobs = jobs_for(store, api, running=2)
+    for run_id in ("R1", "R2", "R3"):
+        jobs.enqueue(run_id)
+    jobs.tick()
+    assert [job["labels"]["run"] for job in api.launched] == ["R1", "R2"]
+    assert jobs.progress("R3") == {"ahead": 0}
+    written(store, "R1")
+    api.stage["J1"] = "COMPLETED"
+    jobs.tick()
+    assert [job["labels"]["run"] for job in api.launched] == ["R1", "R2", "R3"]
+
+
+def test_a_refused_launch_leaves_the_run_on_the_list_until_later(tmp_path):
+    """When the jobs stop working, nothing is rendered elsewhere: the run stays
+    owed, in its place, and the launch is tried again later."""
+    store = LocalStore(tmp_path)
+    store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    api, clock = FakeJobs(refuse=1), Clock()
+    said = []
+    jobs = ClipJobs(store, space_id="o/s", dataset="o/d", token="t", api=api, log=said.append,
+                    now=clock)
+    jobs.enqueue("R1")
+    jobs.tick()
+    assert api.launched == [] and jobs.progress("R1") == {"ahead": 0}
+    assert any("402 Payment Required" in line for line in said)
+    clock.t = RETRY_S - 1
+    jobs.tick()
+    assert api.launched == []
+    clock.t = RETRY_S
+    jobs.tick()
+    assert [job["labels"]["run"] for job in api.launched] == ["R1"]
+    assert store.clip_state("R1") == ("pending", None)
+
+
+def test_a_job_that_ended_without_a_clip_is_launched_again_then_failed(tmp_path):
+    """Neither file written: the machine ended the job, not the render. Owed
+    again a few times, then failed with the job's own last word."""
+    store = LocalStore(tmp_path)
+    store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    api = FakeJobs()
+    landed = []
+    jobs = jobs_for(store, api, landed=landed.append)
+    jobs.enqueue("R1")
+    for attempt in range(1, JOB_TRIES + 1):
+        jobs.tick()
+        api.stage[f"J{attempt}"] = "ERROR"
+        api.message[f"J{attempt}"] = "image pull failed"
+    jobs.tick()
+    assert len(api.launched) == JOB_TRIES
+    state, failed = store.clip_state("R1")
+    assert state == "failed"
+    assert failed["reason"] == f"job J{JOB_TRIES} ended ERROR: image pull failed"
+    assert landed == ["R1"] * JOB_TRIES
+    assert jobs.progress("R1") is None
+
+
+def test_a_boot_takes_over_the_jobs_a_previous_process_left_running(tmp_path):
+    """A redeploy does not end the jobs it launched: the next boot follows them
+    instead of rendering the same clips a second time."""
+    store = LocalStore(tmp_path)
+    store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    store.mark_clip_pending("R2", "bob", "sprint-2m", "2026-09-16T10:01:00Z")
+    api = FakeJobs(left=[SimpleNamespace(id="J0", labels={"arena": "clip", "run": "R1"})])
+    api.stage["J0"] = "RUNNING"
+    jobs = jobs_for(store, api)
+    jobs.drain()
+    jobs.tick()
+    assert [job["labels"]["run"] for job in api.launched] == ["R2"]
+    written(store, "R1")
+    api.stage["J0"] = "COMPLETED"
+    jobs.tick()
+    assert jobs.progress("R1") is None and store.clip_state("R1")[0] == "ready"
+
+
+def test_the_list_is_read_again_off_the_markers(tmp_path):
+    """A clip owed by another process, or marked by hand, is launched without
+    waiting for a boot: the pending markers are the list."""
+    store = LocalStore(tmp_path)
+    api, clock = FakeJobs(), Clock()
+    jobs = jobs_for(store, api, now=clock)
+    jobs.tick()
+    store.mark_clip_pending("R1", "alice", "sprint-2m", "2026-09-16T10:00:00Z")
+    jobs.tick()
+    assert api.launched == []
+    clock.t = RETRY_S
+    jobs.tick()
+    assert [job["labels"]["run"] for job in api.launched] == ["R1"]
+
+
+def test_a_clip_rendered_meanwhile_is_not_launched_again(tmp_path):
+    store = LocalStore(tmp_path)
+    api = FakeJobs()
+    jobs = jobs_for(store, api)
+    jobs.enqueue("R1")
+    written(store, "R1")
+    jobs.tick()
+    assert api.launched == []
+
+
+def test_a_restored_run_owes_a_clip_like_any_publication(tmp_path, monkeypatch):
+    from arena import recover as recover_module
+
+    record = make_record(user="apirrone")
+    monkeypatch.setattr(recover_module, "recover", lambda store, events, on_event=None: [record])
+    monkeypatch.setenv("ARENA_RECOVER", "1")
+    app = create_app(ArenaConfig.from_env(store_dir=tmp_path, clip_worker=False))
+    monkeypatch.setattr(app.state.clips, "available", True)
+    with TestClient(app):
+        for _ in range(100):
+            if app.state.clips.progress(record.run_id):
+                break
+            time.sleep(0.05)
+    assert app.state.store.clip_state(record.run_id) == ("pending", None)
+    assert app.state.clips.progress(record.run_id) == {"ahead": 0}

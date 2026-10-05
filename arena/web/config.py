@@ -10,6 +10,7 @@ import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..clips import JOB_FLAVOR
 from ..index import ENTRANTS
 from ..store import HubBallots, HubStore, LocalBallots, LocalStore
 from .oauth import OAuthSettings
@@ -30,6 +31,20 @@ DEFAULT_SESSION_TTL_S = 8 * 60 * 60
 # that serves it. A model that thinks before answering spends the writer's
 # token budget on thoughts and is rejected as incomplete; pick an instruct one.
 DEFAULT_COMMENTARY_MODEL = "deepseek-ai/DeepSeek-V3.1"
+
+
+def _positive(name: str, default: int) -> int:
+    """An environment variable that must be a positive integer, or `default` unset."""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise ValueError(f"{name} must be a positive integer, got {raw!r}")
+    return value
 
 
 def default_frontend(package_dir: Path) -> Path:
@@ -77,17 +92,26 @@ class ArenaConfig:
     # The Space's own id, e.g. pollen-robotics/microduck-arena; its huggingface.co page opens an
     # entry's result for anyone logged in there, private Space or not.
     space_id: str | None = None
-    # Layouts rendered at once. Half the cores: SwiftShader takes every core a
-    # frame can get, so a 2-vCPU Space renders one layout at a time.
+    # Layouts rendered at once by `arena clip`, the clip job's command: half the
+    # cores, so a 2-vCPU machine renders one layout at a time.
     clip_parallel: int = 1
-    # Whether this process runs the clip worker. `arena clip` turns it off so
-    # its one render is not raced by a drain of everything else owed.
+    # Whether `arena clip` draws on the machine's GPU. The Space sets
+    # ARENA_CLIP_GPU=1 on the jobs it launches on a GPU flavor.
+    clip_gpu: bool = False
+    # Whether this process launches clip jobs. `arena clip` turns it off: it is
+    # the job, and owes nothing itself.
     clip_worker: bool = True
-    # The documented way to stop rendering on a running Space: set ARENA_CLIPS=0
-    # and nothing new is queued. Existing clips and the routes serving them are
-    # unaffected — this only stops making more.
+    # The documented way to stop making clips on a running Space: set
+    # ARENA_CLIPS=0 and nothing new is owed. Existing clips and the routes
+    # serving them are unaffected.
     clips_enabled: bool = True
-    # Render a clip for every run that has none — the log as it stood before
+    # What a clip job runs on (ARENA_CLIP_FLAVOR), whose account pays for it
+    # (ARENA_CLIP_NAMESPACE: the Space's owner by default), and how many run at
+    # once at most (ARENA_CLIP_JOBS).
+    clip_flavor: str = JOB_FLAVOR
+    clip_namespace: str | None = None
+    clip_jobs: int = 4
+    # Owe a clip to every run that has none — the log as it stood before
     # clips existed. Set ARENA_CLIP_BACKFILL=1 on the deploy that brings clips
     # to a Space with history; the drain at each boot then owes the rest,
     # newest first, behind fresh publishes, and finds nothing to do once caught up.
@@ -134,18 +158,7 @@ class ArenaConfig:
         oauth = OAuthSettings.from_env(dict(os.environ), os.environ.get("SPACE_HOST"))
         secret = (os.environ.get("OAUTH_CLIENT_SECRET") or "").strip() or secrets.token_urlsafe(32)
 
-        parallel_env = os.environ.get("ARENA_CLIP_PARALLEL")
-        if parallel_env:
-            try:
-                clip_parallel = int(parallel_env)
-            except ValueError:
-                clip_parallel = 0
-            if clip_parallel < 1:
-                raise ValueError(
-                    f"ARENA_CLIP_PARALLEL must be a positive integer, got {parallel_env!r}"
-                )
-        else:
-            clip_parallel = max(1, (os.cpu_count() or 2) // 2)
+        clip_parallel = _positive("ARENA_CLIP_PARALLEL", max(1, (os.cpu_count() or 2) // 2))
 
         return cls(
             store_dir=store,
@@ -161,8 +174,12 @@ class ArenaConfig:
             public_origin=(f"https://{host}" if (host := os.environ.get("SPACE_HOST")) else None),
             space_id=(os.environ.get("SPACE_ID") or "").strip() or None,
             clip_parallel=clip_parallel,
+            clip_gpu=(os.environ.get("ARENA_CLIP_GPU") or "").strip() in {"1", "true", "yes"},
             clip_worker=clip_worker,
             clips_enabled=(os.environ.get("ARENA_CLIPS") or "1").strip() not in {"0", "false", "no"},
+            clip_flavor=(os.environ.get("ARENA_CLIP_FLAVOR") or "").strip() or JOB_FLAVOR,
+            clip_namespace=(os.environ.get("ARENA_CLIP_NAMESPACE") or "").strip() or None,
+            clip_jobs=_positive("ARENA_CLIP_JOBS", 4),
             clip_backfill=(os.environ.get("ARENA_CLIP_BACKFILL") or "").strip() in {"1", "true", "yes"},
             commentary_enabled=(os.environ.get("ARENA_COMMENTARY") or "1").strip()
             not in {"0", "false", "no"},

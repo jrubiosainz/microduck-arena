@@ -57,7 +57,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.state.build = hashlib.sha256(index.read_bytes()).hexdigest()[:12] if index else "dev"
 
     from .. import commentary
-    from ..clips import ClipRenderer
+    from ..clips import ClipJobs
     from ..commentary.lore import load
 
     # Why the booth is off, for the boot to say in one line, or None when it is
@@ -84,16 +84,17 @@ def create_app(config: ArenaConfig) -> FastAPI:
                     model=config.commentary_model, book=app.state.broadcasts, rng=rng,
                 )
 
-    app.state.clips = ClipRenderer(
-        app.state.store, config.origin, config.frontend_dir, config.clip_parallel,
-        enabled=config.clips_enabled, backfill=config.clip_backfill,
+    app.state.clips = ClipJobs(
+        app.state.store, space_id=config.space_id, dataset=config.dataset_repo,
+        token=config.hf_token, namespace=config.clip_namespace, flavor=config.clip_flavor,
+        running=config.clip_jobs, enabled=config.clips_enabled, backfill=config.clip_backfill,
         landed=lambda run_id: app.state.programme.landed(),
     )
     if config.clip_worker and app.state.clips.available:
         @app.on_event("startup")
-        def _render_owed_clips() -> None:
-            # A thread, as recovery is: a render is minutes of CPU and the
-            # health check cannot wait for it.
+        def _launch_owed_clips() -> None:
+            # A thread, as recovery is: the drain is Hub calls and the health
+            # check cannot wait for them.
             app.state.clips.start()
 
     from ..commentary.stock import CommentaryStock
@@ -101,8 +102,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     from ..recorder import find_chrome
 
     # No Chrome or no built plan page is a supported setup — a developer
-    # machine — not an error, the same as the clip renderer a few lines up:
-    # the channel then plays replays with no booths. Without this, a machine
+    # machine — not an error: the channel then plays replays with no booths. Without this, a machine
     # with no bundle would loop forever on a page with no window.plan.
     plan_page = config.frontend_dir and (config.frontend_dir / "plan.html").is_file()
     tab = PlanTab(config.origin) if writer and plan_page and find_chrome() else None
@@ -153,6 +153,13 @@ def create_app(config: ArenaConfig) -> FastAPI:
                         app.state.store, all_events(), on_event=lambda m: print(f"recover: {m}")
                     )
                     print(f"recover: {len(restored)} run(s) restored from the Hub")
+                    # A restored run is a publication like any other: it owes a clip.
+                    if app.state.clips.available:
+                        for record in restored:
+                            app.state.store.mark_clip_pending(
+                                record.run_id, record.user, record.event_id, record.submitted_at
+                            )
+                            app.state.clips.enqueue(record.run_id)
                 except Exception as exc:  # noqa: BLE001
                     # A failed recovery must never take the app down with it —
                     # the board simply stays as it was.

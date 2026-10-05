@@ -340,6 +340,7 @@ class Store(Protocol):
     def clip_file(self, run_id: str, name: str) -> Path: ...
     def pending_clips(self) -> list[str]: ...
     def failed_clips(self) -> list[str]: ...
+    def refresh(self) -> None: ...
 
 
 class LocalStore:
@@ -523,6 +524,9 @@ class LocalStore:
             folder.name for folder in directory.iterdir()
             if folder.is_dir() and self.clip_state(folder.name)[0] == "failed"
         )
+
+    def refresh(self) -> None:
+        """Nothing to do: a directory is read fresh every time."""
 
 
 class HubStore:
@@ -724,6 +728,11 @@ class HubStore:
 
     def failed_clips(self) -> list[str]:
         return self.snapshot().failed_clips()
+
+    def refresh(self) -> None:
+        """The next read downloads again: what another process wrote — a clip
+        job, say — is seen now rather than after the TTL."""
+        self._snapshot = None
 
 
 class HubBallots:

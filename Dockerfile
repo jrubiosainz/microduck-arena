@@ -19,13 +19,15 @@ RUN npm run build
 FROM python:3.12-slim
 
 # The clip recorder (arena/recorder.py) photographs the arena's own stage in
-# a headless Chromium and encodes it with ffmpeg. That is the one reason this
-# image carries a browser and Mesa: MuJoCo still runs headless with no GL of
-# its own. fonts-liberation is the fallback face for glyphs Anton and DM Sans
-# lack. The version check fails the build on a broken apt layer, before a
-# Space boots and renders nothing.
+# a headless Chromium and encodes it with ffmpeg, on a clip job that runs this
+# very image. That is the one reason it carries a browser and Mesa: MuJoCo
+# still runs headless with no GL of its own. libegl1 and libgles2 are the glvnd
+# dispatchers ANGLE loads to reach the NVIDIA driver a GPU job mounts; without
+# them Chromium on the job's T4 gets no WebGL at all. fonts-liberation is the
+# fallback face for glyphs Anton and DM Sans lack. The version check fails the
+# build on a broken apt layer, before a Space boots and renders nothing.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends chromium ffmpeg fonts-liberation \
+ && apt-get install -y --no-install-recommends chromium ffmpeg fonts-liberation libegl1 libgles2 \
  && rm -rf /var/lib/apt/lists/* \
  && chromium --version && ffmpeg -version
 ENV CHROME=/usr/bin/chromium

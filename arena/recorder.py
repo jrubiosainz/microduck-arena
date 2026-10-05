@@ -133,13 +133,21 @@ class Chrome:
              "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox",
              "--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows",
              "--disable-background-timer-throttling", "--remote-debugging-port=0")
+    # On a clip job's GPU: ANGLE on the NVIDIA Vulkan driver. Measured on a T4 on
+    # 2026-10-05: 83 ms a frame against SwiftShader's 3 153 ms on the same machine,
+    # the same picture. It needs the glvnd dispatchers (libegl1, libgles2: the
+    # Dockerfile) beside the driver the job's runtime mounts, or no WebGL at all.
+    GPU_FLAGS = (*(flag for flag in FLAGS if "swiftshader" not in flag),
+                 "--use-angle=vulkan", "--enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan",
+                 "--disable-vulkan-surface", "--ignore-gpu-blocklist", "--enable-gpu")
 
-    def __init__(self, binary: str, nice: int = 10):
+    def __init__(self, binary: str, nice: int = 10, gpu: bool = False):
         self.profile = tempfile.mkdtemp(prefix="arena-chrome-")
         self.process = None
+        flags = self.GPU_FLAGS if gpu else self.FLAGS
         try:
             self.process = subprocess.Popen(
-                niced([binary, *self.FLAGS, f"--user-data-dir={self.profile}", "about:blank"], nice),
+                niced([binary, *flags, f"--user-data-dir={self.profile}", "about:blank"], nice),
                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
             )
             self.endpoint = self._endpoint()
@@ -355,7 +363,7 @@ def _record_layout(
 
 
 def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None = None,
-               nice: int = 10, budget_s: float = 900.0,
+               nice: int = 10, budget_s: float = 900.0, gpu: bool = False,
                on_progress=lambda stage, done, total: None) -> RenderedRun:
     """Every layout of one run, each in a browser of its own; the first one
     renders the soundtrack they all share, and they are recorded `parallel` at
@@ -363,8 +371,8 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
 
     `budget_s` bounds the whole render of a race's clip, from here, and a
     longer clip gets as much time per frame (`budget_for`) — a stuck tab or an
-    overloaded machine fails the clip rather than occupying the worker
-    forever and leaving every publish behind it stuck `pending`.
+    overloaded machine fails the clip rather than occupying the job forever.
+    `gpu` draws on the machine's GPU (Chrome.GPU_FLAGS), not in SwiftShader.
 
     `on_progress(stage, done, total)` is called as the render moves, for the
     page waiting on it: the two stages before the frames take minutes of their
@@ -386,7 +394,7 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
         # vertical one ever did. The anti-backgrounding flags above did not
         # change that; being the only tab in a browser takes the question away.
         tabs = {
-            layout: _open(stack.enter_context(Chrome(binary, nice)), origin, run_id, layout)
+            layout: _open(stack.enter_context(Chrome(binary, nice, gpu)), origin, run_id, layout)
             for layout in SIZES
         }
         on_progress("soundtrack", 0, 0)

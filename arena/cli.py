@@ -137,12 +137,12 @@ def _cmd_recover(args) -> int:
 
 
 def _app_on_loopback(store_dir) -> tuple | None:
-    """The app on a free loopback port, answering, with its clip worker off.
+    """The app on a free loopback port, answering, launching no clip jobs.
 
-    The recorder's Chrome needs the clip page and the API; the worker is off
-    because one render by hand must not be raced by a drain of everything else
-    owed. The config, the app, the running server and its origin — or None,
-    the failure already reported.
+    The recorder's Chrome needs the clip page and the API; this process is the
+    clip job, or a render by hand, and owes nothing itself. The config, the
+    app, the running server and its origin — or None, the failure already
+    reported.
     """
     import socket
     import threading
@@ -176,7 +176,7 @@ def _app_on_loopback(store_dir) -> tuple | None:
 
 
 def _cmd_clip(args) -> int:
-    """Render one run's clips into a local store, by hand."""
+    """Render one run's clips into the store: what a clip job runs, or by hand."""
     from .clips import ClipRenderer
 
     started = _app_on_loopback(args.store)
@@ -185,7 +185,8 @@ def _cmd_clip(args) -> int:
     config, app, server, origin = started
 
     renderer = ClipRenderer(
-        app.state.store, origin, config.frontend_dir, args.parallel or config.clip_parallel
+        app.state.store, origin, config.frontend_dir, args.parallel or config.clip_parallel,
+        gpu=config.clip_gpu,
     )
     if not renderer.available:
         print("no renderer here: needs a Chrome ($CHROME or the usual paths), ffmpeg, and a built clip.html",
@@ -197,15 +198,15 @@ def _cmd_clip(args) -> int:
               file=sys.stderr)
         server.should_exit = True
         return 1
-    renderer.render_one(args.run_id)
+    rendered = renderer.render_one(args.run_id)
     server.should_exit = True
-    state, manifest = app.state.store.clip_state(args.run_id)
-    if state != "ready":
+    if not rendered:
         return 1
+    _, manifest = app.state.store.clip_state(args.run_id)
     for name, layout in manifest["layouts"].items():
         print(f"{name}: {layout['seconds']} s, {layout['timing']['total_wall_ms'] / 1000:.0f} s wall, "
               f"{layout['timing']['capture_ms_per_frame']} ms/frame capture")
-    print(f"written under {config.store_dir}/clips/{args.run_id}")
+    print(f"written to {config.store_description()}")
     return 0
 
 
@@ -306,8 +307,9 @@ def _cmd_serve(args) -> int:
         print("frontend  NOT BUILT — run: cd app && npm install && npm run build")
     else:
         print(f"frontend  {config.frontend_dir}")
-    clips = "on" if app.state.clips.available else "off (no Chrome, ffmpeg or clip page)"
-    print(f"clips  {clips}")
+    clips = app.state.clips
+    on = f"on (jobs on {clips.flavor}, paid by {clips.namespace})"
+    print(f"clips  {on if clips.available else 'off (no Space, dataset or token to run jobs with)'}")
     booth = "on" if app.state.booth_off is None else f"off ({app.state.booth_off})"
     print(f"booth  {booth}")
     print(f"\n  http://{args.host}:{args.port}\n")
@@ -361,7 +363,7 @@ def main(argv=None) -> int:
     )
     recover.set_defaults(func=_cmd_recover)
 
-    clip = subs.add_parser("clip", help="render one run's social clips into a local store")
+    clip = subs.add_parser("clip", help="render one run's social clips into the store")
     clip.add_argument("run_id")
     clip.add_argument("--store", required=True)
     clip.add_argument("--parallel", type=int, default=None,
