@@ -6,15 +6,17 @@ const sprint = { id: "sprint-2m" };
 afterEach(() => vi.restoreAllMocks());
 
 describe("Train my own robot", () => {
-  it("gives the one line for this challenge, on this Arena, and uv's install as the answer to its absence", () => {
+  it("gives the one line for this challenge, on this Arena, and uv's install folded as the answer to its absence", () => {
     expect(oneLine(sprint, "http://127.0.0.1:8000")).toBe("uv run http://127.0.0.1:8000/workshop.py sprint-2m");
     const panel = trainPanel(sprint, "https://arena.example");
     expect(panel.querySelector(".train__open").textContent).toBe("Train my own robot");
     const [line, install] = [...panel.querySelectorAll(".train__line code")].map((node) => node.textContent);
     expect(line).toBe("uv run https://arena.example/workshop.py sprint-2m");
     expect(install).toBe("curl -LsSf https://astral.sh/uv/install.sh | sh");
-    expect(panel.querySelector(".train__uv").textContent).toBe(
-      "uv: command not found? Install uv, open a new terminal, and paste the line again:");
+    const uv = panel.querySelector(".train__uv");
+    expect(uv.open).toBe(false);
+    expect(uv.querySelector("summary").textContent).toBe("uv: command not found?");
+    expect(uv.querySelector("p").textContent).toBe("Install uv, open a new terminal, and paste the line again:");
   });
 
   it("leaves what else it takes to the launcher and the workshop, when each is needed", () => {

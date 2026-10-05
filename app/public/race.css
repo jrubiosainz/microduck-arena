@@ -132,6 +132,8 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 .train[open] .train__open { margin-bottom: 4px; }
 .train__uv, .train__step, .train__note { margin: 0; font-size: 0.85rem; }
 .train__note, .train__uv { color: var(--ink-70); }
+.train__uv > summary { cursor: pointer; }
+.train__uv > p { margin: 8px 0; }
 /* A command line that wraps rather than scrolls: the panel's width is the
    entry column's, and a one-line launcher easily runs wider than it. It breaks
    at its spaces first, so `uv run` and the challenge's id stay whole. */
@@ -514,6 +516,7 @@ table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 .pickall-box:focus-visible,
 .train__open:focus-visible,
 .train__copy:focus-visible,
+.train__uv > summary:focus-visible,
 .signin-button:focus-visible,
 table.board .grab a:focus-visible,
 table.board .env a:focus-visible,

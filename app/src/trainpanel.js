@@ -2,7 +2,7 @@
 // this Arena serves (arena/web/routes_launcher.py), which clones microduck-challenges and opens
 // the workshop on this challenge. What else it takes — git, a Hugging Face account, a GPU or
 // Hugging Face Jobs — the launcher and the workshop ask for when it is needed. uv is needed to
-// run the line at all, so the answer to its absence sits right under it.
+// run the line at all, so the answer to its absence sits folded right under it.
 
 const UV_INSTALL = "curl -LsSf https://astral.sh/uv/install.sh | sh";
 
@@ -20,8 +20,11 @@ export function trainPanel(event, origin = location.origin) {
     <button type="button" class="train__copy">Copy</button>
     <p class="train__note">It clones <code>microduck-challenges</code> into the folder you run it in
       (or reuses it) and opens the workshop in your browser.</p>
-    <p class="train__uv"><code>uv: command not found</code>? Install uv, open a new terminal, and paste the line again:</p>
-    <pre class="train__line"><code></code></pre>`;
+    <details class="train__uv">
+      <summary><code>uv: command not found</code>?</summary>
+      <p>Install uv, open a new terminal, and paste the line again:</p>
+      <pre class="train__line"><code></code></pre>
+    </details>`;
   const [line, install] = panel.querySelectorAll(".train__line code");
   line.textContent = oneLine(event, origin);
   install.textContent = UV_INSTALL;
