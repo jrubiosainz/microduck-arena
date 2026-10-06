@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { JOINT_NAMES, buildRigTree } from "./rig.js";
-import { CTRL_DT, Player, TRACE_WIDTH, applyFrame, frameAt, frameCount, leadIn } from "./replay.js";
+import { CTRL_DT, Player, TRACE_WIDTH, applyFrame, frameAt, frameCount, leadIn, standing } from "./replay.js";
 
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
 
@@ -15,6 +15,13 @@ function traceOf(frames) {
     data[at + 3] = 1; // quaternion w — upright
     data[at + 7] = 0.05 * f; // first joint angle
   }
+  return data;
+}
+
+/** A settle whose trunk heights are `heights`, one frame each. */
+function settleOf(heights) {
+  const data = traceOf(heights.length);
+  heights.forEach((z, f) => (data[f * TRACE_WIDTH + 2] = z));
   return data;
 }
 
@@ -51,6 +58,32 @@ describe("leadIn", () => {
     expect(frameCount(lane)).toBe(7);
     for (const f of [0, 1, 2, 3]) expect([...frameAt(lane, f)]).toEqual([...frameAt(traceOf(4), 0)]);
     expect([...frameAt(lane, 4)]).toEqual([...frameAt(traceOf(4), 1)]);
+  });
+
+  it("holds a shorter settle's own first frame, so the lane never jumps into it", () => {
+    const settle = traceOf(2).map((v) => v + 100);
+    const lane = leadIn(settle, traceOf(4), 3);
+    expect(frameCount(lane)).toBe(7);
+    for (const f of [0, 1]) expect([...frameAt(lane, f)]).toEqual([...frameAt(settle, 0)]);
+    expect([...frameAt(lane, 2)]).toEqual([...frameAt(settle, 1)]);
+    expect([...frameAt(lane, 3)]).toEqual([...frameAt(traceOf(4), 0)]);
+  });
+});
+
+describe("standing", () => {
+  it("drops the frames the solver spends lifting the roller rig's wheels out of the floor", () => {
+    // A roller-sprint-2m settle's first frames, from the run log.
+    const settle = settleOf([0.12, 0.1268, 0.1327, 0.1357, 0.1359, 0.1337, 0.1294]);
+    expect([...standing(settle)]).toEqual([...settle.subarray(4 * TRACE_WIDTH)]);
+  });
+
+  it("keeps every frame of a walking duck dropping onto the floor", () => {
+    const settle = settleOf([0.12, 0.1174, 0.115, 0.1151]);
+    expect(standing(settle)).toEqual(settle);
+  });
+
+  it("keeps a run stored without a settle empty", () => {
+    expect(frameCount(standing(new Float32Array(0)))).toBe(0);
   });
 });
 

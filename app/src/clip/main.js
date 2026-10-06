@@ -6,7 +6,7 @@ import { getRun, getSettle, getTrace } from "../api.js";
 import { LANE_COLORS } from "../course.js";
 import { formatScore, isStage } from "../format.js";
 import { lanesFor } from "../lanes.js";
-import { CTRL_DT, frameCount, leadIn } from "../replay.js";
+import { CTRL_DT, frameCount, leadIn, standing } from "../replay.js";
 import { createViewer } from "../viewer.js";
 import { actAt, clipPlan, stepAt, travelAt } from "./plan.js";
 import { stadiumDirection } from "./direction.js";
@@ -70,9 +70,9 @@ async function main() {
   const lanes = lanesFor(run);
   const [traces, settles] = await Promise.all([
     Promise.all(lanes.map((lane) => getTrace(lane.run_id))),
-    Promise.all(lanes.map((lane) => getSettle(lane.run_id))),
+    Promise.all(lanes.map((lane) => getSettle(lane.run_id).then(standing))),
   ]);
-  // Every lane from where its simulation started, all in step.
+  // Every lane from where its duck stands, all in step.
   const settle = Math.max(...settles.map(frameCount));
   const replays = lanes.map((_, i) => leadIn(settles[i], traces[i], settle));
   const config = run.event.clip;

@@ -20,15 +20,28 @@ export function frameAt(trace, index) {
 }
 
 /**
+ * The settle from where the duck stands on the floor. The roller rig spawns at
+ * the walking rig's height on its longer, wheeled legs, so its reset pose has
+ * the wheels 2 cm deep and the solver lifts the trunk out over the first steps;
+ * a walking duck drops onto the floor instead, and keeps every frame.
+ */
+export function standing(settle) {
+  let f = 0;
+  while (f + 1 < frameCount(settle) && frameAt(settle, f + 1)[2] > frameAt(settle, f)[2]) f++;
+  return settle.subarray(f * TRACE_WIDTH);
+}
+
+/**
  * A lane from where its simulation started: its settle, then its trace, with
- * `frames` frames before the trace. A shorter settle — none, for a run stored
- * before settles were recorded — is made up by holding the trace's first frame,
+ * `frames` frames before the trace. A shorter settle is made up by holding its
+ * first frame — the trace's, for a run stored before settles were recorded —
  * so every lane still reaches its trace in step with the others.
  */
 export function leadIn(settle, trace, frames) {
   const lane = new Float32Array((frames + frameCount(trace)) * TRACE_WIDTH);
   const missing = frames - frameCount(settle);
-  for (let f = 0; f < missing; f++) lane.set(frameAt(trace, 0), f * TRACE_WIDTH);
+  const first = frameAt(frameCount(settle) ? settle : trace, 0);
+  for (let f = 0; f < missing; f++) lane.set(first, f * TRACE_WIDTH);
   lane.set(settle, missing * TRACE_WIDTH);
   lane.set(trace, frames * TRACE_WIDTH);
   return lane;
