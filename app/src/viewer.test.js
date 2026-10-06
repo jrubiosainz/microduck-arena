@@ -1,5 +1,6 @@
+import { Spherical, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import { cameraPose, travelPose } from "./viewer.js";
+import { cameraPose, dragPose, travelPose } from "./viewer.js";
 
 describe("cameraPose", () => {
   it("chases the leader from behind and trackside by default, at the original close distance", () => {
@@ -45,5 +46,23 @@ describe("travelPose", () => {
 
   it("never comes closer to the ducks than the chase does", () => {
     for (let u = 0; u < 1; u += 0.1) expect(reach(travelPose(chase, u))).toBeGreaterThanOrEqual(reach(chase) - 1e-9);
+  });
+});
+
+describe("dragPose", () => {
+  const pose = cameraPose(null, 1.2, 1.15, 0.1);
+
+  it("leaves the camera alone when nothing drags it", () => {
+    expect(dragPose(pose, 0)).toBe(pose);
+  });
+
+  it("turns the camera round what it looks at, the way dragging right does", () => {
+    const target = new Vector3(...pose.target);
+    const orbit = new Spherical().setFromVector3(new Vector3(...pose.position).sub(target));
+    orbit.theta -= 0.3; // OrbitControls' rotateLeft for a drag to the right
+    const expected = new Vector3().setFromSpherical(orbit).add(target).toArray();
+    const turned = dragPose(pose, 0.3);
+    turned.position.forEach((value, i) => expect(value).toBeCloseTo(expected[i], 9));
+    expect(turned.target).toBe(pose.target);
   });
 });

@@ -47,6 +47,7 @@ import { buildRollerHall } from "./roller-hall.js";
 import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
+import { SWEEP_TURN, sweepAt } from "./sweep.js";
 
 // The sun supplies shape and the shadows; the room only soft reflections. Much
 // more of the room and the racers' shadows wash out on the parquet, which
@@ -186,6 +187,24 @@ export function travelPose(chase, u) {
   };
 }
 
+/**
+ * `pose` turned round its target as OrbitControls turns it for a drag `angle`
+ * radians to the right, so the swing teaches the gesture the right way round.
+ * Pure, so it is testable.
+ */
+export function dragPose(pose, angle) {
+  if (!angle) return pose;
+  const [x, , z] = pose.target;
+  const dx = pose.position[0] - x;
+  const dz = pose.position[2] - z;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    position: [x + dx * cos - dz * sin, pose.position[1], z + dz * cos + dx * sin],
+    target: pose.target,
+  };
+}
+
 // The racers' model, 1.3 MB, and the crowd's: the same GLB decimated to a
 // tenth of its triangles, 154 KB, made with
 //   npx @gltf-transform/cli@4 simplify --ratio 0.05 --error 0.02 microduck.glb microduck-crowd.glb
@@ -321,6 +340,8 @@ export async function createViewer(
   // Chase camera on by default; the first drag hands control to the user, the
   // same bargain the original sandbox makes.
   let chase = true;
+  // When the chase last swung to show it can be moved (sweep); never, so far.
+  let swept = -Infinity;
 
   // A clip drives the camera from cameraPose alone: no controls to fight, no
   // "start" drag to hand chase away.
@@ -519,6 +540,11 @@ export async function createViewer(
     onChaseChange?.(true);
   }
 
+  /** Swing the chase once from side to side, as a hand dragging it would. */
+  function sweep() {
+    swept = performance.now();
+  }
+
   function resize() {
     const width = canvas.clientWidth || 800;
     const height = canvas.clientHeight || 450;
@@ -560,11 +586,12 @@ export async function createViewer(
         ? Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]))
         : courseLength / 2;
       const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
-      const pose = stage
+      const pose = dragPose(stage
         ? stageCameraPose(manual ? seconds : player.time,
           lanes.length ? [stageCameraTarget(lanes[0].trace, player.time, lanes[0].rig.placer)] : [],
           camera.aspect, camera.fov, stage.layout.depth)
-        : travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel);
+        : travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel),
+      SWEEP_TURN * sweepAt((performance.now() - swept) / 1000));
       camera.position.set(...pose.position);
       _target.set(...pose.target);
       if (controls) controls.target.copy(_target);
@@ -618,6 +645,7 @@ export async function createViewer(
   return {
     setLanes,
     follow,
+    sweep,
     setBrightness,
     frame,
     spot,

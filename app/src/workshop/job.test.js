@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({
   saveTimeline: vi.fn(async (event, text) => ({ text })),
 }));
 vi.mock("./api.js", () => api);
-const viewer = vi.hoisted(() => ({ setLanes: vi.fn(), setBrightness: vi.fn(), dispose: vi.fn(), follow() {} }));
+const viewer = vi.hoisted(() => ({ setLanes: vi.fn(), setBrightness: vi.fn(), dispose: vi.fn(), follow() {}, sweep() {} }));
 vi.mock("../viewer.js", () => ({ createViewer: vi.fn(async () => viewer) }));
 
 import { POLL_MS, futureSlots, mountJob } from "./job.js";
@@ -41,8 +41,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.getJob.mockReset();
   api.getCode.mockResolvedValue(CODE);
+  // The polls run the clock past the deck's orbit hint, which jsdom has
+  // neither the media queries nor the animations to play.
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  Element.prototype.animate = () => ({ finished: new Promise(() => {}) });
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  delete Element.prototype.animate;
+});
 
 describe("a training's page", () => {
   it("counts the checkpoints still to come from the spacing of those saved", () => {

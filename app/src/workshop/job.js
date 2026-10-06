@@ -4,7 +4,7 @@
 // the focus and an open Output stay, and no button is rebuilt under the pointer.
 
 import { MIN } from "../brightness.js";
-import { deckMarkup, followKeyFor, wireDeck } from "../deck.js";
+import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "../deck.js";
 import { isStage } from "../format.js";
 import { eventGuideHref } from "../router.js";
 import { footer } from "../signage.js";
@@ -246,6 +246,7 @@ export async function mountJob(root, { status, account, route }) {
     viewer = made;
     viewer.setBrightness(MIN); // as the Arena's race page
     wireDeck(grid, viewer);
+    offerOrbit(grid, viewer);
     viewer.setLanes([], event);
     return viewer;
   });

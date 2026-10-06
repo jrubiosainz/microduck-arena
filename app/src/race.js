@@ -8,7 +8,7 @@ import {
   withdrawRun,
 } from "./api.js";
 import { boardsheetMarkup, podium, wireBoardsheet } from "./boardsheet.js";
-import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
+import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
 import { formatEventFacts, isStage } from "./format.js";
@@ -205,6 +205,7 @@ export async function renderRace(root, { event, state }) {
   });
   state.viewer = viewer;
   wireDeck(root, viewer);
+  offerOrbit(root, viewer);
 
   // No slider any more: the stage is pinned at the dimmest the module allows.
   // Worth knowing if this ever looks wrong — brightness.js says in its own

@@ -7,7 +7,7 @@
 import { getClip, getMe, getRun, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { boardsheetMarkup, wireBoardsheet } from "./boardsheet.js";
-import { deckMarkup, followKeyFor, wireDeck } from "./deck.js";
+import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { formatSpeed, isStage } from "./format.js";
 import { colourLanes, lanesFor } from "./lanes.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
@@ -318,6 +318,7 @@ export async function renderRun(root, runId, state) {
   await race(...parked);
   if (leaving.signal.aborted) return;
   if (!revealing) {
+    offerOrbit(page, viewer);
     // No theatre — but the author has still seen their result.
     if (me?.user === run.user && !run.seen) {
       markSeen(run.run_id).catch(() => {});
@@ -378,4 +379,6 @@ export async function renderRun(root, runId, state) {
   );
   // The theatre is over: Space should scroll the page again, not skip it.
   lifetime.abort();
+  // The hint never plays over the theatre: it would draw the eye off the result.
+  offerOrbit(page, viewer);
 }

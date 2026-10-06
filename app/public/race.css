@@ -228,6 +228,48 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 .deck #follow:hover { color: var(--paper); border-color: var(--paper); }
 .deck #follow:active { translate: 2px 2px; }
 
+/* ── the orbit hint ───────────────────────────────────────────────────── */
+
+/* The picture can be taken: the hand says so where the pointer lands. */
+.stage canvas { cursor: grab; }
+.stage canvas:active { cursor: grabbing; }
+
+/* A hand dragging the camera side to side (deck.js offerOrbit), low in the
+   picture so it never covers the leader the chase centres, over the line that
+   says it in the follow key's quiet. Never in the drag's way: a visitor who
+   reaches for the picture at once gets the canvas. */
+.orbit-hint {
+  position: absolute;
+  z-index: 1;
+  inset: auto 0 14% 0;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.orbit-hint .symbol {
+  width: 44px;
+  height: 44px;
+  color: var(--paper);
+  filter: drop-shadow(2px 2px 0 var(--ink));
+}
+.orbit-hint p {
+  margin: 0;
+  padding: 6px 10px;
+  font: 400 0.72rem/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--paper);
+  background: var(--deep-ink);
+  border: 2px solid var(--paper-60);
+}
+.orbit-hint__touch { display: none; }
+@media (pointer: coarse) {
+  .orbit-hint__mouse { display: none; }
+  .orbit-hint__touch { display: inline; }
+}
+
 /* ── the board ────────────────────────────────────────────────────────── */
 
 /* The pegboard, hung by hand: warm paper inside a 3 px ink frame on its own
