@@ -112,12 +112,12 @@ def test_gather_offers_an_earlier_run_only_to_a_callback(tmp_path):
     book = BroadcastBook(tmp_path)
     aired(book, "R0", CAROL, "2026-09-10T11:00:00Z")
 
-    plain = gather(store, mine, LORE, book, callback=False)
+    plain = gather(store, mine, LORE, book, random.Random(0), callback=False)
     kinds = [f.kind for f in plain]
     assert kinds[:5] == ["result"] * 5
     assert "notable" in kinds and "lore" in kinds and "recent" not in kinds
     assert sum(1 for f in plain if f.kind == "lore") <= 2
-    called = gather(store, mine, LORE, book, callback=True)
+    called = gather(store, mine, LORE, book, random.Random(0), callback=True)
     assert [f.kind for f in called] == [*kinds, "recent"]
 
 

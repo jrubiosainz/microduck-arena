@@ -1,10 +1,10 @@
 """The commentators' bible: who they are, the scenes they can play, and what they remember.
 
 Editorial fiction lives here and only here. The owner edits the JSON; this
-module checks it at load and picks, for one run, the few memories that could
-resonate with its facts, leaving out any the recent broadcasts already used.
-The prompt never sees the whole bible: a memory offered every time is a memory
-told every time.
+module checks it at load and draws, for one run, a few of the memories that
+could resonate with its facts, leaving out any the recent broadcasts already
+used. The prompt never sees the whole bible: a memory offered every time is a
+memory told every time.
 """
 
 import json
@@ -68,14 +68,13 @@ def load(path: Path = LORE_PATH) -> Lore:
     return Lore(characters, tuple(scenes), tuple(memories))
 
 
-def select_memories(lore: Lore, facts: list[Fact], used: set[str], limit: int = 2) -> list[Memory]:
-    """The memories whose tags meet the facts', most overlap first, none the
-    recent broadcasts told."""
+def select_memories(lore: Lore, facts: list[Fact], used: set[str], rng,
+                    limit: int = 2) -> list[Memory]:
+    """A few memories whose tags meet the facts', drawn at random, none the
+    recent broadcasts told. Drawn, not ranked: the reserve writes several runs
+    ahead of the air, so a ranked pick offered the same two memories to every
+    dialogue until one of them aired."""
     wanted = {tag for fact in facts for tag in fact.tags}
-    scored = [
-        (len(set(memory.tags) & wanted), memory)
-        for memory in lore.memories
-        if memory.id not in used and set(memory.tags) & wanted
-    ]
-    scored.sort(key=lambda pair: (-pair[0], pair[1].id))
-    return [memory for _, memory in scored[:limit]]
+    fitting = [memory for memory in lore.memories
+               if memory.id not in used and set(memory.tags) & wanted]
+    return rng.sample(fitting, min(limit, len(fitting)))

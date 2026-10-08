@@ -2,6 +2,7 @@
 
 import json
 import random
+import re
 
 import httpx
 import pytest
@@ -35,8 +36,8 @@ FACTS = [
     Fact("run#/board",
          "On the 2 m Sprint board this run ranks 2 of 4, 1.20 s behind the leader, @carol.",
          "result", ("podium",), identities=("carol",)),
-    Fact("lore:tin-trophy", "The trophy they built from a coffee tin and a bicycle bell.", "lore",
-         ("podium",)),
+    Fact("lore:throne", "A board with a single name on it: Peter calls it a throne, Ray calls it "
+         "a queue with nobody behind.", "lore", ("open-board",)),
     Fact("recent:R9",
          "Earlier this season: @bob's run on the 2 m Sprint, 13.10 s, every seed finished.",
          "recent", ("clean",), identities=("bob",)),
@@ -49,7 +50,7 @@ TURNS = [
     {"speaker": "ray",
      "text": "12.40 s, every seed finished. Rank 2 on the board, 1.20 s behind carol.",
      "fact_refs": [2, 3]},
-    {"speaker": "peter", "text": "Do we bring out the coffee tin, my friend?", "fact_refs": [4]},
+    {"speaker": "peter", "text": "A throne with nobody behind it, my friend?", "fact_refs": [4]},
 ]
 
 
@@ -83,8 +84,8 @@ def test_a_checked_dialogue_keeps_the_prose_and_maps_indices_to_references():
     written, provider = run_case()
     assert [t["text"] for t in written["turns"]] == [t["text"] for t in TURNS]
     assert written["turns"][0]["fact_refs"] == ["run#/event", "run#/participant", "run#/result"]
-    assert written["turns"][2]["fact_refs"] == ["lore:tin-trophy"]
-    assert written["lore_refs"] == ["tin-trophy"]
+    assert written["turns"][2]["fact_refs"] == ["lore:throne"]
+    assert written["lore_refs"] == ["throne"]
     assert written["model"] == "fake/model"
     assert written["usage"] == {"prompt_tokens": 900, "completion_tokens": 120}
     # One call: nothing judges a dialogue between the writer and the air.
@@ -150,6 +151,17 @@ def test_the_prompt_no_longer_hands_out_the_word_debut():
     assert "then adds a fact" not in STYLE
     assert "a grin and a well-chosen number" not in STYLE
     assert "then puts a fact on the table" not in LORE.characters["ray"]["sheet"]
+
+
+def test_the_booth_speaks_of_nothing_a_new_viewer_has_not_seen():
+    """The hall's bell, echo and bench, the booth's trophies and the commentators' past were
+    private jokes: a viewer who had never watched the channel heard of props never shown."""
+    told = " ".join((STYLE, GROUNDING, BOOTH_CONTEXT, json.dumps(LORE.characters), *LORE.scenes,
+                     *(m.memory for m in LORE.memories),
+                     *(option for options in DIMENSIONS.values() for option in options))).lower()
+    for prop in ("bell", "hall", "echo", "gym", "megaphone", "trophy", "coffee", "curtain",
+                 "notebook", "pencil", "badge", "lap of honour", "fog", "towel", "bench"):
+        assert not re.search(rf"\b{prop}\b", told), prop
 
 
 def test_the_booth_knows_a_performance_is_not_a_race():

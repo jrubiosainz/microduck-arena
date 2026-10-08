@@ -1,6 +1,7 @@
 """The bible is data the owner edits; the code only checks it and picks from it."""
 
 import json
+import random
 
 import pytest
 
@@ -8,11 +9,10 @@ from arena.commentary.context import Fact
 from arena.commentary.lore import Lore, Memory, load, select_memories
 
 
-def test_the_shipped_bible_is_well_formed_and_deep():
+def test_the_shipped_bible_is_well_formed():
     lore = load()
     assert set(lore.characters) == {"peter", "ray"}
     assert lore.characters["peter"]["name"] == "Peter Duckry"
-    assert len(lore.characters["ray"]["sheet"]) > 300
     assert len(lore.scenes) == 8
     assert len(set(lore.scenes)) == len(lore.scenes)
     assert len(lore.memories) >= 24
@@ -44,16 +44,22 @@ def test_a_malformed_bible_is_refused(tmp_path):
             load(path)
 
 
-def test_selection_matches_tags_skips_recent_and_ranks_by_overlap():
+def test_selection_draws_among_the_memories_that_match_and_skips_recent():
     lore = Lore(characters={}, scenes=("A quiet scene.",), memories=(
-        Memory("trophy", ("podium", "first-run"), "The tin trophy."),
-        Memory("dance", ("podium",), "The dance."),
-        Memory("mud", ("hill", "fall"), "The mud."),
-        Memory("bell", ("record", "milestone"), "The bell."),
+        Memory("throne", ("podium", "first-run"), "The throne."),
+        Memory("queue", ("podium",), "The queue."),
+        Memory("newcomer", ("first-run",), "The newcomer."),
+        Memory("slope", ("hill", "fall"), "The slope."),
     ))
     facts = [Fact("run#/board", "...", "result", ("podium",)),
              Fact("notable#/first-ever", "...", "notable", ("first-run",))]
-    assert [m.id for m in select_memories(lore, facts, used=set())] == ["trophy", "dance"]
-    assert [m.id for m in select_memories(lore, facts, used={"trophy"})] == ["dance"]
-    assert select_memories(lore, [Fact("x", "...", "result", ("sprint",))], used=set()) == []
-    assert [m.id for m in select_memories(lore, facts, used=set(), limit=1)] == ["trophy"]
+    drawn = {frozenset(m.id for m in select_memories(lore, facts, set(), random.Random(seed)))
+             for seed in range(50)}
+    # Every pair of the three that match comes up: the same two are not offered every time.
+    assert drawn == {frozenset(pair) for pair in
+                     (("throne", "queue"), ("throne", "newcomer"), ("queue", "newcomer"))}
+    assert {m.id for m in select_memories(lore, facts, {"throne"}, random.Random(0))} == {
+        "queue", "newcomer"}
+    assert select_memories(lore, [Fact("x", "...", "result", ("sprint",))], set(),
+                           random.Random(0)) == []
+    assert len(select_memories(lore, facts, set(), random.Random(0), limit=1)) == 1

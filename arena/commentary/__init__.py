@@ -71,7 +71,7 @@ def callback_fact(book, run_id: str) -> list[Fact]:
     return []
 
 
-def gather(store, record: RunRecord, lore: Lore, book, callback: bool) -> list[Fact]:
+def gather(store, record: RunRecord, lore: Lore, book, rng, callback: bool) -> list[Fact]:
     """Everything the writer may cite for this run.
 
     Read at the moment of writing, not at publish: the standings, the records
@@ -87,7 +87,7 @@ def gather(store, record: RunRecord, lore: Lore, book, callback: bool) -> list[F
     facts += pick(notable_facts(s)) + profiles(s, earned)
     used = used_memories(book)
     facts += [Fact(f"lore:{m.id}", m.memory, "lore", m.tags)
-              for m in select_memories(lore, facts, used)]
+              for m in select_memories(lore, facts, used, rng)]
     return facts + (callback_fact(book, record.run_id) if callback else [])
 
 
@@ -97,7 +97,7 @@ def briefing(store, run_id: str, *, lore: Lore, book, rng) -> tuple[list[Fact], 
     lookback = max(LOOKBACK, len(lore.scenes) // 2)
     drawn = direction(rng, [one.dialogue["brief"]["direction"]
                             for one in book.recent_written(lookback)], lore.scenes)
-    facts = gather(store, record, lore, book, callback=drawn["callback"] == CALLBACK)
+    facts = gather(store, record, lore, book, rng, callback=drawn["callback"] == CALLBACK)
     if facts[-1].kind != "recent":
         # A callback the book cannot serve is no callback, and the brief says so.
         drawn = {**drawn, "callback": NO_CALLBACK}
