@@ -5,6 +5,7 @@
 
 import { olaAt, scheduleOla } from "../crowd-behaviour.js";
 import { callSamples } from "../duck-voice.js";
+import { SAMPLE_RATE } from "../live/score.js";
 import { loadCalls } from "../live/voice.js";
 import { stadiumDirection } from "./direction.js";
 import { StadiumAmbience, prepareStadium } from "./stadium.js";
@@ -33,7 +34,7 @@ function interleave(buffer) {
 
 /** A sound of the robot's synth as a buffer: mono, which the context spreads to both sides. */
 function synthBuffer(context, samples) {
-  const buffer = context.createBuffer(1, samples.length, RATE);
+  const buffer = context.createBuffer(1, samples.length, SAMPLE_RATE);
   buffer.copyToChannel(samples, 0);
   return buffer;
 }

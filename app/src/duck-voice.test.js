@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CTRL_DT } from "./replay.js";
 import { DUCK_SEED, callSamples, mouthTrack, voiceEvents } from "./duck-voice.js";
 
 describe("voiceEvents", () => {
@@ -37,6 +38,17 @@ describe("voiceEvents", () => {
     expect(voiceEvents(track, 100).map((sound) => sound.variant)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0]);
   });
 
+  it("lets a wheee cut a quack still playing", () => {
+    expect(voiceEvents([[0, 0, 0], [1, 1, 0], [1.05, 0, 1]], 5)).toEqual([
+      { tag: "chirp", variant: 0, start: 1, end: 1.05 },
+      { tag: "wheee", variant: 0, start: 1.05, end: 5 },
+    ]);
+  });
+
+  it("ignores a change on the last step, which float error puts a hair before the end", () => {
+    expect(voiceEvents([[0, 0, 0], [0.7, 1, 0]], 35 * CTRL_DT)).toEqual([]);
+  });
+
   it("makes no sound without a track", () => {
     expect(voiceEvents(null, 20)).toEqual([]);
   });
@@ -50,6 +62,10 @@ describe("mouthTrack", () => {
     expect(open[75]).toBeLessThan(0.7); // eased at the change, not snapped
     expect(open[90]).toBeGreaterThan(0.99); // and there 0.3 s later
     expect(open[199]).toBeLessThan(0.01);
+  });
+
+  it("opens to the harder-pulled trigger when both are pulled", () => {
+    for (const value of mouthTrack([[0, 0.4, 0.7]], 3)) expect(value).toBeCloseTo(0.7);
   });
 
   it("leaves the beak alone without a track", () => {
@@ -78,6 +94,10 @@ describe("callSamples", () => {
     expect(ride[24000]).toBe(2);
     expect(ride[24000 + 2 * 9600]).toBe(2);
     expect(ride[47999]).toBe(0);
+  });
+
+  it("always gives a sound a sample, however short its stretch", () => {
+    expect(callSamples(calls, { tag: "chirp", variant: 0, start: 1, end: 1 + 1e-6 })).toHaveLength(1);
   });
 
   it("sings in the stage duck's voice", () => {

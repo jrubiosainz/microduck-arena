@@ -131,20 +131,6 @@ describe("setJoint", () => {
 });
 
 describe("attachMeshes against the real GLB", () => {
-  it("hangs the lower beak on a pivot that opens it and leaves it in place at rest", async () => {
-    const rig = buildRigTree(kinematics);
-    attachMeshes(rig, kinematics, await loadedScene());
-    const centre = () => {
-      rig.root.updateMatrixWorld(true);
-      return new Box3().setFromObject(rig.bodies.get("jaw_soft")).getCenter(new Vector3());
-    };
-    const rest = centre();
-    const pivot = jawPivot(rig);
-    expect(pivot.children.length).toBeGreaterThan(0);
-    expect(centre().distanceTo(rest)).toBeLessThan(1e-6);
-    pivot.rotation.y = 0.6;
-    expect(centre().distanceTo(rest)).toBeGreaterThan(0.001);
-  });
   // Nothing else in this file exercises attachMeshes, which is how a lookup that
   // resolved zero meshes shipped once already. These tests load the actual
   // vendored asset so the naming premise cannot drift unnoticed.
@@ -387,6 +373,21 @@ describe("attachMeshes against the real GLB", () => {
     ]) {
       expect(attached).not.toContain(inside);
     }
+  });
+
+  it("hangs the lower beak on a pivot that opens it and leaves it in place at rest", async () => {
+    const rig = buildRigTree(kinematics);
+    attachMeshes(rig, kinematics, await loadedScene());
+    const centre = () => {
+      rig.root.updateMatrixWorld(true);
+      return new Box3().setFromObject(rig.bodies.get("jaw_soft")).getCenter(new Vector3());
+    };
+    const rest = centre();
+    const pivot = jawPivot(rig);
+    expect(pivot.children.length).toBeGreaterThan(0);
+    expect(centre().distanceTo(rest)).toBeLessThan(1e-6);
+    pivot.rotation.y = 0.6;
+    expect(centre().distanceTo(rest)).toBeGreaterThan(0.001);
   });
 });
 

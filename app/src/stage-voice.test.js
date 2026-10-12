@@ -7,8 +7,15 @@ const calls = {
 };
 
 function fakeContext(log) {
+  const listeners = [];
   return {
     state: "running",
+    addEventListener: (type, listener) => listeners.push(listener),
+    removeEventListener: (type, listener) => listeners.splice(listeners.indexOf(listener), 1),
+    changeState(state) {
+      this.state = state;
+      for (const listener of [...listeners]) listener();
+    },
     destination: {},
     resume: async () => log.push(["resume"]),
     close: async () => {},
@@ -26,9 +33,10 @@ function fakeContext(log) {
   };
 }
 
-async function voiceWith(sounds, { muted = () => false } = {}) {
+async function voiceWith(sounds, { muted = () => false, state = "running" } = {}) {
   const log = [];
   const context = fakeContext(log);
+  context.state = state;
   const voice = createStageVoice(async () => calls, { makeContext: () => context, muted });
   voice.set(sounds);
   await new Promise((done) => setTimeout(done));
@@ -72,14 +80,43 @@ describe("createStageVoice", () => {
     expect(log.map(([what]) => what)).toEqual(["start", "stop"]);
   });
 
-  it("asks a suspended context to resume and plays once it runs", async () => {
-    const { voice, log, context } = await voiceWith([{ tag: "chirp", variant: 0, start: 0, end: 1 }]);
-    context.state = "suspended";
-    voice.follow(0.02);
-    expect(log).toEqual([["resume"]]);
-    context.state = "running";
-    voice.follow(0.04);
-    expect(log.at(-1)[0]).toBe("start");
+  describe("on a page the browser keeps silent until a gesture", () => {
+    const suspended = async () => {
+      const made = await voiceWith([{ tag: "chirp", variant: 0, start: 0, end: 1 }], { state: "suspended" });
+      for (const at of [0.02, 0.04, 0.06]) made.voice.follow(at);
+      return made;
+    };
+
+    it("never asks the context to resume from a frame", async () => {
+      const { voice, log } = await suspended();
+      expect(log).toEqual([]);
+      voice.dispose();
+    });
+
+    it("resumes it inside the first gesture, once", async () => {
+      const { voice, log } = await suspended();
+      window.dispatchEvent(new Event("pointerdown"));
+      expect(log).toEqual([["resume"]]);
+      voice.dispose();
+    });
+
+    it("plays the sound that is due from its offset on the first frame after the context runs", async () => {
+      const { voice, log, context } = await suspended();
+      context.changeState("running");
+      voice.follow(0.08);
+      expect(log).toEqual([["start", 4800, 0.08]]);
+      window.dispatchEvent(new Event("pointerdown"));
+      expect(log).toHaveLength(1);
+      voice.dispose();
+    });
+
+    it("stops listening for gestures once disposed", async () => {
+      const { voice, log } = await suspended();
+      voice.dispose();
+      window.dispatchEvent(new Event("pointerdown"));
+      window.dispatchEvent(new Event("keydown"));
+      expect(log).toEqual([]);
+    });
   });
 
   it("forgets the sounds of lanes that have left the stage", async () => {

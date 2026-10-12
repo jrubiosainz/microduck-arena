@@ -6,6 +6,7 @@
 // sound at a time, a new quack cutting the last and a quack during a wheee dropped. Pure: the
 // viewer and the clip hear the same sounds from it.
 
+import { SAMPLE_RATE } from "./live/score.js";
 import { CTRL_DT } from "./replay.js";
 
 /** The voice every performer sings in: a seed of the robot's `sounds` crate, picked by ear. */
@@ -16,7 +17,6 @@ export const PULL = 0.3;
 export const MOUTH_TRAVEL = (35 * Math.PI) / 180;
 /** How fast the beak follows its trigger: a servo's ease, not a snap. */
 const MOUTH_TAU_S = 0.06;
-const RATE = 48000;
 /** A cut sound fades out over this, so it stops without a click. */
 const FADE_S = 0.005;
 /** The variants of each call in the robot's bank (sounds::variant_count). */
@@ -68,7 +68,7 @@ export function voiceEvents(track, duration) {
   let rt = 0;
   let riding = false;
   for (const [t, pulledRt, pulledLt] of track) {
-    if (t >= duration) break;
+    if (t >= duration - 1e-9) break;
     // robotd's order: the wheee first, then the one-shots, which see the ride this instant started.
     if (pulledLt >= PULL && !riding) begin("wheee", t);
     if (pulledLt < PULL && riding) sounds.at(-1).end = t;
@@ -84,7 +84,7 @@ export function voiceEvents(track, duration) {
  * recorded, the wheee's start then its loop over and over; cut at its `end`, with a short fade.
  */
 export function callSamples(calls, { tag, variant, start, end }, seed = DUCK_SEED) {
-  const room = Math.max(0, Math.round((end - start) * RATE));
+  const room = Math.max(1, Math.round((end - start) * SAMPLE_RATE));
   let whole = tag === "chirp" ? calls.chirp(seed, variant) : calls.wheee(seed, variant, 0);
   if (tag === "chirp" && whole.length <= room) return whole;
   if (tag === "wheee") {
@@ -95,7 +95,7 @@ export function callSamples(calls, { tag, variant, start, end }, seed = DUCK_SEE
     whole = grown;
   }
   const cut = whole.slice(0, room);
-  const fade = Math.min(room, Math.round(FADE_S * RATE));
+  const fade = Math.min(room, Math.round(FADE_S * SAMPLE_RATE));
   for (let i = 0; i < fade; i++) cut[room - 1 - i] *= i / fade;
   return cut;
 }
