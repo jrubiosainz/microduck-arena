@@ -7,6 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: false
 short_description: Race Microduck policies on a clock you can trust
+thumbnail: https://huggingface.co/spaces/pollen-robotics/microduck-arena/resolve/main/docs/thumbnail.png
 hf_oauth: true
 ---
 
