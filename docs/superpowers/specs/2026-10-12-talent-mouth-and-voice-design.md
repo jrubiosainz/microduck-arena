@@ -78,7 +78,9 @@ open from 6.0 s to 8.0 s.
 - **`arena/web/routes_submit.py`.** An entry stores `trigger_track(fetched.timeline)`. A
   re-race through `recover` fetches the timeline again and stores it again.
 - **What the site reads.**
-  - `GET /api/runs/{id}`: `triggers`.
+  - Every board row (`_board_row`: the event's leaderboard and the run page's board) carries
+    `triggers`. The run page, the event page and the clip put board rows on the stage — any row
+    can go on it — so the row is where a lane learns how its duck sounds.
   - `GET /api/events/{id}/ballot`: `triggers`, one track per lane in lane order (or `null`).
     It carries the performance and no identity.
   - The workshop's checkpoint evaluation (`arena/workshop/evaluations.py`): `triggers` of the
@@ -103,8 +105,8 @@ open from 6.0 s to 8.0 s.
 - **The time origin** is the trace's first frame. The clip's lead-in settle holds the first
   keyframe's opening and makes no sound, as the settle plays the first keyframe.
 - **The synth.** `app/voice/src/lib.rs` gains `chirp(seed, variant)` and
-  `wheee(seed, variant, segment)` (0 start, 1 loop, 2 end) writing into the existing samples
-  buffer; `app/public/sound/microduck-voice.wasm` is rebuilt with the command in
+  `wheee(seed, variant, segment)` (0 start, 1 loop; no end segment: a timeline always releases
+  its trigger, so a ride never lands) writing into the existing samples buffer; `app/public/sound/microduck-voice.wasm` is rebuilt with the command in
   `app/voice/Cargo.toml`; `voice.js`'s `loadSynth` exposes them.
 - **The viewer** (run page, ballot, workshop). A lane entry may carry `triggers`; on a stage
   the viewer starts each sound when the player's time crosses its start. After a jump — the
