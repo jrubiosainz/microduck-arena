@@ -145,7 +145,7 @@ def climb(s: Situation) -> list[Fact]:
     text = f"@{s.user} climbs from rank {was} to rank {now} on the {s.manifest.title}"
     text += f", passing {', '.join(f'@{u}' for u in passed[:3])}." if passed else "."
     tags = ("climb", "podium") if now <= 3 else ("climb",)
-    return [Fact("notable#/climb", text, "notable", tags, identities=tuple(passed[:3]),
+    return [Fact("notable#/climb", text, "notable", tags,
                  score=min(0.9, 0.5 + 0.1 * (was - now)))]
 
 
@@ -217,8 +217,7 @@ def rivalry(s: Situation) -> list[Fact]:
     if swaps < 2:
         return []
     return [Fact("notable#/rivalry", f"@{s.user} and @{other} have traded the lead of the "
-                 f"{s.manifest.title} {swaps} times.", "notable", ("rivalry",),
-                 identities=(other,), score=0.7)]
+                 f"{s.manifest.title} {swaps} times.", "notable", ("rivalry",), score=0.7)]
 
 
 def opponents(s: Situation) -> list[Fact]:
@@ -242,7 +241,7 @@ def opponents(s: Situation) -> list[Fact]:
             f"notable#/opponent/{user}",
             f"@{user} drops from rank {held.rank} to rank {row.rank} on the {s.manifest.title}; "
             f"their best time there, {held.record.score:.2f} s, was published {ago}.",
-            "notable", ("rivalry", "displaced"), identities=(user,), score=min(0.8, 0.4 + days / 60),
+            "notable", ("rivalry", "displaced"), score=min(0.8, 0.4 + days / 60),
         ))
     return out
 
@@ -278,8 +277,7 @@ def profiles(s: Situation, earned: list[Receipt]) -> list[Fact]:
         rival = others[0]
         place = "who leads" if board[0].record.user == rival else "next on"
         facts.append(Fact(f"notable#/profile/{rival}", f"@{rival}, {place} this board, has "
-                          f"{_season(rival, s, ladder)}.", "notable", ("profile",),
-                          identities=(rival,)))
+                          f"{_season(rival, s, ladder)}.", "notable", ("profile",)))
     return facts
 
 

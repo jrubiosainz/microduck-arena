@@ -1,4 +1,4 @@
-"""Facts in, checked dialogue out; only the router is faked."""
+"""Facts in, playable dialogue out; only the router is faked."""
 
 import json
 import random
@@ -30,20 +30,18 @@ LORE = load()
 FACTS = [
     Fact("run#/event", "The event is the 2 m Sprint, a 2 m sprint on foot.", "result", ("sprint",)),
     Fact("run#/participant", "The participant is @alice, racing a policy named alice-v1.", "result",
-         ("participant",), identities=("alice",)),
+         ("participant",)),
     Fact("run#/result", "The mean finish time is 12.40 s, every one of the 5 seeds finished.",
          "result", ("clean",)),
     Fact("run#/board",
          "On the 2 m Sprint board this run ranks 2 of 4, 1.20 s behind the leader, @carol.",
-         "result", ("podium",), identities=("carol",)),
+         "result", ("podium",)),
     Fact("lore:throne", "A board with a single name on it: Peter calls it a throne, Ray calls it "
          "a queue with nobody behind.", "lore", ("open-board",)),
     Fact("recent:R9",
          "Earlier this season: @bob's run on the 2 m Sprint, 13.10 s, every seed finished.",
-         "recent", ("clean",), identities=("bob",)),
+         "recent", ("clean",)),
 ]
-# Quantities are never spelled out: "twelve" or "second" would fail the
-# number-word check, which is the point of the check.
 TURNS = [
     {"speaker": "peter", "text": "12.40! Alice flies down the 2 m Sprint, Ray!",
      "fact_refs": [0, 1, 2]},
@@ -80,7 +78,7 @@ def run_case(turns=TURNS, facts=FACTS):
             provider)
 
 
-def test_a_checked_dialogue_keeps_the_prose_and_maps_indices_to_references():
+def test_a_dialogue_keeps_the_prose_and_maps_indices_to_references():
     written, provider = run_case()
     assert [t["text"] for t in written["turns"]] == [t["text"] for t in TURNS]
     assert written["turns"][0]["fact_refs"] == ["run#/event", "run#/participant", "run#/result"]
@@ -181,14 +179,6 @@ def test_the_callback_is_a_coin_that_avoids_nothing():
     assert 60 < called < 140  # one in four, whatever was drawn lately
 
 
-def test_the_writer_is_told_every_fact_that_grounds_a_handle():
-    again = Fact("recent:R8", "Earlier this season: The participant is @alice.", "recent",
-                 identities=("alice",))
-    _, provider = run_case(facts=[*FACTS, again])
-    system = provider.calls[0][0][0]["content"]
-    assert '"@alice": [1, 6]' in system and '"@carol": [3]' in system
-
-
 def test_a_code_fence_around_the_answer_is_dressing():
     fenced = "```json\n" + json.dumps(TURNS) + "\n```"
     provider = provider_for(reply(TURNS, content=fenced))
@@ -201,59 +191,26 @@ def test_a_code_fence_around_the_answer_is_dressing():
     (TURNS[:2], "3 to 6 turns"),
     (TURNS * 3, "3 to 6 turns"),
     ([TURNS[1], TURNS[0], TURNS[2]], "alternate"),
-    ([{**TURNS[0], "text": "Peter: what a run!"}, TURNS[1], TURNS[2]], "speaker prefix"),
-    ([{**TURNS[0], "text": "I'm Peter Duckry and what a run!"}, TURNS[1], TURNS[2]],
-     "self-introduction"),
-    ([{**TURNS[0], "text": "See clips/R1/landscape.mp4, Ray!"}, TURNS[1], TURNS[2]], "technical"),
-    ([{**TURNS[0], "text": "He flies down the sprint!"}, TURNS[1], TURNS[2]], "gendered"),
-    ([{**TURNS[0], "text": "Carol will be worried, Ray!", "fact_refs": [0]}, TURNS[1], TURNS[2]],
-     "name"),
-    ([{**TURNS[0], "text": "Alice fell at the line!"}, TURNS[1], TURNS[2]], "fall"),
-    ([TURNS[0], {**TURNS[1], "text": "12.41 s on the clock."}, TURNS[2]], "number"),
-    ([TURNS[0], {**TURNS[1], "text": "Three seconds behind carol.", "fact_refs": [3]}, TURNS[2]],
-     "number"),
     ([{**TURNS[0], "fact_refs": []}, TURNS[1], TURNS[2]], "fact_refs"),
     ([{**TURNS[0], "fact_refs": [9]}, TURNS[1], TURNS[2]], "fact_refs"),
     ([{**TURNS[0], "fact_refs": [0, 0]}, TURNS[1], TURNS[2]], "fact_refs"),
-    ([{**TURNS[0], "text": "<b>Go</b>"}, TURNS[1], TURNS[2]], "printable"),
+    ([{**TURNS[0], "text": "  "}, TURNS[1], TURNS[2]], "non-empty"),
     ([{**TURNS[0], "text": "x" * 241}, TURNS[1], TURNS[2]], "240"),
     ([{**TURNS[0], "extra": 1}, TURNS[1], TURNS[2]], "speaker, text, fact_refs"),
-    ([{"speaker": "peter", "text": "What a day, Ray!", "fact_refs": [4]},
-      {"speaker": "ray", "text": "A day, Peter.", "fact_refs": [4]},
-      {"speaker": "peter", "text": "The coffee tin, my friend?", "fact_refs": [4]}], "result"),
-    ([{**TURNS[0], "text": "Alice is here in the booth with us!"}, TURNS[1], TURNS[2]], "booth"),
 ])
-def test_local_checks_reject_with_a_reason(turns, why):
+def test_an_answer_the_booth_cannot_play_is_rejected_with_a_reason(turns, why):
     with pytest.raises(Rejected, match=why):
         run_case(turns=turns)
 
 
-@pytest.mark.parametrize("said", ["20 seconds on the stage.", "20 s of it.", "20.0 s of it.",
-                                  "20.00 s of it."])
-def test_a_number_is_quoted_by_its_value_not_its_spelling(said):
-    # A whole performance prints "20.00 s", and "20 seconds" says exactly that: the
-    # reference's booth was refused for it on the Space.
-    facts = [*FACTS[:2], Fact("run#/result", "The performance lasts 20.00 s.", "result",
-                              ("performance",)), *FACTS[3:]]
-    turns = [{**TURNS[0], "text": "Alice on the 2 m Sprint, Ray!", "fact_refs": [0, 1]},
-             {**TURNS[1], "text": said, "fact_refs": [2]}, TURNS[2]]
-    written, _ = run_case(turns=turns, facts=facts)
-    assert written["turns"][1]["text"] == said
-
-
-def test_a_refused_number_is_named_in_the_reason():
-    # A rounder or a nearby value is still another number.
-    for said, named in (("12.41 s on the clock.", "12.41"), ("12 s on the clock.", "12")):
-        with pytest.raises(Rejected, match=rf"^a number not in the cited facts: {named}$"):
-            run_case(turns=[TURNS[0], {**TURNS[1], "text": said}, TURNS[2]])
-
-
-def test_a_player_at_the_line_or_in_the_lead_is_not_placed_in_the_booth():
-    # Only naming the booth is a placement; ordinary grounded scene-setting
-    # ("at the line", "in the lead") must not trip the same check.
-    turns = [{**TURNS[0], "text": "Alice is at the line, Ray!"}, TURNS[1], TURNS[2]]
+def test_the_prose_itself_is_never_judged():
+    # What a line says is the prompt's business: an invented number, a fall, a
+    # pronoun or a name nobody cited all go on air as written.
+    turns = [{**TURNS[0], "text": "He fell twice and still ran 99 s, Ray!", "fact_refs": [0]},
+             {**TURNS[1], "text": "Carol will be worried, Peter.", "fact_refs": [4]},
+             TURNS[2]]
     written, _ = run_case(turns=turns)
-    assert written["turns"][0]["text"] == "Alice is at the line, Ray!"
+    assert [t["text"] for t in written["turns"]] == [t["text"] for t in turns]
 
 
 @pytest.mark.parametrize("changes", [
@@ -265,58 +222,6 @@ def test_an_invalid_provider_answer_is_rejected(changes):
     with pytest.raises(Rejected):
         write(FACTS, direction(random.Random(1), [], LORE.scenes), lore=LORE, provider=provider,
               model="m")
-
-
-def test_a_name_spoken_in_a_facts_own_text_is_grounded_by_that_fact_alone():
-    # A notable fact can name the participant in its own text without declaring
-    # an identity itself (context.py's own detectors do exactly this); citing
-    # that fact alone, not the participant fact, still grounds the name.
-    facts = FACTS + [Fact("notable#/personal-best",
-                          "@alice beats their previous best on the 2 m Sprint, 13.00 s, by 0.60 s.",
-                          "notable", ("pb",))]
-    turns = [{**TURNS[0], "text": "Alice smashes a personal best, Ray!", "fact_refs": [6]},
-             TURNS[1], TURNS[2]]
-    written, _ = run_case(turns=turns, facts=facts)
-    assert written["turns"][0]["fact_refs"] == ["notable#/personal-best"]
-
-
-def test_two_facts_establishing_the_same_name_need_only_one_cited():
-    # The sprint-like shape this fix exists for: the participant fact and a
-    # second fact both establish @alice. Citing either one alone is enough;
-    # the bug was demanding both.
-    facts = FACTS + [Fact("notable#/personal-best",
-                          "@alice beats their previous best on the 2 m Sprint, 13.00 s, by 0.60 s.",
-                          "notable", ("pb",))]
-    turns = [{**TURNS[0], "text": "Alice makes it look easy, Ray!", "fact_refs": [1]},
-             TURNS[1], TURNS[2]]
-    written, _ = run_case(turns=turns, facts=facts)
-    assert written["turns"][0]["fact_refs"] == ["run#/participant"]
-
-
-def test_a_callback_cites_its_fact_and_quotes_no_number_from_it():
-    called_back = {"speaker": "ray", "text": "Bob ran here earlier this season, Peter.",
-                   "fact_refs": [5]}
-    written, _ = run_case(turns=[TURNS[0], called_back, TURNS[2]])
-    assert written["turns"][1]["fact_refs"] == ["recent:R9"]
-    with pytest.raises(Rejected, match="name"):
-        run_case(turns=[TURNS[0], {**called_back, "fact_refs": [2]}, TURNS[2]])
-    # Another run's figure must not reach the air under this run's name.
-    with pytest.raises(Rejected, match="number"):
-        run_case(turns=[TURNS[0], {**called_back, "text": "Bob ran 13.10 s here, Peter."},
-                        TURNS[2]])
-
-
-def test_a_callback_quotes_no_number_word_from_its_fact_either():
-    # A callback's own fact can itself be a points sentence, complete with a
-    # banned number word ("first"): citing it must not license speaking that
-    # word about this run, any more than the digits it also carries.
-    points = Fact("recent:R7",
-                  "Earlier this season: @dave's run earned 100 points: a first run on this "
-                  "event (100).", "recent", identities=("dave",))
-    called_back = {"speaker": "ray", "text": "Dave ran a first run here, Peter.",
-                   "fact_refs": [6]}
-    with pytest.raises(Rejected, match="number word"):
-        run_case(turns=[TURNS[0], called_back, TURNS[2]], facts=[*FACTS, points])
 
 
 class Answered:

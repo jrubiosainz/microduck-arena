@@ -101,7 +101,6 @@ def test_a_callback_is_the_last_other_run_to_air_told_by_its_result_facts(tmp_pa
     # callback carries neither.
     assert "board" not in fact.text and "lead" not in fact.text
     assert "points" not in fact.text and "earned" not in fact.text
-    assert fact.identities == ("carol",)
     assert callback_fact(BroadcastBook(tmp_path / "empty"), "R1") == []
 
 

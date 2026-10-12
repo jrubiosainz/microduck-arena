@@ -2,7 +2,7 @@
 
 context projects a run's own facts, notable digs the log for more, lore offers a
 memory or two, what went out lately keeps the memories from repeating and lends
-a callback its one fact, and generator writes and checks. This module puts them
+a callback its one fact, and generator writes. This module puts them
 together for one run, at the moment the reserve needs it.
 """
 
@@ -12,7 +12,7 @@ from ..manifest import all_events
 from ..points import counting, receipts
 from ..store import RunRecord
 from .context import Fact, result_facts
-from .generator import AT_NAME, CALLBACK, LOOKBACK, NO_CALLBACK, complete, direction, write
+from .generator import CALLBACK, LOOKBACK, NO_CALLBACK, complete, direction, write
 from .lore import Lore, select_memories
 from .notable import notable_facts, pick, profiles, situation
 
@@ -63,11 +63,7 @@ def callback_fact(book, run_id: str) -> list[Fact]:
         if one.run_id != run_id:
             about = " ".join(fact["text"] for fact in one.dialogue["brief"]["facts"]
                              if fact["ref"] in CALLBACK_REFS)
-            # The handles that text prints are the ones a callback may speak, read
-            # with the writer's own pattern so "@alice's" yields the same identity.
-            names = AT_NAME.findall(about)
-            return [Fact(f"recent:{one.id}", f"Earlier this season: {about}", "recent",
-                         identities=tuple(dict.fromkeys(names)))]
+            return [Fact(f"recent:{one.id}", f"Earlier this season: {about}", "recent")]
     return []
 
 
@@ -105,7 +101,7 @@ def briefing(store, run_id: str, *, lore: Lore, book, rng) -> tuple[list[Fact], 
 
 
 def compose(store, run_id: str, *, lore: Lore, provider, model: str, book, rng) -> dict:
-    """A checked dialogue for one run with the brief it was written from, or Rejected."""
+    """A dialogue for one run with the brief it was written from, or Rejected."""
     facts, drawn = briefing(store, run_id, lore=lore, book=book, rng=rng)
     written = write(facts, drawn, lore=lore, provider=provider, model=model)
     return {

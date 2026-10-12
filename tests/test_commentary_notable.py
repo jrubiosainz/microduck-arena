@@ -52,11 +52,10 @@ def test_a_personal_best_says_the_margin_and_a_climb_names_who_was_passed():
     assert pb.tags == ("pb",)
     climb = facts["notable#/climb"]
     assert climb.text == "@alice climbs from rank 3 to rank 2 on the 2 m Sprint, passing @carol."
-    assert climb.identities == ("carol",) and "podium" in climb.tags
+    assert "podium" in climb.tags
     dropped = facts["notable#/opponent/carol"]
     assert dropped.text == ("@carol drops from rank 2 to rank 3 on the 2 m Sprint; their best "
                             "time there, 12.90 s, was published a day ago.")
-    assert dropped.identities == ("carol",)
 
 
 def test_a_dnf_after_clean_runs_and_a_dnf_streak():
@@ -91,7 +90,6 @@ def test_a_rivalry_counts_the_lead_changes_between_two_players():
     mine = run("alice", 10.8, "2026-09-05T10:00:00Z")
     rivalry = facts_for(mine, a1, b1, a2, b2)["notable#/rivalry"]
     assert rivalry.text == "@alice and @bob have traded the lead of the 2 m Sprint 4 times."
-    assert rivalry.identities == ("bob",)
 
 
 def test_pick_keeps_the_best_and_varies_the_angle():
@@ -125,7 +123,7 @@ def test_profiles_give_the_season_of_the_author_and_of_who_the_board_measures_th
     author, rival = profiles_for(mine, carol, hill)
     assert author.text == ("@alice has 620 points this season, rank 1 of 2 on the points ladder, "
                            "from 2 publications on 2 events.")
-    assert rival.ref == "notable#/profile/carol" and rival.identities == ("carol",)
+    assert rival.ref == "notable#/profile/carol"
     assert rival.text == ("@carol, who leads this board, has 360 points this season, rank 2 of 2 "
                           "on the points ladder, from 1 publication on 1 event.")
     back = run("carol", 11.0, "2026-09-12T10:00:00Z", run_id="R3")

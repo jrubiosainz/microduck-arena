@@ -1,10 +1,9 @@
 """What the commentators may know about a run: public, allowlisted facts.
 
-A Fact is a sentence with a reference. The writer must cite references, and
-the checks read the cited texts back to verify every number and every name it
-speaks. Nothing here fetches, infers or scores; the worker passes records it
-already holds. Editorial fiction lives in lore.py, never in a fact about a
-player.
+A Fact is a sentence with a reference, and the writer cites the references
+it speaks from. Nothing here fetches, infers or scores; the worker passes
+records it already holds. Editorial fiction lives in lore.py, never in a
+fact about a player.
 """
 
 import re
@@ -23,12 +22,6 @@ class Fact:
     text: str
     kind: str  # result | notable | lore | recent
     tags: tuple[str, ...] = ()
-    # Participant names this fact establishes; a name spoken without citing
-    # such a fact is a name the model made up.
-    identities: tuple[str, ...] = ()
-    # "fell" when the fact records a fall, "dnf" for a DNF without one. Fall
-    # vocabulary in the dialogue must cite a fact whose outcome is "fell".
-    outcome: str | None = None
     # Notability. Result facts are always worth citing; detectors score theirs.
     score: float = 1.0
 
@@ -46,7 +39,7 @@ def technical_text(text: str) -> bool:
 
 def label(value, limit: int = 80) -> bool:
     """Submitter-supplied text a fact may quote: short, printable, no markup,
-    nothing machine-shaped — a fact quoting it would have the turn refused."""
+    nothing machine-shaped — a fact quoting it would put it on the air."""
     return (isinstance(value, str) and 0 < len(value.strip()) <= limit
             and value.isprintable() and not any(c in value for c in "<>")
             and not technical_text(value))
@@ -86,8 +79,7 @@ def _result(record: RunRecord, manifest: Manifest) -> Fact:
     if record.seeds_finished == 0:
         text = f"{who} did not finish: none of the {total} seeds reached the line"
         text += f", the duck fell on {falls} of them." if falls else "."
-        return Fact("run#/result", text, "result", ("dnf", "fall") if falls else ("dnf",),
-                    outcome="fell" if falls else "dnf")
+        return Fact("run#/result", text, "result", ("dnf", "fall") if falls else ("dnf",))
     text = f"The mean finish time is {record.score:.2f} s"
     if record.seeds_finished == total:
         return Fact("run#/result", text + f", every one of the {total} seeds finished.", "result",
@@ -95,8 +87,7 @@ def _result(record: RunRecord, manifest: Manifest) -> Fact:
     text += (f", with {record.seeds_finished} of {total} seeds finished; an unfinished seed "
              f"counts as the {manifest.time_limit_s:g} s limit")
     text += f", and the duck fell on {falls} of them." if falls else "."
-    return Fact("run#/result", text, "result", ("fall",) if falls else ("partial",),
-                outcome="fell" if falls else None)
+    return Fact("run#/result", text, "result", ("fall",) if falls else ("partial",))
 
 
 def _board(record: RunRecord, manifest: Manifest, event_runs) -> Fact:
@@ -118,7 +109,7 @@ def _board(record: RunRecord, manifest: Manifest, event_runs) -> Fact:
         text += f", {gap:.2f} s behind the leader, @{leader.user}."
         if gap < 0.5:
             tags.append("close")
-        return Fact("run#/board", text, "result", tuple(tags), identities=(leader.user,))
+        return Fact("run#/board", text, "result", tuple(tags))
     return Fact("run#/board", text + ".", "result", tuple(tags))
 
 
@@ -143,8 +134,7 @@ NOTE_REFUSES = re.compile(r"\bwww\.|\b[^\W_][\w-]+\.[a-z][a-z0-9]{0,4}\b", re.IG
 
 def _quotable(text: str) -> bool:
     """A note a fact may quote: `label`'s checks, with NOTE_ALLOWS let through (masked at the same
-    length) and NOTE_REFUSES refused. A turn that repeats such a unit or name as written is still
-    refused by the dialogue's own check: the writer has to say it in words."""
+    length) and NOTE_REFUSES refused."""
     text = unicodedata.normalize("NFKC", text)
     return (not NOTE_REFUSES.search(text)
             and label(NOTE_ALLOWS.sub(lambda m: "x" * len(m[0]), text), limit=NOTE_MAX))
@@ -157,8 +147,7 @@ def _note(record: RunRecord) -> Fact | None:
     text = " ".join((record.description or "").split())
     if not _quotable(text):
         return None
-    return Fact("run#/note", f'@{record.user} says about the policy: "{text}"', "notable",
-                identities=(record.user,))
+    return Fact("run#/note", f'@{record.user} says about the policy: "{text}"', "notable")
 
 
 def result_facts(record: RunRecord, manifest: Manifest, event_runs, receipts) -> tuple[Fact, ...]:
@@ -177,7 +166,7 @@ def result_facts(record: RunRecord, manifest: Manifest, event_runs, receipts) ->
         Fact("run#/participant",
              f"The participant is {who}, {doing} a policy named {policy}." if policy
              else f"The participant is {who}.",
-             "result", ("participant",), identities=(record.user,)),
+             "result", ("participant",)),
         _result(record, manifest),
     ]
     if note:

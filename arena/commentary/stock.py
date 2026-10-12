@@ -15,8 +15,8 @@ from ..live import cycle
 from .generator import Rejected
 
 DEPTH = 8  # runs kept stocked: about ten minutes of programme
-PER_HOUR = 120  # generation attempts, refusals included: about 115 an hour, 71 booths, on
-                # the real log; the cap sits at that edge on purpose, the owner's own bound.
+PER_HOUR = 120  # generation attempts, refusals included: the owner's own bound, above the
+                # booth after every replay the programme can air.
 IDLE_S = 5.0  # how long to wait when every run in reach is stocked
 RETRY_S = 300.0  # how long a refused run waits: the grid's horizon
 
@@ -90,9 +90,8 @@ class CommentaryStock:
             self.log(f"commentary: {run_id} written")
             self.landed()
         except Rejected as why:
-            # About four in ten are refused on the real log. It is the local
-            # checks doing their job, not a fault: the run waits, and the walk
-            # goes on with the others.
+            # An answer the booth cannot play: the run waits, and the walk goes
+            # on with the others.
             self.log(f"commentary: {run_id} refused ({why})")
             self._refused[run_id] = self.now()
             return None

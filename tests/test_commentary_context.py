@@ -57,19 +57,18 @@ def test_a_clean_run_states_event_participant_time_rank_gap_and_points():
     assert by_ref["run#/event"].tags == ("sprint",)
     participant = by_ref["run#/participant"]
     assert participant.text == "The participant is @alice, racing a policy named alice-v1."
-    assert participant.identities == ("alice",)
     assert by_ref["run#/result"].text == "The mean finish time is 12.40 s, every one of the 5 seeds finished."
-    assert by_ref["run#/result"].tags == ("clean",) and by_ref["run#/result"].outcome is None
+    assert by_ref["run#/result"].tags == ("clean",)
     board = by_ref["run#/board"]
     assert board.text == "On the 2 m Sprint board this run ranks 2 of 2, 1.20 s behind the leader, @carol."
-    assert board.identities == ("carol",) and "podium" in board.tags
+    assert "podium" in board.tags
     points = by_ref["run#/points"]
     assert points.text == "This run earned 110 points: a first run on this event (100), a run of the day (10)."
     assert points.tags == ("first-run",)
     assert all(f.kind == "result" for f in facts)
 
 
-def test_a_fall_is_an_outcome_and_a_lead_is_said_as_such():
+def test_a_fall_is_said_and_an_open_board_is_said_as_such():
     manifest = load_event("hill-climb-1m5")
     fell = run("bob", 32.0, "2026-09-11T10:00:00Z", finished=3, event="hill-climb-1m5", run_id="R2")
     facts = {f.ref: f for f in result_facts(fell, manifest, [fell], [])}
@@ -77,7 +76,7 @@ def test_a_fall_is_an_outcome_and_a_lead_is_said_as_such():
         "The mean finish time is 32.00 s, with 3 of 5 seeds finished; an unfinished seed "
         "counts as the 60 s limit, and the duck fell on 2 of them."
     )
-    assert facts["run#/result"].outcome == "fell" and facts["run#/result"].tags == ("fall",)
+    assert facts["run#/result"].tags == ("fall",)
     assert facts["run#/board"].text == "This run opens the 1.5 m Hill Climb board: nobody else has published on it."
     assert "open-board" in facts["run#/board"].tags
     assert "run#/points" not in facts
@@ -89,7 +88,6 @@ def test_a_dnf_by_timeout_is_not_a_fall_and_a_voted_event_has_no_board():
                             submitted_at="2026-09-11T10:00:00Z", policy_name="<script>")
     facts = {f.ref: f for f in result_facts(timed_out, sprint, [timed_out], [])}
     assert facts["run#/result"].text == "@dan did not finish: none of the 5 seeds reached the line."
-    assert facts["run#/result"].outcome == "dnf"
     # A policy name that is not a label is left out, never quoted.
     assert facts["run#/participant"].text == "The participant is @dan."
     talent = load_event("got-a-talent")
@@ -160,7 +158,7 @@ def test_a_performance_is_told_as_one_its_length_the_only_time():
     assert by_ref["run#/participant"].text == "The participant is @eve, performing a policy named eve-v1."
     result = by_ref["run#/result"]
     assert result.text == "The performance lasts 20.00 s."
-    assert result.tags == ("performance",) and result.outcome is None
+    assert result.tags == ("performance",)
     assert "run#/board" not in by_ref
     spoken = " ".join(f.text for f in facts).lower()
     for word in ("seed", "finish", "limit", "mean", "racing", "line"):
@@ -172,4 +170,4 @@ def test_a_performance_cut_short_says_so_without_a_time_or_a_fall():
     record = stage_run(finished=False)
     result = {f.ref: f for f in result_facts(record, load_event("got-a-talent"), [record], [])}["run#/result"]
     assert result.text == "The performance was cut short."
-    assert result.outcome is None and result.tags == ("performance",)
+    assert result.tags == ("performance",)
