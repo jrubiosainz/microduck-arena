@@ -12,6 +12,11 @@ Arena checks the format, never the choreography.
 
 Every keyframe is the whole command: a group it leaves out is zeros, never the
 previous keyframe's values.
+
+A keyframe may also pull the real pad's two triggers, `"triggers": [rt, lt]`, each within [0, 1]:
+in the replay they open the duck's beak and make it quack or wheee (app/src/duck-voice.js). The
+policy never reads them — the command stays 13 numbers — and a keyframe that leaves them out
+releases both, like any group.
 """
 
 import bisect
@@ -27,6 +32,8 @@ MAX_KEYFRAMES = 1000
 MAX_VALUE = 10.0
 # The command groups, in the order they fill the observation's command slot.
 GROUPS = (("twist", 3), ("head", 4), ("body", 6))
+# The pad's RT and LT, read beside the command and never by the policy.
+TRIGGERS = 2
 _TOP_KEYS = ("timeline_version", "duration_s", "keyframes")
 # Keyframe times are decimal seconds; the runner asks for k * CTRL_DT, which
 # binary floating point cannot always hold (15 * 0.02 < 0.3). A keyframe takes
@@ -43,6 +50,8 @@ class Timeline:
     duration_s: float
     times: tuple[float, ...]
     commands: tuple[tuple[float, ...], ...]
+    # The pad's (RT, LT) at each keyframe; empty for a timeline made in code, which pulls nothing.
+    triggers: tuple[tuple[float, float], ...] = ()
 
     def command_at(self, t: float) -> tuple[float, ...]:
         """The 13 command numbers at time t: the last keyframe with t_k <= t."""
@@ -71,7 +80,7 @@ def _keyframe(raw, index: int, duration_s: float, previous_t: float | None):
     where = f"keyframes[{index}]"
     if not isinstance(raw, dict):
         raise TimelineError(f"{where}: expected an object, got {type(raw).__name__}")
-    unknown = sorted(set(raw) - {"t", *(name for name, _ in GROUPS)})
+    unknown = sorted(set(raw) - {"t", "triggers", *(name for name, _ in GROUPS)})
     if unknown:
         raise TimelineError(f"{where}: unknown keys {unknown}")
     if "t" not in raw:
@@ -93,7 +102,16 @@ def _keyframe(raw, index: int, duration_s: float, previous_t: float | None):
             if abs(number) > MAX_VALUE:
                 raise TimelineError(f"{where}.{name}[{i}]: {number} is outside ±{MAX_VALUE:g}")
             command.append(number)
-    return t, tuple(command)
+    pulled = raw.get("triggers", [0.0] * TRIGGERS)
+    if not isinstance(pulled, list) or len(pulled) != TRIGGERS:
+        raise TimelineError(f"{where}.triggers: expected {TRIGGERS} numbers, got {pulled!r}")
+    triggers = []
+    for i, value in enumerate(pulled):
+        number = _number(value, f"{where}.triggers[{i}]")
+        if not 0.0 <= number <= 1.0:
+            raise TimelineError(f"{where}.triggers[{i}]: {number} is outside [0, 1]")
+        triggers.append(number)
+    return t, tuple(command), tuple(triggers)
 
 
 def load_timeline(path: Path, max_duration_s: float) -> Timeline:
@@ -128,9 +146,20 @@ def load_timeline(path: Path, max_duration_s: float) -> Timeline:
     if not isinstance(keyframes, list) or not 1 <= len(keyframes) <= MAX_KEYFRAMES:
         got = len(keyframes) if isinstance(keyframes, list) else f"a {type(keyframes).__name__}"
         raise TimelineError(f"keyframes: expected 1 to {MAX_KEYFRAMES} keyframes in a list, got {got}")
-    times, commands, previous = [], [], None
+    times, commands, triggers, previous = [], [], [], None
     for index, keyframe in enumerate(keyframes):
-        previous, command = _keyframe(keyframe, index, duration_s, previous)
+        previous, command, pulled = _keyframe(keyframe, index, duration_s, previous)
         times.append(previous)
         commands.append(command)
-    return Timeline(duration_s, tuple(times), tuple(commands))
+        triggers.append(pulled)
+    return Timeline(duration_s, tuple(times), tuple(commands), tuple(triggers))
+
+
+def trigger_track(timeline: Timeline) -> list[list[float]] | None:
+    """What the replay needs of the triggers: [t, rt, lt] where they change, from t = 0. None when
+    both stay released throughout, so a performance that pulls nothing stores nothing."""
+    track = []
+    for t, (rt, lt) in zip(timeline.times, timeline.triggers):
+        if not track or track[-1][1:] != [rt, lt]:
+            track.append([t, rt, lt])
+    return track if any(rt or lt for _, rt, lt in track) else None

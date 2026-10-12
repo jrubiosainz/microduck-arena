@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from arena.constants import CTRL_DT
-from arena.timeline import Timeline, TimelineError, constant_timeline, load_timeline
+from arena.timeline import Timeline, TimelineError, constant_timeline, load_timeline, trigger_track
 
 LIMIT_S = 20.0
 
@@ -69,6 +69,37 @@ def test_constant_timeline_holds_one_command():
     assert timeline.command_at(19.99) == command
 
 
+def test_triggers_are_read_per_keyframe_and_released_when_left_out(tmp_path):
+    raw = good(keyframes=[
+        {"t": 0.0},
+        {"t": 2.0, "twist": [1, 0, 0], "triggers": [1, 0]},
+        {"t": 2.3, "twist": [1, 0, 0]},
+        {"t": 4.0, "triggers": [0, 0.5]},
+    ])
+    timeline = load_timeline(write(tmp_path, raw), LIMIT_S)
+    assert timeline.triggers == ((0.0, 0.0), (1.0, 0.0), (0.0, 0.0), (0.0, 0.5))
+    # The policy never sees them: the command stays the 13 numbers.
+    assert timeline.commands[1] == (1.0,) + (0.0,) * 12
+
+
+def test_the_trigger_track_keeps_the_changes_only(tmp_path):
+    """RT held over two keyframes is one pull, not two: the replay quacks on a change."""
+    raw = good(keyframes=[
+        {"t": 0.0, "triggers": [1, 0]},
+        {"t": 1.0, "twist": [1, 0, 0], "triggers": [1, 0]},
+        {"t": 2.0},
+        {"t": 3.0, "head": [0, 0, 0.3, 0]},
+        {"t": 4.0, "triggers": [0, 1]},
+    ])
+    track = trigger_track(load_timeline(write(tmp_path, raw), LIMIT_S))
+    assert track == [[0.0, 1.0, 0.0], [2.0, 0.0, 0.0], [4.0, 0.0, 1.0]]
+
+
+def test_a_performance_that_pulls_nothing_has_no_track(tmp_path):
+    assert trigger_track(load_timeline(write(tmp_path, good()), LIMIT_S)) is None
+    assert trigger_track(constant_timeline((0.0,) * 13, 20.0)) is None
+
+
 @pytest.mark.parametrize(
     "raw, said",
     [
@@ -95,6 +126,12 @@ def test_constant_timeline_holds_one_command():
         (good(keyframes=[{"t": 0.0, "twist": ["1", 0, 0]}]), r"keyframes\[0\]\.twist\[0\]: expected a number"),
         (good(keyframes=[{"t": 0.0, "twist": [True, 0, 0]}]), r"keyframes\[0\]\.twist\[0\]: expected a number"),
         (good(keyframes=[{"t": 0.0, "body": [0, 0, 0, 0, 0, 10.5]}]), r"keyframes\[0\]\.body\[5\]: 10.5 is outside ±10"),
+        (good(keyframes=[{"t": 0.0, "triggers": [1]}]), r"keyframes\[0\]\.triggers: expected 2 numbers"),
+        (good(keyframes=[{"t": 0.0, "triggers": 1}]), r"keyframes\[0\]\.triggers: expected 2 numbers"),
+        (good(keyframes=[{"t": 0.0, "triggers": [0, "1"]}]), r"keyframes\[0\]\.triggers\[1\]: expected a number"),
+        (good(keyframes=[{"t": 0.0, "triggers": [0, True]}]), r"keyframes\[0\]\.triggers\[1\]: expected a number"),
+        (good(keyframes=[{"t": 0.0, "triggers": [1.5, 0]}]), r"keyframes\[0\]\.triggers\[0\]: 1.5 is outside \[0, 1\]"),
+        (good(keyframes=[{"t": 0.0, "triggers": [0, -0.1]}]), r"keyframes\[0\]\.triggers\[1\]: -0.1 is outside \[0, 1\]"),
     ],
 )
 def test_a_malformed_timeline_is_refused_with_where(tmp_path, raw, said):
