@@ -32,9 +32,13 @@ import {
   MODEL_DIR,
   attachMeshes,
   buildRigTree,
+  jawPivot,
   loadKinematics,
   rigGeometries,
 } from "./rig.js";
+import { MOUTH_TRAVEL, mouthTrack, voiceEvents } from "./duck-voice.js";
+import { createStageVoice } from "./stage-voice.js";
+import { loadCalls } from "./live/voice.js";
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
 import { attachStadium } from "./stadium.js";
 import { isStage } from "./format.js";
@@ -371,6 +375,8 @@ export async function createViewer(
   let slopeDeg = 0;
   let courseLength = 2;
   let player = new Player([]);
+  // The performer's voice, live: a clip renders its own soundtrack and stays silent here.
+  const voice = manual ? null : createStageVoice(loadCalls);
   let crowdDirection = stadiumDirection();
 
   // Whichever set is up, its crowd draws only the seats the camera about to
@@ -495,6 +501,9 @@ export async function createViewer(
       });
       if (talent) placeStagePerformer(rig, entry.trace, stage.layout.centre);
       else placeLane(rig, z);
+      // The pad's triggers a performance pulls (duck-voice.js): the beak follows them.
+      const mouth = talent ? mouthTrack(entry.triggers, frameCount(entry.trace), entry.lead) : null;
+      const jaw = mouth ? jawPivot(rig) : null;
       scene.add(rig.placer);
 
       // The follow-spot, on the course so it climbs a slope with it (placeMarker).
@@ -514,9 +523,12 @@ export async function createViewer(
         plate.sprite.scale.set(PLATE_HEIGHT * plate.ratio, PLATE_HEIGHT, 1);
         scene.add(plate.sprite);
       }
-      return { ...entry, rig, marker, plate, tier, gazeTarget: new Vector3() };
+      return { ...entry, rig, marker, plate, tier, gazeTarget: new Vector3(), mouth, jaw };
     });
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
+    // What a lane's trace holds is what it performed: a cut-short performance falls silent with it.
+    const performer = talent ? lanes[0] : null;
+    voice?.set(performer ? voiceEvents(performer.triggers, frameCount(performer.trace) * CTRL_DT) : []);
     const progress = [];
     if (event?.length_m && lanes.length) {
       for (let second = 0; second < player.duration; second += .1) {
@@ -564,6 +576,7 @@ export async function createViewer(
     lanes.forEach((lane, i) => {
       const frame = frameAt(lane.trace, indices[i]);
       applyFrame(lane.rig, frame);
+      if (lane.jaw) lane.jaw.rotation.y = lane.mouth[indices[i]] * MOUTH_TRAVEL;
       // Follow both feet, including sideways drift and the lane offset.
       if (lane.marker) placeMarker(lane.marker, course ?? scene, feetPosition(lane.rig, _feet), slopeDeg);
       if (lane.plate) {
@@ -608,6 +621,7 @@ export async function createViewer(
 
   function tick(now) {
     player.advance(now);
+    voice?.follow(player.playing ? player.time : null);
     // The crowd on the wall clock: it fidgets before a lane is ticked and after
     // a publication's race has run out, when the replay's clock stands still.
     crowdStart ??= now;
@@ -659,6 +673,7 @@ export async function createViewer(
       return player;
     },
     dispose() {
+      voice?.dispose();
       if (raf) cancelAnimationFrame(raf);
       watcher.disconnect();
       controls?.dispose();
