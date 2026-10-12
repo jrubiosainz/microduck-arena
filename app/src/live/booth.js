@@ -25,7 +25,7 @@ import {
 } from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { applyFrame } from "../replay.js";
-import { STAND, TRUNK_HEIGHT, attachMeshes, buildRigTree, setJoint } from "../rig.js";
+import { STAND, TRUNK_HEIGHT, attachMeshes, buildRigTree, jawPivot, setJoint } from "../rig.js";
 import { loadAssets } from "../viewer.js";
 import { BOOTH_TURN, direct } from "./direction.js";
 import { poseAt } from "./score.js";
@@ -38,9 +38,6 @@ const HEAD = { neck: ["neck_pitch", 5], pitch: ["head_pitch", 6], yaw: ["head_ya
 const SEATS = { peter: { x: -0.16, livery: "classic" }, ray: { x: 0.16, livery: "blue" } };
 // Facing the auditorium: a quarter turn out of the booth's own bearing.
 const FACING = BOOTH_TURN - Math.PI / 2;
-// The lower beak, hung on a pivot in the jaw body's frame.
-const JAW_MESHES = new Set(["jaw.stl", "jaw_soft.stl"]);
-const JAW_PIVOT = [-0.008, 0, -0.025];
 const JAW_OPEN = 0.32;
 const PIXEL_RATIO_CAP = 1.5;
 
@@ -52,19 +49,6 @@ function standFrame(x) {
     Math.cos(yaw / 2), 0, 0, Math.sin(yaw / 2),
     ...STAND,
   ]);
-}
-
-function jawPivot(rig) {
-  const body = rig.bodies.get("jaw_soft");
-  const pivot = new Group();
-  pivot.name = "jaw pivot";
-  pivot.position.set(...JAW_PIVOT);
-  for (const mesh of body.children.filter((child) => JAW_MESHES.has(child.name))) {
-    mesh.position.sub(pivot.position);
-    pivot.add(mesh);
-  }
-  body.add(pivot);
-  return pivot;
 }
 
 // The set's frame is z up; three.js is y up.

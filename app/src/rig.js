@@ -2,7 +2,7 @@
 //
 // A reduced port of the sandbox's app/src/game/duck.js, keeping only what a
 // replay needs: one Group per body, joints as local rotations, meshes from the
-// shared GLB. Deliberately left out: the jaw pivot, colour specs, comic-ink
+// shared GLB. Deliberately left out: colour specs, comic-ink
 // outlines, and the STL fallback path — none of them matter for watching a
 // recorded race, and each would be a thing to keep in sync.
 //
@@ -143,6 +143,25 @@ export function setJoint(rig, name, angle) {
   if (joint.range) value = Math.min(joint.range[1], Math.max(joint.range[0], value));
   _rotation.setFromAxisAngle(joint.axis, value);
   joint.body.quaternion.copy(joint.baseQuat).multiply(_rotation);
+}
+
+// The lower beak, hung on a pivot in the jaw body's frame: what the booth's talkers and the
+// stage's performer open.
+const JAW_MESHES = new Set(["jaw.stl", "jaw_soft.stl"]);
+const JAW_PIVOT = [-0.008, 0, -0.025];
+
+/** Hang the lower beak on a pivot and return it: a positive `rotation.y` opens the beak. */
+export function jawPivot(rig) {
+  const body = rig.bodies.get("jaw_soft");
+  const pivot = new Group();
+  pivot.name = "jaw pivot";
+  pivot.position.set(...JAW_PIVOT);
+  for (const mesh of body.children.filter((child) => JAW_MESHES.has(child.name))) {
+    mesh.position.sub(pivot.position);
+    pivot.add(mesh);
+  }
+  body.add(pivot);
+  return pivot;
 }
 
 // 36 degrees. Below it, neighbouring faces share a normal and the surface reads
