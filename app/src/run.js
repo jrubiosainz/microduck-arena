@@ -260,6 +260,7 @@ export async function renderRun(root, runId, state) {
       trace: fetched[i],
       tier: tiers.get(id) ?? "ghost",
       livery: byId.get(id).livery,
+      triggers: byId.get(id).triggers,
       // The plate over the duck.
       name: byId.get(id).user,
     }));

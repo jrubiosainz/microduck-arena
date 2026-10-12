@@ -216,6 +216,7 @@ export async function renderRace(root, { event, state }) {
   const traces = new Map();
   const liveries = new Map(); // run id -> the colourway it raced in
   const names = new Map(); // run id -> whose run it is, for the plate over its duck
+  const pulls = new Map(); // run id -> the triggers its performance pulls
 
   async function traceFor(runId) {
     if (!traces.has(runId)) traces.set(runId, await getTrace(runId));
@@ -232,6 +233,7 @@ export async function renderRace(root, { event, state }) {
       livery: liveries.get(runId) ?? "classic",
       // The plate over the duck: the viewer builds one for a lane with a name.
       name: names.get(runId),
+      triggers: pulls.get(runId),
     }));
     viewer.setLanes(arrangeLanes(board, isStage(event) ? lanes.slice(0, 1) : lanes), event);
   }
@@ -245,6 +247,7 @@ export async function renderRace(root, { event, state }) {
       for (const row of rows) {
         liveries.set(row.run_id, row.livery ?? "classic");
         names.set(row.run_id, row.user);
+        pulls.set(row.run_id, row.triggers);
       }
       return rows;
     },

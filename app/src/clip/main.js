@@ -87,6 +87,9 @@ async function main() {
         colour: LANE_COLORS[i % LANE_COLORS.length],
         opacity: 1,
         name: `@${lane.user}`,
+        // The beak only: the clip's soundtrack plays the voice. Its lane starts with the settle.
+        triggers: lane.triggers,
+        lead: settle,
       }))
       // The camera stands beyond the last lane: reversed, the author's duck is
       // the one in the foreground, still in the colour its page gives it.

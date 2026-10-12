@@ -275,6 +275,7 @@ export async function renderVote(root, { event, state }) {
       tier: "leader",
       livery: "classic",
       colour: LANE_COLORS[lane % LANE_COLORS.length],
+      triggers: ballot.triggers[lane],
     }));
     const solo = isStage(event);
     viewer.setLanes(solo ? entries.slice(0, 1) : entries, event);
