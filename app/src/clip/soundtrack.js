@@ -4,6 +4,8 @@
 // segments, no smoothing afterwards, no mixing left to ffmpeg.
 
 import { olaAt, scheduleOla } from "../crowd-behaviour.js";
+import { callSamples } from "../duck-voice.js";
+import { loadCalls } from "../live/voice.js";
 import { stadiumDirection } from "./direction.js";
 import { StadiumAmbience, prepareStadium } from "./stadium.js";
 
@@ -29,8 +31,15 @@ function interleave(buffer) {
   return pcm;
 }
 
+/** A sound of the robot's synth as a buffer: mono, which the context spreads to both sides. */
+function synthBuffer(context, samples) {
+  const buffer = context.createBuffer(1, samples.length, RATE);
+  buffer.copyToChannel(samples, 0);
+  return buffer;
+}
+
 /** Interleaved stereo float32 at 48 kHz, exactly `seconds` long. */
-export async function renderSoundtrack(score, seconds, { Context = OfflineAudioContext, load = fetchWav } = {}) {
+export async function renderSoundtrack(score, seconds, { Context = OfflineAudioContext, load = fetchWav, calls = loadCalls } = {}) {
   const context = new Context(2, Math.ceil(seconds * RATE), RATE);
   const limiter = context.createDynamicsCompressor();
   limiter.threshold.value = -3;
@@ -40,8 +49,15 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
   limiter.release.value = 0.1;
   limiter.connect(context.destination);
 
+  // The synth only for a clip whose duck makes a sound: every race and silent performance skips it.
+  const synth = score.cues.some((cue) => cue.call) ? await calls() : null;
   const cues = await Promise.all(
-    score.cues.map(async (cue) => ({ ...cue, buffer: await context.decodeAudioData(await load(cue.file)) })),
+    score.cues.map(async (cue) => ({
+      ...cue,
+      buffer: cue.call
+        ? synthBuffer(context, callSamples(synth, cue.call))
+        : await context.decodeAudioData(await load(cue.file)),
+    })),
   );
   for (const cue of cues) {
     const source = context.createBufferSource();

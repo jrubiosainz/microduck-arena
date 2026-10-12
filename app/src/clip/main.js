@@ -98,7 +98,7 @@ async function main() {
     { loop: false },
   );
   const plan = clipPlan(frameCount(traces[0]), config.tape_max_s, settle);
-  const score = clipScore({ run, plan, trace: replays[0] });
+  const score = clipScore({ run, plan, trace: replays[0], triggers: lanes[0].triggers });
   const crowdDirection = stadiumDirection(score.crowd ?? {});
   letter(run);
 
