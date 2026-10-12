@@ -81,8 +81,8 @@ def main() -> int:
 
     revision = git_revision()
     if revision.endswith("-dirty"):
-        # A warning, not a refusal: deploying a work in progress to a private
-        # Space is a normal thing to want. But the commit message should say so,
+        # A warning, not a refusal: deploying a work in progress by hand is a
+        # normal thing to want. But the commit message should say so,
         # or nobody can tell later what is actually running.
         print("warning: working tree has uncommitted changes; they WILL be deployed")
 

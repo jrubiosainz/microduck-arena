@@ -46,7 +46,6 @@ import json, os, sys
 from pathlib import Path
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps({{"tool": "{tool}", "argv": sys.argv[1:], "cwd": os.getcwd(),
-                          "hf_token": os.environ.get("HF_TOKEN"),
                           "virtual_env": os.environ.get("VIRTUAL_ENV")}}) + "\n")
 if "{tool}" == "git" and sys.argv[1] == "clone":
     (Path(sys.argv[3]) / "src" / "microduck_challenges").mkdir(parents=True)
@@ -64,9 +63,8 @@ def _launch(tmp_path, cwd, *args, env=None):
     script.write_text(LAUNCHER.read_text().replace(DEFAULT, "ARENA = 'http://arena.test'"))
     log = tmp_path / "calls.jsonl"
     # UV too: under `uv run pytest`, uv exports its own path as UV, and the launcher would run it.
-    base = {k: v for k, v in os.environ.items() if k not in ("HF_TOKEN", "HF_HOME", "UV")}
-    full_env = {**base, "PATH": f"{fakes}{os.pathsep}/usr/bin:/bin", "FAKE_LOG": str(log),
-                "HF_HOME": str(tmp_path / "no-hf"), **(env or {})}
+    base = {k: v for k, v in os.environ.items() if k != "UV"}
+    full_env = {**base, "PATH": f"{fakes}{os.pathsep}/usr/bin:/bin", "FAKE_LOG": str(log), **(env or {})}
     subprocess.run([sys.executable, str(script), *args], cwd=cwd, env=full_env, check=True)
     return [json.loads(line) for line in log.read_text().splitlines()]
 
@@ -93,17 +91,6 @@ def test_inside_a_clone_it_works_in_place(tmp_path):
     (uv,) = _launch(tmp_path, clone, "hill-climb-1m5", "--no-browser")
     assert os.path.realpath(uv["cwd"]) == os.path.realpath(clone)
     assert uv["argv"][5:] == ["hill-climb-1m5", "--no-browser", "--arena", "http://arena.test"]
-
-
-def test_the_saved_hub_token_reaches_uv(tmp_path):
-    """While the Arena wheel is on a private Hub repo, uv needs HF_TOKEN to install it."""
-    hf_home = tmp_path / "hf"
-    hf_home.mkdir()
-    (hf_home / "token").write_text("hf_saved\n")
-    clone = tmp_path / "clone"
-    (clone / "src" / "microduck_challenges").mkdir(parents=True)
-    (uv,) = _launch(tmp_path, clone, "sprint-2m", env={"HF_HOME": str(hf_home)})
-    assert uv["hf_token"] == "hf_saved"
 
 
 def test_uv_does_not_inherit_the_scripts_throwaway_environment(tmp_path):

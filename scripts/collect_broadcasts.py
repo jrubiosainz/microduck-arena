@@ -9,18 +9,15 @@ it running for a session; scripts/commentary_bench.py reads the directory.
     uv run --frozen python scripts/collect_broadcasts.py \
         https://pollen-robotics-microduck-arena.hf.space ~/arena-sessions/2026-09-21-baseline
 
-A private Space wants the developer's Hub token as a bearer, and that token is
-sent to a *.hf.space host only. A local `arena serve` is read the same way.
+A local `arena serve` is read the same way.
 """
 
 import argparse
 import json
 import time
 from pathlib import Path
-from urllib.parse import urlsplit
 
 import httpx
-from huggingface_hub import get_token
 
 POLL_S = 20  # /api/live serves a started slot for one minute behind now (BEHIND_MS)
 
@@ -52,11 +49,9 @@ def main() -> None:
     args = parser.parse_args()
     site = args.site.rstrip("/")
     args.out.mkdir(parents=True, exist_ok=True)
-    on_the_hub = urlsplit(site).hostname.endswith(".hf.space")
-    headers = {"Authorization": f"Bearer {get_token()}"} if on_the_hub else {}
 
     def get(url: str) -> dict:
-        response = httpx.get(url, headers=headers, timeout=30)
+        response = httpx.get(url, timeout=30)
         response.raise_for_status()
         return response.json()
 

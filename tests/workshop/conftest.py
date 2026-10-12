@@ -199,9 +199,7 @@ def hub():
 
 
 @pytest.fixture
-def workshop(checkout, fakes, hub, monkeypatch):
-    # As the launcher exports it. monkeypatch puts the developer's own back after the test.
-    monkeypatch.setenv("HF_TOKEN", "hf_from_the_launcher")
+def workshop(checkout, fakes, hub):
     opened = []
     client = reopen(checkout, hub, opened)
     client.opened = opened

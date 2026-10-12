@@ -30,12 +30,12 @@ It runs two ways, and both are first-class:
 
 - **Locally**, with no Hugging Face account, no OAuth and no network. The run log
   is a directory on your disk.
-- **As a private Space** (this repo is one). Same code path; its times are the
+- **As a Space** (this repo is one). Same code path; its times are the
   board's, and a local run on other hardware gives indicative ones.
 
 ## Deploying to the Space
 
-The source of truth is the private GitHub repo
+The source of truth is the GitHub repo
 [`pollen-robotics/microduck-arena`](https://github.com/pollen-robotics/microduck-arena).
 **Every push to `main` deploys** — `.github/workflows/deploy-space.yml` publishes
 the tree to <https://huggingface.co/spaces/pollen-robotics/microduck-arena>.

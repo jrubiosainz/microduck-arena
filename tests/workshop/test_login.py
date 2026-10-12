@@ -66,9 +66,9 @@ def test_a_login_that_prints_no_url_is_an_error_with_its_output_not_a_hang(works
     assert workshop.opened == []
 
 
-def test_a_login_drops_the_token_the_launcher_exported(workshop, fakes):
+def test_a_login_drops_a_token_set_in_the_shell(workshop, fakes, monkeypatch):
     """huggingface_hub reads HF_TOKEN before the saved login, and refreshes only a saved one."""
-    assert os.environ["HF_TOKEN"] == "hf_from_the_launcher"
+    monkeypatch.setenv("HF_TOKEN", "hf_from_the_shell")
     workshop.post("/api/workshop/login")
     wait_for(lambda: _ended(workshop))
     assert "HF_TOKEN" not in os.environ

@@ -39,7 +39,7 @@ TASK = "Mjlab-GotATalent-MicroDuck"
 
 
 @pytest.fixture
-def stage(checkout, fakes, hub, monkeypatch):
+def stage(checkout, fakes, hub):
     """The workshop on a checkout that also holds MicroDuck Got a Talent, its timeline committed."""
     folder = checkout / "src" / "microduck_challenges" / "got_a_talent"
     folder.mkdir()
@@ -47,7 +47,6 @@ def stage(checkout, fakes, hub, monkeypatch):
     (folder / "timeline.json").write_text(TWO_SECONDS)
     git(checkout, "add", "-A")
     git(checkout, "commit", "-qm", "the stage")
-    monkeypatch.setenv("HF_TOKEN", "hf_from_the_launcher")
     client = reopen(checkout, hub)
     client.timeline = folder / "timeline.json"
     return client

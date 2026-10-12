@@ -40,22 +40,11 @@ def checkout(here: Path) -> Path:
     return clone
 
 
-def hf_token() -> str | None:
-    """The token `hf auth login` saved. uv needs it to install the Arena wheel while that
-    sits on a private Hugging Face repo (uv sends HF_TOKEN to huggingface.co only)."""
-    if os.environ.get("HF_TOKEN"):
-        return os.environ["HF_TOKEN"]
-    saved = Path(os.environ.get("HF_HOME") or Path.home() / ".cache" / "huggingface") / "token"
-    return saved.read_text().strip() if saved.is_file() else None
-
-
 def main() -> None:
     root = checkout(Path.cwd())
     # uv runs this script in a throwaway environment and says so in VIRTUAL_ENV; left there,
     # the `uv run` below warns that it does not match the checkout's .venv.
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
-    if token := hf_token():
-        env["HF_TOKEN"] = token
     os.chdir(root)
     # The uv running this script says where it is, in UV: it may not be on PATH (a fresh install).
     uv = os.environ.get("UV") or "uv"
