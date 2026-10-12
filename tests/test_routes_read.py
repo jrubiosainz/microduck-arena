@@ -280,6 +280,18 @@ def test_a_stage_event_is_served_without_a_lane_or_a_sweep(client):
     assert talent["seeds"] == 1
 
 
+def test_a_board_row_says_how_its_duck_sounds_on_the_stage(client):
+    """A lane on a stage is a board row: the event page, the run page and the clip put any row on it."""
+    api, app = client
+    track = [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]
+    pulled = record_run(app, event_id="got-a-talent", user="ann", triggers=track)
+    record_run(app, event_id="got-a-talent", user="bob")
+    rows = {row["user"]: row for row in api.get("/api/events/got-a-talent/leaderboard").json()["rows"]}
+    assert (rows["ann"]["triggers"], rows["bob"]["triggers"]) == (track, None)
+    detail = api.get(f"/api/runs/{pulled.run_id}").json()
+    assert next(row for row in detail["board"] if row["you"])["triggers"] == track
+
+
 def test_standings_rank_every_player_who_published(client):
     api, app = client
     record_run(app, user="ann", score=20.0, submitted_at="2026-09-03T09:00:00Z")

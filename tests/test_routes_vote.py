@@ -150,6 +150,16 @@ def test_the_client_response_never_carries_a_run_id(client):
         assert run_id != body["ballot"]
 
 
+def test_a_ballot_says_how_each_lanes_duck_sounds(client):
+    api, app = client
+    ann = enter(app, "ann", triggers=[[0.0, 1.0, 0.0]])
+    bob = enter(app, "bob")
+    body = api.get("/api/events/got-a-talent/ballot").json()
+    entry = app.state.ballot_book.get(body["ballot"])
+    sounds = {ann.run_id: ann.triggers, bob.run_id: None}
+    assert body["triggers"] == [sounds[run_id] for run_id in entry.run_ids]
+
+
 def test_voting_records_the_whole_field_and_pays_the_voter(client):
     api, app = client
     for name in ("ann", "bob", "cid"):

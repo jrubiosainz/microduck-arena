@@ -31,7 +31,7 @@ from ..evaluate import evaluate
 from ..manifest import load_event
 from ..policy import load_policy
 from ..stage import summary as stage_summary
-from ..timeline import load_timeline
+from ..timeline import load_timeline, trigger_track
 from .challenges import timeline_file, timeline_key
 from .runs import find_runs
 from .shell import uv_run
@@ -139,6 +139,7 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
         "trace_b64": base64.b64encode(result.trace.astype("<f4").tobytes()).decode("ascii"),
         "runner_version": result.runner_version,
         "timeline": key,
+        "triggers": trigger_track(timeline) if timeline else None,
     }
     if event.course.kind == "stage":
         body["stage"] = stage_summary(result.trace, event.termination)

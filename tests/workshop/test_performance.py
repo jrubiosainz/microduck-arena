@@ -34,6 +34,7 @@ max   = 2.0
 """
 TWO_SECONDS = '{"timeline_version": 1, "duration_s": 2.0, "keyframes": [{"t": 0.0}, {"t": 1.0, "twist": [1, 0, 0]}]}\n'
 THREE_SECONDS = '{"timeline_version": 1, "duration_s": 3.0, "keyframes": [{"t": 0.0}]}\n'
+QUACKS = '{"timeline_version": 1, "duration_s": 2.0, "keyframes": [{"t": 0.0}, {"t": 1.0, "triggers": [1, 0]}]}\n'
 URL = "/api/workshop/challenges/got-a-talent"
 TASK = "Mjlab-GotATalent-MicroDuck"
 
@@ -69,6 +70,13 @@ def test_a_stage_checkpoint_plays_the_challenges_timeline(stage, checkout):
     assert body["timeline"] == hashlib.sha256(TWO_SECONDS.encode()).hexdigest()
     assert set(body["stage"]) == {"fell_at", "seated_s", "standing_s"}
     assert (body["seeds_finished"], body["seeds_total"]) == (1, 1)
+    assert body["triggers"] is None
+
+
+def test_a_checkpoint_replays_with_the_triggers_its_timeline_pulls(stage, checkout):
+    stage.timeline.write_text(QUACKS)
+    run = make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
+    assert evaluated(stage, run)["triggers"] == [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]
 
 
 def test_two_threads_evaluating_the_same_checkpoint_never_race_on_one_temp_file(stage, checkout, monkeypatch):

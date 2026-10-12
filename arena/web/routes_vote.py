@@ -194,6 +194,8 @@ def issue_ballot(event_id: str, request: Request, response: Response) -> dict:
         # A COUNT, not a palette: lane i wears the frontend's own LANE_CSS[i],
         # and sending the hex codes would be a second copy of a list it has.
         "lanes": len(picked),
+        # How each lane's duck sounds, in lane order: the performance itself, never who made it.
+        "triggers": [r.triggers for r in picked],
         "cast_today": spent,
         "per_day": per_day,
     }

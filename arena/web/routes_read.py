@@ -152,6 +152,9 @@ def _board_row(row) -> dict:
         "seeds_total": len(record.per_seed),
         "run_id": record.run_id,
         "submitted_at": record.submitted_at,
+        # How the duck sounds on a stage (arena.timeline.trigger_track), or None: a lane is a board
+        # row, so the row carries what the replay opens the beak and plays from.
+        "triggers": record.triggers,
     }
 
 
