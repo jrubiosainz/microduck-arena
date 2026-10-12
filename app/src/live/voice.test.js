@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SAMPLE_RATE, prepare, synthesize } from "./score.js";
-import { createVoice, loadSynth, windGust } from "./voice.js";
+import { createVoice, loadCalls, loadSynth, windGust } from "./voice.js";
 
 const wasm = async (url) => ({ ok: url === "/sound/microduck-voice.wasm", arrayBuffer: async () => readFileSync(`public${url}`) });
 
@@ -15,6 +15,24 @@ describe("loadSynth", () => {
     expect(Math.abs(samples.at(-1))).toBe(0);
     expect(samples.reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0)).toBeCloseTo(10 ** (-6 / 20), 3);
     await expect(loadSynth(async () => ({ ok: false }))).rejects.toThrow("No voice");
+  });
+});
+
+describe("loadCalls", () => {
+  it("quacks and wheees in the robot's own voice, the same every time", async () => {
+    const calls = await loadCalls(wasm);
+    const quack = calls.chirp(28, 3);
+    expect(quack.length).toBeGreaterThan(0.05 * 48000);
+    expect(quack.length).toBeLessThan(0.6 * 48000);
+    expect(quack.reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0)).toBeLessThanOrEqual(1);
+    expect(calls.chirp(28, 4)).not.toEqual(quack);
+    const start = calls.wheee(28, 0, 0);
+    const ride = calls.wheee(28, 0, 1);
+    expect(start.length).toBeGreaterThan(0.5 * 48000);
+    expect(ride.length).toBeGreaterThan(1.2 * 48000);
+    // A copy each: the calls made since did not overwrite the first quack.
+    expect(calls.chirp(28, 3)).toEqual(quack);
+    await expect(loadCalls(async () => ({ ok: false }))).rejects.toThrow("No voice");
   });
 });
 

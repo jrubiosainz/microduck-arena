@@ -6,14 +6,18 @@ import { SAMPLE_RATE, synthesize } from "./score.js";
 
 const BREATHS_S = [0, 1.16];
 
+async function voiceExports(fetcher) {
+  const response = await fetcher("/sound/microduck-voice.wasm");
+  if (!response.ok) throw new Error("No voice");
+  const { instance } = await WebAssembly.instantiate(await response.arrayBuffer());
+  return instance.exports;
+}
+
 /** The robot's synthesiser, built from app/voice: `sing(seed, note)` renders
  * one note's syllable with that seed's microduck personality. The samples are
  * a view into the synth's memory, good until the next call. */
 export async function loadSynth(fetcher = fetch) {
-  const response = await fetcher("/sound/microduck-voice.wasm");
-  if (!response.ok) throw new Error("No voice");
-  const { instance } = await WebAssembly.instantiate(await response.arrayBuffer());
-  const { memory, contour, syllable, samples } = instance.exports;
+  const { memory, contour, syllable, samples } = await voiceExports(fetcher);
   return (seed, note) => {
     // Asked for first: making room may grow the memory, which detaches older views of it.
     const points = contour(note.contour.length);
@@ -23,6 +27,18 @@ export async function loadSynth(fetcher = fetch) {
       note.warble[0], note.warble[1], note.buzz,
     );
     return new Float32Array(memory.buffer, samples(), length);
+  };
+}
+
+/** The robot pad's two calls in its own synthesiser: `chirp(seed, variant)` is
+ * RT's quack, `wheee(seed, variant, segment)` LT's ride (0 its start, 1 its
+ * loop). Each is a copy, kept however many calls follow. */
+export async function loadCalls(fetcher = fetch) {
+  const { memory, chirp, wheee, samples } = await voiceExports(fetcher);
+  const copy = (length) => new Float32Array(memory.buffer, samples(), length).slice();
+  return {
+    chirp: (seed, variant) => copy(chirp(seed, variant)),
+    wheee: (seed, variant, segment) => copy(wheee(seed, variant, segment)),
   };
 }
 

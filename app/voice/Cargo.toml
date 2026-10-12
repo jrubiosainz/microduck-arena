@@ -1,4 +1,4 @@
-# The booth's voices: the microduck's own synthesiser, compiled for the page.
+# The booth's voices and the stage duck's calls: the microduck's own synthesiser, compiled for the page.
 #
 # Rebuild after any change here, from this directory:
 #   cargo build --release --target wasm32-unknown-unknown

@@ -1,4 +1,5 @@
-//! One syllable of Peter's or Ray's, sung by the microduck's own synthesiser.
+//! One syllable of Peter's or Ray's, and the stage duck's quack and wheee, sung by the microduck's
+//! own synthesiser.
 //!
 //! The voice is the robot's: a [`Personality`] drawn from the commentator's seed gives the
 //! harmonics, vibrato, jitter, quack buzz and breath, and the envelopes are the synth's. Only
@@ -7,6 +8,8 @@
 //!
 //! No bindings: the page writes a contour into [`contour`], calls [`syllable`] and reads the
 //! samples at [`samples`].
+//!
+//! The quack and the wheee are the robot's own calls, unshaped: what its pad's RT and LT play.
 
 use std::cell::RefCell;
 use std::f64::consts::TAU;
@@ -102,4 +105,25 @@ pub extern "C" fn syllable(
     s::normalise(&mut sig, -6.0);
     SAMPLES.with_borrow_mut(|out| *out = sig);
     t.len()
+}
+
+/// The quack the robot's RT plays: this seed's `chirp`, variant `variant`. Returns its length.
+#[unsafe(no_mangle)]
+pub extern "C" fn chirp(seed: u32, variant: u32) -> usize {
+    keep(sounds::voices::chirp(&Personality::from_seed(seed), variant))
+}
+
+/// The wheee the robot's LT rides: segment 0 is its start, anything else its loop, which plays
+/// over and over while the trigger is held. No end: a timeline releases its trigger, which cuts
+/// the ride as the robot does. Returns its length.
+#[unsafe(no_mangle)]
+pub extern "C" fn wheee(seed: u32, variant: u32, segment: u32) -> usize {
+    let (start, ride, _) = sounds::voices::wheee_segments(&Personality::from_seed(seed), variant);
+    keep(if segment == 0 { start } else { ride })
+}
+
+fn keep(sig: Vec<f32>) -> usize {
+    let length = sig.len();
+    SAMPLES.with_borrow_mut(|out| *out = sig);
+    length
 }
