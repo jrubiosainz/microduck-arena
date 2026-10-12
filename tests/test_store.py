@@ -208,3 +208,11 @@ def test_every_store_implements_the_whole_protocol():
     for implementation in (LocalStore, HubStore):
         missing = [name for name in required if not hasattr(implementation, name)]
         assert missing == [], f"{implementation.__name__} is missing {missing}"
+
+
+def test_a_record_keeps_its_triggers_and_an_older_one_has_none():
+    record = make_record(event_id="got-a-talent", triggers=[[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]])
+    assert RunRecord.from_dict(record.to_dict()) == record
+    older = record.to_dict()
+    del older["triggers"]
+    assert RunRecord.from_dict(older).triggers is None

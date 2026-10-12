@@ -205,7 +205,8 @@ def test_recover_plays_a_stage_entry_with_its_timeline_at_the_listed_revision(tm
             repo_id=repo_id, filename="policy.onnx", revision=revision,
             path=ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx",
             url=f"https://huggingface.co/{repo_id}/resolve/{revision}/policy.onnx",
-            timeline=Timeline(2.0, (0.0,), ((0.0,) * 13,)), timeline_sha256="t" * 64,
+            timeline=Timeline(2.0, (0.0, 1.0), ((0.0,) * 13,) * 2, ((0.0, 1.0), (0.0, 0.0))),
+            timeline_sha256="t" * 64,
         )
 
     monkeypatch.setattr("arena.hub_fetch.fetch_policy", fetch_policy)
@@ -214,4 +215,5 @@ def test_recover_plays_a_stage_entry_with_its_timeline_at_the_listed_revision(tm
     [record] = recover(LocalStore(tmp_path), [load_event("got-a-talent")], reader=reader)
     assert asked == [("alice/talent", "rev7", "got-a-talent")]
     assert record.score == pytest.approx(2.0)
+    assert record.triggers == [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]
     assert (record.timeline_sha256, record.source["revision"]) == ("t" * 64, "rev7")

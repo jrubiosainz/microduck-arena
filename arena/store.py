@@ -108,6 +108,10 @@ class RunRecord:
     # None for a race, or for a performance of the event's own command. The same weights with
     # another timeline are another performance.
     timeline_sha256: str | None = None
+    # The pad's triggers a stage entry pulls, as arena.timeline.trigger_track gives them: [t, rt, lt]
+    # where they change. None for a race and for a performance that pulls none. Never simulated: the
+    # replay opens the duck's beak and plays its quack and wheee from it.
+    triggers: list | None = None
 
     @property
     def offers_download(self) -> bool:
@@ -142,6 +146,7 @@ class RunRecord:
             "livery": self.livery,
             "description": self.description,
             "timeline_sha256": self.timeline_sha256,
+            "triggers": self.triggers,
         }
 
     @classmethod
@@ -174,6 +179,8 @@ class RunRecord:
             # .get, not [..]: runs recorded before timelines existed have no such
             # key, and an append-only log means those files are never rewritten.
             timeline_sha256=raw.get("timeline_sha256"),
+            # .get, not [..]: runs recorded before triggers existed have no such key.
+            triggers=raw.get("triggers"),
         )
 
 

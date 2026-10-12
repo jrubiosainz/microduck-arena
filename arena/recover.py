@@ -199,6 +199,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
     from .hub_fetch import fetch_policy
     from .policy import load_policy
     from .store import RunRecord, new_id
+    from .timeline import trigger_track
 
     list_repos, read_manifest = reader or hub_reader(on_event=on_event)
     found = candidates(list_repos, read_manifest, all_tagged=all_tagged)
@@ -235,6 +236,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
                 model_stored=False,
                 livery="classic",
                 timeline_sha256=fetched.timeline_sha256,
+                triggers=trigger_track(fetched.timeline) if fetched.timeline else None,
             )
             store.append(record, trace_codec.encode(result.trace, result.settle))
             restored.append(record)

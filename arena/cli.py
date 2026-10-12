@@ -19,7 +19,7 @@ from .index import ENTRANTS, leaderboard
 from .manifest import ManifestError, all_events, load_event
 from .policy import PolicyError, load_policy
 from .store import LocalStore, RunRecord, new_id
-from .timeline import TimelineError, load_timeline
+from .timeline import TimelineError, load_timeline, trigger_track
 
 
 def _cmd_events(args) -> int:
@@ -60,6 +60,7 @@ def _print_stage(manifest, result, timeline, name: str | None) -> None:
 def _cmd_score(args) -> int:
     manifest = load_event(args.event)
     policy = load_policy(Path(args.onnx))
+    timeline = None
     if manifest.course.kind == "stage":
         timeline = load_timeline(Path(args.timeline), manifest.time_limit_s) if args.timeline else None
         result = evaluate(manifest, policy, timeline)
@@ -88,6 +89,7 @@ def _cmd_score(args) -> int:
             trace_seed=result.trace_seed,
             runner_version=result.runner_version,
             livery=args.livery,
+            triggers=trigger_track(timeline) if timeline else None,
         )
         LocalStore(Path(args.store)).append(
             record, trace_codec.encode(result.trace, result.settle), Path(args.onnx).read_bytes()

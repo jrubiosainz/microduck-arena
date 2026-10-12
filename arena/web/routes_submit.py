@@ -22,6 +22,7 @@ from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy, parse_repo_ref
 from ..manifest import ManifestError, load_event
 from ..policy import PolicyError, load_policy
 from ..store import RunRecord, Withdrawal, new_id
+from ..timeline import trigger_track
 from .hub_identity import HubUnreachable, TokenRefused, whoami
 from .routes_auth import current_user
 from .routes_read import _withdrawn
@@ -340,6 +341,7 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         livery=_livery(livery),
         description=_description(fetched),
         timeline_sha256=fetched.timeline_sha256,
+        triggers=trigger_track(fetched.timeline) if fetched.timeline else None,
     )
     store.append(record, trace_codec.encode(result.trace, result.settle))
 

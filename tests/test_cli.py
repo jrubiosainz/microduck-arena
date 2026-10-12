@@ -194,3 +194,16 @@ def test_a_stage_run_is_recorded_and_boarded(tmp_path, capsys):
     capsys.readouterr()
     assert main(["board", "--event", "got-a-talent", "--store", store]) == 0
     assert re.search(r"^\s*1\s+alice\b.*2\.000s", capsys.readouterr().out, re.MULTILINE)
+
+
+def test_score_records_the_triggers_a_performance_pulls(tmp_path, capsys):
+    from arena.store import LocalStore
+
+    timeline = tmp_path / "timeline.json"
+    timeline.write_text(json.dumps({"timeline_version": 1, "duration_s": 1.0,
+                                    "keyframes": [{"t": 0.0}, {"t": 0.5, "triggers": [0, 1]}]}))
+    store = tmp_path / "store"
+    assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(timeline),
+                 "--store", str(store)]) == 0
+    [record] = LocalStore(store).runs("got-a-talent")
+    assert record.triggers == [[0.0, 0.0, 0.0], [0.5, 0.0, 1.0]]
