@@ -210,9 +210,25 @@ def test_every_store_implements_the_whole_protocol():
         assert missing == [], f"{implementation.__name__} is missing {missing}"
 
 
-def test_a_record_keeps_its_triggers_and_an_older_one_has_none():
-    record = make_record(event_id="got-a-talent", triggers=[[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]])
+def test_a_record_keeps_its_sound_and_an_older_one_has_none():
+    sound = {
+        "voice": {"pitch": 0.3},
+        "song": [[1.0, 0.5, 69, 0.7, 0.9, 0.0]],
+        "triggers": [[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]],
+    }
+    record = make_record(event_id="got-a-talent", sound=sound)
     assert RunRecord.from_dict(record.to_dict()) == record
+    assert "triggers" not in record.to_dict()
     older = record.to_dict()
-    del older["triggers"]
-    assert RunRecord.from_dict(older).triggers is None
+    del older["sound"]
+    assert RunRecord.from_dict(older).sound is None
+
+
+def test_a_run_recorded_by_0_4_4_keeps_its_triggers():
+    """0.4.4 kept a performance's triggers under their own key, and the Space's log holds two such runs."""
+    raw = make_record(event_id="got-a-talent").to_dict()
+    del raw["sound"]
+    raw["triggers"] = [[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]]
+    assert RunRecord.from_dict(raw).sound == {"triggers": [[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]]}
+    raw["triggers"] = None
+    assert RunRecord.from_dict(raw).sound is None

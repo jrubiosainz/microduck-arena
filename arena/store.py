@@ -108,10 +108,10 @@ class RunRecord:
     # None for a race, or for a performance of the event's own command. The same weights with
     # another timeline are another performance.
     timeline_sha256: str | None = None
-    # The pad's triggers a stage entry pulls, as arena.timeline.trigger_track gives them: [t, rt, lt]
-    # where they change. None for a race and for a performance that pulls none. Never simulated: the
-    # replay opens the duck's beak and plays its quack and wheee from it.
-    triggers: list | None = None
+    # How a stage entry is heard, as arena.timeline.sound_of gives it: its voice, its song and the
+    # pad's triggers it pulls. None for a race and for a performance that makes no sound. Never
+    # simulated: the replay opens the duck's beak and sings from it.
+    sound: dict | None = None
 
     @property
     def offers_download(self) -> bool:
@@ -146,7 +146,7 @@ class RunRecord:
             "livery": self.livery,
             "description": self.description,
             "timeline_sha256": self.timeline_sha256,
-            "triggers": self.triggers,
+            "sound": self.sound,
         }
 
     @classmethod
@@ -179,8 +179,10 @@ class RunRecord:
             # .get, not [..]: runs recorded before timelines existed have no such
             # key, and an append-only log means those files are never rewritten.
             timeline_sha256=raw.get("timeline_sha256"),
-            # .get, not [..]: runs recorded before triggers existed have no such key.
-            triggers=raw.get("triggers"),
+            # .get, not [..]: runs recorded before sounds existed have no such key. Two runs of
+            # 2026-10-12, recorded by 0.4.4, kept their triggers alone under their own key, and an
+            # append-only log never rewrites them.
+            sound=raw.get("sound") or ({"triggers": raw["triggers"]} if raw.get("triggers") else None),
         )
 
 

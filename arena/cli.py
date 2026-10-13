@@ -19,7 +19,7 @@ from .index import ENTRANTS, leaderboard
 from .manifest import ManifestError, all_events, load_event
 from .policy import PolicyError, load_policy
 from .store import LocalStore, RunRecord, new_id
-from .timeline import TimelineError, load_timeline, trigger_track
+from .timeline import TimelineError, load_timeline, sound_of
 
 
 def _cmd_events(args) -> int:
@@ -89,7 +89,7 @@ def _cmd_score(args) -> int:
             trace_seed=result.trace_seed,
             runner_version=result.runner_version,
             livery=args.livery,
-            triggers=trigger_track(timeline) if timeline else None,
+            sound=sound_of(timeline) if timeline else None,
         )
         LocalStore(Path(args.store)).append(
             record, trace_codec.encode(result.trace, result.settle), Path(args.onnx).read_bytes()

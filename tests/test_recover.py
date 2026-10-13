@@ -215,5 +215,5 @@ def test_recover_plays_a_stage_entry_with_its_timeline_at_the_listed_revision(tm
     [record] = recover(LocalStore(tmp_path), [load_event("got-a-talent")], reader=reader)
     assert asked == [("alice/talent", "rev7", "got-a-talent")]
     assert record.score == pytest.approx(2.0)
-    assert record.triggers == [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]
+    assert record.sound == {"triggers": [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]}
     assert (record.timeline_sha256, record.source["revision"]) == ("t" * 64, "rev7")

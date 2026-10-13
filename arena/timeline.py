@@ -14,7 +14,7 @@ Every keyframe is the whole command: a group it leaves out is zeros, never the
 previous keyframe's values.
 
 A keyframe may also pull the real pad's two triggers, `"triggers": [rt, lt]`, each within [0, 1]:
-in the replay they open the duck's beak and make it quack or wheee (app/src/duck-voice.js). The
+in the replay they open the duck's beak and make it quack or wheee (app/src/duck-voice.js reads them from `sound_of`). The
 policy never reads them — the command stays 13 numbers — and a keyframe that leaves them out
 releases both, like any group.
 
@@ -270,11 +270,29 @@ def load_timeline(path: Path, max_duration_s: float) -> Timeline:
     return Timeline(duration_s, tuple(times), tuple(commands), tuple(triggers), voice, song)
 
 
-def trigger_track(timeline: Timeline) -> list[list[float]] | None:
-    """What the replay needs of the triggers: [t, rt, lt] where they change, from t = 0. None when
-    both stay released throughout, so a performance that pulls nothing stores nothing."""
+def _trigger_track(timeline: Timeline) -> list[list[float]] | None:
+    """The triggers as the replay needs them: [t, rt, lt] where they change, from t = 0. None when
+    both stay released throughout."""
     track = []
     for t, (rt, lt) in zip(timeline.times, timeline.triggers):
         if not track or track[-1][1:] != [rt, lt]:
             track.append([t, rt, lt])
     return track if any(rt or lt for _, rt, lt in track) else None
+
+
+def sound_of(timeline: Timeline) -> dict | None:
+    """What the replay needs to make the duck heard and open its beak: the voice's knobs, the song
+    with each note resolved to [t, for, midi, level, open, formant], and the trigger track. Only the
+    keys in use; None when the performance sings nothing and pulls nothing, so it stores nothing."""
+    sound = {}
+    if timeline.song:
+        sound["song"] = [
+            [n.t, n.length_s, n.midi, DYNAMICS[n.dynamic] * VOWELS[n.vowel][2], VOWELS[n.vowel][0], VOWELS[n.vowel][1]]
+            for n in timeline.song
+        ]
+    triggers = _trigger_track(timeline)
+    if triggers:
+        sound["triggers"] = triggers
+    if sound and timeline.voice:
+        sound = {"voice": dict(timeline.voice), **sound}
+    return sound or None

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from arena.constants import CTRL_DT
-from arena.timeline import Note, Timeline, TimelineError, constant_timeline, load_timeline, trigger_track
+from arena.timeline import Note, Timeline, TimelineError, constant_timeline, load_timeline, sound_of
 
 LIMIT_S = 20.0
 
@@ -82,7 +82,7 @@ def test_triggers_are_read_per_keyframe_and_released_when_left_out(tmp_path):
     assert timeline.commands[1] == (1.0,) + (0.0,) * 12
 
 
-def test_the_trigger_track_keeps_the_changes_only(tmp_path):
+def test_the_sound_keeps_the_trigger_changes_only(tmp_path):
     """RT held over two keyframes is one pull, not two: the replay quacks on a change."""
     raw = good(keyframes=[
         {"t": 0.0, "triggers": [1, 0]},
@@ -91,13 +91,27 @@ def test_the_trigger_track_keeps_the_changes_only(tmp_path):
         {"t": 3.0, "head": [0, 0, 0.3, 0]},
         {"t": 4.0, "triggers": [0, 1]},
     ])
-    track = trigger_track(load_timeline(write(tmp_path, raw), LIMIT_S))
-    assert track == [[0.0, 1.0, 0.0], [2.0, 0.0, 0.0], [4.0, 0.0, 1.0]]
+    assert sound_of(load_timeline(write(tmp_path, raw), LIMIT_S)) == {
+        "triggers": [[0.0, 1.0, 0.0], [2.0, 0.0, 0.0], [4.0, 0.0, 1.0]],
+    }
 
 
-def test_a_performance_that_pulls_nothing_has_no_track(tmp_path):
-    assert trigger_track(load_timeline(write(tmp_path, good()), LIMIT_S)) is None
-    assert trigger_track(constant_timeline((0.0,) * 13, 20.0)) is None
+def test_the_sound_carries_each_note_resolved_and_the_voice(tmp_path):
+    raw = good(voice={"pitch": 0.3}, song=[
+        {"t": 1.0, "note": "A4", "for": 0.5},
+        {"t": 2.0, "note": "C5", "for": 1.0, "dynamic": "p", "vowel": "mm"},
+    ])
+    assert sound_of(load_timeline(write(tmp_path, raw), LIMIT_S)) == {
+        "voice": {"pitch": 0.3},
+        "song": [[1.0, 0.5, 69, 0.70, 0.90, 0.0], [2.0, 1.0, 72, pytest.approx(0.40 * 0.65), 0.05, -2.0]],
+    }
+
+
+def test_a_performance_that_sings_nothing_and_pulls_nothing_has_no_sound(tmp_path):
+    assert sound_of(load_timeline(write(tmp_path, good()), LIMIT_S)) is None
+    # A voice nobody hears is nothing to store.
+    assert sound_of(load_timeline(write(tmp_path, good(voice={"pitch": 1})), LIMIT_S)) is None
+    assert sound_of(constant_timeline((0.0,) * 13, 20.0)) is None
 
 
 def test_a_song_and_a_voice_load_beside_the_keyframes(tmp_path):
