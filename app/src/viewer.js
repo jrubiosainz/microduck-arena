@@ -588,6 +588,9 @@ export async function createViewer(
   const _feet = new Vector3();
   let raf = null;
   let crowdStart = null;
+  // How far the replay runs behind the stage camera's broadcast clock: not at all on a page, where
+  // the camera keeps the replay's own; by a clip's titles in a clip (frame).
+  let lag = 0;
 
   function draw(travel = 1, seconds = player.time, mood = time => crowdDirection(player.time + time - seconds)) {
     const indices = player.frameIndices();
@@ -620,7 +623,9 @@ export async function createViewer(
       const pose = dragPose(stage
         ? stageCameraPose(manual ? seconds : player.time,
           lanes.map((lane) => stageCameraTarget(lane.trace, player.time, lane.rig.placer)),
-          camera.aspect, camera.fov, stage.layout.depth, stage.layout.width)
+          camera.aspect, camera.fov, stage.layout.depth, stage.layout.width,
+          // Where the troupe stands at any moment of the broadcast: each shot is fitted to all of it.
+          (at) => lanes.map((lane) => stageCameraTarget(lane.trace, at - lag, lane.rig.placer)))
         : travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel),
       SWEEP_TURN * sweepAt((performance.now() - swept) / 1000));
       camera.position.set(...pose.position);
@@ -652,6 +657,7 @@ export async function createViewer(
    * the same every render — at `seconds`, and render once, the camera `travel`
    * of the way through its opening travel (travelPose). */
   function frame(seconds, travel = 1, crowdSeconds = seconds, mood) {
+    lag = crowdSeconds - seconds;
     player.seek(seconds);
     draw(travel, crowdSeconds, mood);
   }

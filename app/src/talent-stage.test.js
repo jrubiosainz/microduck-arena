@@ -109,6 +109,24 @@ describe("the MicroDuck Got a Talent broadcast camera", () => {
 describe("the broadcast camera on a troupe", () => {
   // Four ducks spread over the stage, the star first.
   const troupe = [new Vector3(0.2, 0.14, 0.1), new Vector3(-1.3, 0.14, -0.7), new Vector3(1.4, 0.14, 0.7), new Vector3(0.9, 0.14, -0.8)];
+  const V = (x, z) => new Vector3(x, 0.14, z);
+  // Lines along the back of the stage, where the backdrop keeps the jury's camera close beside them.
+  const back = [
+    [V(-1.7, 1.1), V(-0.6, 1.1), V(0.6, 1.1), V(1.7, 1.1)],
+    [V(-1.6, 0.9), V(1.6, 0.9)],
+    [V(-1.8, 0.9), V(1.8, 0.9)],
+  ];
+  // How near the frame's edge a pose puts the farthest-out duck, feet or crest: 1 is the edge itself.
+  const edge = (pose, ducks, aspect) => {
+    const camera = new PerspectiveCamera(42, aspect, 0.02, 100);
+    camera.position.set(...pose.position);
+    camera.lookAt(new Vector3(...pose.target));
+    camera.updateMatrixWorld();
+    return Math.max(...ducks.flatMap((duck) => [-0.14, 0.23].flatMap((height) => {
+      const projected = duck.clone().add(new Vector3(0, height, 0)).project(camera);
+      return [Math.abs(projected.x), Math.abs(projected.y)];
+    })));
+  };
 
   it.each([16 / 9, 9 / 16])("keeps every duck in frame at aspect %s, but in the star's close-up", aspect => {
     const camera = new PerspectiveCamera(42, aspect, 0.02, 100);
@@ -145,11 +163,17 @@ describe("the broadcast camera on a troupe", () => {
       }
     }
   });
+  it.each([16 / 9, 9 / 16])("holds a line along the back within the lone duck's margin for the whole jury shot at aspect %s", aspect => {
+    for (const ducks of back) {
+      for (let frame = 11 * 30; frame < 14 * 30; frame++) {
+        expect(edge(stageCameraPose(frame / 30, ducks, aspect, 42), ducks, aspect)).toBeLessThanOrEqual(0.86);
+      }
+    }
+  });
   it.each([16 / 9, 9 / 16])("glides within every shot at aspect %s, however the troupe spreads", aspect => {
     // A lone duck's camera moves at most 0.039 m from one frame to the next at 30 fps, in the 9:16
-    // opening's dolly. A troupe's follows the same bearings and timing, and where it climbs over the
-    // jury or within the wings, it climbs smoothly: it never jumps.
-    const V = (x, z) => new Vector3(x, 0.14, z);
+    // opening's dolly. A troupe's is fitted once a shot: it rides the lone duck's path, or turns
+    // steadily, raised by the same lift throughout, so it neither jumps nor slides along a bound.
     const troupes = [
       [V(0.64, -1.07), V(0.35, -0.06), V(0.92, -0.22)], // downstage: its front camera on the desk's line
       troupe,
@@ -157,6 +181,7 @@ describe("the broadcast camera on a troupe", () => {
       [V(-1.5, 1), V(0, 1), V(1.5, 1)], // along the back
       [V(0.3, -1), V(0.3, 0), V(0.3, 1)], // from front to back
       [V(-1.6, -1), V(1.6, -1), V(-1.6, 1), V(1.6, 1)], // in the four corners
+      ...back,
     ];
     for (const ducks of troupes) {
       let previous = stageCameraPose(0, ducks, aspect, 42);
@@ -165,6 +190,23 @@ describe("the broadcast camera on a troupe", () => {
         if (pose.shot === previous.shot) {
           expect(new Vector3(...pose.position).distanceTo(new Vector3(...previous.position))).toBeLessThan(0.05);
         }
+        previous = pose;
+      }
+    }
+  });
+  it("fits a shot once to a troupe that spreads during it, holding every duck at every frame", () => {
+    // A pair walking apart through the front shot, from 0.4 m off the middle to 1 m, as fast as a duck walks.
+    const placesAt = (seconds) => {
+      const half = 0.4 + 0.15 * Math.min(4, Math.max(0, seconds - 3));
+      return [V(-half, 0.2), V(half, 0.2)];
+    };
+    for (const aspect of [16 / 9, 9 / 16]) {
+      let previous = null;
+      for (let frame = 3 * 30; frame < 7 * 30; frame++) {
+        const ducks = placesAt(frame / 30);
+        const pose = stageCameraPose(frame / 30, ducks, aspect, 42, 2.6, 3.8, placesAt);
+        expect(edge(pose, ducks, aspect)).toBeLessThanOrEqual(0.86);
+        if (previous) expect(new Vector3(...pose.position).distanceTo(new Vector3(...previous.position))).toBeLessThan(0.05);
         previous = pose;
       }
     }
