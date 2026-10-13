@@ -215,7 +215,7 @@ def test_recover_plays_a_stage_entry_with_its_timeline_at_the_listed_revision(tm
     [record] = recover(LocalStore(tmp_path), [load_event("got-a-talent")], reader=reader)
     assert asked == [("alice/talent", "rev7", "got-a-talent")]
     assert record.score == pytest.approx(2.0)
-    assert record.sound == {"triggers": [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]}
+    assert record.cast[0]["sound"] == {"triggers": [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]}
     assert (record.timeline_sha256, record.source["revision"]) == ("t" * 64, "rev7")
 
 
@@ -251,6 +251,8 @@ def test_recover_plays_a_troupe_with_its_borrowed_policies(tmp_path, monkeypatch
     store = LocalStore(tmp_path)
     [record] = recover(store, [load_event("got-a-talent")], reader=TALENT_LISTED)
     assert trace_codec.decode(store.trace(record.run_id)).shape[:2] == (2, 50)
+    assert [duck["policy"] if duck["policy"] == "self" else duck["policy"]["user"] for duck in record.cast] == [
+        "self", "pollen-robotics"]
 
 
 def test_a_troupe_whose_borrowed_policy_left_the_hub_is_skipped_and_said(tmp_path, monkeypatch):

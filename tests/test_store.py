@@ -27,6 +27,14 @@ def make_record(**overrides) -> RunRecord:
     return RunRecord(**fields)
 
 
+# A borrowed duck's credit, as arena.cast.borrowed_source writes it.
+WALKER = {"repo_id": "yan/microduck-walker", "filename": "policy.onnx", "revision": "b" * 40,
+          "url": "https://huggingface.co/yan/microduck-walker/resolve/" + "b" * 40 + "/policy.onnx",
+          "model_sha256": "w" * 64, "user": "yan", "policy_name": "walker"}
+# What a run recorded before troupes, or a race, holds: one duck, no rig or place of its own.
+ALONE = {"policy": "self", "rig": None, "start": None, "sound": None}
+
+
 def test_run_ids_are_unique_and_sort_by_time():
     ids = [new_id() for _ in range(50)]
     assert len(set(ids)) == 50
@@ -210,25 +218,36 @@ def test_every_store_implements_the_whole_protocol():
         assert missing == [], f"{implementation.__name__} is missing {missing}"
 
 
-def test_a_record_keeps_its_sound_and_an_older_one_has_none():
-    sound = {
-        "voice": {"pitch": 0.3},
-        "song": [[1.0, 0.5, 69, 0.7, 0.9, 0.0]],
-        "triggers": [[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]],
-    }
-    record = make_record(event_id="got-a-talent", sound=sound)
+def test_a_record_keeps_its_cast():
+    cast = ({"policy": "self", "rig": "legs", "start": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+             "sound": {"voice": {"pitch": 0.3}, "song": [[1.0, 0.5, 69, 0.7, 0.9, 0.0]]}},
+            {"policy": WALKER, "rig": "rollers", "start": {"x": 0.4, "y": -0.6, "yaw": 90.0}, "sound": None})
+    record = make_record(event_id="got-a-talent", cast=cast)
     assert RunRecord.from_dict(record.to_dict()) == record
-    assert "triggers" not in record.to_dict()
-    older = record.to_dict()
-    del older["sound"]
-    assert RunRecord.from_dict(older).sound is None
+    assert "sound" not in record.to_dict()
+
+
+def test_a_race_is_one_duck_with_no_rig_or_place_of_its_own():
+    assert make_record().cast == (ALONE,)
+
+
+def test_a_run_recorded_before_troupes_is_a_cast_of_one_drawn_centred():
+    sound = {"voice": {"pitch": 0.3}, "song": [[1.0, 0.5, 69, 0.7, 0.9, 0.0]]}
+    raw = make_record(event_id="got-a-talent").to_dict()
+    del raw["cast"]
+    raw["sound"] = sound
+    assert RunRecord.from_dict(raw).cast == ({**ALONE, "sound": sound},)
+    raw["sound"] = None
+    assert RunRecord.from_dict(raw).cast == (ALONE,)
+    del raw["sound"]  # recorded before sounds existed
+    assert RunRecord.from_dict(raw).cast == (ALONE,)
 
 
 def test_a_run_recorded_by_0_4_4_keeps_its_triggers():
     """0.4.4 kept a performance's triggers under their own key, and the Space's log holds two such runs."""
     raw = make_record(event_id="got-a-talent").to_dict()
-    del raw["sound"]
+    del raw["cast"]
     raw["triggers"] = [[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]]
-    assert RunRecord.from_dict(raw).sound == {"triggers": [[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]]}
+    assert RunRecord.from_dict(raw).cast == ({**ALONE, "sound": {"triggers": [[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]]}},)
     raw["triggers"] = None
-    assert RunRecord.from_dict(raw).sound is None
+    assert RunRecord.from_dict(raw).cast == (ALONE,)

@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from arena.trace import encode
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
-from tests.test_store import make_record
+from tests.test_store import ALONE, WALKER, make_record
 
 
 @pytest.fixture
@@ -288,17 +288,21 @@ def test_a_stage_serves_its_floor_and_how_many_ducks_it_takes(client):
     assert "size_m" not in events["sprint-2m"] and "max_ducks" not in events["sprint-2m"]
 
 
-def test_a_board_row_says_how_its_duck_sounds_on_the_stage(client):
-    """A lane on a stage is a board row: the event page, the run page and the clip put any row on it."""
+def test_a_board_row_and_its_run_page_carry_the_cast(client):
+    """A lane on a stage is a board row: the event page, the run page and the clip put any row on it,
+    every duck in its place, and the run page credits the borrowed ones."""
     api, app = client
-    sound = {"triggers": [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]}
-    pulled = record_run(app, event_id="got-a-talent", user="ann", sound=sound)
+    cast = ({"policy": "self", "rig": "legs", "start": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+             "sound": {"triggers": [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]}},
+            {"policy": WALKER, "rig": "rollers", "start": {"x": 0.4, "y": -0.6, "yaw": 90.0}, "sound": None})
+    troupe = record_run(app, event_id="got-a-talent", user="ann", cast=cast)
     record_run(app, event_id="got-a-talent", user="bob")
     rows = {row["user"]: row for row in api.get("/api/events/got-a-talent/leaderboard").json()["rows"]}
-    assert (rows["ann"]["sound"], rows["bob"]["sound"]) == (sound, None)
-    assert "triggers" not in rows["ann"]
-    detail = api.get(f"/api/runs/{pulled.run_id}").json()
-    assert next(row for row in detail["board"] if row["you"])["sound"] == sound
+    assert (rows["ann"]["cast"], rows["bob"]["cast"]) == (list(cast), [ALONE])
+    assert "sound" not in rows["ann"]
+    detail = api.get(f"/api/runs/{troupe.run_id}").json()
+    assert detail["cast"] == list(cast)
+    assert next(row for row in detail["board"] if row["you"])["cast"] == list(cast)
 
 
 def test_standings_rank_every_player_who_published(client):

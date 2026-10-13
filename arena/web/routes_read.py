@@ -156,9 +156,10 @@ def _board_row(row) -> dict:
         "seeds_total": len(record.per_seed),
         "run_id": record.run_id,
         "submitted_at": record.submitted_at,
-        # How the duck sounds on a stage (arena.timeline.sound_of), or None: a lane is a board row,
-        # so the row carries what the replay opens the beak and sings from.
-        "sound": record.sound,
+        # Who performs, duck by duck (arena.cast): a lane is a board row, so the row carries each
+        # duck's place, its rig, what the replay sings and opens its beak from, and whose policy it
+        # plays. A race's row is one duck of the event's rig.
+        "cast": record.cast,
     }
 
 
@@ -303,6 +304,8 @@ def run_detail(run_id: str, request: Request) -> dict:
         "user": record.user,
         "policy_name": record.policy_name,
         "livery": record.livery,
+        # Every duck, credited: the page names each borrowed policy's author and links its repo.
+        "cast": record.cast,
         "score": record.score,
         "command_vx": record.command_vx,
         "seeds_finished": record.seeds_finished,

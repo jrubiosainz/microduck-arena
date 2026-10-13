@@ -20,7 +20,7 @@ from .hub_fetch import FetchError, fetch_references
 from .index import ENTRANTS, leaderboard
 from .manifest import ManifestError, all_events, load_event
 from .policy import PolicyError, load_policy
-from .store import LocalStore, RunRecord, new_id
+from .store import LocalStore, RunRecord, lone_cast, new_id
 from .timeline import TimelineError, load_troupe
 
 
@@ -99,7 +99,7 @@ def _cmd_score(args) -> int:
             trace_seed=result.trace_seed,
             runner_version=result.runner_version,
             livery=args.livery,
-            sound=cast.record[0]["sound"] if cast else None,
+            cast=cast.record if cast else lone_cast(),
         )
         LocalStore(Path(args.store)).append(
             record, trace_codec.encode(result.trace, result.settle), Path(args.onnx).read_bytes()

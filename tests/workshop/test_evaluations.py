@@ -34,6 +34,7 @@ def test_a_checkpoint_is_exported_by_a_dry_run_publish_and_raced(workshop, fakes
     body = workshop.get(f"{SPRINT_URL}/jobs/{run.name}/checkpoints/1").json()
     # The fake export hands over the Arena's reference walker, which finishes the sprint.
     assert (body["seeds_total"], body["seeds_finished"]) == (5, 5)
+    assert body["cast"] is None  # a race: one duck, nothing to place or hear
     assert body["checkpoint"] == 1 and body["score"] < 50
     assert len(base64.b64decode(body["trace_b64"])) % (4 * TRACE_WIDTH) == 0
     assert body["ducks"] == 1  # a race is one duck

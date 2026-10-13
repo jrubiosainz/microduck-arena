@@ -157,7 +157,7 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
         "trace_b64": base64.b64encode(trace.astype("<f4").tobytes()).decode("ascii"),
         "runner_version": result.runner_version,
         "timeline": key,
-        "sound": cast.record[0]["sound"] if cast else None,
+        "cast": list(cast.record) if cast else None,
     }
     if event.course.kind == "stage":
         body["stage"] = summaries(result.trace, event.termination)[0]

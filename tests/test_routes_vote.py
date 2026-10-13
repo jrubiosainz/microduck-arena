@@ -13,7 +13,7 @@ from arena.trace import encode
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
 from arena.web.routes_vote import BALLOT_TTL_S, BallotBook
-from tests.test_store import make_record
+from tests.test_store import ALONE, WALKER, make_record
 
 
 @pytest.fixture
@@ -150,14 +150,21 @@ def test_the_client_response_never_carries_a_run_id(client):
         assert run_id != body["ballot"]
 
 
-def test_a_ballot_says_how_each_lanes_duck_sounds(client):
+def test_a_ballot_carries_each_lanes_cast_and_never_whose_policies(client):
+    """A ballot is judged blind: every duck's place, rig and sound, and of its policy only whether it
+    is the entry's own."""
     api, app = client
-    ann = enter(app, "ann", sound={"triggers": [[0.0, 1.0, 0.0]]})
+    ann = enter(app, "ann", cast=(
+        {"policy": "self", "rig": "legs", "start": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+         "sound": {"triggers": [[0.0, 1.0, 0.0]]}},
+        {"policy": WALKER, "rig": "rollers", "start": {"x": 0.4, "y": -0.6, "yaw": 90.0}, "sound": None},
+    ))
     bob = enter(app, "bob")
     body = api.get("/api/events/got-a-talent/ballot").json()
     entry = app.state.ballot_book.get(body["ballot"])
-    sounds = {ann.run_id: ann.sound, bob.run_id: None}
-    assert body["sound"] == [sounds[run_id] for run_id in entry.run_ids]
+    casts = {ann.run_id: [ann.cast[0], {**ann.cast[1], "policy": "borrowed"}], bob.run_id: [ALONE]}
+    assert body["cast"] == [casts[run_id] for run_id in entry.run_ids]
+    assert "sound" not in body
 
 
 def test_voting_records_the_whole_field_and_pays_the_voter(client):

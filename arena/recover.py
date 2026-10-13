@@ -199,7 +199,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
     from .evaluate import evaluate
     from .hub_fetch import fetch_policy
     from .policy import load_policy
-    from .store import RunRecord, new_id
+    from .store import RunRecord, lone_cast, new_id
 
     list_repos, read_manifest = reader or hub_reader(on_event=on_event)
     found = candidates(list_repos, read_manifest, all_tagged=all_tagged)
@@ -240,7 +240,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
                 model_stored=False,
                 livery="classic",
                 timeline_sha256=fetched.timeline_sha256,
-                sound=cast.record[0]["sound"] if cast else None,
+                cast=cast.record if cast else lone_cast(),
             )
             store.append(record, trace_codec.encode(result.trace, result.settle))
             restored.append(record)

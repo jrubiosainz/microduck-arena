@@ -83,19 +83,19 @@ def test_a_stage_checkpoint_plays_the_challenges_timeline(stage, checkout):
     assert body["timeline"] == hashlib.sha256(TWO_SECONDS.encode()).hexdigest()
     assert set(body["stage"]) == {"fell_at", "seated_s", "standing_s"}
     assert (body["seeds_finished"], body["seeds_total"]) == (1, 1)
-    assert body["sound"] is None
+    assert body["cast"] == [{"policy": "self", "rig": "legs", "start": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "sound": None}]
 
 
 def test_a_checkpoint_replays_with_the_sound_its_timeline_makes(stage, checkout):
     stage.timeline.write_text(QUACKS)
     run = make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
-    assert evaluated(stage, run)["sound"] == {"triggers": [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]}
+    assert evaluated(stage, run)["cast"][0]["sound"] == {"triggers": [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]}
 
 
 def test_a_checkpoint_replays_with_the_song_its_timeline_sings(stage, checkout):
     stage.timeline.write_text(SINGS)
     run = make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
-    assert evaluated(stage, run)["sound"] == {"song": [[0.5, 1.0, 69, 0.7, 0.9, 0.0]]}
+    assert evaluated(stage, run)["cast"][0]["sound"] == {"song": [[0.5, 1.0, 69, 0.7, 0.9, 0.0]]}
 
 
 def test_two_threads_evaluating_the_same_checkpoint_never_race_on_one_temp_file(stage, checkout, monkeypatch):
@@ -201,7 +201,12 @@ def test_a_broken_timeline_is_never_published(stage, checkout, fakes):
 def test_a_troupe_of_the_checkpoint_itself_plays_every_duck(stage, checkout):
     stage.timeline.write_text(TROUPE)
     run = make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
-    assert frames(evaluated(stage, run)) == 2 * 100  # two ducks, duck-major, 2 s each at 50 Hz
+    body = evaluated(stage, run)
+    assert frames(body) == 2 * 100  # two ducks, duck-major, 2 s each at 50 Hz
+    assert [(duck["start"], duck["sound"]) for duck in body["cast"]] == [
+        ({"x": 0.0, "y": 0.0, "yaw": 0.0}, None),
+        ({"x": 0.0, "y": 0.6, "yaw": 90.0}, {"triggers": [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]}),
+    ]
 
 
 def test_the_page_saves_a_troupe_naming_a_checkpoint_of_this_machine(stage):

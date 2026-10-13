@@ -150,6 +150,12 @@ def _window(request: Request, manifest: Manifest, now: datetime) -> list[Ballot]
     return votes.window(ballots.since(votes.first_day(now, days)), now, days)
 
 
+def _anonymous(cast) -> list[dict]:
+    """A lane's cast as a ballot shows it: every duck's place, rig and sound, and of its policy only
+    whether it is the entry's own. Never who made it: a ballot is judged blind."""
+    return [{**duck, "policy": "self" if duck["policy"] == "self" else "borrowed"} for duck in cast]
+
+
 @router.get("/events/{event_id}/ballot")
 def issue_ballot(event_id: str, request: Request, response: Response) -> dict:
     """A field to judge, or the reason there is none.
@@ -194,8 +200,8 @@ def issue_ballot(event_id: str, request: Request, response: Response) -> dict:
         # A COUNT, not a palette: lane i wears the frontend's own LANE_CSS[i],
         # and sending the hex codes would be a second copy of a list it has.
         "lanes": len(picked),
-        # How each lane's duck sounds, in lane order: the performance itself, never who made it.
-        "sound": [r.sound for r in picked],
+        # Each lane's ducks, in lane order: the performance itself, never who made it.
+        "cast": [_anonymous(r.cast) for r in picked],
         "cast_today": spent,
         "per_day": per_day,
     }

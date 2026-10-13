@@ -12,7 +12,7 @@ import os
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
@@ -64,6 +64,12 @@ def new_id() -> str:
     return f"{head}{tail}"
 
 
+def lone_cast(sound: dict | None = None) -> tuple[dict, ...]:
+    """The cast of a run whose one duck has no rig or place of its own: a race, raced on its event's
+    rig, or a performance recorded before troupes, which the site draws centred as it always did."""
+    return ({"policy": "self", "rig": None, "start": None, "sound": sound},)
+
+
 @dataclass(frozen=True)
 class RunRecord:
     run_id: str
@@ -108,10 +114,10 @@ class RunRecord:
     # None for a race, or for a performance of the event's own command. The same weights with
     # another timeline are another performance.
     timeline_sha256: str | None = None
-    # How a stage entry is heard, as arena.timeline.sound_of gives it: its voice, its song and the
-    # pad's triggers it pulls. None for a race and for a performance that makes no sound. Never
-    # simulated: the replay opens the duck's beak and sings from it.
-    sound: dict | None = None
+    # Who performed, duck by duck, as arena.cast.Cast.record gives it: whose policy each plays ("self",
+    # or a borrowed repo, credited), its rig, where it started on the stage, and how it is heard
+    # (arena.timeline.sound_of). Never simulated again: the replay draws, sings and credits from it.
+    cast: tuple[dict, ...] = field(default_factory=lone_cast)
 
     @property
     def offers_download(self) -> bool:
@@ -146,7 +152,7 @@ class RunRecord:
             "livery": self.livery,
             "description": self.description,
             "timeline_sha256": self.timeline_sha256,
-            "sound": self.sound,
+            "cast": list(self.cast),
         }
 
     @classmethod
@@ -179,10 +185,12 @@ class RunRecord:
             # .get, not [..]: runs recorded before timelines existed have no such
             # key, and an append-only log means those files are never rewritten.
             timeline_sha256=raw.get("timeline_sha256"),
-            # .get, not [..]: runs recorded before sounds existed have no such key. Two runs of
-            # 2026-10-12, recorded by 0.4.4, kept their triggers alone under their own key, and an
-            # append-only log never rewrites them.
-            sound=raw.get("sound") or ({"triggers": raw["triggers"]} if raw.get("triggers") else None),
+            # .get, not [..]: a run recorded before troupes has no cast. Its one duck is heard as the
+            # run was: its "sound", or, for two runs of 2026-10-12 recorded by 0.4.4, the triggers
+            # kept alone under their own key. An append-only log never rewrites them.
+            cast=tuple(raw["cast"]) if raw.get("cast") else lone_cast(
+                raw.get("sound") or ({"triggers": raw["triggers"]} if raw.get("triggers") else None)
+            ),
         )
 
 

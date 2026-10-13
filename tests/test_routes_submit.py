@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -586,17 +587,18 @@ def test_a_stage_entry_keeps_the_sound_its_timeline_makes(api):
     pulled = solo(Timeline(2.0, (0.0, 0.5, 1.0), (stand,) * 3, ((0.0, 0.0), (1.0, 0.0), (0.0, 0.0))))
     _TIMELINES["alice/best_alpha_walking"] = (pulled, "c" * 64)
     body = submit(api, event="got-a-talent").json()
-    assert _stored(api, "got-a-talent", body["run_id"]).sound == {
-        "triggers": [[0.0, 0.0, 0.0], [0.5, 1.0, 0.0], [1.0, 0.0, 0.0]],
-    }
+    assert _stored(api, "got-a-talent", body["run_id"]).cast == ({
+        "policy": "self", "rig": "legs", "start": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+        "sound": {"triggers": [[0.0, 0.0, 0.0], [0.5, 1.0, 0.0], [1.0, 0.0, 0.0]]},
+    },)
 
 
-def test_a_race_and_a_still_performance_keep_no_sound(api):
+def test_a_race_is_one_duck_of_its_events_rig_and_a_still_performance_makes_no_sound(api):
     race = submit(api).json()
-    assert _stored(api, "sprint-2m", race["run_id"]).sound is None
+    assert _stored(api, "sprint-2m", race["run_id"]).cast == ({"policy": "self", "rig": None, "start": None, "sound": None},)
     _TIMELINES["alice/best_alpha_walking"] = (performance(1.0), "d" * 64)
     still = submit(api, event="got-a-talent").json()
-    assert _stored(api, "got-a-talent", still["run_id"]).sound is None
+    assert _stored(api, "got-a-talent", still["run_id"]).cast[0]["sound"] is None
 
 
 def test_a_speed_sent_to_a_stage_is_ignored_not_a_500(api):
@@ -628,6 +630,13 @@ def test_a_troupe_plays_its_borrowed_ducks_beside_the_entrys_own(api, monkeypatc
     body = response.json()
     trace = api.get(f"/api/runs/{body['run_id']}/trace")
     assert (trace.headers["X-Duck-Count"], trace.headers["X-Frame-Count"]) == ("2", "50")
+    assert _stored(api, "got-a-talent", body["run_id"]).cast[1] == {
+        "policy": {"repo_id": "pollen-robotics/microduck-sitter", "filename": "policy.onnx", "revision": "a" * 40,
+                   "url": "https://huggingface.co/pollen-robotics/microduck-sitter/resolve/" + "a" * 40 + "/policy.onnx",
+                   "model_sha256": hashlib.sha256(REFERENCE.read_bytes()).hexdigest(),
+                   "user": "pollen-robotics", "policy_name": "sitter"},
+        "rig": "legs", "start": {"x": 0.0, "y": 0.6, "yaw": 90.0}, "sound": None,
+    }
 
 
 def test_a_borrowed_policy_that_does_not_load_is_a_400_naming_its_duck(api, monkeypatch, tmp_path, store_dir):

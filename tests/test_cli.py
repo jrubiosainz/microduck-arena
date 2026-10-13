@@ -207,7 +207,7 @@ def test_score_records_how_a_performance_sounds(tmp_path, capsys):
     assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(timeline),
                  "--store", str(store)]) == 0
     [record] = LocalStore(store).runs("got-a-talent")
-    assert record.sound == {"triggers": [[0.0, 0.0, 0.0], [0.5, 0.0, 1.0]]}
+    assert record.cast[0]["sound"] == {"triggers": [[0.0, 0.0, 0.0], [0.5, 0.0, 1.0]]}
 
 
 SITTER = "pollen-robotics/microduck-sitter@" + "a" * 40
@@ -262,3 +262,16 @@ def test_a_borrowed_policy_the_hub_refuses_exits_1_naming_its_duck(tmp_path, cap
     monkeypatch.setattr("arena.cli.fetch_references", refuse)
     assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(_troupe(tmp_path))]) == 1
     assert "ducks[1]: pollen-robotics/microduck-sitter" in capsys.readouterr().err
+
+
+def test_score_records_a_troupe_crediting_its_borrowed_ducks(tmp_path, capsys, monkeypatch):
+    from arena.store import LocalStore
+
+    _lend(monkeypatch)
+    store = tmp_path / "store"
+    assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(_troupe(tmp_path)),
+                 "--store", str(store)]) == 0
+    [record] = LocalStore(store).runs("got-a-talent")
+    assert [duck["policy"] if duck["policy"] == "self" else duck["policy"]["repo_id"] for duck in record.cast] == [
+        "self", "pollen-robotics/microduck-sitter", "pollen-robotics/microduck-sitter"]
+    assert [duck["start"]["yaw"] for duck in record.cast] == [0.0, 90.0, -90.0]
