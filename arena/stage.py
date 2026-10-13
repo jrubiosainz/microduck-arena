@@ -1,9 +1,9 @@
 """What a performance on a stage did, read off its trace.
 
 A stage never stops a run for a fall (`arena.runner.run_stage`): whatever
-happens is part of the show. So what happened is read afterwards, from the
-trace: when the event's fall rule first held, and when the duck was seated or
-standing. `arena score` summarises a stage run with these; a challenge can
+happens is part of the performance. So what happened is read afterwards, from
+the trace: when the event's fall rule first held, and when the duck was seated
+or standing. `arena score` summarises a stage run with these; a challenge can
 check its own choreography with them.
 
 A trace frame is the state after one control step: trunk position (0:3),

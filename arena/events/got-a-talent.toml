@@ -34,8 +34,8 @@ settle_s = 0.5
 joint_rad = 0.01
 yaw_deg   = 2.0
 
-# On a stage this does not end the run: a fall is part of the show. It is what
-# `arena score` calls a fall in its summary (arena/stage.py).
+# On a stage this does not end the run: a fall is part of the performance. It is
+# what `arena score` calls a fall in its summary (arena/stage.py).
 [termination]
 fall_gravity_z = -0.5
 fall_hold_s    = 0.3
