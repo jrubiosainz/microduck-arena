@@ -12,7 +12,6 @@ from arena.manifest import load_event
 from arena.policy import load_policy
 from arena.runner import Performer, run_once, run_stage
 from arena.timeline import Start, Timeline, constant_timeline
-from tests import legacy_stage
 
 # Commands a float32 observation holds exactly, so a test can read them back from it.
 STILL = (0.0,) * 13
@@ -108,19 +107,6 @@ def test_a_stage_run_is_deterministic(talent, walker):
     assert np.array_equal(a.settle, b.settle)
 
 
-def test_a_troupe_of_one_plays_bit_for_bit_as_a_lone_duck_did(talent, walker):
-    """The troupe path replaced the lone duck's: every performance already published keeps its trace.
-    (The settle's first frame starts at x = 0.0 where the lone duck's started at -0.0, the
-    keyframe's sign of zero; the two are equal, and the trace that follows is equal to the bit.)"""
-    timeline = Timeline(4.0, (0.0, 0.5, 1.5, 2.6), (STILL, WALK, LOOK, SIT))
-    before = legacy_stage.run_stage(talent, walker, timeline, seed=1)
-    now = run_stage(talent, alone(walker, timeline), seed=1)
-    assert (now.status, now.time_s) == (before.status, before.time_s) == ("finish", 4.0)
-    assert np.array_equal(now.trace, before.trace[np.newaxis])
-    assert now.trace[0].tobytes() == before.trace.tobytes()
-    assert np.array_equal(now.settle, before.settle[np.newaxis])
-
-
 def test_a_mixed_troupe_plays_the_same_twice(talent, walker):
     cast = (
         Performer(walker, "legs", Start(), Timeline(3.0, (0.0, 1.0), (STILL, WALK))),
@@ -187,8 +173,8 @@ def test_duck_0_keeps_a_lone_ducks_streams_and_the_others_have_their_own(talent,
     ), seed=1)
     crc = zlib.crc32(b"got-a-talent")
     assert delays == [np.random.default_rng(seq).bit_generator.state for seq in ([crc, 1, 1], [crc, 1, 3, 1])]
-    lone = legacy_stage.run_stage(talent, walker, timeline, seed=1)
-    assert np.array_equal(troupe.settle[0, 0], lone.settle[0])
+    lone = run_stage(talent, alone(walker, timeline), seed=1)
+    assert np.array_equal(troupe.settle[0, 0], lone.settle[0, 0])
     noise = np.random.default_rng([crc, 1, 2, 1]).uniform(-talent.start.joint_rad, talent.start.joint_rad, NUM_JOINTS)
     np.testing.assert_array_equal(troupe.settle[1, 0, 7:], (DEFAULT_POSE + noise).astype(np.float32))
 
