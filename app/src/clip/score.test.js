@@ -62,4 +62,17 @@ describe("clipScore", () => {
     const score = clipScore({ run, plan: clipPlan(250, 20, 26), trace: new Float32Array(21 * 276), sound: null });
     expect(score.cues.some((cue) => cue.call)).toBe(false);
   });
+
+  it("puts the duck's song on the tape at the performance's start, and its calls in its voice", () => {
+    const event = { id: "got-a-talent", course: "stage", clip: { tape_max_s: 20, sounds: ["crowd", "verdict"] } };
+    const plan = clipPlan(250, 20, 26); // a 5 s performance after 26 frames of settle
+    const sound = { voice: { pitch: 1 }, song: [[0.5, 1, 69, 0.7, 0.9, 0]], triggers: [[0, 0, 0], [2, 1, 0]] };
+    const run = { run_id: "r1", seeds_finished: 1, event };
+    const cues = clipScore({ run, plan, trace: new Float32Array(21 * 276), sound }).cues;
+    const sung = cues.find((cue) => cue.song);
+    expect(sung.at).toBeCloseTo(3 + 0.52);
+    expect(sung.song.sound).toBe(sound);
+    expect(sung.song.duration).toBeCloseTo(5);
+    expect(cues.find((cue) => cue.call).voice).toEqual({ pitch: 1 });
+  });
 });
