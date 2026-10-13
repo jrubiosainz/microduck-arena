@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..manifest import ManifestError, load_event
-from ..timeline import load_timeline
+from ..timeline import load_troupe
 
 PACKAGE = Path("src") / "microduck_challenges"
 RECIPE = ("num_envs", "max_iterations", "seed")
@@ -175,7 +175,8 @@ def save_timeline(challenge: Challenge, text: str) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         candidate = Path(tmp) / TIMELINE  # so a refusal names timeline.json, not a temp file
         candidate.write_text(text, encoding="utf-8")
-        load_timeline(candidate, load_event(challenge.event).time_limit_s)
+        # A duck may be a checkpoint of this machine: the page saves and plays it, publishing resolves it.
+        load_troupe(candidate, load_event(challenge.event), allow_local=True)
     path = timeline_file(challenge)
     # A temp file unique to this save: two writers of the same timeline never race on one temp name.
     staged = tempfile.NamedTemporaryFile(dir=path.parent, delete=False, prefix=f".{TIMELINE}", suffix=".tmp")

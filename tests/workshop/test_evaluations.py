@@ -81,7 +81,7 @@ def test_any_failure_while_measuring_is_stored_and_the_worker_moves_on(workshop,
     """One checkpoint that breaks the evaluator must not keep the worker on it forever."""
     from arena.workshop import evaluations
 
-    def breaks(event, policy, timeline=None):
+    def breaks(event, policy, cast=None):
         raise FloatingPointError("the simulation diverged")
 
     run = make_run(checkout, "first", checkpoints=(0,))

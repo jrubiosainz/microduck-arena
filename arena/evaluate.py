@@ -22,9 +22,9 @@ proportionally instead of hiding behind a best-of: a policy that is brilliant
 four times and falls once ranks below a steady one.
 
 A stage is not a race and none of this applies to it: it plays the entry's
-command timeline once, on one seed, and every performance that plays to the
-end goes to the voters. Its score is the duration played, and only informs:
-a stage's board ranks on votes.
+cast once (every duck of its troupe, arena/cast.py), on one seed, and every
+performance that plays to the end goes to the voters. Its score is the
+duration played, and only informs: a stage's board ranks on votes.
 """
 
 import statistics
@@ -36,7 +36,7 @@ from .constants import RUNNER_VERSION
 from .course import compile_course
 from .manifest import Manifest
 from .runner import Performer, run_once, run_stage
-from .timeline import Start, Timeline, constant_timeline
+from .timeline import Start, constant_timeline
 
 
 @dataclass(frozen=True)
@@ -186,11 +186,11 @@ def evaluate_at(manifest: Manifest, policy, command_vx: float) -> Evaluation:
     )
 
 
-def evaluate(manifest: Manifest, policy, timeline: Timeline | None = None) -> Evaluation:
+def evaluate(manifest: Manifest, policy, cast: tuple[Performer, ...] | None = None) -> Evaluation:
     if manifest.course.kind == "stage":
-        return _evaluate_stage(manifest, policy, timeline)
-    if timeline is not None:
-        raise ValueError(f"{manifest.id} is a race: it plays the event's command, not a timeline")
+        return _evaluate_stage(manifest, policy, cast)
+    if cast is not None:
+        raise ValueError(f"{manifest.id} is a race: it races the entry alone, on the event's command")
     model = compile_course(manifest)  # compiled once, reused for every run
     sweep = manifest.sweep
 
@@ -251,13 +251,13 @@ def evaluate(manifest: Manifest, policy, timeline: Timeline | None = None) -> Ev
     )
 
 
-def _evaluate_stage(manifest: Manifest, policy, timeline: Timeline | None) -> Evaluation:
-    """One performance by the entry's policy alone, at the centre: its timeline, or the event's
-    command for the whole time limit."""
-    if timeline is None:
-        timeline = constant_timeline(manifest.command, manifest.time_limit_s)
+def _evaluate_stage(manifest: Manifest, policy, cast: tuple[Performer, ...] | None) -> Evaluation:
+    """One performance: the cast, or the entry alone at the centre on the event's command for the
+    whole time limit."""
+    if cast is None:
+        cast = (Performer(policy, manifest.rig, Start(), constant_timeline(manifest.command, manifest.time_limit_s)),)
     seed = manifest.seeds[0]
-    outcome = run_stage(manifest, (Performer(policy, manifest.rig, Start(), timeline),), seed)
+    outcome = run_stage(manifest, cast, seed)
     per_seed = (SeedResult(seed=seed, status=outcome.status, time_s=outcome.time_s),)
     return Evaluation(
         event_id=manifest.id,

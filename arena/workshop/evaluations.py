@@ -16,7 +16,8 @@ younger than FRESH_S waits: a local training may still be writing it.
 
 On a stage, each checkpoint plays the challenge's timeline.json (`timeline_key`); an edit makes every
 stored evaluation stale. The ONNX a checkpoint was exported to is kept beside it and played again, so
-a stale checkpoint costs a second or two, not an export.
+a stale checkpoint costs a second or two, not an export. A troupe plays here when every duck is the
+checkpoint itself ("self").
 """
 
 import base64
@@ -26,12 +27,13 @@ import shutil
 import tempfile
 import time
 
+from ..cast import cast_of
 from ..constants import RUNNER_VERSION
 from ..evaluate import evaluate
 from ..manifest import load_event
 from ..policy import load_policy
 from ..stage import summaries
-from ..timeline import load_timeline, sound_of
+from ..timeline import SELF, load_troupe
 from ..trace import as_ducks
 from .challenges import timeline_file, timeline_key
 from .runs import find_runs
@@ -109,6 +111,14 @@ def _write(run, n: int, body: dict) -> None:
     os.replace(tmp.name, path)
 
 
+def _own(troupe):
+    """`troupe`, when every duck plays the checkpoint itself: the workshop plays no other policy."""
+    for k, duck in enumerate(troupe.ducks if troupe else ()):
+        if duck.policy != SELF:
+            raise EvaluationError(f'ducks[{k}].policy: the workshop plays only this checkpoint ("self"), not {duck.policy!r}')
+    return troupe
+
+
 def _measure(root, run, n: int, challenge, key: str | None) -> dict:
     onnx = _path(run, n).with_suffix(".onnx")
     if not exported(run, n):
@@ -127,8 +137,12 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
         shutil.move(out / "policy.onnx", onnx)
         shutil.rmtree(out, ignore_errors=True)
     event = load_event(challenge.event)
-    timeline = load_timeline(timeline_file(challenge), event.time_limit_s) if key else None
-    result = evaluate(event, load_policy(onnx), timeline)
+    policy = load_policy(onnx)
+    # On a stage the challenge's timeline.json, which may name a checkpoint of this machine: saved and
+    # played here, never entered.
+    troupe = load_troupe(timeline_file(challenge), event, allow_local=True) if key else None
+    cast = cast_of(event, _own(troupe), policy, None, {}) if event.course.kind == "stage" else None
+    result = evaluate(event, policy, cast.performers if cast else None)
     trace = as_ducks(result.trace)
     body = {
         "checkpoint": n,
@@ -143,7 +157,7 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
         "trace_b64": base64.b64encode(trace.astype("<f4").tobytes()).decode("ascii"),
         "runner_version": result.runner_version,
         "timeline": key,
-        "sound": sound_of(timeline) if timeline else None,
+        "sound": cast.record[0]["sound"] if cast else None,
     }
     if event.course.kind == "stage":
         body["stage"] = summaries(result.trace, event.termination)[0]

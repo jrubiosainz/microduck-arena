@@ -8,7 +8,8 @@ from arena.constants import CTRL_DT, NUM_JOINTS, RUNNER_VERSION, TRACE_WIDTH
 from arena.evaluate import evaluate
 from arena.manifest import load_event
 from arena.policy import load_policy
-from arena.timeline import Timeline
+from arena.runner import Performer
+from arena.timeline import Start, Timeline
 
 STILL = (0.0,) * 13
 
@@ -40,16 +41,17 @@ def test_an_entry_without_a_timeline_plays_the_events_command_for_20_s(talent, w
     assert result.runner_version == RUNNER_VERSION
 
 
-def test_a_timeline_sets_the_performance_and_its_length(talent, walker):
+def test_a_cast_plays_every_duck_for_the_length_of_its_timeline(talent, walker):
     timeline = Timeline(2.0, (0.0, 1.0), (STILL, (1.0,) + (0.0,) * 12))
-    result = evaluate(talent, walker, timeline)
-    assert result.trace.shape == (1, 100, TRACE_WIDTH)
+    cast = (Performer(walker, "legs", Start(), timeline), Performer(walker, "legs", Start(0.0, 0.6, 90.0), timeline))
+    result = evaluate(talent, walker, cast)
+    assert result.trace.shape == (2, 100, TRACE_WIDTH)
     assert result.score == pytest.approx(2.0)
 
 
-def test_a_race_refuses_a_timeline(walker):
+def test_a_race_refuses_a_cast(walker):
     with pytest.raises(ValueError, match="race"):
-        evaluate(load_event("sprint-2m"), walker, Timeline(2.0, (0.0,), (STILL,)))
+        evaluate(load_event("sprint-2m"), walker, (Performer(walker, "legs", Start(), Timeline(2.0, (0.0,), (STILL,))),))
 
 
 class _RecordingPolicy:

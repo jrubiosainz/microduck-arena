@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from arena.assets import ASSET_ROOT
 from arena.hub_fetch import FetchedPolicy
-from arena.timeline import Timeline
+from arena.timeline import SELF, Duck, Start, Timeline, Troupe, solo
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
 
@@ -15,22 +15,13 @@ REFERENCE = ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"
 # fake Hub under a repo id; the autouse fixture below serves it back.
 _HUB: dict[str, Path] = {}
 
-# A repo id registered here also carries this timeline.json, as (Timeline, sha256).
+# A repo id registered here also carries this timeline.json, as (Troupe, sha256).
 _TIMELINES: dict[str, tuple] = {}
 
 
-def _fetched(path=REFERENCE, repo_id="alice/walker", filename="policy.onnx", revision="rev1", manifest=None,
-             timeline=None, timeline_sha256=None):
-    return FetchedPolicy(
-        repo_id=repo_id,
-        filename=filename,
-        revision=revision,
-        path=path,
-        url=f"https://huggingface.co/{repo_id}/resolve/{revision}/{filename}",
-        manifest=manifest,
-        timeline=timeline,
-        timeline_sha256=timeline_sha256,
-    )
+def _fetched(path=REFERENCE, repo_id="alice/walker", filename="policy.onnx", revision="rev1", **more):
+    return FetchedPolicy(repo_id=repo_id, filename=filename, revision=revision, path=path,
+                         url=f"https://huggingface.co/{repo_id}/resolve/{revision}/{filename}", **more)
 
 
 @pytest.fixture(autouse=True)
@@ -47,9 +38,9 @@ def hub(monkeypatch):
             from arena.hub_fetch import FetchError
 
             raise FetchError(f"{repo_id} has no .onnx file")
-        timeline, digest = _TIMELINES.get(repo_id, (None, None))
+        troupe, digest = _TIMELINES.get(repo_id, (None, None))
         return _fetched(path=_HUB[repo_id], repo_id=repo_id, revision=revision or "rev1",
-                        timeline=timeline, timeline_sha256=digest)
+                        troupe=troupe, timeline_sha256=digest)
 
     monkeypatch.setattr("arena.web.routes_submit._fetch_from_hub", fetch)
     return calls
@@ -558,11 +549,11 @@ def test_a_manifest_that_disagrees_is_a_400_naming_the_field(api, monkeypatch, s
 
 
 def performance(seconds, sit_at=None):
-    """A timeline of `seconds` standing, sitting from `sit_at` when given."""
+    """A one-duck performance of `seconds` standing, sitting from `sit_at` when given."""
     stand, sit = (0.0,) * 13, (1.0,) + (0.0,) * 12
     if sit_at is None:
-        return Timeline(seconds, (0.0,), (stand,))
-    return Timeline(seconds, (0.0, sit_at), (stand, sit))
+        return solo(Timeline(seconds, (0.0,), (stand,)))
+    return solo(Timeline(seconds, (0.0, sit_at), (stand, sit)))
 
 
 def test_a_stage_entry_plays_its_timeline(api):
@@ -592,7 +583,7 @@ def _stored(api, event_id, run_id):
 
 def test_a_stage_entry_keeps_the_sound_its_timeline_makes(api):
     stand = (0.0,) * 13
-    pulled = Timeline(2.0, (0.0, 0.5, 1.0), (stand,) * 3, ((0.0, 0.0), (1.0, 0.0), (0.0, 0.0)))
+    pulled = solo(Timeline(2.0, (0.0, 0.5, 1.0), (stand,) * 3, ((0.0, 0.0), (1.0, 0.0), (0.0, 0.0))))
     _TIMELINES["alice/best_alpha_walking"] = (pulled, "c" * 64)
     body = submit(api, event="got-a-talent").json()
     assert _stored(api, "got-a-talent", body["run_id"]).sound == {
@@ -613,3 +604,37 @@ def test_a_speed_sent_to_a_stage_is_ignored_not_a_500(api):
     response = submit(api, event="got-a-talent", command_vx="0.3")
     assert response.status_code == 200, response.text
     assert response.json()["command_vx"] == 0.0
+
+
+SITTER = "pollen-robotics/microduck-sitter@" + "a" * 40
+
+
+def _troupe(seconds=1.0):
+    """The entry's own duck at the centre, and the sitter borrowed beside it."""
+    still = Timeline(seconds, (0.0,), ((0.0,) * 13,))
+    return Troupe(seconds, (Duck(SELF, Start(), still), Duck(SITTER, Start(0.0, 0.6, 90.0), still)))
+
+
+def _with_a_borrowed(monkeypatch, path=REFERENCE):
+    lent = _fetched(path=path, repo_id="pollen-robotics/microduck-sitter", revision="a" * 40)
+    monkeypatch.setattr("arena.web.routes_submit._fetch_from_hub", lambda repo_id, revision, event: _fetched(
+        troupe=_troupe(), timeline_sha256="e" * 64, borrowed={SITTER: lent}))
+
+
+def test_a_troupe_plays_its_borrowed_ducks_beside_the_entrys_own(api, monkeypatch):
+    _with_a_borrowed(monkeypatch)
+    response = api.post("/api/events/got-a-talent/submit", data={"repo_id": "alice/walker"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    trace = api.get(f"/api/runs/{body['run_id']}/trace")
+    assert (trace.headers["X-Duck-Count"], trace.headers["X-Frame-Count"]) == ("2", "50")
+
+
+def test_a_borrowed_policy_that_does_not_load_is_a_400_naming_its_duck(api, monkeypatch, tmp_path, store_dir):
+    junk = tmp_path / "junk.onnx"
+    junk.write_bytes(b"not a model")
+    _with_a_borrowed(monkeypatch, path=junk)
+    response = api.post("/api/events/got-a-talent/submit", data={"repo_id": "alice/walker"})
+    assert response.status_code == 400
+    assert response.json()["detail"].startswith("ducks[1]: pollen-robotics/microduck-sitter: not a loadable ONNX model")
+    assert list(store_dir.rglob("*.json")) == []

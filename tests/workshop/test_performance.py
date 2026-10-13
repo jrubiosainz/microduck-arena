@@ -37,6 +37,16 @@ THREE_SECONDS = '{"timeline_version": 1, "duration_s": 3.0, "keyframes": [{"t": 
 QUACKS = '{"timeline_version": 1, "duration_s": 2.0, "keyframes": [{"t": 0.0}, {"t": 1.0, "triggers": [1, 0]}]}\n'
 SINGS = ('{"timeline_version": 1, "duration_s": 2.0, "keyframes": [{"t": 0.0}], '
          '"song": [{"t": 0.5, "note": "A4", "for": 1.0}]}\n')
+TROUPE = json.dumps({"timeline_version": 2, "duration_s": 2.0, "ducks": [
+    {"policy": "self", "keyframes": [{"t": 0.0}]},
+    {"policy": "self", "start": {"x": 0.0, "y": 0.6, "yaw": 90},
+     "keyframes": [{"t": 0.0}, {"t": 1.0, "triggers": [1, 0]}]},
+]}) + "\n"
+# A troupe whose second duck is a checkpoint of this machine, not published yet.
+BORROWS = json.dumps({"timeline_version": 2, "duration_s": 2.0, "ducks": [
+    {"policy": "self", "keyframes": [{"t": 0.0}]},
+    {"policy": "local:got_a_talent/first@1", "start": {"x": 0.0, "y": 0.6, "yaw": 0}, "keyframes": [{"t": 0.0}]},
+]}) + "\n"
 URL = "/api/workshop/challenges/got-a-talent"
 TASK = "Mjlab-GotATalent-MicroDuck"
 
@@ -185,4 +195,31 @@ def test_a_broken_timeline_is_never_published(stage, checkout, fakes):
     body = {"checkpoint": 1, "name": "my talent", "description": "It sits and looks around."}
     refused = stage.post(f"{URL}/jobs/{run.name}/publish", json=body)
     assert refused.status_code == 400 and "not a JSON file" in refused.json()["detail"]
+    assert fakes.calls("publish") == []
+
+
+def test_a_troupe_of_the_checkpoint_itself_plays_every_duck(stage, checkout):
+    stage.timeline.write_text(TROUPE)
+    run = make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
+    assert frames(evaluated(stage, run)) == 2 * 100  # two ducks, duck-major, 2 s each at 50 Hz
+
+
+def test_the_page_saves_a_troupe_naming_a_checkpoint_of_this_machine(stage):
+    saved = stage.post(f"{URL}/timeline", json={"text": BORROWS})
+    assert saved.status_code == 200, saved.text
+    assert stage.timeline.read_text() == BORROWS
+
+
+def test_a_duck_playing_another_policy_is_not_played_here(stage, checkout):
+    stage.timeline.write_text(BORROWS)
+    run = make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
+    assert "ducks[1].policy" in evaluated(stage, run)["error"]
+
+
+def test_a_troupe_naming_a_checkpoint_of_this_machine_is_not_published(stage, checkout, fakes):
+    stage.timeline.write_text(BORROWS)
+    run = make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
+    body = {"checkpoint": 1, "name": "my talent", "description": "It sits and looks around."}
+    refused = stage.post(f"{URL}/jobs/{run.name}/publish", json=body)
+    assert refused.status_code == 400 and "publish it first" in refused.json()["detail"]
     assert fakes.calls("publish") == []

@@ -10,13 +10,16 @@ from arena.timeline import (
     Timeline,
     TimelineError,
     constant_timeline,
-    load_timeline,
     load_troupe,
     sound_of,
 )
 
-LIMIT_S = 20.0
-# Its time limit is LIMIT_S: a troupe and a lone timeline are refused at the same length.
+
+def load(path) -> Timeline:
+    """A v1 file as the Arena reads it: a troupe of one, whose duck carries the timeline."""
+    return load_troupe(path, TALENT).ducks[0].timeline
+
+
 TALENT = load_event("got-a-talent")
 
 
@@ -40,7 +43,7 @@ def good(**overrides) -> dict:
 
 
 def test_a_good_timeline_loads(tmp_path):
-    timeline = load_timeline(write(tmp_path, good()), LIMIT_S)
+    timeline = load(write(tmp_path, good()))
     assert timeline.duration_s == 10.0
     assert timeline.times == (0.0, 2.0, 4.5)
     assert timeline.commands[1] == (1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0) + (0.0,) * 6
@@ -49,12 +52,12 @@ def test_a_good_timeline_loads(tmp_path):
 def test_a_missing_group_is_zeros_not_the_previous_keyframes(tmp_path):
     """keyframes[2] names only body: its twist and head are zeros, although
     keyframes[1] sat and looked left. Every keyframe is the whole command."""
-    timeline = load_timeline(write(tmp_path, good()), LIMIT_S)
+    timeline = load(write(tmp_path, good()))
     assert timeline.commands[2] == (0.0,) * 12 + (0.25,)
 
 
 def test_the_command_is_the_last_keyframe_at_or_before_t(tmp_path):
-    timeline = load_timeline(write(tmp_path, good()), LIMIT_S)
+    timeline = load(write(tmp_path, good()))
     assert timeline.command_at(0.0) == timeline.commands[0]
     assert timeline.command_at(1.98) == timeline.commands[0]
     assert timeline.command_at(2.0) == timeline.commands[1]
@@ -67,7 +70,7 @@ def test_a_keyframe_on_the_control_grid_starts_at_its_own_step(tmp_path, t):
     """k * CTRL_DT is not exactly t in binary floating point (15 * 0.02 against
     0.3); the keyframe must still take effect at step round(t / CTRL_DT)."""
     raw = good(duration_s=20.0, keyframes=[{"t": 0.0}, {"t": t, "twist": [1, 0, 0]}])
-    timeline = load_timeline(write(tmp_path, raw), LIMIT_S)
+    timeline = load(write(tmp_path, raw))
     k = round(t / CTRL_DT)
     assert timeline.command_at(k * CTRL_DT)[0] == 1.0
     assert timeline.command_at((k - 1) * CTRL_DT)[0] == 0.0
@@ -87,7 +90,7 @@ def test_triggers_are_read_per_keyframe_and_released_when_left_out(tmp_path):
         {"t": 2.3, "twist": [1, 0, 0]},
         {"t": 4.0, "triggers": [0, 0.5]},
     ])
-    timeline = load_timeline(write(tmp_path, raw), LIMIT_S)
+    timeline = load(write(tmp_path, raw))
     assert timeline.triggers == ((0.0, 0.0), (1.0, 0.0), (0.0, 0.0), (0.0, 0.5))
     # The policy never sees them: the command stays the 13 numbers.
     assert timeline.commands[1] == (1.0,) + (0.0,) * 12
@@ -102,7 +105,7 @@ def test_the_sound_keeps_the_trigger_changes_only(tmp_path):
         {"t": 3.0, "head": [0, 0, 0.3, 0]},
         {"t": 4.0, "triggers": [0, 1]},
     ])
-    assert sound_of(load_timeline(write(tmp_path, raw), LIMIT_S)) == {
+    assert sound_of(load(write(tmp_path, raw))) == {
         "triggers": [[0.0, 1.0, 0.0], [2.0, 0.0, 0.0], [4.0, 0.0, 1.0]],
     }
 
@@ -112,16 +115,16 @@ def test_the_sound_carries_each_note_resolved_and_the_voice(tmp_path):
         {"t": 1.0, "note": "A4", "for": 0.5},
         {"t": 2.0, "note": "C5", "for": 1.0, "dynamic": "p", "vowel": "mm"},
     ])
-    assert sound_of(load_timeline(write(tmp_path, raw), LIMIT_S)) == {
+    assert sound_of(load(write(tmp_path, raw))) == {
         "voice": {"pitch": 0.3},
         "song": [[1.0, 0.5, 69, 0.70, 0.90, 0.0], [2.0, 1.0, 72, pytest.approx(0.40 * 0.65), 0.05, -2.0]],
     }
 
 
 def test_a_performance_that_sings_nothing_and_pulls_nothing_has_no_sound(tmp_path):
-    assert sound_of(load_timeline(write(tmp_path, good()), LIMIT_S)) is None
+    assert sound_of(load(write(tmp_path, good()))) is None
     # A voice nobody hears is nothing to store.
-    assert sound_of(load_timeline(write(tmp_path, good(voice={"pitch": 1})), LIMIT_S)) is None
+    assert sound_of(load(write(tmp_path, good(voice={"pitch": 1})))) is None
     assert sound_of(constant_timeline((0.0,) * 13, 20.0)) is None
 
 
@@ -131,7 +134,7 @@ def test_a_song_and_a_voice_load_beside_the_keyframes(tmp_path):
         {"t": 1.5, "note": "eb4", "for": 0.25, "dynamic": "p", "vowel": "oo"},
         {"t": 2.0, "note": "F#3", "for": 1.0},
     ])
-    timeline = load_timeline(write(tmp_path, raw), LIMIT_S)
+    timeline = load(write(tmp_path, raw))
     assert timeline.voice == {"pitch": 0.3, "breath": 0.0}
     assert timeline.song == (
         Note(1.0, 0.5, 72, "mf", "ah"),
@@ -139,11 +142,11 @@ def test_a_song_and_a_voice_load_beside_the_keyframes(tmp_path):
         Note(2.0, 1.0, 54, "mf", "ah"),
     )
     # The policy never hears it: the command numbers are the keyframes' alone.
-    assert timeline.commands == load_timeline(write(tmp_path, good()), LIMIT_S).commands
+    assert timeline.commands == load(write(tmp_path, good())).commands
 
 
 def test_a_timeline_without_a_song_or_a_voice_has_neither(tmp_path):
-    timeline = load_timeline(write(tmp_path, good()), LIMIT_S)
+    timeline = load(write(tmp_path, good()))
     assert (timeline.voice, timeline.song) == ({}, ())
 
 
@@ -151,7 +154,7 @@ def test_notes_written_end_to_end_in_decimals_follow_each_other(tmp_path):
     """0.1 + 0.2 is 0.30000000000000004 in floating point: a note at 0.3 still follows one at 0.1 for 0.2,
     and a note ending exactly at duration_s fits."""
     raw = good(song=[{"t": 0.1, "note": "C4", "for": 0.2}, {"t": 0.3, "note": "D4", "for": 9.7}])
-    assert len(load_timeline(write(tmp_path, raw), LIMIT_S).song) == 2
+    assert len(load(write(tmp_path, raw)).song) == 2
 
 
 @pytest.mark.parametrize(
@@ -212,16 +215,7 @@ def test_notes_written_end_to_end_in_decimals_follow_each_other(tmp_path):
 )
 def test_a_malformed_timeline_is_refused_with_where(tmp_path, raw, said):
     with pytest.raises(TimelineError, match=said):
-        load_timeline(write(tmp_path, raw), LIMIT_S)
-    # A troupe reads a version 1 file the same way, refusal for refusal.
-    with pytest.raises(TimelineError, match=said):
         load_troupe(write(tmp_path, raw), TALENT)
-
-
-@pytest.mark.parametrize("version", [2, True])
-def test_a_lone_timeline_is_version_1(tmp_path, version):
-    with pytest.raises(TimelineError, match="timeline_version: this Arena plays version 1, got"):
-        load_timeline(write(tmp_path, good(timeline_version=version)), LIMIT_S)
 
 
 @pytest.mark.parametrize("version", [0, 3, True, "1", 1.5, None])
@@ -236,19 +230,19 @@ def test_jsons_non_finite_literals_are_refused(tmp_path, literal):
     text = ('{"timeline_version": 1, "duration_s": 5.0, '
             '"keyframes": [{"t": 0.0, "head": [0, 0, %s, 0]}]}' % literal)
     with pytest.raises(TimelineError, match=r"keyframes\[0\]\.head\[2\]: must be finite"):
-        load_timeline(write(tmp_path, text), LIMIT_S)
+        load(write(tmp_path, text))
 
 
 def test_an_integer_too_large_for_a_float_is_refused_as_a_command_value(tmp_path):
     """math.isfinite raises OverflowError on a 400-digit int rather than saying no."""
     raw = good(keyframes=[{"t": 0.0, "twist": [10**400, 0, 0]}])
     with pytest.raises(TimelineError, match=r"keyframes\[0\]\.twist\[0\]: must be finite"):
-        load_timeline(write(tmp_path, raw), LIMIT_S)
+        load(write(tmp_path, raw))
 
 
 def test_an_integer_too_large_for_a_float_is_refused_as_duration_s(tmp_path):
     with pytest.raises(TimelineError, match="duration_s: must be finite"):
-        load_timeline(write(tmp_path, good(duration_s=10**400)), LIMIT_S)
+        load(write(tmp_path, good(duration_s=10**400)))
 
 
 def test_an_integer_over_pythons_string_conversion_limit_is_refused(tmp_path):
@@ -256,32 +250,32 @@ def test_an_integer_over_pythons_string_conversion_limit_is_refused(tmp_path):
     not a JSONDecodeError, when it converts the digits to an int."""
     text = '{"timeline_version": 1, "duration_s": %s, "keyframes": [{"t": 0.0}]}' % ("1" * 5000)
     with pytest.raises(TimelineError, match="not a JSON file"):
-        load_timeline(write(tmp_path, text), LIMIT_S)
+        load(write(tmp_path, text))
 
 
 def test_deeply_nested_json_is_refused(tmp_path):
     """100k nested '[' overflows json's recursive descent parser."""
     with pytest.raises(TimelineError, match="not a JSON file"):
-        load_timeline(write(tmp_path, "[" * 100000), LIMIT_S)
+        load(write(tmp_path, "[" * 100000))
 
 
 def test_a_file_that_is_not_json_is_refused(tmp_path):
     with pytest.raises(TimelineError, match="timeline.json: not a JSON file"):
-        load_timeline(write(tmp_path, "{nope"), LIMIT_S)
+        load(write(tmp_path, "{nope"))
 
 
 def test_a_file_that_is_not_utf8_is_refused(tmp_path):
     path = tmp_path / "timeline.json"
     path.write_bytes(b"\xff\xfe{}")
     with pytest.raises(TimelineError, match="timeline.json: not a JSON file"):
-        load_timeline(path, LIMIT_S)
+        load(path)
 
 
 def test_a_top_level_that_is_not_an_object_is_refused(tmp_path):
     with pytest.raises(TimelineError, match="timeline.json: expected a JSON object, got list"):
-        load_timeline(write(tmp_path, "[]"), LIMIT_S)
+        load(write(tmp_path, "[]"))
 
 
 def test_a_missing_file_is_refused(tmp_path):
     with pytest.raises(TimelineError, match="missing.json"):
-        load_timeline(tmp_path / "missing.json", LIMIT_S)
+        load(tmp_path / "missing.json")

@@ -330,13 +330,13 @@ def _keys(raw: dict, allowed, required, where: str) -> None:
             raise TimelineError(f"{where}: missing {key!r}")
 
 
-def _version(raw: dict, name: str, versions: tuple[int, ...]) -> int:
+def _version(raw: dict, name: str) -> int:
     if "timeline_version" not in raw:
         raise TimelineError(f"{name}: missing 'timeline_version'")
     version = raw["timeline_version"]
     # bool first: True == 1 in Python, and would otherwise read as version 1.
-    if isinstance(version, bool) or version not in versions:
-        plays = " or ".join(str(v) for v in versions)
+    if isinstance(version, bool) or version not in TIMELINE_VERSIONS:
+        plays = " or ".join(str(v) for v in TIMELINE_VERSIONS)
         raise TimelineError(f"timeline_version: this Arena plays version {plays}, got {version!r}")
     return version
 
@@ -449,18 +449,9 @@ def load_troupe(path: Path, event: Manifest, *, allow_local: bool = False) -> Tr
     an entry is refused one."""
     path = Path(path)
     raw = _read(path)
-    if _version(raw, path.name, TIMELINE_VERSIONS) == 1:
+    if _version(raw, path.name) == 1:
         return solo(_v1(raw, path.name, event.time_limit_s))
     return _troupe(raw, path.name, event, allow_local)
-
-
-def load_timeline(path: Path, max_duration_s: float) -> Timeline:
-    """Read and check a version 1 timeline.json. `max_duration_s` is the event's time limit,
-    so the event stays the one place the 20 s is written."""
-    path = Path(path)
-    raw = _read(path)
-    _version(raw, path.name, (1,))
-    return _v1(raw, path.name, max_duration_s)
 
 
 def _trigger_track(timeline: Timeline) -> list[list[float]] | None:

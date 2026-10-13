@@ -313,27 +313,41 @@ def test_check_manifest_is_silent_when_everything_agrees():
 
 PERFORMANCE = {"timeline_version": 1, "duration_s": 4.0,
                "keyframes": [{"t": 0.0}, {"t": 2.0, "twist": [1, 0, 0]}]}
+SITTER = "pollen-robotics/microduck-sitter@" + "a" * 40
+ROLLER = "bob/microduck-roller@" + "b" * 40
+ROLLERS = GOOD_MANIFEST | {"robot": {"model": "microduck", "accessories": ["rollers"]}}
+
+
+def _troupe(*policies):
+    """A v2 performance: one duck per policy, in a row across the stage, 0.6 m apart."""
+    return {"timeline_version": 2, "duration_s": 4.0, "ducks": [
+        {"policy": policy, "start": {"x": 0.0, "y": -0.9 + 0.6 * k, "yaw": 0}, "keyframes": [{"t": 0.0}]}
+        for k, policy in enumerate(policies)]}
 
 
 def test_a_stage_entry_brings_its_timeline_from_the_pinned_revision(tmp_path):
     downloads = []
     fetched = _fetch(tmp_path, None, event_id="got-a-talent", revision="abc123", downloads=downloads,
                      timeline=PERFORMANCE)
-    assert fetched.timeline.duration_s == 4.0
-    assert fetched.timeline.command_at(2.0)[0] == 1.0
+    assert fetched.troupe.duration_s == 4.0
+    assert fetched.troupe.ducks[0].timeline.command_at(2.0)[0] == 1.0
+    assert fetched.borrowed == {}
     assert fetched.timeline_sha256 == hashlib.sha256((tmp_path / "timeline.json").read_bytes()).hexdigest()
     assert downloads == [("timeline.json", "sha-of-abc123"), ("policy.onnx", "sha-of-abc123")]
 
 
 def test_a_stage_entry_without_a_timeline_plays_the_events_command(tmp_path):
     fetched = _fetch(tmp_path, None, event_id="got-a-talent")
-    assert (fetched.timeline, fetched.timeline_sha256) == (None, None)
+    assert (fetched.troupe, fetched.timeline_sha256) == (None, None)
 
 
 @pytest.mark.parametrize("content, reason", [
     ("{not json", "not a JSON file"),
     ({**PERFORMANCE, "duration_s": 25.0}, "longer than this event's 20 s"),
     ({**PERFORMANCE, "keyframes": [{"t": 0.0, "head": [0, 0, 1]}]}, "keyframes[0].head"),
+    (_troupe(SITTER), "ducks[0].policy"),
+    # An entry's troupe names policies on the Hub: a checkpoint of the author's machine is the workshop's.
+    (_troupe("self", "local:got_a_talent/first@1"), "publish it first"),
 ])
 def test_a_timeline_the_arena_will_not_play_is_refused_before_the_weights(tmp_path, content, reason):
     downloads = []
@@ -347,5 +361,99 @@ def test_a_timeline_the_arena_will_not_play_is_refused_before_the_weights(tmp_pa
 def test_a_race_never_reads_a_timeline(tmp_path):
     downloads = []
     fetched = _fetch(tmp_path, None, event_id="sprint-2m", downloads=downloads, timeline="{not json")
-    assert fetched.timeline is None
+    assert fetched.troupe is None
     assert "timeline.json" not in [name for name, _ in downloads]
+
+
+def test_on_a_stage_the_entry_stands_on_its_own_rig(tmp_path):
+    """A race is run on its event's rig; on a stage each duck brings its own."""
+    assert _fetch(tmp_path, ROLLERS, event_id="got-a-talent").rig == "rollers"
+    assert _fetch(tmp_path, GOOD_MANIFEST, event_id="got-a-talent").rig == "legs"
+    assert _fetch(tmp_path, None, event_id="got-a-talent").rig is None
+
+
+def test_on_a_stage_a_robot_that_is_neither_legs_nor_rollers_is_refused(tmp_path):
+    with pytest.raises(FetchError, match=r"robot 'flyduck' with accessories \[\] is neither"):
+        _fetch(tmp_path, GOOD_MANIFEST | {"robot": {"model": "flyduck"}}, event_id="got-a-talent")
+
+
+class _Hub:
+    """A fake Hub of several repos, {repo: {file: content}}; an ONNX's content is None. A repo answers
+    at whatever revision is asked, a size is declared only when set in `sizes`, and every download is
+    kept as (repo, file, revision)."""
+
+    def __init__(self, tmp_path, repos):
+        self.tmp_path, self.repos, self.sizes, self.downloads = tmp_path, repos, {}, []
+
+    def info(self, repo_id, revision):
+        if repo_id not in self.repos:
+            raise RuntimeError("404 Client Error: Repository Not Found")
+        files = list(self.repos[repo_id])
+        return files, revision or "sha-of-main", {f: self.sizes.get((repo_id, f)) for f in files}
+
+    def download(self, repo_id, filename, revision):
+        self.downloads.append((repo_id, filename, revision))
+        content = self.repos[repo_id][filename]
+        path = self.tmp_path / repo_id.replace("/", "--") / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("weights" if content is None else content if isinstance(content, str) else json.dumps(content))
+        return str(path)
+
+    def fetch(self):
+        return fetch_policy("alice/walker", event=load_event("got-a-talent"), download=self.download, info=self.info)
+
+
+def test_a_troupe_brings_each_borrowed_policy_once_at_its_commit(tmp_path):
+    hub = _Hub(tmp_path, {
+        "alice/walker": {"policy.onnx": None, "timeline.json": _troupe("self", SITTER, ROLLER, SITTER)},
+        # A borrowed repo's own timeline.json is another performance: never read.
+        "pollen-robotics/microduck-sitter": {"policy.onnx": None, "manifest.json": GOOD_MANIFEST,
+                                             "timeline.json": "{not json"},
+        "bob/microduck-roller": {"roller.onnx": None, "manifest.json": ROLLERS},
+    })
+    fetched = hub.fetch()
+    assert list(fetched.borrowed) == [SITTER, ROLLER]
+    sitter, roller = fetched.borrowed[SITTER], fetched.borrowed[ROLLER]
+    assert (sitter.repo_id, sitter.revision, sitter.filename) == ("pollen-robotics/microduck-sitter", "a" * 40, "policy.onnx")
+    assert roller.url == "https://huggingface.co/bob/microduck-roller/resolve/" + "b" * 40 + "/roller.onnx"
+    assert (fetched.rig, sitter.rig, roller.rig) == (None, "legs", "rollers")
+    assert (sitter.troupe, sitter.borrowed) == (None, {})
+    # The entry's timeline first, then each borrowed policy once, and the entry's weights last.
+    assert hub.downloads == [
+        ("alice/walker", "timeline.json", "sha-of-main"),
+        ("pollen-robotics/microduck-sitter", "manifest.json", "a" * 40),
+        ("pollen-robotics/microduck-sitter", "policy.onnx", "a" * 40),
+        ("bob/microduck-roller", "manifest.json", "b" * 40),
+        ("bob/microduck-roller", "roller.onnx", "b" * 40),
+        ("alice/walker", "policy.onnx", "sha-of-main"),
+    ]
+
+
+@pytest.mark.parametrize("sitter, reason", [
+    (None, "could not read pollen-robotics/microduck-sitter: 404"),
+    ({"README.md": "hello"}, "has no .onnx file"),
+    ({"policy.onnx": None, "manifest.json": GOOD_MANIFEST | {"kind": "episodic"}}, "kind is 'episodic'"),
+    ({"policy.onnx": None, "manifest.json": GOOD_MANIFEST | {"robot": {"model": "flyduck"}}}, "robot 'flyduck'"),
+])
+def test_a_borrowed_policy_is_refused_naming_the_first_duck_that_plays_it(tmp_path, sitter, reason):
+    repos = {"alice/walker": {"policy.onnx": None, "timeline.json": _troupe("self", ROLLER, SITTER, SITTER)},
+             "bob/microduck-roller": {"policy.onnx": None}}
+    if sitter is not None:
+        repos["pollen-robotics/microduck-sitter"] = sitter
+    hub = _Hub(tmp_path, repos)
+    with pytest.raises(FetchError) as refused:
+        hub.fetch()
+    assert str(refused.value).startswith("ducks[2]: pollen-robotics/microduck-sitter: ")
+    assert reason in str(refused.value)
+    assert ("alice/walker", "policy.onnx", "sha-of-main") not in hub.downloads, "the entry's weights wait for its troupe"
+
+
+def test_a_borrowed_policy_over_the_size_cap_is_refused_before_its_weights(tmp_path):
+    from arena.policy import MAX_MODEL_BYTES
+
+    hub = _Hub(tmp_path, {"alice/walker": {"policy.onnx": None, "timeline.json": _troupe("self", SITTER)},
+                          "pollen-robotics/microduck-sitter": {"policy.onnx": None}})
+    hub.sizes[("pollen-robotics/microduck-sitter", "policy.onnx")] = MAX_MODEL_BYTES + 1
+    with pytest.raises(FetchError, match=r"^ducks\[1\]: pollen-robotics/microduck-sitter: .*larger than"):
+        hub.fetch()
+    assert [name for repo, name, _ in hub.downloads if repo == "pollen-robotics/microduck-sitter"] == []

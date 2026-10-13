@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..manifest import load_event
-from ..timeline import TimelineError, load_timeline
+from ..timeline import TimelineError, load_troupe
 from ..web.routes_read import event_summary
 from .challenges import (
     RECIPE,
@@ -385,7 +385,7 @@ async def publish_route(event: str, ticket_id: str, body: PublishRequest, reques
     timeline = timeline_file(challenge) if is_stage(challenge) and timeline_file(challenge).exists() else None
     if timeline is not None:
         try:
-            load_timeline(timeline, load_event(challenge.event).time_limit_s)
+            load_troupe(timeline, load_event(challenge.event))
         except TimelineError as exc:
             raise HTTPException(status_code=400, detail=f"Your performance cannot be published: {exc}") from exc
     user = await run_in_threadpool(_hub_user, ws)

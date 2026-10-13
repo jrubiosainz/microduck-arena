@@ -208,3 +208,57 @@ def test_score_records_how_a_performance_sounds(tmp_path, capsys):
                  "--store", str(store)]) == 0
     [record] = LocalStore(store).runs("got-a-talent")
     assert record.sound == {"triggers": [[0.0, 0.0, 0.0], [0.5, 0.0, 1.0]]}
+
+
+SITTER = "pollen-robotics/microduck-sitter@" + "a" * 40
+
+
+def _troupe(tmp_path):
+    """The entry's own duck at the centre, and the sitter borrowed twice, one on each side."""
+    path = tmp_path / "timeline.json"
+    path.write_text(json.dumps({"timeline_version": 2, "duration_s": 1.0, "ducks": [
+        {"policy": "self", "keyframes": [{"t": 0.0}]},
+        {"policy": SITTER, "start": {"x": 0.0, "y": 0.6, "yaw": 90}, "keyframes": [{"t": 0.0}]},
+        {"policy": SITTER, "start": {"x": 0.0, "y": -0.6, "yaw": -90}, "keyframes": [{"t": 0.0}]},
+    ]}))
+    return path
+
+
+def _lend(monkeypatch):
+    """Stands in for the Hub: the sitter is the reference walker's weights at its commit. Returns what
+    was asked of it, the troupe's references per call."""
+    from pathlib import Path
+
+    from arena.hub_fetch import FetchedPolicy
+
+    asked = []
+
+    def fetch_references(troupe, event):
+        asked.append(troupe.references())
+        return {SITTER: FetchedPolicy(
+            repo_id="pollen-robotics/microduck-sitter", filename="policy.onnx", revision="a" * 40,
+            path=Path(REFERENCE),
+            url="https://huggingface.co/pollen-robotics/microduck-sitter/resolve/" + "a" * 40 + "/policy.onnx")}
+
+    monkeypatch.setattr("arena.cli.fetch_references", fetch_references)
+    return asked
+
+
+def test_score_plays_a_troupe_with_its_borrowed_policies_from_the_hub(tmp_path, capsys, monkeypatch):
+    asked = _lend(monkeypatch)
+    assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(_troupe(tmp_path))]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert asked == [(SITTER,)], "a policy two ducks play is fetched once"
+    assert lines[0] == "stage: 1.00 s played, timeline.json (3 ducks)"
+    assert [line.split(":")[0] for line in lines[1:]] == ["duck 0", "duck 1", "duck 2"]
+
+
+def test_a_borrowed_policy_the_hub_refuses_exits_1_naming_its_duck(tmp_path, capsys, monkeypatch):
+    from arena.hub_fetch import FetchError
+
+    def refuse(troupe, event):
+        raise FetchError("ducks[1]: pollen-robotics/microduck-sitter: could not read pollen-robotics/microduck-sitter: 404")
+
+    monkeypatch.setattr("arena.cli.fetch_references", refuse)
+    assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(_troupe(tmp_path))]) == 1
+    assert "ducks[1]: pollen-robotics/microduck-sitter" in capsys.readouterr().err

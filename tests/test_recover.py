@@ -195,7 +195,7 @@ def test_recover_plays_a_stage_entry_with_its_timeline_at_the_listed_revision(tm
     from arena.manifest import load_event
     from arena.recover import recover
     from arena.store import LocalStore
-    from arena.timeline import Timeline
+    from arena.timeline import Timeline, solo
 
     asked = []
 
@@ -205,7 +205,7 @@ def test_recover_plays_a_stage_entry_with_its_timeline_at_the_listed_revision(tm
             repo_id=repo_id, filename="policy.onnx", revision=revision,
             path=ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx",
             url=f"https://huggingface.co/{repo_id}/resolve/{revision}/policy.onnx",
-            timeline=Timeline(2.0, (0.0, 1.0), ((0.0,) * 13,) * 2, ((0.0, 1.0), (0.0, 0.0))),
+            troupe=solo(Timeline(2.0, (0.0, 1.0), ((0.0,) * 13,) * 2, ((0.0, 1.0), (0.0, 0.0)))),
             timeline_sha256="t" * 64,
         )
 
@@ -217,3 +217,37 @@ def test_recover_plays_a_stage_entry_with_its_timeline_at_the_listed_revision(tm
     assert record.score == pytest.approx(2.0)
     assert record.sound == {"triggers": [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]}
     assert (record.timeline_sha256, record.source["revision"]) == ("t" * 64, "rev7")
+
+
+SITTER = "pollen-robotics/microduck-sitter@" + "a" * 40
+TALENT_LISTED = (listing(("alice/talent", "rev7")),
+                 manifests({"alice/talent": arena_manifest(arena={"event": "got-a-talent"})}))
+
+
+def test_recover_plays_a_troupe_with_its_borrowed_policies(tmp_path, monkeypatch):
+    from arena import trace as trace_codec
+    from arena.assets import ASSET_ROOT
+    from arena.hub_fetch import FetchedPolicy
+    from arena.manifest import load_event
+    from arena.recover import recover
+    from arena.store import LocalStore
+    from arena.timeline import SELF, Duck, Start, Timeline, Troupe
+
+    walker = ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"
+    still = Timeline(1.0, (0.0,), ((0.0,) * 13,))
+
+    def fetch_policy(repo_id, revision=None, event=None):
+        return FetchedPolicy(
+            repo_id=repo_id, filename="policy.onnx", revision=revision, path=walker,
+            url=f"https://huggingface.co/{repo_id}/resolve/{revision}/policy.onnx",
+            troupe=Troupe(1.0, (Duck(SELF, Start(), still), Duck(SITTER, Start(0.0, 0.6, 90.0), still))),
+            timeline_sha256="t" * 64,
+            borrowed={SITTER: FetchedPolicy(
+                repo_id="pollen-robotics/microduck-sitter", filename="policy.onnx", revision="a" * 40, path=walker,
+                url="https://huggingface.co/pollen-robotics/microduck-sitter/resolve/" + "a" * 40 + "/policy.onnx")},
+        )
+
+    monkeypatch.setattr("arena.hub_fetch.fetch_policy", fetch_policy)
+    store = LocalStore(tmp_path)
+    [record] = recover(store, [load_event("got-a-talent")], reader=TALENT_LISTED)
+    assert trace_codec.decode(store.trace(record.run_id)).shape[:2] == (2, 50)

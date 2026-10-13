@@ -15,14 +15,14 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
 from .. import trace as trace_codec
+from ..cast import cast_of, load_borrowed
 from ..constants import RUNNER_VERSION
 from ..envlink import EnvLinkError, normalise_env_url
 from ..evaluate import evaluate, evaluate_at
-from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy, parse_repo_ref
+from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy, hub_name, parse_repo_ref
 from ..manifest import ManifestError, load_event
 from ..policy import PolicyError, load_policy
 from ..store import RunRecord, Withdrawal, new_id
-from ..timeline import sound_of
 from .hub_identity import HubUnreachable, TokenRefused, whoami
 from .routes_auth import current_user
 from .routes_read import _withdrawn
@@ -150,12 +150,6 @@ def _livery(value: str | None) -> str:
     return (value or "classic").strip()[:32] or "classic"
 
 
-def _hub_name(fetched: FetchedPolicy) -> str:
-    """A Hub entry's name when its author typed none: its manifest's, else its repo's."""
-    named = str((fetched.manifest or {}).get("name") or "").strip()
-    return named or fetched.repo_id.rsplit("/", 1)[-1].removeprefix("microduck-")
-
-
 DESCRIPTION_MAX = 500
 
 
@@ -186,9 +180,9 @@ def _seed_rows(per_seed) -> list[dict]:
     return [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in per_seed]
 
 
-def _evaluate(manifest, policy, command_vx: float | None, timeline):
+def _evaluate(manifest, policy, command_vx: float | None, cast):
     if command_vx is None:
-        return evaluate(manifest, policy, timeline)
+        return evaluate(manifest, policy, cast)
     return evaluate_at(manifest, policy, command_vx)
 
 
@@ -272,7 +266,8 @@ async def submit(
 
 async def _enter(request, manifest, user, repo_id, revision, name, livery, command_vx, link) -> dict:
     try:
-        # Offloaded to a worker thread: this is a network call.
+        # Offloaded to a worker thread: this is a network call. On a stage it also reads every
+        # policy the troupe borrows, each at its commit.
         fetched = await run_in_threadpool(_fetch_from_hub, repo_id, revision, manifest)
     except FetchError as exc:
         # 400, not 500: the reference is the problem, and the message is written to be read
@@ -288,6 +283,16 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
     kept = _already_entered(store, manifest.id, user, policy.sha256, fetched.timeline_sha256)
     if kept is not None:
         return _answer(kept, manifest.course.kind, _page_url(request, kept.run_id), already=True)
+
+    cast = None
+    if manifest.course.kind == "stage":
+        try:
+            # Every borrowed policy's session too, off the event loop: each loaded once however
+            # many ducks play it, and one that does not load is refused naming its first duck.
+            borrowed = await run_in_threadpool(load_borrowed, fetched.troupe, fetched.borrowed)
+        except PolicyError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        cast = cast_of(manifest, fetched.troupe, policy, fetched.rig, borrowed)
 
     # `command_vx` pins the commanded speed for this entry; omit it for the full
     # sweep, which stays the default.
@@ -307,7 +312,7 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
     try:
         # Five simulated runs per speed, CPU-bound: off the event loop.
         result = await run_in_threadpool(
-            _evaluate, manifest, policy, _speed(manifest, command_vx), fetched.timeline
+            _evaluate, manifest, policy, _speed(manifest, command_vx), cast.performers if cast else None
         )
     except PolicyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -319,7 +324,7 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         # comparing this as a STRING, so an isoformat() offset would misorder it.
         submitted_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         user=user,
-        policy_name=_label(name, _hub_name(fetched)),
+        policy_name=_label(name, hub_name(fetched)),
         source={
             "kind": "hub",
             "repo_id": fetched.repo_id,
@@ -341,7 +346,7 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         livery=_livery(livery),
         description=_description(fetched),
         timeline_sha256=fetched.timeline_sha256,
-        sound=sound_of(fetched.timeline) if fetched.timeline else None,
+        sound=cast.record[0]["sound"] if cast else None,
     )
     store.append(record, trace_codec.encode(result.trace, result.settle))
 

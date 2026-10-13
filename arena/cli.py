@@ -13,13 +13,15 @@ from pathlib import Path
 
 from . import stage
 from . import trace as trace_codec
+from .cast import cast_of, load_borrowed
 from .constants import CTRL_DT
 from .evaluate import evaluate
+from .hub_fetch import FetchError, fetch_references
 from .index import ENTRANTS, leaderboard
 from .manifest import ManifestError, all_events, load_event
 from .policy import PolicyError, load_policy
 from .store import LocalStore, RunRecord, new_id
-from .timeline import TimelineError, load_timeline, sound_of
+from .timeline import TimelineError, load_troupe
 
 
 def _cmd_events(args) -> int:
@@ -45,9 +47,14 @@ def _print_sweep(result) -> None:
           f"{len(result.per_seed)} finished · replay from seed {result.trace_seed}")
 
 
-def _print_stage(manifest, result, timeline, name: str | None) -> None:
+def _print_stage(manifest, result, troupe, name: str | None) -> None:
     played = result.trace.shape[1] * CTRL_DT
-    what = f"{name} ({len(timeline.times)} keyframes)" if timeline else "the event's default command"
+    if troupe is None:
+        what = "the event's default command"
+    elif len(troupe.ducks) == 1:
+        what = f"{name} ({len(troupe.ducks[0].timeline.times)} keyframes)"
+    else:
+        what = f"{name} ({len(troupe.ducks)} ducks)"
     if result.seeds_finished:
         print(f"stage: {played:.2f} s played, {what}")
     else:
@@ -60,11 +67,14 @@ def _print_stage(manifest, result, timeline, name: str | None) -> None:
 def _cmd_score(args) -> int:
     manifest = load_event(args.event)
     policy = load_policy(Path(args.onnx))
-    timeline = None
+    cast = None
     if manifest.course.kind == "stage":
-        timeline = load_timeline(Path(args.timeline), manifest.time_limit_s) if args.timeline else None
-        result = evaluate(manifest, policy, timeline)
-        _print_stage(manifest, result, timeline, Path(args.timeline).name if args.timeline else None)
+        troupe = load_troupe(Path(args.timeline), manifest) if args.timeline else None
+        # "self" is the ONNX given here; every other duck's policy comes from the Hub, at its commit.
+        references = fetch_references(troupe, manifest) if troupe else {}
+        cast = cast_of(manifest, troupe, policy, None, load_borrowed(troupe, references))
+        result = evaluate(manifest, policy, cast.performers)
+        _print_stage(manifest, result, troupe, Path(args.timeline).name if args.timeline else None)
     elif args.timeline:
         print(f"{manifest.id} is a race: --timeline is for stage events", file=sys.stderr)
         return 1
@@ -89,7 +99,7 @@ def _cmd_score(args) -> int:
             trace_seed=result.trace_seed,
             runner_version=result.runner_version,
             livery=args.livery,
-            sound=sound_of(timeline) if timeline else None,
+            sound=cast.record[0]["sound"] if cast else None,
         )
         LocalStore(Path(args.store)).append(
             record, trace_codec.encode(result.trace, result.settle), Path(args.onnx).read_bytes()
@@ -386,7 +396,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (ManifestError, PolicyError, TimelineError) as exc:
+    except (ManifestError, PolicyError, TimelineError, FetchError) as exc:
         print(f"{exc}", file=sys.stderr)
         return 1
 

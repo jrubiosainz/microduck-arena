@@ -195,11 +195,11 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
     from datetime import UTC, datetime
 
     from . import trace as trace_codec
+    from .cast import cast_of, load_borrowed
     from .evaluate import evaluate
     from .hub_fetch import fetch_policy
     from .policy import load_policy
     from .store import RunRecord, new_id
-    from .timeline import sound_of
 
     list_repos, read_manifest = reader or hub_reader(on_event=on_event)
     found = candidates(list_repos, read_manifest, all_tagged=all_tagged)
@@ -212,7 +212,11 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
             # revision, and a stage's timeline.json is read with the weights it goes with.
             fetched = fetch_policy(candidate.repo_id, revision=candidate.revision, event=event)
             policy = load_policy(fetched.path)
-            result = evaluate(event, policy, fetched.timeline)
+            # A stage plays its troupe, borrowed policies included. One that left the Hub has refused
+            # the fetch above: that run cannot be raced again, and the store keeps none of it.
+            cast = (cast_of(event, fetched.troupe, policy, fetched.rig, load_borrowed(fetched.troupe, fetched.borrowed))
+                    if event.course.kind == "stage" else None)
+            result = evaluate(event, policy, cast.performers if cast else None)
             record = RunRecord(
                 run_id=new_id(),
                 event_id=event.id,
@@ -236,7 +240,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
                 model_stored=False,
                 livery="classic",
                 timeline_sha256=fetched.timeline_sha256,
-                sound=sound_of(fetched.timeline) if fetched.timeline else None,
+                sound=cast.record[0]["sound"] if cast else None,
             )
             store.append(record, trace_codec.encode(result.trace, result.settle))
             restored.append(record)
