@@ -4,9 +4,20 @@ from pathlib import Path
 import pytest
 
 from arena.constants import CTRL_DT
-from arena.timeline import Note, Timeline, TimelineError, constant_timeline, load_timeline, sound_of
+from arena.manifest import load_event
+from arena.timeline import (
+    Note,
+    Timeline,
+    TimelineError,
+    constant_timeline,
+    load_timeline,
+    load_troupe,
+    sound_of,
+)
 
 LIMIT_S = 20.0
+# Its time limit is LIMIT_S: a troupe and a lone timeline are refused at the same length.
+TALENT = load_event("got-a-talent")
 
 
 def write(tmp_path, content) -> Path:
@@ -148,8 +159,6 @@ def test_notes_written_end_to_end_in_decimals_follow_each_other(tmp_path):
     [
         (good(extra=1), r"unknown keys \['extra'\]"),
         ({k: v for k, v in good().items() if k != "keyframes"}, "missing 'keyframes'"),
-        (good(timeline_version=2), "timeline_version: this Arena plays version 1"),
-        (good(timeline_version=True), "timeline_version: this Arena plays version 1"),
         (good(duration_s=0.0), "duration_s: must be at least one control step"),
         (good(duration_s=0.01), "duration_s: must be at least one control step"),
         (good(duration_s=20.5), "duration_s: 20.5 s is longer than this event's 20 s"),
@@ -204,6 +213,21 @@ def test_notes_written_end_to_end_in_decimals_follow_each_other(tmp_path):
 def test_a_malformed_timeline_is_refused_with_where(tmp_path, raw, said):
     with pytest.raises(TimelineError, match=said):
         load_timeline(write(tmp_path, raw), LIMIT_S)
+    # A troupe reads a version 1 file the same way, refusal for refusal.
+    with pytest.raises(TimelineError, match=said):
+        load_troupe(write(tmp_path, raw), TALENT)
+
+
+@pytest.mark.parametrize("version", [2, True])
+def test_a_lone_timeline_is_version_1(tmp_path, version):
+    with pytest.raises(TimelineError, match="timeline_version: this Arena plays version 1, got"):
+        load_timeline(write(tmp_path, good(timeline_version=version)), LIMIT_S)
+
+
+@pytest.mark.parametrize("version", [0, 3, True, "1", 1.5, None])
+def test_a_troupe_is_version_1_or_2(tmp_path, version):
+    with pytest.raises(TimelineError, match="timeline_version: this Arena plays version 1 or 2, got"):
+        load_troupe(write(tmp_path, good(timeline_version=version)), TALENT)
 
 
 @pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
