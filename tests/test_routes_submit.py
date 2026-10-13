@@ -601,6 +601,24 @@ def test_a_race_is_one_duck_of_its_events_rig_and_a_still_performance_makes_no_s
     assert _stored(api, "got-a-talent", still["run_id"]).cast[0]["sound"] is None
 
 
+def test_a_star_whose_manifest_names_the_rollers_performs_on_them_and_is_kept_on_them(api, monkeypatch):
+    from arena.web import routes_submit
+
+    monkeypatch.setattr("arena.web.routes_submit._fetch_from_hub", lambda repo_id, revision, event: _fetched(
+        troupe=performance(1.0), timeline_sha256="f" * 64, rig="rollers"))
+    played, evaluate = [], routes_submit.evaluate
+
+    def watched(manifest, policy, cast):
+        played.extend(performer.rig for performer in cast)
+        return evaluate(manifest, policy, cast)
+
+    monkeypatch.setattr(routes_submit, "evaluate", watched)
+    response = api.post("/api/events/got-a-talent/submit", data={"repo_id": "alice/walker"})
+    assert response.status_code == 200, response.text
+    assert played == ["rollers"]
+    assert _stored(api, "got-a-talent", response.json()["run_id"]).cast[0]["rig"] == "rollers"
+
+
 def test_a_speed_sent_to_a_stage_is_ignored_not_a_500(api):
     _TIMELINES["alice/best_alpha_walking"] = (performance(1.0), "a" * 64)
     response = submit(api, event="got-a-talent", command_vx="0.3")

@@ -219,8 +219,31 @@ def test_recover_plays_a_stage_entry_with_its_timeline_at_the_listed_revision(tm
     assert (record.timeline_sha256, record.source["revision"]) == ("t" * 64, "rev7")
 
 
+def test_recover_plays_a_star_on_the_rig_its_manifest_names(tmp_path, monkeypatch):
+    from arena.assets import ASSET_ROOT
+    from arena.hub_fetch import FetchedPolicy
+    from arena.manifest import load_event
+    from arena.recover import recover
+    from arena.store import LocalStore
+    from arena.timeline import Timeline, solo
+
+    def fetch_policy(repo_id, revision=None, event=None):
+        return FetchedPolicy(
+            repo_id=repo_id, filename="policy.onnx", revision=revision,
+            path=ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx",
+            url=f"https://huggingface.co/{repo_id}/resolve/{revision}/policy.onnx",
+            troupe=solo(Timeline(1.0, (0.0,), ((0.0,) * 13,))), timeline_sha256="t" * 64, rig="rollers",
+        )
+
+    monkeypatch.setattr("arena.hub_fetch.fetch_policy", fetch_policy)
+    reader = (listing(("alice/talent", "rev7")),
+              manifests({"alice/talent": arena_manifest(arena={"event": "got-a-talent"})}))
+    [record] = recover(LocalStore(tmp_path), [load_event("got-a-talent")], reader=reader)
+    assert record.cast[0]["rig"] == "rollers"
+
+
 SITTER = "pollen-robotics/microduck-sitter@" + "a" * 40
-TALENT_LISTED = (listing(("alice/talent", "rev7")),
+TALENT_LISTED =(listing(("alice/talent", "rev7")),
                  manifests({"alice/talent": arena_manifest(arena={"event": "got-a-talent"})}))
 
 
