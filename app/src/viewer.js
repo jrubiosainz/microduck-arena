@@ -39,6 +39,7 @@ import {
 import { MOUTH_TRAVEL, mouthTrack, voiceEvents } from "./duck-voice.js";
 import { createStageVoice } from "./stage-voice.js";
 import { loadCalls } from "./live/voice.js";
+import { isMuted } from "./sound.js";
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
 import { attachStadium } from "./stadium.js";
 import { isStage } from "./format.js";
@@ -254,7 +255,7 @@ export function loadAssets(rig, model = MODEL) {
 
 export async function createViewer(
   canvas,
-  { onChaseChange, rig: rigName = "legs", manual = false, camera: spec = null } = {},
+  { onChaseChange, rig: rigName = "legs", manual = false, camera: spec = null, hushed = () => false } = {},
 ) {
   // `rigName` and not `rig`, because setLanes below names each lane's built
   // tree `rig` — the two would shadow, and it would work by accident today
@@ -375,8 +376,10 @@ export async function createViewer(
   let slopeDeg = 0;
   let courseLength = 2;
   let player = new Player([]);
-  // The performer's voice, live: a clip renders its own soundtrack and stays silent here.
-  const voice = manual ? null : createStageVoice(loadCalls);
+  // The performer's voice, live: a clip renders its own soundtrack and stays silent here. It holds
+  // its tongue while the Arena is muted or the page says `hushed` — the run page, while its clip
+  // plays, so the two soundtracks never mix.
+  const voice = manual ? null : createStageVoice(loadCalls, { muted: () => isMuted() || hushed() });
   let crowdDirection = stadiumDirection();
 
   // Whichever set is up, its crowd draws only the seats the camera about to

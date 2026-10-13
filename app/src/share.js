@@ -226,7 +226,7 @@ export function shareStrip(run, { origin }) {
       bar.setAttribute("aria-valuenow", String(Math.floor(fraction * 100)));
     }
   }
-  return { root, said, setClip };
+  return { root, said, player, setClip };
 }
 
 /**

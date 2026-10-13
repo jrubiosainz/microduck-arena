@@ -308,6 +308,7 @@ export async function renderRun(root, runId, state) {
   const created = await createViewer($("stage"), {
     rig: run.event.rig,
     onChaseChange: followKeyFor(page),
+    hushed: () => !strip.player.paused,
   });
   if (leaving.signal.aborted) {
     created.dispose();

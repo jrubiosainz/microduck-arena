@@ -80,6 +80,18 @@ describe("createStageVoice", () => {
     expect(log.map(([what]) => what)).toEqual(["start", "stop"]);
   });
 
+  it("cuts a wheee the moment it is muted, and takes it up where the replay is once it is not", async () => {
+    let quiet = false;
+    const { voice, log } = await voiceWith([{ tag: "wheee", variant: 0, start: 0, end: 2 }], { muted: () => quiet });
+    voice.follow(0.5);
+    quiet = true;
+    voice.follow(0.52);
+    voice.follow(0.54);
+    quiet = false;
+    voice.follow(0.56);
+    expect(log).toEqual([["start", 96000, 0.5], ["stop"], ["start", 96000, 0.56]]);
+  });
+
   describe("on a page the browser keeps silent until a gesture", () => {
     const suspended = async () => {
       const made = await voiceWith([{ tag: "chirp", variant: 0, start: 0, end: 1 }], { state: "suspended" });
