@@ -52,8 +52,13 @@ class Course:
 @dataclass(frozen=True)
 class Stage:
     """An open floor: no walls, no slope, no line to cross. A stage event plays
-    each entry's own command timeline (arena/timeline.py) instead of racing it."""
+    each entry's own command timeline (arena/timeline.py) instead of racing it,
+    with a troupe of up to `max_ducks` ducks placed on its floor."""
 
+    # Depth along x (towards the audience), then width along y, in metres: the
+    # floor the pages draw, and the one the placement rules keep every duck on.
+    size_m: tuple[float, float]
+    max_ducks: int
     kind: str = "stage"
 
 
@@ -277,6 +282,21 @@ def _clip(raw: dict | None, where: str) -> ClipConfig:
     return ClipConfig(tape_max_s=tape, sounds=sounds, camera=_camera(raw.get("camera"), f"{where}.camera"))
 
 
+def _stage(raw: dict) -> Stage:
+    size = _require(raw, "size_m", "[course]")
+    # bool first: TOML's true is a Python int, and would otherwise read as 1.
+    if not isinstance(size, list) or len(size) != 2 or not all(
+        not isinstance(v, bool) and isinstance(v, (int, float)) and v > 0 for v in size
+    ):
+        raise ManifestError(
+            f"[course]: size_m must be two positive numbers, depth along x then width along y, got {size!r}"
+        )
+    most = _require(raw, "max_ducks", "[course]")
+    if isinstance(most, bool) or not isinstance(most, int) or most < 1:
+        raise ManifestError(f"[course]: max_ducks must be a whole number of at least 1, got {most!r}")
+    return Stage(size_m=(float(size[0]), float(size[1])), max_ducks=most)
+
+
 def _sweep(raw: dict, path: Path) -> Sweep:
     sweep = Sweep(
         lo=float(_require(raw, "lo", "[sweep]")),
@@ -330,12 +350,12 @@ def load_manifest(path: Path) -> Manifest:
     term_raw = _require(raw, "termination", str(path))
 
     if kind == "stage":
-        _refuse_unknown(course_raw, {"kind"}, "[course]")
+        _refuse_unknown(course_raw, {"kind", "size_m", "max_ducks"}, "[course]")
         if len(seeds) != 1:
             raise ManifestError(f"{path}: a stage plays one performance, so it declares exactly one seed")
         if "sweep" in raw:
             raise ManifestError(f"{path}: a stage plays each entry's timeline, so it takes no [sweep]")
-        course, sweep = Stage(), None
+        course, sweep = _stage(course_raw), None
     else:
         course = Course(
             kind=kind,

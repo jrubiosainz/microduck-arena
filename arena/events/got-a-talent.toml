@@ -10,9 +10,15 @@ seeds        = [1]
 
 # A performance, not a race: an open floor, no walls, no line. Each entry's
 # timeline.json (arena/timeline.py) says what to command and when; the event
-# plays it once, for at most time_limit_s. Voters judge the show.
+# plays it once, for at most time_limit_s. Voters judge the performance.
+#
+# The floor is size_m: 2.6 m deep along x (towards the audience) by 3.8 m wide
+# along y, the stage the pages draw. One entry puts a troupe of up to max_ducks
+# ducks on it: 4 for now, 16 once that cost is measured.
 [course]
-kind = "stage"
+kind      = "stage"
+size_m    = [2.6, 3.8]
+max_ducks = 4
 
 # What an entry without a timeline plays for the whole 20 s: standing still.
 [command]

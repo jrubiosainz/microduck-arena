@@ -201,15 +201,38 @@ def test_a_missing_sweep_section_is_rejected(tmp_path):
         load_manifest(path)
 
 
-# A stage's sections, over GOOD: [course] names only its kind, and there is no [sweep].
-STAGE = {"course": '[course]\nkind="stage"\n', "sweep": ""}
+# A stage's sections, over GOOD: [course] names its kind, its floor and its cap, and there is no [sweep].
+STAGE = {"course": '[course]\nkind="stage"\nsize_m=[2.0,3]\nmax_ducks=2\n', "sweep": ""}
 
 
 def test_a_stage_loads_with_no_lane_and_no_sweep(tmp_path):
     m = load_manifest(write_manifest(tmp_path, **STAGE))
-    assert m.course == Stage()
+    assert m.course == Stage(size_m=(2.0, 3.0), max_ducks=2)
     assert m.course.kind == "stage"
     assert m.sweep is None
+
+
+@pytest.mark.parametrize(
+    "lines, complaint",
+    [
+        ("max_ducks=2\n", r"\[course\]: missing 'size_m'"),
+        ("size_m=[2.0,3.0]\n", r"\[course\]: missing 'max_ducks'"),
+        ("size_m=2.0\nmax_ducks=2\n", r"size_m must be two positive numbers, depth along x then width along y, got 2\.0"),
+        ("size_m=[2.0]\nmax_ducks=2\n", r"size_m must be two positive numbers"),
+        ("size_m=[2.0,3.0,1.0]\nmax_ducks=2\n", r"size_m must be two positive numbers"),
+        ("size_m=[2.0,0.0]\nmax_ducks=2\n", r"size_m must be two positive numbers"),
+        ("size_m=[-2.0,3.0]\nmax_ducks=2\n", r"size_m must be two positive numbers"),
+        ('size_m=[2.0,"3"]\nmax_ducks=2\n', r"size_m must be two positive numbers"),
+        ("size_m=[true,3.0]\nmax_ducks=2\n", r"size_m must be two positive numbers"),
+        ("size_m=[2.0,3.0]\nmax_ducks=0\n", r"max_ducks must be a whole number of at least 1, got 0"),
+        ("size_m=[2.0,3.0]\nmax_ducks=1.5\n", r"max_ducks must be a whole number of at least 1, got 1\.5"),
+        ("size_m=[2.0,3.0]\nmax_ducks=true\n", r"max_ducks must be a whole number of at least 1, got True"),
+    ],
+)
+def test_a_stages_floor_and_cap_are_checked(tmp_path, lines, complaint):
+    course = '[course]\nkind="stage"\n' + lines
+    with pytest.raises(ManifestError, match=complaint):
+        load_manifest(write_manifest(tmp_path, course=course, sweep=""))
 
 
 def test_a_stage_refuses_a_lanes_geometry(tmp_path):
@@ -295,7 +318,7 @@ def test_got_a_talent_declares_its_ballot_and_its_window():
 
 def test_got_a_talent_is_a_stage_played_once_for_20_s():
     talent, sprint = load_event("got-a-talent"), load_event("sprint-2m")
-    assert talent.course == Stage()
+    assert talent.course == Stage(size_m=(2.6, 3.8), max_ducks=4)
     assert talent.sweep is None
     assert talent.seeds == (1,)
     assert talent.time_limit_s == 20.0

@@ -74,6 +74,10 @@ def event_summary(manifest: Manifest) -> dict:
             "sweep_step": manifest.sweep.step,
             "sweep_count": len(manifest.sweep.speeds()),
         }
+    else:
+        # The stage's floor and its cap, so the server's placement rules, the workshop's plan and
+        # the drawn stage read the same numbers, as the walls are served for a lane.
+        summary |= {"size_m": list(manifest.course.size_m), "max_ducks": manifest.course.max_ducks}
     return summary
 
 

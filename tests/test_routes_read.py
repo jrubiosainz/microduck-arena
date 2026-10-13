@@ -280,6 +280,14 @@ def test_a_stage_event_is_served_without_a_lane_or_a_sweep(client):
     assert talent["seeds"] == 1
 
 
+def test_a_stage_serves_its_floor_and_how_many_ducks_it_takes(client):
+    """The server's placement rules, the workshop's plan and the drawn stage read these same numbers."""
+    api, _ = client
+    events = {e["id"]: e for e in api.get("/api/events").json()["events"]}
+    assert (events["got-a-talent"]["size_m"], events["got-a-talent"]["max_ducks"]) == ([2.6, 3.8], 4)
+    assert "size_m" not in events["sprint-2m"] and "max_ducks" not in events["sprint-2m"]
+
+
 def test_a_board_row_says_how_its_duck_sounds_on_the_stage(client):
     """A lane on a stage is a board row: the event page, the run page and the clip put any row on it."""
     api, app = client
