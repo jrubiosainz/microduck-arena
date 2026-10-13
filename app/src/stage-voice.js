@@ -1,26 +1,30 @@
-// The performer's voice on a live stage: the sounds duck-voice.js lists, played on the replay's own
-// clock, one at a time as on the robot. A jump — the loop coming round, a scrub, new lanes — stops
-// what plays and starts what the new time is inside, from where it is: a wheee resumes mid-ride.
-// Nothing waits on a sound: no Web Audio, a muted Arena or a context the browser keeps suspended
-// until a gesture (the first click or key resumes it) leave the replay playing in silence.
+// The performer's voice on a live stage: its song as one take from t = 0 and its calls one at a time
+// (duck-voice.js), played on the replay's own clock. A jump — the loop coming round, a scrub, new
+// lanes — stops what plays and starts what the new time is inside, from where it is: a wheee resumes
+// mid-ride, the song mid-phrase. Nothing waits on a sound: no Web Audio, a muted Arena or a context
+// the browser keeps suspended until a gesture (the first click or key resumes it) leave the replay
+// playing in silence.
 
-import { callSamples } from "./duck-voice.js";
+import { callSamples, songSamples, voiceEvents } from "./duck-voice.js";
 import { SAMPLE_RATE } from "./live/score.js";
+import { isMuted } from "./sound.js";
 
 /** A step longer than this between two frames is a jump, not playback. */
 const JUMP_S = 0.25;
 /** The voice under the replay, as the vote's cues sit (sound.js: 0.4–0.6). */
 const GAIN = 0.6;
 
-export function createStageVoice(loadCalls, { makeContext = () => new AudioContext(), muted }) {
+export function createStageVoice(loadCalls, { makeContext = () => new AudioContext(), muted = isMuted } = {}) {
   let loaded = null;
   let context = null;
   let output = null;
   let clips = [];
+  let song = null;
   let version = 0;
-  let playing = -1;
-  let source = null;
   let last = 0;
+  // Two parts, each playing one buffer at a time: the calls, and the song (its only clip is 0).
+  const calling = { playing: -1, source: null };
+  const singing = { playing: -1, source: null };
 
   // A suspended context only starts from a resume() asked inside a gesture.
   const gestures = ["pointerdown", "keydown"];
@@ -35,25 +39,50 @@ export function createStageVoice(loadCalls, { makeContext = () => new AudioConte
     if (context.state === "running") stopWaitingForGesture();
   }
 
-  function stop() {
-    if (source) {
+  function halt(part) {
+    if (part.source) {
       try {
-        source.stop();
+        part.source.stop();
       } catch {
         // Already ended: nothing to stop.
       }
     }
-    source = null;
-    playing = -1;
+    part.source = null;
+    part.playing = -1;
+  }
+
+  /** Has `part` play clip `index` (-1: nothing) from `offset` seconds into `buffer`, unless it already does and the clock did not jump. */
+  function steer(part, index, jumped, buffer, offset) {
+    if (index === part.playing && !jumped) return;
+    halt(part);
+    if (index < 0 || context.state !== "running") return;
+    try {
+      part.source = context.createBufferSource();
+      part.source.buffer = buffer;
+      part.source.connect(output);
+      part.source.start(0, offset);
+      part.playing = index;
+    } catch {
+      part.source = null;
+    }
+  }
+
+  function bufferOf(samples) {
+    const buffer = context.createBuffer(1, samples.length, SAMPLE_RATE);
+    buffer.copyToChannel(samples, 0);
+    return buffer;
   }
 
   return {
-    /** The sounds of the lane now on the stage (duck-voice.js voiceEvents); [] for none. */
-    set(sounds) {
-      stop();
+    /** The performer now on the stage: how it sounds (duck-voice.js), or null, and how many seconds its trace performs. */
+    set(sound, duration) {
+      halt(calling);
+      halt(singing);
       clips = [];
+      song = null;
       const mine = ++version;
-      if (!sounds.length) return;
+      const events = voiceEvents(sound, duration);
+      if (!events.length && !sound?.song) return;
       loaded ??= loadCalls();
       loaded.then((calls) => {
         if (mine !== version) return;
@@ -67,12 +96,12 @@ export function createStageVoice(loadCalls, { makeContext = () => new AudioConte
             context.addEventListener("statechange", onStateChange);
           }
         }
-        clips = sounds.map((sound) => {
-          const samples = callSamples(calls, sound);
-          const buffer = context.createBuffer(1, samples.length, SAMPLE_RATE);
-          buffer.copyToChannel(samples, 0);
-          return { start: sound.start, end: sound.start + samples.length / SAMPLE_RATE, buffer };
+        clips = events.map((event) => {
+          const samples = callSamples(calls, event, sound.voice);
+          return { start: event.start, end: event.start + samples.length / SAMPLE_RATE, buffer: bufferOf(samples) };
         });
+        const sung = songSamples(calls, sound, duration);
+        song = sung && { end: sung.length / SAMPLE_RATE, buffer: bufferOf(sung) };
       }).catch(() => {});
     },
 
@@ -80,26 +109,15 @@ export function createStageVoice(loadCalls, { makeContext = () => new AudioConte
     follow(seconds) {
       const jumped = seconds === null || seconds < last || seconds - last > JUMP_S;
       if (seconds !== null) last = seconds;
-      const active = seconds === null || !clips.length || muted()
-        ? -1
-        : clips.findIndex((clip) => clip.start <= seconds && seconds < clip.end);
-      if (active === playing && !jumped) return;
-      stop();
-      if (active < 0) return;
-      if (context.state !== "running") return;
-      try {
-        source = context.createBufferSource();
-        source.buffer = clips[active].buffer;
-        source.connect(output);
-        source.start(0, seconds - clips[active].start);
-        playing = active;
-      } catch {
-        source = null;
-      }
+      const live = seconds !== null && !muted();
+      const call = live ? clips.findIndex((clip) => clip.start <= seconds && seconds < clip.end) : -1;
+      steer(calling, call, jumped, clips[call]?.buffer, seconds - clips[call]?.start);
+      steer(singing, live && song && seconds < song.end ? 0 : -1, jumped, song?.buffer, seconds);
     },
 
     dispose() {
-      stop();
+      halt(calling);
+      halt(singing);
       version++;
       stopWaitingForGesture();
       context?.close().catch(() => {});

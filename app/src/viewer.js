@@ -36,7 +36,7 @@ import {
   loadKinematics,
   rigGeometries,
 } from "./rig.js";
-import { MOUTH_TRAVEL, mouthTrack, voiceEvents } from "./duck-voice.js";
+import { MOUTH_TRAVEL, mouthTrack } from "./duck-voice.js";
 import { createStageVoice } from "./stage-voice.js";
 import { loadCalls } from "./live/voice.js";
 import { isMuted } from "./sound.js";
@@ -531,7 +531,7 @@ export async function createViewer(
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
     // What a lane's trace holds is what it performed: a cut-short performance falls silent with it.
     const performer = talent ? lanes[0] : null;
-    voice?.set(performer ? voiceEvents(performer.sound, frameCount(performer.trace) * CTRL_DT) : []);
+    voice?.set(performer?.sound ?? null, performer ? frameCount(performer.trace) * CTRL_DT : 0);
     const progress = [];
     if (event?.length_m && lanes.length) {
       for (let second = 0; second < player.duration; second += .1) {
