@@ -64,28 +64,48 @@ export function stageCameraTarget(trace, seconds, placer) {
   return target;
 }
 
-// Where a troupe stands, from each duck's smoothed place: the middle of their extent, and how far
-// its corners reach from it. One duck is its own middle, with no spread.
-function troupeFrame(subjects) {
-  if (!subjects.length) return { middle: new Vector3(0, 0.14, 0), spread: 0 };
-  const box = new Box3().setFromPoints(subjects);
-  const middle = box.getCenter(new Vector3());
-  return { middle, spread: Math.hypot(box.max.x - middle.x, box.max.z - middle.z) };
+// A duck stands from its feet, 0.14 m below its trunk, to its crest, 0.23 m above.
+const DUCK_HEIGHTS = [-0.14, 0.23];
+// How far beyond the stage's sides the auditorium's wing walls stand. A camera keeps 0.3 m inside
+// them: past them it would look through their backs.
+const WINGS = 2.5;
+// From this elevation up, a low camera behind the jury desk's line sees the stage's front edge
+// over the judges' heads and the audience's.
+const OVER = 0.4;
+
+// How far from `target` a camera on `bearing`, raised by `elevation`, stands for every duck, feet
+// to crest, to take no more of the frame than a lone performer does: what it spans across the
+// view against the horizontal field, along and up the view against the vertical one, a duck nearer
+// the camera than the target needing more.
+function troupeReach(ducks, target, bearing, elevation, tanAcross, tanUp) {
+  const sin = Math.sin(elevation), cos = Math.cos(elevation);
+  let reach = 0;
+  for (const duck of ducks) {
+    const x = duck.x - target.x, z = duck.z - target.z;
+    const across = Math.abs(x * Math.cos(bearing) + z * Math.sin(bearing));
+    const along = z * Math.cos(bearing) - x * Math.sin(bearing);
+    for (const height of DUCK_HEIGHTS) {
+      const up = duck.y + height - target.y;
+      const frame = Math.max(across / tanAcross, Math.abs(along * sin + up * cos) / tanUp) * 1.18;
+      reach = Math.max(reach, frame - along * cos + up * sin);
+    }
+  }
+  return reach;
 }
 
 // The broadcast clock keeps moving during clip titles, even while replay time
 // is held at zero. Each camera moves within its shot; cuts are instantaneous.
 // `subjects` are the ducks' places, the star first: every shot frames the whole
-// troupe, backed off to hold its spread, but the low front shot, the star's close-up.
-export function stageCameraPose(seconds, subjects, aspect, fov, depth = 2.6) {
+// troupe from its middle, but the low front shot, the star's close-up.
+export function stageCameraPose(seconds, subjects, aspect, fov, depth = 2.6, width = 3.8) {
   // One cycle of shots; a clip runs past it (titles and outro around a 20 s performance), and
   // there the last shot holds rather than cutting back to the opening.
   const time = Math.min(Math.max(0, seconds), 24);
-  const { middle, spread } = troupeFrame(time >= 14 && time < 18 ? subjects.slice(0, 1) : subjects);
-  const target = middle.clone();
+  const ducks = time >= 14 && time < 18 ? subjects.slice(0, 1) : subjects;
+  const target = ducks.length ? new Box3().setFromPoints(ducks).getCenter(new Vector3()) : new Vector3(0, 0.14, 0);
   target.y = Math.max(0.14, target.y) + 0.04;
   const halfFov = Math.atan(Math.tan(fov * Math.PI / 360) * Math.min(1, aspect));
-  const fit = (0.32 + spread) / Math.sin(halfFov) * 1.18;
+  const fit = 0.32 / Math.sin(halfFov) * 1.18;
   let shot, angle, distance, elevation;
   if (time < 3) {
     shot = "opening";
@@ -131,7 +151,8 @@ export function stageCameraPose(seconds, subjects, aspect, fov, depth = 2.6) {
   const horizontal = distance * Math.cos(elevation);
   let dx = Math.sin(angle) * horizontal;
   let dz = -Math.cos(angle) * horizontal;
-  if (shot !== "opening" && shot !== "crane") {
+  const low = shot !== "opening" && shot !== "crane";
+  if (low) {
     // Keep low cameras between the desk and the LED wall. When a performer
     // approaches an edge, move sideways on the same radius to preserve framing.
     const z = Math.max(-depth / 2 - 0.08, Math.min(depth / 2 - 0.1, target.z + dz));
@@ -140,9 +161,32 @@ export function stageCameraPose(seconds, subjects, aspect, fov, depth = 2.6) {
       dx = (dx < 0 ? -1 : 1) * Math.sqrt(Math.max(0, horizontal * horizontal - dz * dz));
     }
   }
+  // A troupe is filmed on the bearing its middle alone would be, from as far as holding every duck
+  // takes. Where that is past the wings, behind the backdrop, or, for a low camera, behind the
+  // desk's line under the judges' heads, the camera rises instead of swinging out: the lowest
+  // elevation from the shot's own that places it inside, found by halving. A lone duck needs no
+  // more than the shot's own distance and elevation.
+  const bearing = Math.atan2(dx, -dz);
+  const tanUp = Math.tan(fov * Math.PI / 360);
+  const wings = width / 2 + WINGS - 0.3;
+  const place = rise => {
+    const reach = Math.max(distance, troupeReach(ducks, target, bearing, rise, tanUp * aspect, tanUp));
+    const run = reach * Math.cos(rise);
+    return { rise, reach, x: target.x + Math.sin(bearing) * run, z: target.z - Math.cos(bearing) * run };
+  };
+  const inside = ({ rise, x, z }) => Math.abs(x) <= wings
+    && (!low || (z <= depth / 2 - 0.1 && (z >= -depth / 2 - 0.08 || rise >= OVER)));
+  let lo = elevation, hi = Math.PI / 2;
+  if (inside(place(lo))) hi = lo;
+  while (hi - lo > 1e-12) {
+    const mid = (lo + hi) / 2;
+    if (inside(place(mid))) hi = mid;
+    else lo = mid;
+  }
+  const camera = place(hi);
   return {
     shot,
-    position: [target.x + dx, target.y + Math.sin(elevation) * distance, target.z + dz],
+    position: [camera.x, target.y + Math.sin(camera.rise) * camera.reach, camera.z],
     target: target.toArray(),
   };
 }
@@ -201,7 +245,7 @@ export function buildTalentStage(event, spectators, reachy) {
   // Inward-facing walls keep the crane's exterior establishing view unobstructed.
   mesh(new PlaneGeometry(width + 5, 3.4), velvet, [centre, 1.45, audienceZ - 2.4], "auditorium-back");
   for (const side of [-1, 1]) {
-    const x = centre + side * (width / 2 + 2.5);
+    const x = centre + side * (width / 2 + WINGS);
     const wing = mesh(new PlaneGeometry(depth + 5, 3.4), velvet, [x, 1.45, -1.5], "auditorium-wing");
     wing.rotation.y = -side * Math.PI / 2;
     for (let i = 0; i < 6; i++) {

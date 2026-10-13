@@ -86,6 +86,22 @@ describe("the broadcast camera on a troupe", () => {
       }
     }
   });
+  it("keeps every camera inside the theatre, and a low one on the bearing it takes a lone duck from", () => {
+    // The wing walls stand at ±4.4 m and the backdrop beyond the stage's back edge; past either, a
+    // camera looks through their backs.
+    const bearing = pose => Math.atan2(pose.position[0] - pose.target[0], pose.target[2] - pose.position[2]);
+    for (const aspect of [16 / 9, 9 / 16]) {
+      for (let time = 0; time <= 24; time += 0.5) {
+        const pose = stageCameraPose(time, troupe, aspect, 42, 2.6);
+        expect(Math.abs(pose.position[0])).toBeLessThanOrEqual(4.1);
+        expect(pose.position[2]).toBeLessThan(1.3);
+        if (aspect > 1 && pose.shot !== "opening" && pose.shot !== "crane") {
+          const lone = stageCameraPose(time, troupe.slice(0, 1), aspect, 42, 2.6);
+          expect(Math.abs(bearing(pose) - bearing(lone))).toBeLessThan(15 * Math.PI / 180);
+        }
+      }
+    }
+  });
   it("closes in on the star alone in the low front shot, as on a lone performer", () => {
     for (const time of [14, 16, 17.9]) {
       expect(stageCameraPose(time, troupe, 16 / 9, 42)).toEqual(stageCameraPose(time, troupe.slice(0, 1), 16 / 9, 42));

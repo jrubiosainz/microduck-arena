@@ -620,7 +620,7 @@ export async function createViewer(
       const pose = dragPose(stage
         ? stageCameraPose(manual ? seconds : player.time,
           lanes.map((lane) => stageCameraTarget(lane.trace, player.time, lane.rig.placer)),
-          camera.aspect, camera.fov, stage.layout.depth)
+          camera.aspect, camera.fov, stage.layout.depth, stage.layout.width)
         : travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel),
       SWEEP_TURN * sweepAt((performance.now() - swept) / 1000));
       camera.position.set(...pose.position);
