@@ -88,7 +88,7 @@ async function main() {
         opacity: 1,
         name: `@${lane.user}`,
         // The beak only: the clip's soundtrack plays the voice. Its lane starts with the settle.
-        triggers: lane.triggers,
+        sound: lane.sound,
         lead: settle,
       }))
       // The camera stands beyond the last lane: reversed, the author's duck is
@@ -98,7 +98,7 @@ async function main() {
     { loop: false },
   );
   const plan = clipPlan(frameCount(traces[0]), config.tape_max_s, settle);
-  const score = clipScore({ run, plan, trace: replays[0], triggers: lanes[0].triggers });
+  const score = clipScore({ run, plan, trace: replays[0], sound: lanes[0].sound });
   const crowdDirection = stadiumDirection(score.crowd ?? {});
   letter(run);
 

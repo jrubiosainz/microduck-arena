@@ -504,8 +504,8 @@ export async function createViewer(
       });
       if (talent) placeStagePerformer(rig, entry.trace, stage.layout.centre);
       else placeLane(rig, z);
-      // The pad's triggers a performance pulls (duck-voice.js): the beak follows them.
-      const mouth = talent ? mouthTrack(entry.triggers, frameCount(entry.trace), entry.lead) : null;
+      // How the performance sounds (duck-voice.js): the beak follows its triggers and its song.
+      const mouth = talent ? mouthTrack(entry.sound, frameCount(entry.trace), entry.lead) : null;
       const jaw = mouth ? jawPivot(rig) : null;
       scene.add(rig.placer);
 
@@ -531,7 +531,7 @@ export async function createViewer(
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
     // What a lane's trace holds is what it performed: a cut-short performance falls silent with it.
     const performer = talent ? lanes[0] : null;
-    voice?.set(performer ? voiceEvents(performer.triggers, frameCount(performer.trace) * CTRL_DT) : []);
+    voice?.set(performer ? voiceEvents(performer.sound, frameCount(performer.trace) * CTRL_DT) : []);
     const progress = [];
     if (event?.length_m && lanes.length) {
       for (let second = 0; second < player.duration; second += .1) {

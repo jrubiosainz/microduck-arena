@@ -41,7 +41,7 @@ const SOURCES = {
   ],
 };
 
-export function clipScore({ run, plan, trace, triggers }) {
+export function clipScore({ run, plan, trace, sound }) {
   const sounds = run.event.clip.sounds;
   const verdict = run.seeds_finished > 0 ? "pass" : "fail";
   const start = plan.intro / plan.fps;
@@ -49,7 +49,7 @@ export function clipScore({ run, plan, trace, triggers }) {
   const context = { start, end, verdict };
   // The performance starts on the tape after the settle; its length is the author's trace, cut short or not.
   const performed = start + plan.settle * CTRL_DT;
-  const voice = voiceEvents(triggers, (plan.steps - plan.settle) * CTRL_DT)
+  const voice = voiceEvents(sound, (plan.steps - plan.settle) * CTRL_DT)
     .map((call) => ({ at: performed + call.start, call, gain: GAINS.voice }));
   return {
     // The same run always sounds the same, whichever layout renders it.

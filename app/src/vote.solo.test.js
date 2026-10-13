@@ -6,7 +6,7 @@ import { getBallotTrace } from "./api.js";
 vi.mock("./viewer.js", () => ({ createViewer: vi.fn() }));
 vi.mock("./api.js", () => ({
   getMe: vi.fn(async () => ({ signed_in: false })),
-  getBallot: vi.fn(async () => ({ state: "ballot", ballot: "test", lanes: 3, triggers: [null, null, null], cast_today: 0, per_day: 20 })),
+  getBallot: vi.fn(async () => ({ state: "ballot", ballot: "test", lanes: 3, sound: [null, null, null], cast_today: 0, per_day: 20 })),
   getBallotTrace: vi.fn(async (_, lane) => new Float32Array([lane])),
   castVote: vi.fn(),
 }));
