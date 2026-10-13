@@ -125,6 +125,20 @@ export function stageLanes(entries) {
     .map((duck) => ({ ...duck, opacity: 1, name: duck.star ? entry.name : undefined })));
 }
 
+/**
+ * A stage's broadcast camera over its lanes, a duck each, at `seconds` of the broadcast clock and
+ * `replay` of the replay: talent-stage.js plans each shot once, at its first frame, from where the
+ * troupe stands throughout it, the replay running `lag()` behind the clock (a clip's titles). Made
+ * once for each set of lanes, so that every later frame of a shot finds that plan. Needs no
+ * renderer, so it is testable.
+ */
+export function stageCamera(lanes, layout, lag) {
+  const placesAt = (at) => lanes.map((lane) => stageCameraTarget(lane.trace, at - lag(), lane.rig.placer));
+  return (seconds, replay, aspect, fov) => stageCameraPose(seconds,
+    lanes.map((lane) => stageCameraTarget(lane.trace, replay, lane.rig.placer)),
+    aspect, fov, layout.depth, layout.width, placesAt);
+}
+
 // Project the midpoint of the feet vertically onto the course. Parenting the
 // ring to the course also aligns its plane with the ramp.
 export function placeMarker(marker, ground, feet, slopeDeg) {
@@ -377,6 +391,8 @@ export async function createViewer(
   }
 
   let lanes = [];
+  // The stage's camera over those lanes (stageCamera); null on a race.
+  let broadcast = null;
   let course = null;
   let gym = null;
   let judges = null;
@@ -542,6 +558,7 @@ export async function createViewer(
       }
       return { ...entry, rig, marker, plate, tier, gazeTarget: new Vector3(), mouth, jaw };
     });
+    broadcast = talent ? stageCamera(lanes, stage.layout, () => lag) : null;
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
     // Every duck on the stage sounds for as long as the troupe's traces perform: a cut-short
     // performance falls silent with them. A race makes no sound.
@@ -620,11 +637,7 @@ export async function createViewer(
         : courseLength / 2;
       const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
       const pose = dragPose(stage
-        ? stageCameraPose(manual ? seconds : player.time,
-          lanes.map((lane) => stageCameraTarget(lane.trace, player.time, lane.rig.placer)),
-          camera.aspect, camera.fov, stage.layout.depth, stage.layout.width,
-          // Where the troupe stands at any moment of the broadcast: each shot is fitted to all of it.
-          (at) => lanes.map((lane) => stageCameraTarget(lane.trace, at - lag, lane.rig.placer)))
+        ? broadcast(manual ? seconds : player.time, player.time, camera.aspect, camera.fov)
         : travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel),
       SWEEP_TURN * sweepAt((performance.now() - swept) / 1000));
       camera.position.set(...pose.position);
