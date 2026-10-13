@@ -46,15 +46,15 @@ def _print_sweep(result) -> None:
 
 
 def _print_stage(manifest, result, timeline, name: str | None) -> None:
-    played = result.trace.shape[0] * CTRL_DT
+    played = result.trace.shape[1] * CTRL_DT
     what = f"{name} ({len(timeline.times)} keyframes)" if timeline else "the event's default command"
     if result.seeds_finished:
         print(f"stage: {played:.2f} s played, {what}")
     else:
         print(f"stage: stopped at {played:.2f} s, the simulation diverged; {what}")
-    done = stage.summary(result.trace, manifest.termination)
-    print("fell: no" if done["fell_at"] is None else f"fell: at {done['fell_at']:.2f} s")
-    print(f"seated {done['seated_s']:.1f} s · standing {done['standing_s']:.1f} s")
+    for k, done in enumerate(stage.summaries(result.trace, manifest.termination)):
+        fell = "no" if done["fell_at"] is None else f"at {done['fell_at']:.2f} s"
+        print(f"duck {k}: fell {fell} · seated {done['seated_s']:.1f} s · standing {done['standing_s']:.1f} s")
 
 
 def _cmd_score(args) -> int:

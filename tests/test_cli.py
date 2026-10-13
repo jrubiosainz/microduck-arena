@@ -159,8 +159,9 @@ def test_score_on_a_stage_summarises_the_performance(tmp_path, capsys):
     assert main(["score", REFERENCE, "--event", "got-a-talent", "--timeline", str(_timeline(tmp_path))]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == "stage: 2.00 s played, timeline.json (2 keyframes)"
-    assert re.fullmatch(r"fell: (no|at \d+\.\d\d s)", lines[1])
-    assert re.fullmatch(r"seated \d+\.\d s · standing \d+\.\d s", lines[2])
+    # One line per duck: a version 1 timeline is a troupe of one.
+    assert len(lines) == 2
+    assert re.fullmatch(r"duck 0: fell (no|at \d+\.\d\d s) · seated \d+\.\d s · standing \d+\.\d s", lines[1])
 
 
 def test_score_on_a_stage_without_a_timeline_plays_the_events_command(capsys):

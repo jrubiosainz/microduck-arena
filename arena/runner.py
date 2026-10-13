@@ -1,4 +1,4 @@
-"""Run one policy, on one event, at one seed.
+"""Run one policy, on one event, at one seed — or, on a stage, a troupe of them.
 
 No queue, no storage, no HTTP: this narrowness is what makes the determinism and
 golden-run tests possible, and those tests are the only thing standing between a
@@ -26,9 +26,16 @@ Two of those drives are training's own behaviour rather than an idealised loop
   Training's reset drive reads the forces the previous episode left behind,
   which a single run cannot copy; here a forward pass on the reset pose runs
   first, so the drive reads that pose's own forces — a consistent state.
+
+A stage's troupe shares one physics (`arena.course.compile_stage`): at each
+control step every duck observes the same state and its policy acts on its own
+command, then each of the four substeps drives every duck's servos before its
+one `mj_step`, and every duck's servos are driven a fifth time before the
+forward pass. A lone duck, on a lane or a stage, is a troupe of one.
 """
 
 import zlib
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import mujoco
@@ -45,9 +52,9 @@ from .constants import (
     OBS_SIZE,
     TRACE_WIDTH,
 )
-from .course import compile_course, ramp_dir
+from .course import compile_course, compile_stage, duck_prefix, ramp_dir
 from .manifest import Manifest
-from .timeline import Timeline
+from .timeline import Start, Timeline
 
 _WORLD_DOWN = np.array([0.0, 0.0, -1.0])
 
@@ -61,10 +68,22 @@ class RunOutcome:
     # Where the start line landed in course coordinates, after settling. Exposed
     # so a test can assert the clock and the start line agree.
     start_progress_m: float
-    trace: np.ndarray  # (frames, TRACE_WIDTH) float32
+    # (frames, TRACE_WIDTH) float32 on a lane; (ducks, frames, TRACE_WIDTH) on a stage.
+    trace: np.ndarray
     # The untimed settle before the trace: the reset pose, then a frame per
-    # settle step, so a replay can start where the simulation did.
-    settle: np.ndarray  # (settle steps + 1, TRACE_WIDTH) float32
+    # settle step, so a replay can start where the simulation did. Shaped as the
+    # trace is, with settle steps + 1 frames.
+    settle: np.ndarray
+
+
+@dataclass(frozen=True)
+class Performer:
+    """One duck of a stage's troupe: its policy, its rig, where it starts, and what it is asked."""
+
+    policy: object  # anything with .act(obs) -> action (arena.policy.Policy)
+    rig: str
+    start: Start
+    timeline: Timeline
 
 
 @dataclass(frozen=True)
@@ -74,16 +93,21 @@ class _Addresses:
     act: np.ndarray
     gyro: int
     trunk: int
+    # The qpos address of the trunk's free joint: position, then quaternion.
+    free: int
     stand_key: int
 
     @classmethod
-    def of(cls, model, keyframe: str) -> "_Addresses":
+    def of(cls, model, keyframe: str, prefix: str) -> "_Addresses":
+        """The duck whose names carry `prefix` (arena.course.duck_prefix)."""
+        trunk = int(model.body(f"{prefix}trunk_base").id)
         return cls(
-            qpos=np.array([int(model.joint(n).qposadr[0]) for n in JOINT_NAMES]),
-            dof=np.array([int(model.joint(n).dofadr[0]) for n in JOINT_NAMES]),
-            act=np.array([int(model.actuator(n).id) for n in JOINT_NAMES]),
-            gyro=int(model.sensor("imu_ang_vel").adr[0]),
-            trunk=int(model.body("trunk_base").id),
+            qpos=np.array([int(model.joint(prefix + n).qposadr[0]) for n in JOINT_NAMES]),
+            dof=np.array([int(model.joint(prefix + n).dofadr[0]) for n in JOINT_NAMES]),
+            act=np.array([int(model.actuator(prefix + n).id) for n in JOINT_NAMES]),
+            gyro=int(model.sensor(f"{prefix}imu_ang_vel").adr[0]),
+            trunk=trunk,
+            free=int(model.jnt_qposadr[model.body_jntadr[trunk]]),
             stand_key=int(model.key(keyframe).id),
         )
 
@@ -96,6 +120,19 @@ def seed_rng(event_id: str, seed: int) -> np.random.Generator:
     point of running server-side.
     """
     return np.random.default_rng([zlib.crc32(event_id.encode()), seed])
+
+
+def _streams(event_id: str, seed: int, k: int) -> tuple[np.random.Generator, np.random.Generator]:
+    """Duck k's start perturbation and servo command delays, each its own stream.
+
+    Duck 0 keeps a lone duck's — the perturbation `seed_rng`, the delays marked by
+    a trailing 1 — so a troupe of one is the run it always was. Every other duck's
+    are marked 2 and 3, then its index.
+    """
+    crc = zlib.crc32(event_id.encode())
+    if k == 0:
+        return seed_rng(event_id, seed), np.random.default_rng([crc, seed, 1])
+    return np.random.default_rng([crc, seed, 2, k]), np.random.default_rng([crc, seed, 3, k])
 
 
 def _observe(model, data, adr, last_action, command, joint_vel) -> np.ndarray:
@@ -112,106 +149,114 @@ def _observe(model, data, adr, last_action, command, joint_vel) -> np.ndarray:
     return obs
 
 
-def _perturb(data, adr, manifest, seed) -> None:
-    rng = seed_rng(manifest.id, seed)
+def _perturb(data, adr, manifest, rng, yaw_deg: float) -> None:
+    """The start's noise on every joint, and the trunk's heading: the duck's own yaw plus noise."""
     start = manifest.start
     data.qpos[adr.qpos] += rng.uniform(-start.joint_rad, start.joint_rad, NUM_JOINTS)
-    yaw = np.radians(rng.uniform(-start.yaw_deg, start.yaw_deg))
-    data.qpos[3:7] = [np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)]
+    yaw = np.radians(yaw_deg + rng.uniform(-start.yaw_deg, start.yaw_deg))
+    data.qpos[adr.free + 3 : adr.free + 7] = [np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)]
 
 
 def _record(frame: np.ndarray, data, adr) -> None:
-    frame[0:3] = data.qpos[0:3]
-    frame[3:7] = data.qpos[3:7]
+    frame[0:7] = data.qpos[adr.free : adr.free + 7]
     frame[7:TRACE_WIDTH] = data.qpos[adr.qpos]
 
 
-def _step(
-    model, data, policy, adr, command, last_action, prev_qvel, servos
-) -> tuple[np.ndarray, np.ndarray]:
-    """One control step: observe, act, drive the servos once per substep and
-    once more after them (training's post-reset write, see the module
-    docstring), then the forward pass.
+class _Duck:
+    """One robot between control steps: where it sits in the model, its servos
+    and its policy, and the two things its next observation carries over."""
 
-    `prev_qvel` is the joint velocity recorded one control step ago — the
-    actor's observation lags the true qvel by exactly one control step,
-    matching training (mjlab resamples the observation before the servo
-    updates its own delayed target, so the two delays are independent). The
-    qvel this call captures for the NEXT step's observation is read here,
-    before any of this step's substeps run.
-    """
-    obs = _observe(model, data, adr, last_action, command, prev_qvel)
-    next_prev_qvel = data.qvel[adr.dof].copy()
-    action = policy.act(obs)
-    target = DEFAULT_POSE + action * ACTION_SCALE
-    for _ in range(DECIMATION):
-        servos.drive(data, target)
-        mujoco.mj_step(model, data)
-    servos.drive(data, target)
-    mujoco.mj_forward(model, data)
-    return action, next_prev_qvel
-
-
-class _Sim:
-    """One run's simulation between control steps: the physics, and the two
-    things the next observation carries over from this step."""
-
-    def __init__(self, model, data, adr, servos, policy):
-        self.model, self.data, self.adr, self.servos, self.policy = model, data, adr, servos, policy
+    def __init__(self, data, adr, servos, policy):
+        self.adr, self.servos, self.policy = adr, servos, policy
         self.last_action = np.zeros(NUM_JOINTS, dtype=np.float32)
         # The actor's joint-velocity observation is one control step old — a fixed
         # lag in training (delay_min_lag = delay_max_lag = 1 on its joint_vel term),
         # not a randomisation; the first step uses the reset state's qvel.
         self.prev_qvel = data.qvel[adr.dof].copy()
 
-    def step(self, command: np.ndarray) -> None:
-        self.last_action, self.prev_qvel = _step(
-            self.model, self.data, self.policy, self.adr, command,
-            self.last_action, self.prev_qvel, self.servos,
-        )
+    def act(self, model, data, command: np.ndarray) -> np.ndarray:
+        """Observe, act, and return the target its servos are driven toward this control step.
 
-    def record(self, frame: np.ndarray) -> None:
-        _record(frame, self.data, self.adr)
+        The observation's joint velocity is the one recorded a control step ago,
+        matching training (mjlab resamples the observation before the servo
+        updates its own delayed target, so the two delays are independent). The
+        qvel kept for the NEXT step's observation is read here, before any of
+        this step's substeps run.
+        """
+        obs = _observe(model, data, self.adr, self.last_action, command, self.prev_qvel)
+        self.prev_qvel = data.qvel[self.adr.dof].copy()
+        self.last_action = self.policy.act(obs)
+        return DEFAULT_POSE + self.last_action * ACTION_SCALE
 
 
-def _start(manifest: Manifest, policy, seed: int, model, command: np.ndarray) -> tuple[_Sim, np.ndarray]:
-    """Every run's opening, lane or stage: training's reset, then the untimed
-    settle on `command`. Returns the simulation where the clock starts, and the
-    settle's frames."""
-    model = model if model is not None else compile_course(manifest)
+def _step(model, data, ducks: Sequence[_Duck], commands: Sequence[np.ndarray]) -> None:
+    """One control step of the shared physics: every duck observes the same
+    state and acts on its own command; then each substep drives every duck's
+    servos before its one mj_step, and every duck's servos are driven once more
+    after them (training's post-reset write, see the module docstring) before
+    the forward pass."""
+    targets = [duck.act(model, data, command) for duck, command in zip(ducks, commands)]
+    for _ in range(DECIMATION):
+        for duck, target in zip(ducks, targets):
+            duck.servos.drive(data, target)
+        mujoco.mj_step(model, data)
+    for duck, target in zip(ducks, targets):
+        duck.servos.drive(data, target)
+    mujoco.mj_forward(model, data)
+
+
+class _Sim:
+    """One run's simulation between control steps: the physics, and every duck on it."""
+
+    def __init__(self, model, data, ducks: list[_Duck]):
+        self.model, self.data, self.ducks = model, data, ducks
+
+    def step(self, commands: Sequence[np.ndarray]) -> None:
+        _step(self.model, self.data, self.ducks, commands)
+
+    def record(self, frames: np.ndarray) -> None:
+        """This step's frame of every duck, into `frames`, (ducks, TRACE_WIDTH)."""
+        for duck, frame in zip(self.ducks, frames):
+            _record(frame, self.data, duck.adr)
+
+
+def _start(manifest: Manifest, model, policies, yaws_deg, seed: int, commands) -> tuple[_Sim, np.ndarray]:
+    """Every run's opening, lane or stage: training's reset of every duck on
+    `model` (one policy and one yaw per duck, in duck order), then the untimed
+    settle, each duck on its command. Returns the simulation where the clock
+    starts, and the settle's frames, (ducks, settle steps + 1, TRACE_WIDTH)."""
     data = mujoco.MjData(model)
-    adr = _Addresses.of(model, manifest.start.keyframe)
+    adrs = [_Addresses.of(model, manifest.start.keyframe, duck_prefix(k)) for k in range(len(policies))]
+    streams = [_streams(manifest.id, seed, k) for k in range(len(policies))]
 
-    # A fresh Servos every run, constructed BEFORE the reset below: the
+    # A fresh Servos per duck every run, constructed BEFORE the reset below: the
     # compiled model is shared across an evaluation's runs (evaluate.py
     # compiles once), Servos writes model.dof_frictionloss / model.dof_damping,
     # and its construction resets them — so nothing in this run sees the
-    # friction state the run before it left on the shared model. The
-    # command-delay stream is seeded per run, distinct from the perturbation
-    # stream below (a trailing 1 in the seed sequence marks it).
-    servos = Servos(
-        model, adr.dof, adr.act, np.random.default_rng([zlib.crc32(manifest.id.encode()), seed, 1])
-    )
+    # friction state the run before it left on the shared model.
+    servos = [Servos(model, adr.dof, adr.act, delays) for adr, (_, delays) in zip(adrs, streams)]
 
     # Training's reset (module docstring): the perturbed pose, a forward pass so
     # the reset drive reads that pose's own forces (training's would read the
     # previous episode's), the servos driven once toward the cleared 0 rad
     # targets, then the forward pass that picks up their torques.
-    mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
-    _perturb(data, adr, manifest, seed)
+    mujoco.mj_resetDataKeyframe(model, data, adrs[0].stand_key)
+    for adr, (perturbation, _), yaw_deg in zip(adrs, streams, yaws_deg):
+        _perturb(data, adr, manifest, perturbation, yaw_deg)
     mujoco.mj_forward(model, data)
-    servos.drive(data, np.zeros(NUM_JOINTS))
+    for each in servos:
+        each.drive(data, np.zeros(NUM_JOINTS))
     mujoco.mj_forward(model, data)
 
-    sim = _Sim(model, data, adr, servos, policy)
-    # Settle with the policy running and the clock stopped: nobody is timed on
+    sim = _Sim(model, data, [_Duck(data, adr, each, policy) for adr, each, policy in zip(adrs, servos, policies)])
+    # Settle with the policies running and the clock stopped: nobody is timed on
     # standing up.
     settle_steps = round(manifest.start.settle_s / CTRL_DT)
-    settle = np.empty((settle_steps + 1, TRACE_WIDTH), dtype=np.float32)
-    sim.record(settle[0])
+    settle = np.empty((len(policies), settle_steps + 1, TRACE_WIDTH), dtype=np.float32)
+    sim.record(settle[:, 0])
     for step in range(settle_steps):
-        sim.step(command)
-        sim.record(settle[step + 1])
+        sim.step(commands)
+        sim.record(settle[:, step + 1])
     return sim, settle
 
 
@@ -223,15 +268,16 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     # (see evaluate.py). The event still owns the shape of the command; a caller
     # only gets to say how fast.
     command = np.asarray(manifest.command if command is None else command, dtype=np.float64)
-    sim, settle = _start(manifest, policy, seed, model, command)
-    data, adr = sim.data, sim.adr
+    model = model if model is not None else compile_course(manifest)
+    sim, settle = _start(manifest, model, [policy], [0.0], seed, [command])
+    data, adr = sim.data, sim.ducks[0].adr
 
     direction = ramp_dir(manifest.course.slope_deg)
     start_progress = float(direction @ data.qpos[0:3])
     max_steps = round(manifest.time_limit_s / CTRL_DT)
     fall_steps_needed = round(manifest.termination.fall_hold_s / CTRL_DT)
 
-    frames = np.empty((max_steps, TRACE_WIDTH), dtype=np.float32)
+    frames = np.empty((1, max_steps, TRACE_WIDTH), dtype=np.float32)
     tipped_for = 0
     status = "timeout"
     time_s = None
@@ -239,8 +285,8 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     written = 0
 
     for step in range(max_steps):
-        sim.step(command)
-        sim.record(frames[written])
+        sim.step([command])
+        sim.record(frames[:, written])
         written += 1
 
         if not np.all(np.isfinite(data.qpos)):
@@ -273,8 +319,8 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
         time_s=time_s,
         progress_m=progress,
         start_progress_m=start_progress,
-        trace=frames[:written].copy(),
-        settle=settle,
+        trace=frames[0, :written].copy(),
+        settle=settle[0],
     )
 
 
@@ -293,23 +339,31 @@ def _reset_by_mujoco(data) -> bool:
     return any(data.warning[w].number for w in _RESET_WARNINGS)
 
 
-def run_stage(manifest: Manifest, policy, timeline: Timeline, seed: int) -> RunOutcome:
-    """Play a timeline on a stage: no line to cross, and no fall stops the show.
+def _commands(cast: Sequence[Performer], t: float) -> list[np.ndarray]:
+    return [np.asarray(p.timeline.command_at(t), dtype=np.float64) for p in cast]
 
-    The settle plays the first keyframe; timed step k plays the command at
-    k * CTRL_DT. Only a simulation MuJoCo had to reset ends a performance early:
-    a solver explosion is not a performance, and the trace stops before it.
+
+def run_stage(manifest: Manifest, cast: Sequence[Performer], seed: int) -> RunOutcome:
+    """Play a troupe on a stage: no line to cross, and no fall stops the performance.
+
+    Every duck plays its own timeline on the shared physics: the settle plays
+    its first keyframe; timed step k plays its command at k * CTRL_DT. Only a
+    simulation MuJoCo had to reset ends a performance early, the whole troupe's
+    since the physics is one: a solver explosion is not a performance, and the
+    trace stops before it.
     """
-    sim, settle = _start(manifest, policy, seed, None, np.asarray(timeline.command_at(0.0), dtype=np.float64))
-    steps = round(timeline.duration_s / CTRL_DT)
-    frames = np.empty((steps, TRACE_WIDTH), dtype=np.float32)
+    model = compile_stage(manifest, [(p.rig, p.start) for p in cast])
+    policies, yaws_deg = [p.policy for p in cast], [p.start.yaw_deg for p in cast]
+    sim, settle = _start(manifest, model, policies, yaws_deg, seed, _commands(cast, 0.0))
+    steps = round(cast[0].timeline.duration_s / CTRL_DT)
+    frames = np.empty((len(cast), steps, TRACE_WIDTH), dtype=np.float32)
     status, time_s, written = "finish", steps * CTRL_DT, 0
     for step in range(steps):
-        sim.step(np.asarray(timeline.command_at(step * CTRL_DT), dtype=np.float64))
+        sim.step(_commands(cast, step * CTRL_DT))
         if _reset_by_mujoco(sim.data):
             status, time_s = "fall", None
             break
-        sim.record(frames[written])
+        sim.record(frames[:, written])
         written += 1
     return RunOutcome(
         seed=seed,
@@ -317,6 +371,6 @@ def run_stage(manifest: Manifest, policy, timeline: Timeline, seed: int) -> RunO
         time_s=time_s,
         progress_m=0.0,
         start_progress_m=0.0,  # a stage has no line
-        trace=frames[:written].copy(),
+        trace=frames[:, :written].copy(),
         settle=settle,
     )

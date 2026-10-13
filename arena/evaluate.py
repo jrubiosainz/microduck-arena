@@ -35,8 +35,8 @@ import numpy as np
 from .constants import RUNNER_VERSION
 from .course import compile_course
 from .manifest import Manifest
-from .runner import run_once, run_stage
-from .timeline import Timeline, constant_timeline
+from .runner import Performer, run_once, run_stage
+from .timeline import Start, Timeline, constant_timeline
 
 
 @dataclass(frozen=True)
@@ -66,8 +66,9 @@ class Evaluation:
     seeds_finished: int
     per_seed: tuple[SeedResult, ...]
     scan: tuple[ScanPoint, ...]
+    # (frames, TRACE_WIDTH) for a race; (ducks, frames, TRACE_WIDTH) for a stage.
     trace: np.ndarray
-    # The trace seed's untimed settle, from the reset pose (see RunOutcome).
+    # The trace seed's untimed settle, from the reset pose, shaped as the trace (see RunOutcome).
     settle: np.ndarray
     trace_seed: int
     runner_version: int
@@ -251,11 +252,12 @@ def evaluate(manifest: Manifest, policy, timeline: Timeline | None = None) -> Ev
 
 
 def _evaluate_stage(manifest: Manifest, policy, timeline: Timeline | None) -> Evaluation:
-    """One performance: the entry's timeline, or the event's command for the whole time limit."""
+    """One performance by the entry's policy alone, at the centre: its timeline, or the event's
+    command for the whole time limit."""
     if timeline is None:
         timeline = constant_timeline(manifest.command, manifest.time_limit_s)
     seed = manifest.seeds[0]
-    outcome = run_stage(manifest, policy, timeline, seed)
+    outcome = run_stage(manifest, (Performer(policy, manifest.rig, Start(), timeline),), seed)
     per_seed = (SeedResult(seed=seed, status=outcome.status, time_s=outcome.time_s),)
     return Evaluation(
         event_id=manifest.id,

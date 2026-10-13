@@ -8,10 +8,15 @@ official run may depend on scenery. The vendored MJCF still describes the sandbo
 position-servo robot; `compile_course` converts the 14 actuated joints to the
 torque motors `arena.actuator` drives, so the built XML and the compiled
 model disagree on purpose.
+
+A stage holds a troupe (`compile_stage`): one robot per duck in one model, so
+they share one physics and can push each other.
 """
 
+import dataclasses
 import math
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
 
 import mujoco
 import numpy as np
@@ -20,6 +25,7 @@ from .actuator import ARMATURE, FORCE_LIMIT, SOLIMP_FRICTION, SOLREF_FRICTION
 from .assets import ASSET_ROOT
 from .constants import DEFAULT_POSE, JOINT_NAMES, TIMESTEP
 from .manifest import Manifest
+from .timeline import Start
 
 SPAWN_HEIGHT_M = 0.12  # matches the trunk_base pos in the vendored MJCF
 
@@ -153,8 +159,9 @@ def _inject_keyframe(root: ET.Element, manifest: Manifest) -> None:
     )
 
 
-def build_course_xml(manifest: Manifest) -> tuple[str, dict[str, bytes]]:
-    rig_dir, xml_name = RIG_XML[manifest.rig]
+def _robot(rig: str) -> tuple[ET.Element, dict[str, bytes]]:
+    """A rig's MJCF without its visual geoms, and the meshes its collision geoms use."""
+    rig_dir, xml_name = RIG_XML[rig]
     robot_dir = ASSET_ROOT / "robot" / rig_dir
     root = ET.parse(robot_dir / xml_name).getroot()
 
@@ -164,26 +171,27 @@ def build_course_xml(manifest: Manifest) -> tuple[str, dict[str, bytes]]:
     compiler = root.find("compiler")
     compiler.set("meshdir", "")
 
+    asset = root.find("asset")
+    files = [m.get("file") for m in asset.findall("mesh")]
+    return root, {f: (robot_dir / "assets" / f).read_bytes() for f in files}
+
+
+def build_course_xml(manifest: Manifest) -> tuple[str, dict[str, bytes]]:
+    root, assets = _robot(manifest.rig)
     _sub(root, "option", timestep=TIMESTEP)
     _inject_course(root, manifest)
     _inject_keyframe(root, manifest)
-
-    asset = root.find("asset")
-    files = [m.get("file") for m in asset.findall("mesh")]
-    assets = {f: (robot_dir / "assets" / f).read_bytes() for f in files}
-
     return ET.tostring(root, encoding="unicode"), assets
 
 
-def compile_course(manifest: Manifest) -> mujoco.MjModel:
-    """Compile the event's model with the 14 servos as BAM torque motors.
+def _motorized(xml: str, assets: dict[str, bytes]) -> mujoco.MjSpec:
+    """The spec of `xml` with the 14 servos as BAM torque motors.
 
-    The vendored MJCF (`build_course_xml`) still describes MuJoCo position
-    servos; converting to motors here, as training's `bam.mjlab.BamActuator.
-    edit_spec` does, is what lets `arena.actuator.Servos` drive them with real
-    torque instead of the sandbox's position gain.
+    The vendored MJCF still describes MuJoCo position servos; converting to
+    motors here, as training's `bam.mjlab.BamActuator.edit_spec` does, is what
+    lets `arena.actuator.Servos` drive them with real torque instead of the
+    sandbox's position gain.
     """
-    xml, assets = build_course_xml(manifest)
     spec = mujoco.MjSpec.from_string(xml, assets=assets)
     for act in spec.actuators:
         act.set_to_motor()
@@ -198,8 +206,62 @@ def compile_course(manifest: Manifest) -> mujoco.MjModel:
             joint.frictionloss = 0.0
             joint.solref_friction = SOLREF_FRICTION
             joint.solimp_friction = SOLIMP_FRICTION
+    return spec
+
+
+def _compiled(spec: mujoco.MjSpec) -> mujoco.MjModel:
+    """The model, with training's solver."""
     model = spec.compile()
     model.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
     model.opt.iterations = 10
     model.opt.ls_iterations = 20
+    return model
+
+
+def compile_course(manifest: Manifest) -> mujoco.MjModel:
+    """Compile the event's model with the 14 servos as BAM torque motors."""
+    return _compiled(_motorized(*build_course_xml(manifest)))
+
+
+def duck_prefix(k: int) -> str:
+    """Duck k's names in a stage's model. Duck 0's are a lone duck's own, so a
+    troupe of one is the model a stage always compiled; another duck's carry its
+    index."""
+    return f"duck{k}/" if k else ""
+
+
+def _yaw_quat(yaw_deg: float) -> list[float]:
+    half = math.radians(yaw_deg) / 2
+    return [math.cos(half), 0.0, 0.0, math.sin(half)]
+
+
+def compile_stage(manifest: Manifest, layout: Sequence[tuple[str, Start]]) -> mujoco.MjModel:
+    """A stage's model for a troupe: one robot per duck, `(rig, start)` in duck order.
+
+    Duck 0 is built as `compile_course` builds a lone duck, from the same XML
+    with the same names (in its own rig), so a troupe of one compiles to the
+    model a stage always played. Every other duck is its rig's own MJCF,
+    motorized the same way and grafted onto the world under its prefix
+    (`duck_prefix`): each robot keeps its MJCF's own contact rules, and two
+    robots' collision geoms collide like any others. The keyframe holds every
+    duck at its start, at the stage's spawn height (the roller rig's 2 cm-deep
+    spawn included), turned by its yaw; attaching left the new ducks' part of it
+    at the origin.
+    """
+    (rig, _), others = layout[0], layout[1:]
+    spec = _motorized(*build_course_xml(dataclasses.replace(manifest, rig=rig)))
+    for k, (rig, start) in enumerate(others, start=1):
+        root, assets = _robot(rig)
+        robot = _motorized(ET.tostring(root, encoding="unicode"), assets)
+        frame = spec.worldbody.add_frame(pos=[start.x, start.y, 0.0], quat=_yaw_quat(start.yaw_deg))
+        spec.attach(robot, prefix=duck_prefix(k), frame=frame)
+    model = _compiled(spec)
+    pose = model.key_qpos[model.key(manifest.start.keyframe).id]
+    for k, (_, start) in enumerate(layout):
+        prefix = duck_prefix(k)
+        trunk = model.body(f"{prefix}trunk_base").id
+        free = model.jnt_qposadr[model.body_jntadr[trunk]]
+        pose[free : free + 7] = [start.x, start.y, SPAWN_HEIGHT_M, *_yaw_quat(start.yaw_deg)]
+        for name, angle in zip(JOINT_NAMES, DEFAULT_POSE):
+            pose[model.joint(prefix + name).qposadr[0]] = angle
     return model

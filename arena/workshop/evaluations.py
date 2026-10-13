@@ -30,7 +30,7 @@ from ..constants import RUNNER_VERSION
 from ..evaluate import evaluate
 from ..manifest import load_event
 from ..policy import load_policy
-from ..stage import summary as stage_summary
+from ..stage import summaries
 from ..timeline import load_timeline, sound_of
 from ..trace import as_ducks
 from .challenges import timeline_file, timeline_key
@@ -146,7 +146,7 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
         "sound": sound_of(timeline) if timeline else None,
     }
     if event.course.kind == "stage":
-        body["stage"] = stage_summary(result.trace, event.termination)
+        body["stage"] = summaries(result.trace, event.termination)[0]
     return body
 
 

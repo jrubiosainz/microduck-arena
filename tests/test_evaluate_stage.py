@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from arena.assets import ASSET_ROOT
-from arena.constants import CTRL_DT, NUM_JOINTS, RUNNER_VERSION
+from arena.constants import CTRL_DT, NUM_JOINTS, RUNNER_VERSION, TRACE_WIDTH
 from arena.evaluate import evaluate
 from arena.manifest import load_event
 from arena.policy import load_policy
@@ -28,7 +28,9 @@ def test_an_entry_without_a_timeline_plays_the_events_command_for_20_s(talent, w
     a timeline; it must still play the whole performance and stay eligible for
     ballots."""
     result = evaluate(talent, walker)
-    assert result.trace.shape[0] == round(20.0 / CTRL_DT)
+    # A troupe of one: the entry's own policy, alone at the centre.
+    assert result.trace.shape == (1, round(20.0 / CTRL_DT), TRACE_WIDTH)
+    assert result.settle.shape == (1, round(talent.start.settle_s / CTRL_DT) + 1, TRACE_WIDTH)
     assert result.seeds_finished == 1
     assert result.score == pytest.approx(20.0)
     assert [(r.seed, r.status) for r in result.per_seed] == [(1, "finish")]
@@ -41,7 +43,7 @@ def test_an_entry_without_a_timeline_plays_the_events_command_for_20_s(talent, w
 def test_a_timeline_sets_the_performance_and_its_length(talent, walker):
     timeline = Timeline(2.0, (0.0, 1.0), (STILL, (1.0,) + (0.0,) * 12))
     result = evaluate(talent, walker, timeline)
-    assert result.trace.shape[0] == 100
+    assert result.trace.shape == (1, 100, TRACE_WIDTH)
     assert result.score == pytest.approx(2.0)
 
 
@@ -68,4 +70,4 @@ def test_the_events_own_command_reaches_the_policy_without_a_timeline(talent):
     result = evaluate(manifest, policy)
     commands = [tuple(float(v) for v in obs[48:61]) for obs in policy.observed]
     assert commands and set(commands) == {command}
-    assert result.trace.shape[0] == 50
+    assert result.trace.shape == (1, 50, TRACE_WIDTH)

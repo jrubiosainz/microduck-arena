@@ -11,7 +11,7 @@ from arena.constants import CTRL_DT, DECIMATION, NUM_JOINTS, TIMESTEP, TRACE_WID
 from arena.course import compile_course, ramp_dir
 from arena.manifest import load_event
 from arena.policy import load_policy
-from arena.runner import _Addresses, _step, run_once, seed_rng
+from arena.runner import _Addresses, _Duck, _step, run_once, seed_rng
 
 REFERENCE = ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"
 # A command the reference walker finishes the sprint at on every seed: at 0.30
@@ -226,23 +226,18 @@ def test_the_actor_sees_joint_velocity_one_step_old(sprint):
 
     model = compile_course(sprint)
     data = mujoco.MjData(model)
-    adr = _Addresses.of(model, sprint.start.keyframe)
+    adr = _Addresses.of(model, sprint.start.keyframe, "")
     mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
     servos = Servos(model, adr.dof, adr.act, np.random.default_rng(0))
     command = np.asarray(sprint.command, dtype=np.float64)
-    last_action = np.zeros(NUM_JOINTS, dtype=np.float32)
-    prev_qvel = data.qvel[adr.dof].copy()
 
     policy = _RecordingPolicy()
+    duck = _Duck(data, adr, servos, policy)
     qvel_before_first_substeps = data.qvel[adr.dof].copy()
-    last_action, prev_qvel = _step(
-        model, data, policy, adr, command, last_action, prev_qvel, servos
-    )
+    _step(model, data, [duck], [command])
     qvel_before_second_substeps = data.qvel[adr.dof].copy()
-    last_action, prev_qvel = _step(
-        model, data, policy, adr, command, last_action, prev_qvel, servos
-    )
-    _step(model, data, policy, adr, command, last_action, prev_qvel, servos)
+    _step(model, data, [duck], [command])
+    _step(model, data, [duck], [command])
 
     assert len(policy.observed) == 3
     np.testing.assert_array_equal(policy.observed[1][20:34], qvel_before_first_substeps)
@@ -262,16 +257,13 @@ def test_a_control_step_drives_the_servos_a_fifth_time_before_its_forward_pass(s
     mj_step, and the forward pass after the fifth."""
     model = compile_course(sprint)
     data = mujoco.MjData(model)
-    adr = _Addresses.of(model, sprint.start.keyframe)
+    adr = _Addresses.of(model, sprint.start.keyframe, "")
     mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
     mujoco.mj_forward(model, data)
     servos = _RecordingServos(model, adr.dof, adr.act, np.random.default_rng(0))
     command = np.asarray(sprint.command, dtype=np.float64)
 
-    _step(
-        model, data, _RecordingPolicy(), adr, command,
-        np.zeros(NUM_JOINTS, dtype=np.float32), data.qvel[adr.dof].copy(), servos,
-    )
+    _step(model, data, [_Duck(data, adr, servos, _RecordingPolicy())], [command])
 
     times = [time for time, _, _, _ in servos.calls]
     assert times == pytest.approx([k * TIMESTEP for k in range(DECIMATION + 1)])
@@ -303,9 +295,9 @@ def test_the_reset_drives_the_servos_toward_the_zero_pose_first(sprint, walker, 
     # The forces of the perturbed reset pose itself.
     model = compile_course(sprint)
     data = mujoco.MjData(model)
-    adr = _Addresses.of(model, sprint.start.keyframe)
+    adr = _Addresses.of(model, sprint.start.keyframe, "")
     mujoco.mj_resetDataKeyframe(model, data, adr.stand_key)
-    runner._perturb(data, adr, sprint, 1)
+    runner._perturb(data, adr, sprint, seed_rng(sprint.id, 1), 0.0)
     mujoco.mj_forward(model, data)
     assert data.qfrc_bias.any()
     np.testing.assert_array_equal(bias, data.qfrc_bias)

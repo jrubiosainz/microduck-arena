@@ -11,10 +11,13 @@ from arena.course import (
     SPAWN_HEIGHT_M,
     build_course_xml,
     compile_course,
+    compile_stage,
+    duck_prefix,
     ramp_dir,
     ramp_normal,
 )
 from arena.manifest import load_event
+from arena.timeline import Start
 
 
 def test_course_compiles_and_keeps_14_actuators():
@@ -228,3 +231,80 @@ def test_a_stage_compiles_the_lanes_robot_and_solver():
     assert stage.opt.timestep == lane.opt.timestep
     assert stage.opt.integrator == lane.opt.integrator
     assert (stage.opt.iterations, stage.opt.ls_iterations) == (lane.opt.iterations, lane.opt.ls_iterations)
+
+
+def test_duck_0_has_a_lone_ducks_names_and_the_others_a_prefix():
+    assert [duck_prefix(k) for k in range(3)] == ["", "duck1/", "duck2/"]
+
+
+def test_a_troupe_of_one_compiles_to_a_lone_ducks_stage():
+    """Every array of the model is the one a stage always compiled, so a troupe of one plays as a lone duck did."""
+    talent = load_event("got-a-talent")
+    lone, troupe = compile_course(talent), compile_stage(talent, [("legs", Start())])
+    assert (troupe.nq, troupe.nbody, troupe.ngeom, troupe.nu) == (lone.nq, lone.nbody, lone.ngeom, lone.nu)
+    for field in dir(lone):
+        value = getattr(lone, field)
+        if isinstance(value, np.ndarray):
+            np.testing.assert_array_equal(getattr(troupe, field), value, err_msg=field)
+    assert troupe.opt.integrator == lone.opt.integrator
+    assert (troupe.opt.iterations, troupe.opt.ls_iterations) == (lone.opt.iterations, lone.opt.ls_iterations)
+
+
+def test_duck_0_is_built_in_its_own_rig():
+    model = compile_stage(load_event("got-a-talent"), [("rollers", Start())])
+    assert model.joint("passive_LF_wheel").id >= 0
+
+
+LAYOUT = [("legs", Start()), ("rollers", Start(0.4, -0.6, 90.0)), ("legs", Start(-0.5, 0.7, -45.0))]
+
+
+def test_a_troupe_is_one_model_with_every_duck_under_its_prefix():
+    model = compile_stage(load_event("got-a-talent"), LAYOUT)
+    assert model.nu == 3 * 14
+    for k, (rig, _) in enumerate(LAYOUT):
+        prefix = duck_prefix(k)
+        for name in JOINT_NAMES:
+            assert model.joint(prefix + name).id >= 0, prefix + name
+            assert model.actuator(prefix + name).id >= 0, prefix + name
+        assert model.sensor(f"{prefix}imu_ang_vel").id >= 0
+        assert model.body(f"{prefix}trunk_base").id >= 0
+    assert model.joint("duck1/passive_LF_wheel").id >= 0
+    with pytest.raises(KeyError):
+        model.joint("duck2/passive_LF_wheel")
+    assert model.nkey == 1 and model.key_qpos.shape == (1, model.nq)
+    np.testing.assert_array_equal(model.key_ctrl[0], np.zeros(model.nu))
+
+
+def test_the_keyframe_holds_every_duck_at_its_start():
+    model = compile_stage(load_event("got-a-talent"), LAYOUT)
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("STAND").id)
+    for k, (_, start) in enumerate(LAYOUT):
+        prefix = duck_prefix(k)
+        free = int(model.joint(f"{prefix}trunk_base_freejoint").qposadr[0])
+        half = np.radians(start.yaw_deg) / 2
+        np.testing.assert_allclose(
+            data.qpos[free : free + 7], [start.x, start.y, SPAWN_HEIGHT_M, np.cos(half), 0, 0, np.sin(half)],
+            atol=1e-12, err_msg=prefix,
+        )
+        for i, name in enumerate(JOINT_NAMES):
+            assert data.qpos[model.joint(prefix + name).qposadr[0]] == DEFAULT_POSE[i], prefix + name
+    assert data.qpos[model.joint("duck1/passive_LF_wheel").qposadr[0]] == 0.0
+
+
+def test_every_ducks_servos_are_torque_motors_with_bams_parameters():
+    """The grafted robots are converted exactly as a lone duck's."""
+    model = compile_stage(load_event("got-a-talent"), LAYOUT)
+    for k in range(len(LAYOUT)):
+        for name in JOINT_NAMES:
+            act, dof = model.actuator(duck_prefix(k) + name).id, int(model.joint(duck_prefix(k) + name).dofadr[0])
+            assert model.actuator_gaintype[act] == mujoco.mjtGain.mjGAIN_FIXED
+            assert model.actuator_gainprm[act][0] == pytest.approx(1.0)
+            assert model.actuator_biastype[act] == mujoco.mjtBias.mjBIAS_NONE
+            assert model.actuator_forcerange[act] == pytest.approx((-FORCE_LIMIT, FORCE_LIMIT))
+            assert model.actuator_ctrllimited[act] == 0
+            assert model.dof_armature[dof] == pytest.approx(ARMATURE)
+            assert model.dof_damping[dof] == pytest.approx(0.0)
+            assert model.dof_frictionloss[dof] == pytest.approx(0.0)
+            assert model.dof_solref[dof] == pytest.approx(SOLREF_FRICTION)
+            assert model.dof_solimp[dof] == pytest.approx(SOLIMP_FRICTION)
