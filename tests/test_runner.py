@@ -8,10 +8,11 @@ from arena import runner
 from arena.actuator import Servos
 from arena.assets import ASSET_ROOT
 from arena.constants import CTRL_DT, DECIMATION, NUM_JOINTS, TIMESTEP, TRACE_WIDTH
-from arena.course import compile_course, ramp_dir
+from arena.course import compile_course, compile_stage, duck_prefix, ramp_dir
 from arena.manifest import load_event
 from arena.policy import load_policy
 from arena.runner import _Addresses, _Duck, _step, run_once, seed_rng
+from arena.timeline import Start
 
 REFERENCE = ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"
 # A command the reference walker finishes the sprint at on every seed: at 0.30
@@ -270,6 +271,27 @@ def test_a_control_step_drives_the_servos_a_fifth_time_before_its_forward_pass(s
     # The forward pass ran after the fifth write: the actuator force MuJoCo
     # holds is the torque that write left in ctrl (gear 1).
     np.testing.assert_allclose(data.qfrc_actuator[adr.dof], data.ctrl[adr.act], rtol=0, atol=1e-12)
+
+
+def test_a_troupes_control_step_drives_every_duck_at_each_substep_then_steps_the_physics_once():
+    """Two ducks share one physics: each substep drives both ducks' servos, then one mj_step moves
+    them both, and the fifth drive is both ducks'. So each duck is driven at a lone duck's five
+    times, and the control step lasts four substeps, not four per duck."""
+    talent = load_event("got-a-talent")
+    model = compile_stage(talent, [("legs", Start()), ("legs", Start(0.0, 0.5, 0.0))])
+    data = mujoco.MjData(model)
+    adrs = [_Addresses.of(model, talent.start.keyframe, duck_prefix(k)) for k in range(2)]
+    mujoco.mj_resetDataKeyframe(model, data, adrs[0].stand_key)
+    mujoco.mj_forward(model, data)
+    servos = [_RecordingServos(model, adr.dof, adr.act, np.random.default_rng(k)) for k, adr in enumerate(adrs)]
+    command = np.asarray(talent.command, dtype=np.float64)
+
+    _step(model, data, [_Duck(data, adr, each, _RecordingPolicy()) for adr, each in zip(adrs, servos)],
+          [command, command])
+
+    for each in servos:
+        assert [time for time, _, _, _ in each.calls] == pytest.approx([k * TIMESTEP for k in range(DECIMATION + 1)])
+    assert data.time == pytest.approx(DECIMATION * TIMESTEP)
 
 
 def test_the_reset_drives_the_servos_toward_the_zero_pose_first(sprint, walker, monkeypatch):
