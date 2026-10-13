@@ -91,7 +91,8 @@ _START_KEYS = ("x", "y", "yaw")
 _REPO = r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
 _REFERENCE = re.compile(rf"({_REPO})@([0-9a-f]{{40}})")
 _UNPINNED = re.compile(rf"{_REPO}(@.*)?")
-_LOCAL = re.compile(rf"{LOCAL}([^/@]+)/([^/@]+)@([0-9]+)")
+# A checkpoint number of nine digits at most: a longer one is refused here, never left to int().
+_LOCAL = re.compile(rf"{LOCAL}([^/@]+)/([^/@]+)@([0-9]{{1,9}})")
 # Keyframe times are decimal seconds; the runner asks for k * CTRL_DT, which
 # binary floating point cannot always hold (15 * 0.02 < 0.3). A keyframe takes
 # effect at the step that starts within this of its time.

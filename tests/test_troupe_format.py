@@ -177,7 +177,8 @@ def test_a_malformed_troupe_is_refused_with_where(tmp_path, raw, said):
         load_troupe(write(tmp_path, raw), TALENT, allow_local=True)
 
 
-@pytest.mark.parametrize("policy", ["local:got_a_talent", "local:got_a_talent/first", "local:a/b@x", "local:/b@1"])
+@pytest.mark.parametrize("policy", ["local:got_a_talent", "local:got_a_talent/first", "local:a/b@x", "local:/b@1",
+                                    "local:a/b@" + "1" * 10])
 def test_a_local_checkpoint_names_its_challenge_its_run_and_its_number(tmp_path, policy):
     with pytest.raises(TimelineError, match=r"ducks\[1\]\.policy: .* is not local:<challenge folder>/<run>@<checkpoint>"):
         load_troupe(write(tmp_path, troupe(duck(), duck(policy, start=apart(0.5)))), TALENT, allow_local=True)
