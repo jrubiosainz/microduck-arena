@@ -14,7 +14,7 @@ from arena import hub_fetch
 from arena.constants import TRACE_WIDTH
 from arena.hub_fetch import FetchedPolicy, FetchError
 from arena.timeline import TimelineError
-from arena.workshop import troupe
+from arena.workshop import app, troupe
 from arena.workshop.evaluations import RETRY_S, evaluate_checkpoint, evaluate_next, stored
 from arena.workshop.runs import find_runs
 from arena.workshop.troupe import local_policy, resolve_local, timeline_key
@@ -297,6 +297,29 @@ def test_a_duck_published_before_is_reused_from_its_runs_published_json(stage, c
     (only,) = fakes.calls("publish")
     assert "--enter" in only
     assert [d["policy"] for d in json.loads(fakes.timelines()[-1])["ducks"]] == ["self", f"alice/microduck-walker@{BBB}"]
+
+
+def test_a_copy_the_arena_would_refuse_is_never_uploaded(stage, checkout, fakes, monkeypatch):
+    """The click reads timeline.json twice: to find its ducks, then to name them by their commits. A duck
+    the author adds in between is no checkpoint the click published."""
+    star, walker = runs(checkout)
+    (walker / "workshop").mkdir()
+    (walker / "workshop" / "published.json").write_text(json.dumps([
+        {"checkpoint": 1, "repo": "alice/microduck-walker", "revision": BBB, "at": "2026-10-13T10:00:00+00:00"}]))
+    walking = (f"local:sprint_2m/{walker.name}@1", 0.0, 0.5, 0)
+    stage.timeline.write_text(troupe_text(walking))
+    looked_up = app.published_at
+
+    def added_meanwhile(run, n):
+        stage.timeline.write_text(troupe_text(walking, (f"local:got_a_talent/{star.name}@1", 0.0, -0.5, 0)))
+        return looked_up(run, n)
+
+    monkeypatch.setattr(app, "published_at", added_meanwhile)
+    refused = publish(stage, star)
+    assert refused.status_code == 400
+    assert refused.json()["detail"] == (f"Your performance cannot be published: ducks[2].policy: "
+                                        f"'local:got_a_talent/{star.name}@1' is a checkpoint on your machine: publish it first")
+    assert fakes.calls("publish") == []
 
 
 def test_a_failed_entry_keeps_its_ducks_published_and_the_next_click_reuses_them(stage, checkout, fakes, monkeypatch):

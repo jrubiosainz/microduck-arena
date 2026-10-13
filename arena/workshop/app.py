@@ -446,6 +446,13 @@ async def publish_route(event: str, ticket_id: str, body: PublishRequest, reques
                 timeline = Path(tmp) / TIMELINE
                 timeline.write_text(resolved(timeline_file(challenge).read_text(encoding="utf-8"), on_hub),
                                     encoding="utf-8")
+                # Read again since its ducks were found: what the author changed meanwhile is checked as
+                # the Arena will check it, before anything is uploaded.
+                try:
+                    load_troupe(timeline, load_event(challenge.event), allow_local=False)
+                except TimelineError as exc:
+                    raise HTTPException(status_code=400,
+                                        detail=f"Your performance cannot be published: {exc}") from exc
             entered = await run_in_threadpool(publish, *args, arena=ws.arena, code_url=env, timeline=timeline)
     except PublishError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
