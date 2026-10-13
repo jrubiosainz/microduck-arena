@@ -219,6 +219,11 @@ def test_recover_plays_a_stage_entry_with_its_timeline_at_the_listed_revision(tm
     assert (record.timeline_sha256, record.source["revision"]) == ("t" * 64, "rev7")
 
 
+SITTER = "pollen-robotics/microduck-sitter@" + "a" * 40
+TALENT_LISTED = (listing(("alice/talent", "rev7")),
+                 manifests({"alice/talent": arena_manifest(arena={"event": "got-a-talent"})}))
+
+
 def test_recover_plays_a_star_on_the_rig_its_manifest_names(tmp_path, monkeypatch):
     from arena.assets import ASSET_ROOT
     from arena.hub_fetch import FetchedPolicy
@@ -236,15 +241,8 @@ def test_recover_plays_a_star_on_the_rig_its_manifest_names(tmp_path, monkeypatc
         )
 
     monkeypatch.setattr("arena.hub_fetch.fetch_policy", fetch_policy)
-    reader = (listing(("alice/talent", "rev7")),
-              manifests({"alice/talent": arena_manifest(arena={"event": "got-a-talent"})}))
-    [record] = recover(LocalStore(tmp_path), [load_event("got-a-talent")], reader=reader)
+    [record] = recover(LocalStore(tmp_path), [load_event("got-a-talent")], reader=TALENT_LISTED)
     assert record.cast[0]["rig"] == "rollers"
-
-
-SITTER = "pollen-robotics/microduck-sitter@" + "a" * 40
-TALENT_LISTED =(listing(("alice/talent", "rev7")),
-                 manifests({"alice/talent": arena_manifest(arena={"event": "got-a-talent"})}))
 
 
 def test_recover_plays_a_troupe_with_its_borrowed_policies(tmp_path, monkeypatch):
