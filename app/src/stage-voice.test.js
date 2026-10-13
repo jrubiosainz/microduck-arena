@@ -102,6 +102,19 @@ describe("createStageVoice", () => {
     expect(log).toEqual([["start", 105600, 2], ["start", 4800, expect.closeTo(0, 5)]]);
   });
 
+  it("starts both the quack and the song a jump lands inside, and stops both when the loop comes round", async () => {
+    const { voice, log } = await voiceWith({ ...song, triggers: [[0, 0, 0], [2.05, 1, 0]] });
+    voice.follow(2.1);
+    voice.follow(0.3);
+    expect(log).toEqual([
+      ["start", 4800, expect.closeTo(0.05, 5)],
+      ["start", 105600, 2.1],
+      ["stop"],
+      ["stop"],
+      ["start", 105600, 0.3],
+    ]);
+  });
+
   it("restarts the song where a jump lands, and lets it go past its end", async () => {
     const { voice, log } = await voiceWith(song);
     voice.follow(1.5);

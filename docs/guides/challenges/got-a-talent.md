@@ -17,7 +17,7 @@ Your policy follows the commands; your performance gives them.
 
 A performance is a `timeline.json` published beside your policy: when to sit, when to stand,
 where to look. The Arena plays it once, on a flat open floor, for at most **20 seconds**. Nothing is
-timed and nothing has to be finished; a fall is part of the show.
+timed and nothing has to be finished; a fall is part of the performance.
 
 ```json
 {"timeline_version": 1, "duration_s": 20.0, "keyframes": [
@@ -99,10 +99,23 @@ Each knob goes from 0 to 1. A knob you leave out keeps the stage duck's own voic
 | Knob | From 0 to 1 | The stage duck's own |
 | --- | --- | --- |
 | `pitch` | a low duck (110 Hz) to a high one (620 Hz): the quack and the wheee, never the song's notes | 0.49 |
-| `brightness` | a dark voice to a bright one | about 0.12 |
-| `buzz` | a pure tone to a buzzing quack | 0.55 |
+| `brightness` | a dark voice to a bright one | about 0.12 (leave it out to keep the duck's own exactly) |
+| `buzz` | a pure tone to a buzzing quack | 0.54 |
 | `vibrato` | steady to a vibrato of 0.7 semitone | 0.11 |
 | `breath` | clean to breathy | 0.90 |
+
+A whole timeline with a voice and a song beside the keyframes:
+
+```json
+{"timeline_version": 1, "duration_s": 20.0,
+ "voice": {"pitch": 0.3, "brightness": 0.8, "buzz": 0.2, "vibrato": 0.5, "breath": 0.1},
+ "song": [
+   {"t": 2.0, "note": "C5", "for": 0.5},
+   {"t": 2.5, "note": "E5", "for": 0.5, "vowel": "oo"},
+   {"t": 3.0, "note": "G5", "for": 1.0, "dynamic": "p"}
+ ],
+ "keyframes": [{"t": 0.0}]}
+```
 
 The workshop edits it on a training's page and plays it with the checkpoint you pick. From a
 shell, `uv run --group workshop arena score policy.onnx --event got-a-talent --timeline timeline.json`

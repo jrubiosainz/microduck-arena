@@ -7,14 +7,13 @@
 
 import { callSamples, songSamples, voiceEvents } from "./duck-voice.js";
 import { SAMPLE_RATE } from "./live/score.js";
-import { isMuted } from "./sound.js";
 
 /** A step longer than this between two frames is a jump, not playback. */
 const JUMP_S = 0.25;
 /** The voice under the replay, as the vote's cues sit (sound.js: 0.4–0.6). */
 const GAIN = 0.6;
 
-export function createStageVoice(loadCalls, { makeContext = () => new AudioContext(), muted = isMuted } = {}) {
+export function createStageVoice(loadCalls, { makeContext = () => new AudioContext(), muted }) {
   let loaded = null;
   let context = null;
   let output = null;

@@ -14,9 +14,9 @@ Every keyframe is the whole command: a group it leaves out is zeros, never the
 previous keyframe's values.
 
 A keyframe may also pull the real pad's two triggers, `"triggers": [rt, lt]`, each within [0, 1]:
-in the replay they open the duck's beak and make it quack or wheee (app/src/duck-voice.js reads them from `sound_of`). The
-policy never reads them — the command stays 13 numbers — and a keyframe that leaves them out
-releases both, like any group.
+in the replay they open the duck's beak and make it quack or wheee (app/src/duck-voice.js reads
+them from `sound_of`). The policy never reads them — the command stays 13 numbers — and a keyframe
+that leaves them out releases both, like any group.
 
 Beside the keyframes, a performance may sing: `"song"` is a list of notes, each
 `{"t", "note", "for", "dynamic", "vowel"}` (a scientific pitch name, C4 = middle C; a dynamic
@@ -286,10 +286,10 @@ def sound_of(timeline: Timeline) -> dict | None:
     keys in use; None when the performance sings nothing and pulls nothing, so it stores nothing."""
     sound = {}
     if timeline.song:
-        sound["song"] = [
-            [n.t, n.length_s, n.midi, DYNAMICS[n.dynamic] * VOWELS[n.vowel][2], VOWELS[n.vowel][0], VOWELS[n.vowel][1]]
-            for n in timeline.song
-        ]
+        sound["song"] = []
+        for n in timeline.song:
+            open_, formant, scale = VOWELS[n.vowel]
+            sound["song"].append([n.t, n.length_s, n.midi, DYNAMICS[n.dynamic] * scale, open_, formant])
     triggers = _trigger_track(timeline)
     if triggers:
         sound["triggers"] = triggers

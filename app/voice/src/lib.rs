@@ -17,7 +17,7 @@
 use std::cell::RefCell;
 use std::f64::consts::TAU;
 
-use sounds::chorale::{Vowel, midi_hz};
+use sounds::chorale::midi_hz;
 use sounds::{Personality, SR, Stream, synth as s};
 
 /// The chorale's control block: a note change lands within a few milliseconds, the stream's own
@@ -187,7 +187,8 @@ pub extern "C" fn notes(count: usize) -> *mut f64 {
 
 /// The whole song, `seconds` long from the performance's t = 0, in the tuned voice: the robot's
 /// `Stream`, untamed (a solo has no chord to sour), driven by the chorale's loop. A note sounds for
-/// its first [`SUSTAIN`] and lets go; between notes the voice is silent at the last pitch. No
+/// its first [`SUSTAIN`] and lets go; between notes the voice is silent at the last pitch, mouth and
+/// vowel, as the robot's live chorale leaves it. No
 /// speaker rolloff: a page plays on full-range speakers. Returns the length, at least one sample.
 #[unsafe(no_mangle)]
 pub extern "C" fn song(
@@ -207,24 +208,26 @@ pub extern "C" fn song(
     let mut voice = Stream::new(&tuned(seed, pitch, brightness, buzz, vibrato, breath), "song", 0);
     let total = ((seconds * f64::from(SR)).round() as usize).max(1);
     let mut out = vec![0.0f32; total];
-    // Held across rests, as the chorale holds it: the next note does not glide in from nowhere.
-    let mut last_hz = notes.first().map_or(440.0, |note| midi_hz(note[2]));
+    // Aimed at the first note, silently, so it does not glide in from the duck's centre pitch.
+    if let Some(first) = notes.first() {
+        voice.set_formant_shift(first[5]);
+        voice.set(midi_hz(first[2]), 0.0, first[4]);
+    }
     for start in (0..total).step_by(BLOCK) {
         let now = start as f64 / f64::from(SR);
-        let (level, open, formant) = match notes
+        match notes
             .iter()
             .find(|note| now >= note[0] && now < note[0] + note[1])
         {
             Some(&[begin, length, midi, level, open, formant]) => {
-                last_hz = midi_hz(midi);
                 let sounding = now - begin < SUSTAIN * length;
-                (if sounding { level } else { 0.0 }, open, formant)
+                voice.set_formant_shift(formant);
+                voice.set(midi_hz(midi), if sounding { level } else { 0.0 }, open);
             }
-            // Before the first note, between two, after the last.
-            None => (0.0, Vowel::default().open(), 0.0),
-        };
-        voice.set_formant_shift(formant);
-        voice.set(last_hz, level, open);
+            // Before the first note, between two, after the last: only the level drops, so the
+            // next note starts from the timbre this one left.
+            None => voice.set_level(0.0),
+        }
         let end = (start + BLOCK).min(total);
         voice.block(&mut out[start..end]);
     }
