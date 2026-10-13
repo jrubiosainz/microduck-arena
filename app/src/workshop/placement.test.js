@@ -146,6 +146,16 @@ describe("the placement plan", () => {
     expect(add.hidden).toBe(true);
   });
 
+  it("still adds this checkpoint again when the list of other policies cannot be had", async () => {
+    const { plan, write } = open(SOLO, async () => { throw new Error("the workshop did not answer"); });
+    await flush();
+    const add = plan.el.querySelector(".placement__add");
+    expect([...add.options].map((option) => option.textContent)).toEqual(["+ duck", "This checkpoint again"]);
+    add.value = "self";
+    add.dispatchEvent(new Event("change"));
+    expect(JSON.parse(write.mock.lastCall[0]).ducks.map((duck) => duck.policy)).toEqual(["self", "self"]);
+  });
+
   it("writes a timeline as an author lays one out", () => {
     expect(formatTimeline({ timeline_version: 2, duration_s: 20, ducks: [{ policy: "self", start: { x: 0, y: 0, yaw: 0 },
       song: [{ t: 1, note: "C4", for: 0.5 }], keyframes: [{ t: 0, twist: [1, 0, 0] }] }] })).toBe(`{

@@ -201,6 +201,7 @@ export function placementPlan(event, { read, write, performers }) {
     rewrite(raw);
   });
 
+  // What "+ duck" offers beside this checkpoint again; a list that cannot be had leaves that alone.
   performers().then((found) => {
     for (const [label, mine] of [["Your trainings", true], ["Published", false]]) {
       const group = el("optgroup");
@@ -208,7 +209,7 @@ export function placementPlan(event, { read, write, performers }) {
       group.append(...found.filter((p) => p.policy.startsWith("local:") === mine).map((p) => new Option(`${p.label} · ${p.rig}`, p.policy)));
       if (group.children.length) add.append(group);
     }
-  });
+  }).catch(() => {});
 
   refresh();
   return { el: box, refresh };
