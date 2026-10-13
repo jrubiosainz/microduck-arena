@@ -59,7 +59,7 @@ VOWELS = {
 # The notes a song may sing, as MIDI numbers: C2 to C7.
 LOWEST_NOTE, HIGHEST_NOTE = 36, 96
 _NOTE_KEYS = ("t", "note", "for", "dynamic", "vowel")
-_NOTE_NAME = re.compile(r"([A-Ga-g])([#b]?)(-?\d+)")
+_NOTE_NAME = re.compile(r"([A-Ga-g])([#b]?)(-?\d{1,2})")
 _STEPS = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 _TOP_KEYS = ("timeline_version", "duration_s", "keyframes")
 # Keyframe times are decimal seconds; the runner asks for k * CTRL_DT, which

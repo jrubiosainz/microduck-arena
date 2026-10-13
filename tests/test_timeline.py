@@ -184,6 +184,7 @@ def test_notes_written_end_to_end_in_decimals_follow_each_other(tmp_path):
         (good(song=[{"t": 0, "note": "C4", "for": 1, "dynamic": ["f"]}]), r"song\[0\]\.dynamic: \['f'\] is not one of"),
         (good(song=[{"t": 0, "note": "C4", "for": 1, "vowel": "uh"}]), r"song\[0\]\.vowel: 'uh' is not one of ah eh ee oh oo mm"),
         (good(song=[{"t": 0, "note": "C4", "for": 1, "vowel": 3}]), r"song\[0\]\.vowel: 3 is not one of"),
+        (good(song=[{"t": 0, "note": "C" + "1" * 5000, "for": 1}]), r"song\[0\]\.note: 'C1+' is not a note name"),
     ],
 )
 def test_a_malformed_timeline_is_refused_with_where(tmp_path, raw, said):
