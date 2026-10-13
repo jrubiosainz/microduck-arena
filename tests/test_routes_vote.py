@@ -286,8 +286,21 @@ def test_a_lanes_trace_is_served_without_ever_naming_a_run(client):
     body = api.get("/api/events/got-a-talent/ballot").json()
     trace = api.get(f"/api/ballots/{body['ballot']}/lanes/0/trace")
     assert trace.status_code == 200
-    assert trace.headers["X-Frame-Count"] == "5"
+    assert (trace.headers["X-Frame-Count"], trace.headers["X-Duck-Count"]) == ("5", "1")
+    assert len(trace.content) == 5 * 21 * 4
     assert api.get(f"/api/ballots/{body['ballot']}/lanes/9/trace").status_code == 400
+
+
+def test_a_lane_with_a_troupe_serves_every_duck_through_the_ballot(client):
+    api, app = client
+    troupe = np.arange(2 * 6 * 21, dtype=np.float32).reshape(2, 6, 21)
+    for name in ("ann", "bob"):
+        record = make_record(user=name, event_id="got-a-talent", policy_name=name)
+        app.state.store.append(record, encode(troupe))
+    body = api.get("/api/events/got-a-talent/ballot").json()
+    trace = api.get(f"/api/ballots/{body['ballot']}/lanes/1/trace")
+    assert (trace.headers["X-Frame-Count"], trace.headers["X-Duck-Count"]) == ("6", "2")
+    np.testing.assert_array_equal(np.frombuffer(trace.content, dtype="<f4").reshape(2, 6, 21), troupe)
 
 
 def test_a_lane_whose_trace_is_missing_404s_not_500s(client):

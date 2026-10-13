@@ -69,6 +69,7 @@ def test_a_stage_checkpoint_plays_the_challenges_timeline(stage, checkout):
     run = make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
     body = evaluated(stage, run)
     assert frames(body) == 100  # 2 s at 50 Hz: the timeline's length, not the event's 20 s
+    assert body["ducks"] == 1
     assert body["timeline"] == hashlib.sha256(TWO_SECONDS.encode()).hexdigest()
     assert set(body["stage"]) == {"fell_at", "seated_s", "standing_s"}
     assert (body["seeds_finished"], body["seeds_total"]) == (1, 1)

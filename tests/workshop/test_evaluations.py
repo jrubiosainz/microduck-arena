@@ -36,6 +36,7 @@ def test_a_checkpoint_is_exported_by_a_dry_run_publish_and_raced(workshop, fakes
     assert (body["seeds_total"], body["seeds_finished"]) == (5, 5)
     assert body["checkpoint"] == 1 and body["score"] < 50
     assert len(base64.b64decode(body["trace_b64"])) % (4 * TRACE_WIDTH) == 0
+    assert body["ducks"] == 1  # a race is one duck
     (publish,) = fakes.calls("publish")
     assert publish[3:7] == ["--run", str(run), "--checkpoint", "1"]
     assert "--dry-run" in publish and "--allow-dirty" in publish

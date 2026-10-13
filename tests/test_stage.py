@@ -51,6 +51,16 @@ def test_the_rule_is_the_runners():
     assert fell_at(outcome.trace, sprint.termination) == pytest.approx(outcome.trace.shape[0] * CTRL_DT)
 
 
+def test_a_troupe_is_summarised_duck_by_duck():
+    from arena.stage import summaries, summary
+
+    term = load_event("got-a-talent").termination
+    troupe = np.stack([frames(50), frames(50, z=0.06), frames(50, tilt=80.0)])
+    assert summaries(troupe, term) == [summary(duck, term) for duck in troupe]
+    assert [s["seated_s"] for s in summaries(troupe, term)] == [0.0, pytest.approx(1.0), 0.0]
+    assert summaries(troupe, term)[2]["fell_at"] == pytest.approx(15 * CTRL_DT)
+
+
 def test_a_summary_says_when_it_fell_and_how_long_it_sat_and_stood():
     from arena.manifest import load_event
     from arena.stage import summary

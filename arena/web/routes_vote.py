@@ -28,7 +28,6 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-import numpy as np
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
@@ -38,6 +37,7 @@ from ..points import SCHEDULE
 from ..store import Ballot
 from ..trace import decode
 from .routes_auth import current_user
+from .routes_read import frames_response
 
 router = APIRouter(prefix="/api")
 
@@ -220,11 +220,7 @@ def ballot_trace(token: str, lane: int, request: Request) -> Response:
         # Mirrors routes_read.run_trace: 404 before ever assuming the bytes
         # are there, never a 500 surfaced from a missing file.
         raise HTTPException(status_code=404, detail="that lane has no replay") from exc
-    return Response(
-        content=np.ascontiguousarray(trace, dtype="<f4").tobytes(),
-        media_type="application/octet-stream",
-        headers={"X-Frame-Count": str(trace.shape[0]), "Cache-Control": "no-store"},
-    )
+    return frames_response(trace)
 
 
 @router.post("/events/{event_id}/vote")

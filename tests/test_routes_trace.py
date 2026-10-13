@@ -17,9 +17,11 @@ def client(tmp_path):
     return TestClient(app), app
 
 
-def a_trace(frames=7):
-    """A trace whose every value is distinct, so a transpose or stride bug shows."""
-    return np.arange(frames * TRACE_WIDTH, dtype=np.float32).reshape(frames, TRACE_WIDTH)
+def a_trace(frames=7, ducks=None):
+    """A trace whose every value is distinct, so a transpose or stride bug shows: one duck's
+    (frames, TRACE_WIDTH), or a troupe's (ducks, frames, TRACE_WIDTH)."""
+    shape = (frames, TRACE_WIDTH) if ducks is None else (ducks, frames, TRACE_WIDTH)
+    return np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
 
 
 def test_run_detail_reports_the_per_seed_breakdown(client):
@@ -81,11 +83,25 @@ def test_the_trace_round_trips_as_float32(client):
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/octet-stream"
     assert response.headers["x-frame-count"] == "11"
+    assert response.headers["x-duck-count"] == "1"
 
     restored = np.frombuffer(response.content, dtype="<f4").reshape(-1, TRACE_WIDTH)
     assert restored.shape == (11, TRACE_WIDTH)
     # float16 storage is lossy; these values are small integers so they survive.
     np.testing.assert_allclose(restored, original, rtol=0, atol=1e-2)
+
+
+def test_a_troupes_trace_and_settle_are_served_duck_after_duck(client):
+    api, app = client
+    record = make_record(event_id="got-a-talent")
+    trace, settle = a_trace(frames=9, ducks=3), a_trace(frames=4, ducks=3)
+    app.state.store.append(record, encode(trace, settle))
+    for path, original in (("trace", trace), ("settle", settle)):
+        response = api.get(f"/api/runs/{record.run_id}/{path}")
+        assert response.headers["x-duck-count"] == "3", path
+        assert response.headers["x-frame-count"] == str(original.shape[1]), path
+        restored = np.frombuffer(response.content, dtype="<f4").reshape(original.shape)
+        np.testing.assert_allclose(restored, original, rtol=0, atol=1e-2, err_msg=path)
 
 
 def test_the_settle_is_served_like_the_trace(client):
@@ -109,6 +125,7 @@ def test_a_run_stored_before_settles_were_recorded_serves_an_empty_one(client):
     response = api.get(f"/api/runs/{record.run_id}/settle")
     assert response.status_code == 200
     assert response.headers["x-frame-count"] == "0"
+    assert response.headers["x-duck-count"] == "1"
     assert response.content == b""
 
 

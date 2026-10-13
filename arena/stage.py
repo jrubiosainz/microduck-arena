@@ -63,3 +63,8 @@ def summary(trace: np.ndarray, termination: Termination) -> dict:
         "seated_s": float(seated(trace).sum() * CTRL_DT),
         "standing_s": float(standing(trace).sum() * CTRL_DT),
     }
+
+
+def summaries(trace: np.ndarray, termination: Termination) -> list[dict]:
+    """`summary` of each duck of a troupe's (ducks, frames, TRACE_WIDTH) trace, in duck order."""
+    return [summary(duck, termination) for duck in trace]

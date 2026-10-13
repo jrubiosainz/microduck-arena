@@ -391,7 +391,8 @@ def run_policy(run_id: str, request: Request) -> Response:
 
 @router.get("/runs/{run_id}/trace")
 def run_trace(run_id: str, request: Request) -> Response:
-    """Raw little-endian float32, TRACE_WIDTH values per frame.
+    """Raw little-endian float32, TRACE_WIDTH values per frame, every duck's frames
+    one duck after another (`frames_response`).
 
     The stored form is compressed float16 npz, which a browser cannot read. This
     decodes it server-side so the frontend is one `new Float32Array(buffer)` away
@@ -399,7 +400,7 @@ def run_trace(run_id: str, request: Request) -> Response:
     """
     store = request.app.state.store
     _find_run(store, run_id)  # 404 before touching the trace file
-    return _frames(decode(store.trace(run_id)))
+    return frames_response(decode(store.trace(run_id)))
 
 
 @router.get("/runs/{run_id}/settle")
@@ -409,14 +410,20 @@ def run_settle(run_id: str, request: Request) -> Response:
     settles were recorded."""
     store = request.app.state.store
     _find_run(store, run_id)
-    return _frames(decode_settle(store.trace(run_id)))
+    return frames_response(decode_settle(store.trace(run_id)))
 
 
-def _frames(frames: np.ndarray) -> Response:
+def frames_response(ducks: np.ndarray) -> Response:
+    """A (ducks, frames, TRACE_WIDTH) trace on the wire: little-endian float32, duck-major, so one
+    duck's bytes are what a lone duck's always were. X-Frame-Count counts one duck's frames."""
     return Response(
-        content=np.ascontiguousarray(frames, dtype="<f4").tobytes(),
+        content=np.ascontiguousarray(ducks, dtype="<f4").tobytes(),
         media_type="application/octet-stream",
-        headers={"X-Frame-Count": str(frames.shape[0]), "Cache-Control": "no-store"},
+        headers={
+            "X-Frame-Count": str(ducks.shape[1]),
+            "X-Duck-Count": str(ducks.shape[0]),
+            "Cache-Control": "no-store",
+        },
     )
 
 

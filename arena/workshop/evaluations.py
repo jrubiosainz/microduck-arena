@@ -32,6 +32,7 @@ from ..manifest import load_event
 from ..policy import load_policy
 from ..stage import summary as stage_summary
 from ..timeline import load_timeline, sound_of
+from ..trace import as_ducks
 from .challenges import timeline_file, timeline_key
 from .runs import find_runs
 from .shell import uv_run
@@ -128,6 +129,7 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
     event = load_event(challenge.event)
     timeline = load_timeline(timeline_file(challenge), event.time_limit_s) if key else None
     result = evaluate(event, load_policy(onnx), timeline)
+    trace = as_ducks(result.trace)
     body = {
         "checkpoint": n,
         "score": result.score,
@@ -136,7 +138,9 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
         "seeds_total": len(result.per_seed),
         "per_seed": [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in result.per_seed],
         "trace_seed": result.trace_seed,
-        "trace_b64": base64.b64encode(result.trace.astype("<f4").tobytes()).decode("ascii"),
+        # Every duck's frames, one duck after another, as the Arena serves a trace.
+        "ducks": len(trace),
+        "trace_b64": base64.b64encode(trace.astype("<f4").tobytes()).decode("ascii"),
         "runner_version": result.runner_version,
         "timeline": key,
         "sound": sound_of(timeline) if timeline else None,
