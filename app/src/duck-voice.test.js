@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CTRL_DT } from "./replay.js";
-import { DUCK_SEED, callSamples, mouthTrack, songSamples, voiceEvents } from "./duck-voice.js";
+import { DUCK_SEED, callSamples, choirOf, mouthTrack, songSamples, voiceEvents } from "./duck-voice.js";
 
 const pulls = (triggers) => ({ triggers });
 /** A note as arena/timeline.py sound_of stores it: [t, for, midi, level, open, formant]. */
@@ -181,5 +181,28 @@ describe("songSamples", () => {
   it("is nothing without a song", () => {
     expect(songSamples(synth([]), pulls([[0, 1, 0]]), 20)).toBeNull();
     expect(songSamples(synth([]), null, 20)).toBeNull();
+  });
+
+  it("sings the duck's own part of a chorus when asked, and solo otherwise", () => {
+    const asked = [];
+    const record = { song: (seed, voice, notes, seconds, part) => (asked.push(part), new Float32Array(48000)) };
+    songSamples(record, { song: [note(0, 1)] }, 20, { choral: true, variant: 2 });
+    songSamples(record, { song: [note(0, 1)] }, 20);
+    expect(asked).toEqual([{ choral: true, variant: 2 }, { choral: false, variant: 0 }]);
+  });
+});
+
+describe("choirOf", () => {
+  const sings = { sound: { song: [note(0, 1)] } };
+  const quacks = { sound: pulls([[0, 1, 0]]) };
+
+  it("makes a chorus of two or more singers, whatever the others do", () => {
+    expect(choirOf([sings, quacks, sings])).toBe(true);
+  });
+
+  it("leaves a lone singer solo, and a silent troupe without a chorus", () => {
+    expect(choirOf([sings, quacks, { sound: null }])).toBe(false);
+    expect(choirOf([sings])).toBe(false);
+    expect(choirOf([])).toBe(false);
   });
 });

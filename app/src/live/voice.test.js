@@ -89,6 +89,31 @@ describe("loadCalls: the song and the tuned voice", () => {
   });
 });
 
+describe("loadCalls: the chorus", () => {
+  const notes = [[0, 1, 69, 1, 0.9, 0]];
+
+  it("sings a part of a chorus in the robot's choral voice: its own per part, still on its note", async () => {
+    const calls = await loadCalls(wasm);
+    const solo = calls.song(28, {}, notes, 1.2);
+    const first = calls.song(28, {}, notes, 1.2, { choral: true, variant: 0 });
+    const second = calls.song(28, {}, notes, 1.2, { choral: true, variant: 1 });
+    for (const take of [solo, first, second]) {
+      expect(take).toHaveLength(57600);
+      expect(take.every(Number.isFinite)).toBe(true);
+    }
+    expect(first).not.toEqual(solo);
+    expect(second).not.toEqual(first);
+    const held = first.subarray(0.2 * 48000, 0.8 * 48000);
+    expect(power(held, 440)).toBeGreaterThan(10 * power(held, 415.3));
+    expect(power(held, 440)).toBeGreaterThan(10 * power(held, 466.2));
+  });
+
+  it("sings solo unless asked for a part, whatever the variant", async () => {
+    const calls = await loadCalls(wasm);
+    expect(calls.song(28, {}, notes, 1.2, { choral: false, variant: 3 })).toEqual(calls.song(28, {}, notes, 1.2));
+  });
+});
+
 describe("windGust", () => {
   const seeded = (seed) => () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;

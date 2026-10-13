@@ -11,8 +11,9 @@
 //!
 //! The quack and the wheee are the robot's own calls, unshaped: what its pad's RT and LT play.
 //! The stage duck's song is the robot's singing voice, `Stream`, driven note by note as its
-//! chorale drives it. All three sing in a voice the performance tunes: five knobs over the seed's
-//! personality, each a position within [0, 1] on a trait's range.
+//! chorale drives it: solo when one duck of a troupe sings, a part of a chorus when two or more do.
+//! All three sing in a voice the performance tunes: five knobs over the seed's personality, each a
+//! position within [0, 1] on a trait's range.
 
 use std::cell::RefCell;
 use std::f64::consts::TAU;
@@ -186,10 +187,12 @@ pub extern "C" fn notes(count: usize) -> *mut f64 {
 }
 
 /// The whole song, `seconds` long from the performance's t = 0, in the tuned voice: the robot's
-/// `Stream`, untamed (a solo has no chord to sour), driven by the chorale's loop. A note sounds for
-/// its first [`SUSTAIN`] and lets go; between notes the voice is silent at the last pitch, mouth and
-/// vowel, as the robot's live chorale leaves it. No
-/// speaker rolloff: a page plays on full-range speakers. Returns the length, at least one sample.
+/// `Stream`, driven by the chorale's loop. A lone singer is untamed (a solo has no chord to sour).
+/// With `choral` 1 the duck sings part `variant` of a chorus through `Stream::choral`, which tames
+/// its vibrato, buzz, jitter and breath so the chord stays in tune. A note sounds for its first
+/// [`SUSTAIN`] and lets go; between notes the voice is silent at the last pitch, mouth and vowel, as
+/// the robot's live chorale leaves it. No speaker rolloff: a page plays on full-range speakers.
+/// Returns the length, at least one sample.
 #[unsafe(no_mangle)]
 pub extern "C" fn song(
     seed: u32,
@@ -199,13 +202,20 @@ pub extern "C" fn song(
     vibrato: f64,
     breath: f64,
     seconds: f64,
+    choral: u32,
+    variant: u32,
 ) -> usize {
     let notes: Vec<[f64; 6]> = NOTES.with_borrow(|n| {
         n.chunks_exact(6)
             .map(|c| [c[0], c[1], c[2], c[3], c[4], c[5]])
             .collect()
     });
-    let mut voice = Stream::new(&tuned(seed, pitch, brightness, buzz, vibrato, breath), "song", 0);
+    let p = tuned(seed, pitch, brightness, buzz, vibrato, breath);
+    let mut voice = if choral == 1 {
+        Stream::choral(&p, variant)
+    } else {
+        Stream::new(&p, "song", 0)
+    };
     let total = ((seconds * f64::from(SR)).round() as usize).max(1);
     let mut out = vec![0.0f32; total];
     // Aimed at the first note, silently, so it does not glide in from the duck's centre pitch.

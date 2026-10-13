@@ -36,19 +36,20 @@ const knobs = (voice = {}) => KNOBS.map((name) => voice[name] ?? NaN);
 
 /** The stage duck's voice in the robot's synthesiser, tuned by a performance's `voice` knobs:
  * `chirp(seed, variant, voice)` is RT's quack, `wheee(seed, variant, segment, voice)` LT's ride
- * (0 its start, 1 its loop), and `song(seed, voice, notes, seconds)` the whole song from t = 0,
- * its notes as arena/timeline.py sound_of stores them. Each is a copy, kept however many calls follow. */
+ * (0 its start, 1 its loop), and `song(seed, voice, notes, seconds, { choral, variant })` the whole
+ * song from t = 0, its notes as arena/timeline.py sound_of stores them: solo, or with `choral` the
+ * duck's part `variant` of a chorus. Each is a copy, kept however many calls follow. */
 export async function loadCalls(fetcher = fetch) {
   const { memory, chirp, wheee, notes, song, samples } = await voiceExports(fetcher);
   const copy = (length) => new Float32Array(memory.buffer, samples(), length).slice();
   return {
     chirp: (seed, variant, voice) => copy(chirp(seed, variant, ...knobs(voice))),
     wheee: (seed, variant, segment, voice) => copy(wheee(seed, variant, segment, ...knobs(voice))),
-    song(seed, voice, written, seconds) {
+    song(seed, voice, written, seconds, { choral = false, variant = 0 } = {}) {
       // Asked for first: making room may grow the memory, which detaches older views of it.
       const room = notes(written.length);
       new Float64Array(memory.buffer, room, written.length * 6).set(written.flat());
-      return copy(song(seed, ...knobs(voice), seconds));
+      return copy(song(seed, ...knobs(voice), seconds, choral ? 1 : 0, variant));
     },
   };
 }

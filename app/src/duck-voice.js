@@ -6,7 +6,8 @@
 // while at or over PULL and its release cuts it; one call at a time, a new quack cutting the last and
 // a quack during a wheee dropped. The chorale (sounds::chorale, robotd): a note sounds for SUSTAIN of
 // its length and the beak follows its vowel; a note holds the speaker, so no call starts inside one,
-// a call playing when one starts is cut, and LT still held when it ends rides again. Pure: the
+// a call playing when one starts is cut, and LT still held when it ends rides again. A troupe where
+// two or more ducks sing is a chorus: each sings its part in the robot's choral voice. Pure: the
 // viewer and the clip hear the same sounds from it.
 
 import { SAMPLE_RATE } from "./live/score.js";
@@ -156,11 +157,21 @@ export function callSamples(calls, { tag, variant, start, end }, voice = {}) {
 
 /**
  * The song as one take from the performance's t = 0, in the voice it tunes, to its last release —
- * or to `duration`, where a cut-short trace stops it, faded. Never empty; null without a song.
+ * or to `duration`, where a cut-short trace stops it, faded. In a chorus (choirOf) it is the duck's
+ * part `variant`. Never empty; null without a song.
  */
-export function songSamples(calls, sound, duration) {
+export function songSamples(calls, sound, duration, { choral = false, variant = 0 } = {}) {
   if (!sound?.song) return null;
   const [start, length] = sound.song.at(-1);
   const seconds = Math.max(1 / SAMPLE_RATE, Math.min(duration, start + length + TAIL_S));
-  return fadeOut(calls.song(DUCK_SEED, sound.voice ?? {}, sound.song, seconds));
+  return fadeOut(calls.song(DUCK_SEED, sound.voice ?? {}, sound.song, seconds, { choral, variant }));
+}
+
+/**
+ * Whether a troupe sings as a chorus: two or more of its ducks have a song. In a chord the
+ * robot tames vibrato, buzz, jitter and breath, which would sour the tuning (sounds::Stream::choral);
+ * a lone singer keeps them.
+ */
+export function choirOf(ducks) {
+  return ducks.filter((duck) => duck.sound?.song).length > 1;
 }
