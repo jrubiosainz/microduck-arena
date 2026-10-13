@@ -31,19 +31,19 @@ from .challenges import (
     read_timeline,
     save_timeline,
     timeline_file,
-    timeline_key,
     write_values,
 )
 from .code import code_state, code_url, commit, push, use_fork
-from .evaluations import evaluate_checkpoint, evaluate_forever, exported, stored
+from .evaluations import evaluate_checkpoint, evaluate_forever, stored
 from .hub import Hub, HubUnreachable
 from .jobs import recorded_jobs, remember_job
 from .login import BrowserLogin, LoginError
-from .publishing import PublishError, preview, publish, repo_for
+from .publishing import PublishError, exported, preview, publish, repo_for
 from .runs import find_runs
 from .shell import ShellError, commit_all, git
 from .tickets import source, ticket, ticket_detail, ticket_state, tickets
 from .training import Training
+from .troupe import candidates, timeline_key
 from .watch import watch_forever
 
 NO_SITE = (
@@ -279,7 +279,7 @@ def checkpoint(event: str, ticket_id: str, n: int, request: Request) -> dict:
     run = found[3] if found else None
     if run is None or n not in run.checkpoints:
         raise HTTPException(status_code=404, detail=f"Checkpoint {n} is not evaluated yet.")
-    body = stored(run, n, timeline_key(challenge))
+    body = stored(run, n, timeline_key(ws.root, challenge))
     if body is None and is_stage(challenge) and exported(run, n):
         body = evaluate_checkpoint(ws.root, run, n, challenge)
     if body is None:
@@ -312,6 +312,14 @@ def post_timeline(event: str, body: TimelineText, request: Request) -> dict:
     except TimelineError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"text": body.text}
+
+
+@router.get("/challenges/{event}/performers")
+def performers(event: str, request: Request) -> dict:
+    """What "+ duck" offers on a stage's plan: every checkpoint and every published policy of the checkout."""
+    ws = _workshop(request)
+    _stage_or_409(ws, event)
+    return {"performers": candidates(ws.root)}
 
 
 class CommitRequest(BaseModel):

@@ -8,31 +8,12 @@ import os
 import threading
 import time
 
-import pytest
-
 from arena.constants import TRACE_WIDTH
 from arena.workshop import evaluations
 from arena.workshop.evaluations import evaluate_checkpoint, evaluate_next, next_checkpoint
 from arena.workshop.runs import find_runs
-from tests.workshop.conftest import git, make_run, reopen
+from tests.workshop.conftest import TWO_SECONDS, make_run
 
-TALENT = """\
-event = "got-a-talent"
-task  = "Mjlab-GotATalent-MicroDuck"
-kind  = "perpetual"
-
-[recipe]
-num_envs       = 4096
-max_iterations = 3000
-seed           = 1
-
-[params.head_reward]
-label = "Follow the head moves"
-value = 0.75
-min   = 0.0
-max   = 2.0
-"""
-TWO_SECONDS = '{"timeline_version": 1, "duration_s": 2.0, "keyframes": [{"t": 0.0}, {"t": 1.0, "twist": [1, 0, 0]}]}\n'
 THREE_SECONDS = '{"timeline_version": 1, "duration_s": 3.0, "keyframes": [{"t": 0.0}]}\n'
 QUACKS = '{"timeline_version": 1, "duration_s": 2.0, "keyframes": [{"t": 0.0}, {"t": 1.0, "triggers": [1, 0]}]}\n'
 SINGS = ('{"timeline_version": 1, "duration_s": 2.0, "keyframes": [{"t": 0.0}], '
@@ -51,20 +32,6 @@ URL = "/api/workshop/challenges/got-a-talent"
 TASK = "Mjlab-GotATalent-MicroDuck"
 
 
-@pytest.fixture
-def stage(checkout, fakes, hub):
-    """The workshop on a checkout that also holds MicroDuck Got a Talent, its timeline committed."""
-    folder = checkout / "src" / "microduck_challenges" / "got_a_talent"
-    folder.mkdir()
-    (folder / "challenge.toml").write_text(TALENT)
-    (folder / "timeline.json").write_text(TWO_SECONDS)
-    git(checkout, "add", "-A")
-    git(checkout, "commit", "-qm", "the stage")
-    client = reopen(checkout, hub)
-    client.timeline = folder / "timeline.json"
-    return client
-
-
 def frames(body) -> int:
     return len(base64.b64decode(body["trace_b64"])) // (4 * TRACE_WIDTH)
 
@@ -81,7 +48,7 @@ def test_a_stage_checkpoint_plays_the_challenges_timeline(stage, checkout):
     assert frames(body) == 100  # 2 s at 50 Hz: the timeline's length, not the event's 20 s
     assert body["ducks"] == 1
     assert body["timeline"] == hashlib.sha256(TWO_SECONDS.encode()).hexdigest()
-    assert set(body["stage"]) == {"fell_at", "seated_s", "standing_s"}
+    assert [set(duck) for duck in body["stage"]] == [{"fell_at", "seated_s", "standing_s"}]
     assert (body["seeds_finished"], body["seeds_total"]) == (1, 1)
     assert body["cast"] == [{"policy": "self", "rig": "legs", "start": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "sound": None}]
 
@@ -207,18 +174,6 @@ def test_a_troupe_of_the_checkpoint_itself_plays_every_duck(stage, checkout):
         ({"x": 0.0, "y": 0.0, "yaw": 0.0}, None),
         ({"x": 0.0, "y": 0.6, "yaw": 90.0}, {"triggers": [[0.0, 0.0, 0.0], [1.0, 1.0, 0.0]]}),
     ]
-
-
-def test_the_page_saves_a_troupe_naming_a_checkpoint_of_this_machine(stage):
-    saved = stage.post(f"{URL}/timeline", json={"text": BORROWS})
-    assert saved.status_code == 200, saved.text
-    assert stage.timeline.read_text() == BORROWS
-
-
-def test_a_duck_playing_another_policy_is_not_played_here(stage, checkout):
-    stage.timeline.write_text(BORROWS)
-    run = make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
-    assert "ducks[1].policy" in evaluated(stage, run)["error"]
 
 
 def test_a_troupe_naming_a_checkpoint_of_this_machine_is_not_published(stage, checkout, fakes):

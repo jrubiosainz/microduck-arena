@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   getJob: vi.fn(),
-  getCheckpoint: vi.fn(async (event, id, n) => ({ checkpoint: n, score: 5.62, trace: new Float32Array(8) })),
+  getCheckpoint: vi.fn(async (event, id, n) => ({ checkpoint: n, score: 5.62, ducks: 1, traces: [new Float32Array(8)],
+    cast: [{ policy: "self", rig: null, start: null, sound: null }] })),
   getCode: vi.fn(),
   publishJob: vi.fn(),
   pushCode: vi.fn(),
@@ -94,7 +95,7 @@ describe("a training's page", () => {
 
   it("a stage's training page edits its performance and says what the checkpoint did", async () => {
     const stageRow = { n: 500, status: "evaluated", score: 20, seeds_finished: 1, seeds_total: 1, command_vx: 0,
-      stage: { fell_at: null, seated_s: 7.9, standing_s: 11.5 } };
+      stage: [{ fell_at: null, seated_s: 7.9, standing_s: 11.5 }] };
     api.getJob.mockResolvedValue({ ...JOB, checkpoints: [stageRow], best: null });
     const root = document.createElement("div");
     await open(root, TALENT);
@@ -110,8 +111,9 @@ describe("a training's page", () => {
   it("a Save and play's fresh evaluation counts even while the ticket row still says queued", async () => {
     const stageEvent = { ...TALENT, metric: "time" }; // so the best checkpoint is picked at once, as on a race
     api.getJob.mockResolvedValue({ ...JOB, checkpoints: [{ n: 500, status: "queued" }], best: 500 });
-    api.getCheckpoint.mockResolvedValue({ checkpoint: 500, trace: new Float32Array(8),
-      stage: { fell_at: 3.2, seated_s: 1, standing_s: 2 } });
+    api.getCheckpoint.mockResolvedValue({ checkpoint: 500, ducks: 1, traces: [new Float32Array(8)],
+      cast: [{ policy: "self", rig: "legs", start: { x: 0, y: 0, yaw: 0 }, sound: null }],
+      stage: [{ fell_at: 3.2, seated_s: 1, standing_s: 2 }] });
     const root = document.createElement("div");
     await open(root, stageEvent);
     await settle();
@@ -126,6 +128,44 @@ describe("a training's page", () => {
     await settle();
     expect(root.querySelector(".performance")).toBeNull();
     expect(api.getTimeline).not.toHaveBeenCalled();
+  });
+
+  it("plays a troupe's every duck on its own rig, and says what each did", async () => {
+    api.getJob.mockResolvedValue({ ...JOB, best: null,
+      checkpoints: [{ n: 500, status: "evaluated", score: 2, seeds_finished: 1, seeds_total: 1, command_vx: 0 }] });
+    api.getCheckpoint.mockResolvedValueOnce({
+      checkpoint: 500, ducks: 2, traces: [new Float32Array(21), new Float32Array(21)],
+      cast: [
+        { policy: "self", rig: "legs", start: { x: 0, y: 0, yaw: 0 }, sound: null },
+        { policy: `pollen-robotics/microduck-roller@${"c".repeat(40)}`, rig: "rollers", start: { x: 0.5, y: 0, yaw: 180 }, sound: null },
+      ],
+      stage: [{ fell_at: null, seated_s: 1, standing_s: 0.5 }, { fell_at: 0.8, seated_s: 0, standing_s: 0.2 }],
+    });
+    const root = document.createElement("div");
+    await open(root, TALENT);
+    await settle();
+    root.querySelector(".ckpts .bars i").click();
+    await settle();
+    const [[lane]] = viewer.setLanes.mock.lastCall;
+    expect(lane.name).toBe("checkpoint 500");
+    expect(lane.ducks.map((duck) => duck.rig)).toEqual(["legs", "rollers"]);
+    expect(root.querySelector(".score__value").textContent).toBe("1 of 2 fell");
+    expect(root.querySelector(".score__seeds").textContent).toBe(
+      "★ · no fall · seated 1.00 s · standing 0.50 s\n1 · fell at 0.80 s · seated 0.00 s · standing 0.20 s");
+  });
+
+  it("says why a checkpoint cannot play: the last line of what failed", async () => {
+    api.getJob.mockResolvedValue({ ...JOB, best: null, checkpoints: [{ n: 500, status: "failed" }] });
+    api.getCheckpoint.mockResolvedValueOnce({ checkpoint: 500,
+      error: "[publish] exporting checkpoint 500\nTimelineError: 'local:sprint_2m/2026-09-25_10-00-00_first@7': this checkout has no such checkpoint\n" });
+    const root = document.createElement("div");
+    await open(root, TALENT);
+    await settle();
+    root.querySelector(".ckpts .bars i").click();
+    await settle();
+    expect(root.querySelector(".score__value").textContent).toBe("Failed");
+    expect(root.querySelector(".score__seeds").textContent).toBe(
+      "TimelineError: 'local:sprint_2m/2026-09-25_10-00-00_first@7': this checkout has no such checkpoint");
   });
 
   it("keeps what is typed while the page redraws every few seconds", async () => {

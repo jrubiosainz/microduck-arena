@@ -6,7 +6,6 @@ and the layout are the author's explanation of the knobs, and a user reads the
 same file in an editor. The Arena never imports the challenge's Python.
 """
 
-import hashlib
 import json
 import os
 import re
@@ -147,17 +146,6 @@ def timeline_file(challenge: Challenge) -> Path:
     return challenge.toml.parent / TIMELINE
 
 
-def timeline_key(challenge: Challenge) -> str | None:
-    """Which performance a challenge's checkpoints play: the sha256 of its timeline.json on a stage;
-    None on a race, or on a stage without one, which plays the event's own command."""
-    if not is_stage(challenge):
-        return None
-    try:
-        return hashlib.sha256(timeline_file(challenge).read_bytes()).hexdigest()
-    except FileNotFoundError:
-        return None
-
-
 def read_timeline(challenge: Challenge) -> str:
     """The text the training's page edits. Without a file, a timeline that stands still for the
     event's whole time limit, which is what the event plays without one."""
@@ -170,12 +158,12 @@ def read_timeline(challenge: Challenge) -> str:
 
 
 def save_timeline(challenge: Challenge, text: str) -> None:
-    """Write the page's timeline.json as typed, once the Arena's own loader has read it: a refusal
-    (TimelineError, which says where) leaves the file as it was."""
+    """Write the page's timeline.json as typed, once the Arena's own loader has read it — a duck of
+    this machine (`local:`) allowed, which Publish & compete resolves. A refusal (TimelineError, which
+    says where) leaves the file as it was."""
     with tempfile.TemporaryDirectory() as tmp:
         candidate = Path(tmp) / TIMELINE  # so a refusal names timeline.json, not a temp file
         candidate.write_text(text, encoding="utf-8")
-        # A duck may be a checkpoint of this machine: the page saves and plays it, publishing resolves it.
         load_troupe(candidate, load_event(challenge.event), allow_local=True)
     path = timeline_file(challenge)
     # A temp file unique to this save: two writers of the same timeline never race on one temp name.

@@ -4,13 +4,19 @@ The workshop writes no manifest, uploads nothing and calls no Arena itself: `pub
 --enter` does all three, exactly as from a shell. The preview of the Hub card is the same command
 with `--dry-run`. The real one prints the commit it made and the entry's time and page, which the
 workshop opens and remembers next to the run.
+
+The workshop's evaluations export a checkpoint with the same command and `--dry-run` (`export`): it
+bakes the observation normaliser in and checks the 61 → 14 shape exactly as the real publish will.
+The ONNX it writes is kept beside its checkpoint, and played again.
 """
 
 import json
 import os
 import re
 import shutil
+import threading
 from datetime import UTC, datetime
+from pathlib import Path
 
 from ..manifest import load_event
 from .shell import uv_run
@@ -65,6 +71,47 @@ def preview(root, run, checkpoint, repo, name, description, event_id, allow_dirt
         return {"readme": (out / "README.md").read_text()}
     finally:
         shutil.rmtree(out, ignore_errors=True)
+
+
+# The evaluations' export stages under ./publish-workshop-evaluation/.
+EXPORT = "workshop-evaluation"
+# One export at a time: they all stage in that one folder, and the evaluator and a page's Save and
+# play (a troupe's local ducks included) may export at the same time.
+_exporting = threading.Lock()
+
+
+def onnx_of(run, n: int) -> Path:
+    """Where checkpoint n's ONNX is kept once exported: beside its stored evaluation."""
+    return run.path / "workshop" / f"model_{n}.onnx"
+
+
+def exported(run, n: int) -> bool:
+    """Whether checkpoint n's ONNX is already exported from the checkpoint file as it is."""
+    try:
+        return onnx_of(run, n).stat().st_mtime >= (run.path / f"model_{n}.pt").stat().st_mtime
+    except OSError:
+        return False
+
+
+def export(root, run, n: int) -> Path:
+    """Checkpoint n's ONNX, exported once by `publish --dry-run`. `--allow-dirty`: an export publishes
+    nothing. A failure raises PublishError with the command's whole output."""
+    onnx = onnx_of(run, n)
+    with _exporting:
+        if exported(run, n):
+            return onnx
+        out = root / f"publish-{EXPORT}"
+        # A previous, failed export may have left this: never move whatever happens to be sitting in
+        # it into a checkpoint's slot as if this run had just produced it.
+        shutil.rmtree(out, ignore_errors=True)
+        try:
+            _run(root, ["publish", "--run", str(run.path), "--checkpoint", str(n), "--repo",
+                        f"local/microduck-{EXPORT}", "--name", EXPORT, "--dry-run", "--allow-dirty"])
+            onnx.parent.mkdir(exist_ok=True)
+            shutil.move(out / "policy.onnx", onnx)
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+    return onnx
 
 
 PUBLISHED = "published.json"

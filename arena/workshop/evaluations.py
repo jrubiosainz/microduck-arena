@@ -1,51 +1,47 @@
-"""Every checkpoint, evaluated: exported as `publish` would, then raced with the Arena's own evaluator.
+"""Every checkpoint, evaluated: exported as `publish` would, then played with the Arena's own evaluator.
 
-`publish --run … --dry-run` is the exporter: it bakes the observation normaliser in and checks the
-61 → 14 shape exactly as the real publish will. `--allow-dirty` because an evaluation publishes
-nothing. `arena.evaluate` is the code the Space runs, on this machine's MuJoCo: the score is
-indicative — only the Space times an entry, and replays drift apart between machines after a few
-seconds.
+The export is publishing.export. `arena.evaluate` is the code the Space runs, on this machine's
+MuJoCo: the score is indicative — only the Space times an entry, and replays drift apart between
+machines after a few seconds.
 
-A worker evaluates every checkpoint of the open challenges' runs, one at a time (the export always
-stages in the same ./publish-workshop-evaluation/): the newest run first, its checkpoints in order,
-so a training's tickets fill in as it goes. A result is stored next to its checkpoint, per Arena
-runner version, trace included, so a page replays it at once. A checkpoint that cannot be measured
-— a failed export, a policy that does not load, a race that breaks — is stored as a failure, with the
-checkpoint file's modification time, and tried again only once that file changes. A checkpoint file
-younger than FRESH_S waits: a local training may still be writing it.
+A worker evaluates every checkpoint of the open challenges' runs, one at a time: the newest run first,
+its checkpoints in order, so a training's tickets fill in as it goes. A result is stored next to its
+checkpoint, per Arena runner version and per FORMAT, trace included, so a page replays it at once. A
+checkpoint that cannot be measured — a failed export, a policy that does not load, a race that breaks,
+a duck the troupe cannot cast — is stored as a failure, with the checkpoint file's modification time,
+and tried again only once that file changes. A checkpoint file younger than FRESH_S waits: a local
+training may still be writing it.
 
-On a stage, each checkpoint plays the challenge's timeline.json (`timeline_key`); an edit makes every
-stored evaluation stale. The ONNX a checkpoint was exported to is kept beside it and played again, so
-a stale checkpoint costs a second or two, not an export. A troupe plays here when every duck is the
-checkpoint itself ("self").
+On a stage, each checkpoint plays the challenge's timeline.json with its whole troupe, the checkpoint
+as the star ("self"). `troupe.timeline_key` names that performance: an edit, or a local duck's
+checkpoint file rewritten, makes every stored evaluation stale. Every ONNX exported is kept beside its
+checkpoint and played again, so a stale checkpoint costs a performance, not an export.
 """
 
 import base64
 import json
 import os
-import shutil
 import tempfile
 import time
 
-from ..cast import cast_of
+from ..cast import duck_record
 from ..constants import RUNNER_VERSION
 from ..evaluate import evaluate
 from ..manifest import load_event
 from ..policy import load_policy
 from ..stage import summaries
-from ..timeline import SELF, load_troupe
+from ..timeline import constant_timeline, load_troupe, solo
 from ..trace import as_ducks
-from .challenges import timeline_file, timeline_key
+from .challenges import timeline_file
+from .publishing import PublishError, export
 from .runs import find_runs
-from .shell import uv_run
+from .troupe import performers_for, timeline_key
 
-NAME = "workshop-evaluation"
 FRESH_S = 30.0
 IDLE_S = 5.0
-
-
-class EvaluationError(RuntimeError):
-    """The export or the race failed; the message is the whole output."""
+# What a stored evaluation holds. 2: every duck's trace, duck-major, with the cast and a stage summary
+# per duck. A body of another form is measured again, as one of another runner version is.
+FORMAT = 2
 
 
 def _path(run, n: int):
@@ -64,7 +60,7 @@ def stored(run, n: int, timeline: str | None) -> dict | None:
         body = json.loads(_path(run, n).read_text())
     except (OSError, ValueError):
         return None  # missing, or corrupt (a crash mid-write): as good as never evaluated
-    if not isinstance(body, dict) or body.get("runner_version") != RUNNER_VERSION:
+    if not isinstance(body, dict) or (body.get("runner_version"), body.get("format")) != (RUNNER_VERSION, FORMAT):
         return None
     if body.get("timeline") != timeline:
         return None  # played with another timeline: stale, a failure included
@@ -74,14 +70,6 @@ def stored(run, n: int, timeline: str | None) -> dict | None:
         except OSError:
             return None
     return body
-
-
-def exported(run, n: int) -> bool:
-    """Whether checkpoint n's ONNX is already exported from the checkpoint file as it is."""
-    try:
-        return _path(run, n).with_suffix(".onnx").stat().st_mtime >= _mtime(run, n)
-    except OSError:
-        return False
 
 
 def summary(run, timeline: str | None) -> dict[int, dict]:
@@ -111,69 +99,49 @@ def _write(run, n: int, body: dict) -> None:
     os.replace(tmp.name, path)
 
 
-def _own(troupe):
-    """`troupe`, when every duck plays the checkpoint itself: the workshop plays no other policy."""
-    for k, duck in enumerate(troupe.ducks if troupe else ()):
-        if duck.policy != SELF:
-            raise EvaluationError(f'ducks[{k}].policy: the workshop plays only this checkpoint ("self"), not {duck.policy!r}')
-    return troupe
-
-
 def _measure(root, run, n: int, challenge, key: str | None) -> dict:
-    onnx = _path(run, n).with_suffix(".onnx")
-    if not exported(run, n):
-        out = root / f"publish-{NAME}"
-        # A previous, failed export may have left this: never move whatever happens to be sitting in
-        # it into a checkpoint's slot as if this run had just produced it.
-        shutil.rmtree(out, ignore_errors=True)
-        done = uv_run(
-            root, "publish", "--run", str(run.path), "--checkpoint", str(n),
-            "--repo", f"local/microduck-{NAME}", "--name", NAME, "--dry-run", "--allow-dirty",
-        )
-        if done.returncode != 0:
-            shutil.rmtree(out, ignore_errors=True)
-            raise EvaluationError(done.stdout + done.stderr)
-        onnx.parent.mkdir(exist_ok=True)
-        shutil.move(out / "policy.onnx", onnx)
-        shutil.rmtree(out, ignore_errors=True)
+    onnx = export(root, run, n)
     event = load_event(challenge.event)
-    policy = load_policy(onnx)
-    # On a stage the challenge's timeline.json, which may name a checkpoint of this machine: saved and
-    # played here, never entered.
-    troupe = load_troupe(timeline_file(challenge), event, allow_local=True) if key else None
-    cast = cast_of(event, _own(troupe), policy, None, {}) if event.course.kind == "stage" else None
-    result = evaluate(event, policy, cast.performers if cast else None)
-    trace = as_ducks(result.trace)
-    body = {
-        "checkpoint": n,
+    body = {"checkpoint": n}
+    if event.course.kind == "stage":
+        # Without a timeline.json, the troupe of one the event plays: its own command for its time limit.
+        troupe = (load_troupe(timeline_file(challenge), event, allow_local=True) if key
+                  else solo(constant_timeline(event.command, event.time_limit_s)))
+        cast = performers_for(root, troupe, onnx, event.rig, event)
+        result = evaluate(event, cast[0].policy, cast)
+        # A duck's policy as the timeline names it: "self", a Hub reference, or a local checkpoint.
+        body["cast"] = [duck_record(duck.policy, performer.rig, duck) for duck, performer in zip(troupe.ducks, cast)]
+        body["stage"] = summaries(result.trace, event.termination)
+    else:
+        result = evaluate(event, load_policy(onnx))
+        body["cast"] = None  # a race: one duck, nothing to place or hear
+    return body | {
         "score": result.score,
         "command_vx": result.command_vx,
         "seeds_finished": result.seeds_finished,
         "seeds_total": len(result.per_seed),
         "per_seed": [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in result.per_seed],
         "trace_seed": result.trace_seed,
-        # Every duck's frames, one duck after another, as the Arena serves a trace.
-        "ducks": len(trace),
-        "trace_b64": base64.b64encode(trace.astype("<f4").tobytes()).decode("ascii"),
+        # Duck-major, as the Arena serves a trace: the page cuts it into `ducks` traces.
+        "ducks": len(as_ducks(result.trace)),
+        "trace_b64": base64.b64encode(result.trace.astype("<f4").tobytes()).decode("ascii"),
         "runner_version": result.runner_version,
+        "format": FORMAT,
         "timeline": key,
-        "cast": list(cast.record) if cast else None,
     }
-    if event.course.kind == "stage":
-        body["stage"] = summaries(result.trace, event.termination)[0]
-    return body
 
 
 def evaluate_checkpoint(root, run, n: int, challenge) -> dict:
     """Measure checkpoint n with the challenge's timeline as it is now, store what came of it, and
     return that body."""
     mtime = _mtime(run, n)
-    key = timeline_key(challenge)
+    key = timeline_key(root, challenge)
     try:
         body = _measure(root, run, n, challenge, key)
     except Exception as exc:  # noqa: BLE001 — stored, so the worker moves on to the next checkpoint
-        error = str(exc) if isinstance(exc, EvaluationError) else f"{type(exc).__name__}: {exc}"
-        body = {"checkpoint": n, "error": error, "mtime": mtime, "runner_version": RUNNER_VERSION, "timeline": key}
+        error = str(exc) if isinstance(exc, PublishError) else f"{type(exc).__name__}: {exc}"
+        body = {"checkpoint": n, "error": error, "mtime": mtime, "runner_version": RUNNER_VERSION,
+                "format": FORMAT, "timeline": key}
     _write(run, n, body)
     return body
 
@@ -181,7 +149,7 @@ def evaluate_checkpoint(root, run, n: int, challenge) -> dict:
 def next_checkpoint(root, challenges, now: float | None = None):
     """(challenge, run, n) to evaluate next, or None: the newest run first, its checkpoints in order."""
     now = time.time() if now is None else now
-    keys = {c.event: timeline_key(c) for c in challenges}
+    keys = {c.event: timeline_key(root, c) for c in challenges}
     runs = sorted(((c, r) for c in challenges for r in find_runs(root, c.task)), key=lambda cr: cr[1].id, reverse=True)
     for challenge, run in runs:
         for n in run.checkpoints:

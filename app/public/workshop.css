@@ -200,6 +200,8 @@ details.output summary { margin: 26px 0 8px; }
 .job-note { margin-top: 8px; }
 .score { display: flex; flex-direction: column; gap: 6px; }
 .score .figure-value { font-size: 2.6rem; }
+/* A troupe's score: a line per duck. */
+.score__seeds { white-space: pre-line; }
 .score__caveat { margin: 0; font-size: 0.75rem; color: var(--paper-60); }
 .job-stop { align-self: flex-start; }
 

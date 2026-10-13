@@ -118,11 +118,10 @@ export function placeLane(rig, laneZ) {
 /**
  * The lanes a stage draws: one per duck of the performance it plays (cast.js stageDucks), in duck
  * order, the star first. Every duck is drawn solid, and the plate over the star alone names the
- * entry. The workshop's checkpoint replay hands its one duck as the entry itself. Pure, so it is
- * testable.
+ * entry. Pure, so it is testable.
  */
 export function stageLanes(entries) {
-  return entries.flatMap((entry) => (entry.ducks ?? [{ ...entry, star: true }])
+  return entries.flatMap((entry) => entry.ducks
     .map((duck) => ({ ...duck, opacity: 1, name: duck.star ? entry.name : undefined })));
 }
 

@@ -4,6 +4,7 @@
 // the focus and an open Output stay, and no button is rebuilt under the pointer.
 
 import { MIN } from "../brightness.js";
+import { stageDucks } from "../cast.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "../deck.js";
 import { isStage } from "../format.js";
 import { eventGuideHref } from "../router.js";
@@ -207,8 +208,17 @@ export async function mountJob(root, { status, account, route }) {
     const done = stage ? evaluations.get(selected)?.stage ?? row?.stage : null;
     if (stage && done) {
       const at = (s) => `${s.toFixed(2)} s`;
-      value.textContent = done.fell_at == null ? "No fall" : `Fell at ${at(done.fell_at)}`;
-      seeds.textContent = `seated ${at(done.seated_s)} · standing ${at(done.standing_s)}`;
+      const fell = done.filter((duck) => duck.fell_at != null);
+      const posture = (duck) => `seated ${at(duck.seated_s)} · standing ${at(duck.standing_s)}`;
+      if (done.length === 1) {
+        value.textContent = fell.length ? `Fell at ${at(fell[0].fell_at)}` : "No fall";
+        seeds.textContent = posture(done[0]);
+      } else {
+        // A troupe: how many fell, then a line per duck, the star first, numbered as the plan numbers them.
+        value.textContent = fell.length ? `${fell.length} of ${done.length} fell` : "No fall";
+        seeds.textContent = done.map((duck, i) =>
+          `${i || "★"} · ${duck.fell_at == null ? "no fall" : `fell at ${at(duck.fell_at)}`} · ${posture(duck)}`).join("\n");
+      }
     } else if (!row || row.status === "queued") {
       value.textContent = "…";
       seeds.textContent = "Not evaluated yet.";
@@ -253,7 +263,12 @@ export async function mountJob(root, { status, account, route }) {
 
   async function play(body) {
     if (!(await stadium) || left || selected !== body.checkpoint) return;
-    viewer.setLanes([{ trace: body.trace, sound: body.sound, tier: "trial", livery: "classic", name: `checkpoint ${body.checkpoint}` }], event);
+    const name = `checkpoint ${body.checkpoint}`;
+    // A stage's lane is its troupe, each duck where its trace puts it. The workshop keeps no settle,
+    // so nothing leads in.
+    viewer.setLanes([stage
+      ? { name, livery: "classic", ducks: stageDucks(body.cast, body.traces, null, { livery: "classic", eventRig: event.rig, lead: 0 }) }
+      : { trace: body.traces[0], tier: "trial", livery: "classic", name }], event);
   }
 
   async function pick(n) {
@@ -264,6 +279,9 @@ export async function mountJob(root, { status, account, route }) {
     if (!body) {
       try {
         body = await api.getCheckpoint(event.id, job.id, n);
+        // One that could not be played says why. A failed export says it in its whole output, whose
+        // last line is the reason.
+        if (body.error) throw new Error(body.error.trim().split("\n").at(-1));
       } catch (error) {
         if (selected === n) { // a checkpoint picked since owns the score
           unplayable = error.message;
@@ -271,7 +289,6 @@ export async function mountJob(root, { status, account, route }) {
         }
         return;
       }
-      if (body.error) return;
       evaluations.set(n, body);
       drawScore(); // the ticket row may still say queued; the fetch just answered for it
     }

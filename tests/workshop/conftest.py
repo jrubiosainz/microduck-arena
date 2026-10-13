@@ -25,6 +25,7 @@ from arena.constants import RUNNER_VERSION, TRACE_WIDTH
 # under that PATH (e.g. running tests/workshop/test_training.py alone) would make that probe fail.
 from arena.workshop.app import create_workshop_app
 from arena.workshop.challenges import open_challenges
+from arena.workshop.evaluations import FORMAT
 from arena.workshop.hub import Account, HubUnreachable
 
 HERE = Path(__file__).resolve().parent
@@ -51,6 +52,23 @@ value = 2.0
 min   = 0.5
 max   = 5.0
 """
+TALENT = """\
+event = "got-a-talent"
+task  = "Mjlab-GotATalent-MicroDuck"
+kind  = "perpetual"
+
+[recipe]
+num_envs       = 4096
+max_iterations = 3000
+seed           = 1
+
+[params.head_reward]
+label = "Follow the head moves"
+value = 0.75
+min   = 0.0
+max   = 2.0
+"""
+TWO_SECONDS = '{"timeline_version": 1, "duration_s": 2.0, "keyframes": [{"t": 0.0}, {"t": 1.0, "twist": [1, 0, 0]}]}\n'
 
 
 def git(root, *args) -> str:
@@ -96,6 +114,7 @@ def store_evaluation(run, n, score=5.0, finished=5, total=5):
     (folder / f"model_{n}.json").write_text(json.dumps({
         "checkpoint": n, "score": score, "command_vx": 0.55, "seeds_finished": finished, "seeds_total": total,
         "per_seed": [], "trace_seed": 1, "trace_b64": trace, "runner_version": RUNNER_VERSION,
+        "format": FORMAT,
     }))
 
 
@@ -209,3 +228,17 @@ def workshop(checkout, fakes, hub):
     for training in client.app.state.workshop.trainings.values():
         training.stop(hub)
         wait_for(lambda: training.returncode is not None)
+
+
+@pytest.fixture
+def stage(checkout, fakes, hub):
+    """The workshop on a checkout that also holds MicroDuck Got a Talent, its timeline committed."""
+    folder = checkout / "src" / "microduck_challenges" / "got_a_talent"
+    folder.mkdir()
+    (folder / "challenge.toml").write_text(TALENT)
+    (folder / "timeline.json").write_text(TWO_SECONDS)
+    git(checkout, "add", "-A")
+    git(checkout, "commit", "-qm", "the stage")
+    client = reopen(checkout, hub)
+    client.timeline = folder / "timeline.json"
+    return client

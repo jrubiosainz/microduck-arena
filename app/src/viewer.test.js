@@ -80,11 +80,4 @@ describe("stageLanes", () => {
       ["legs", "purple", duck.start, undefined, 1],
     ]);
   });
-
-  it("takes a workshop checkpoint's lane as a troupe of one, drawn centred on the event's rig", () => {
-    const [lane] = stageLanes([{ trace, sound: null, tier: "trial", livery: "classic", name: "checkpoint 500" }]);
-    expect(lane).toMatchObject({ trace, star: true, opacity: 1, name: "checkpoint 500" });
-    expect(lane.start).toBeUndefined();
-    expect(lane.rig).toBeUndefined();
-  });
 });
