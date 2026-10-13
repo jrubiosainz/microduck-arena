@@ -8,9 +8,12 @@ const calls = {
 };
 /** One A4 from 1 s to 2 s: its take is 2.2 s long, release included. */
 const song = { song: [[1, 1, 69, 0.7, 0.9, 0]] };
+const settle = () => new Promise((done) => setTimeout(done));
 
-function fakeContext(log) {
+/** A context whose sources log their starts and stops, and whose nodes log what they feed (`wiring`). */
+function fakeContext(log, wiring = []) {
   const listeners = [];
+  const node = (name) => ({ name, connect: (to) => wiring.push([name, to.name]) });
   return {
     state: "running",
     addEventListener: (type, listener) => listeners.push(listener),
@@ -19,36 +22,41 @@ function fakeContext(log) {
       this.state = state;
       for (const listener of [...listeners]) listener();
     },
-    destination: {},
+    destination: { name: "speakers" },
     resume: async () => log.push(["resume"]),
     close: async () => {},
-    createGain: () => ({ gain: { value: 1 }, connect() {} }),
+    createGain: () => ({ ...node("gain"), gain: { value: 1 } }),
+    createDynamicsCompressor: () => ({
+      ...node("limiter"), threshold: {}, knee: {}, ratio: {}, attack: {}, release: {},
+    }),
     createBuffer: (channels, length) => ({ length, copyToChannel() {} }),
     createBufferSource() {
-      const node = {
+      const source = {
+        ...node("source"),
         buffer: null,
-        connect() {},
-        start: (when, offset) => log.push(["start", node.buffer.length, offset]),
+        start: (when, offset) => log.push(["start", source.buffer.length, offset]),
         stop: () => log.push(["stop"]),
       };
-      return node;
+      return source;
     },
   };
 }
 
-async function voiceWith(sound, { duration = 5, muted = () => false, state = "running" } = {}) {
+/** A stage voice for a troupe whose ducks sound as `sounds`, in duck order. */
+async function voiceWith(sounds, { duration = 5, muted = () => false, state = "running", synth = calls } = {}) {
   const log = [];
-  const context = fakeContext(log);
+  const wiring = [];
+  const context = fakeContext(log, wiring);
   context.state = state;
-  const voice = createStageVoice(async () => calls, { makeContext: () => context, muted });
-  voice.set(sound, duration);
-  await new Promise((done) => setTimeout(done));
-  return { voice, log, context };
+  const voice = createStageVoice(async () => synth, { makeContext: () => context, muted });
+  voice.set(sounds.map((sound) => ({ sound })), duration);
+  await settle();
+  return { voice, log, wiring, context };
 }
 
 describe("createStageVoice", () => {
   it("starts a quack as the clock crosses it, once, and lets it end", async () => {
-    const { voice, log } = await voiceWith({ triggers: [[0, 0, 0], [1, 1, 0]] });
+    const { voice, log } = await voiceWith([{ triggers: [[0, 0, 0], [1, 1, 0]] }]);
     voice.follow(0.98);
     voice.follow(1.0);
     voice.follow(1.02);
@@ -59,14 +67,14 @@ describe("createStageVoice", () => {
   });
 
   it("resumes a wheee from where a jump lands inside it", async () => {
-    const { voice, log } = await voiceWith({ triggers: [[0, 0, 0], [1, 0, 1], [3, 0, 0]] });
+    const { voice, log } = await voiceWith([{ triggers: [[0, 0, 0], [1, 0, 1], [3, 0, 0]] }]);
     voice.follow(0);
     voice.follow(2);
     expect(log).toEqual([["start", 96000, 1]]);
   });
 
   it("starts again from the top when the replay loops", async () => {
-    const { voice, log } = await voiceWith({ triggers: [[0, 0, 1], [2, 0, 0]] });
+    const { voice, log } = await voiceWith([{ triggers: [[0, 0, 1], [2, 0, 0]] }]);
     voice.follow(0.5);
     voice.follow(0.52);
     voice.follow(0.02);
@@ -75,10 +83,10 @@ describe("createStageVoice", () => {
 
   it("stays silent when the Arena is muted, and stops when the replay pauses", async () => {
     const wheee = { triggers: [[0, 0, 1], [2, 0, 0]] };
-    const muted = await voiceWith(wheee, { muted: () => true });
+    const muted = await voiceWith([wheee], { muted: () => true });
     muted.voice.follow(0.5);
     expect(muted.log).toEqual([]);
-    const { voice, log } = await voiceWith(wheee);
+    const { voice, log } = await voiceWith([wheee]);
     voice.follow(0.5);
     voice.follow(null);
     expect(log.map(([what]) => what)).toEqual(["start", "stop"]);
@@ -86,7 +94,7 @@ describe("createStageVoice", () => {
 
   it("cuts a wheee the moment it is muted, and takes it up where the replay is once it is not", async () => {
     let quiet = false;
-    const { voice, log } = await voiceWith({ triggers: [[0, 0, 1], [2, 0, 0]] }, { muted: () => quiet });
+    const { voice, log } = await voiceWith([{ triggers: [[0, 0, 1], [2, 0, 0]] }], { muted: () => quiet });
     voice.follow(0.5);
     quiet = true;
     voice.follow(0.52);
@@ -97,13 +105,13 @@ describe("createStageVoice", () => {
   });
 
   it("sings the song as one take on the replay's clock, with a quack between notes beside it", async () => {
-    const { voice, log } = await voiceWith({ ...song, triggers: [[0, 0, 0], [2.1, 1, 0]] });
+    const { voice, log } = await voiceWith([{ ...song, triggers: [[0, 0, 0], [2.1, 1, 0]] }]);
     for (let step = 0; step < 10; step++) voice.follow(2 + step * 0.02);
     expect(log).toEqual([["start", 105600, 2], ["start", 4800, expect.closeTo(0, 5)]]);
   });
 
   it("starts both the quack and the song a jump lands inside, and stops both when the loop comes round", async () => {
-    const { voice, log } = await voiceWith({ ...song, triggers: [[0, 0, 0], [2.05, 1, 0]] });
+    const { voice, log } = await voiceWith([{ ...song, triggers: [[0, 0, 0], [2.05, 1, 0]] }]);
     voice.follow(2.1);
     voice.follow(0.3);
     expect(log).toEqual([
@@ -116,25 +124,72 @@ describe("createStageVoice", () => {
   });
 
   it("restarts the song where a jump lands, and lets it go past its end", async () => {
-    const { voice, log } = await voiceWith(song);
+    const { voice, log } = await voiceWith([song]);
     voice.follow(1.5);
     voice.follow(0.2); // the loop came round
     voice.follow(3); // scrubbed past the song
     expect(log).toEqual([["start", 105600, 1.5], ["stop"], ["start", 105600, 0.2], ["stop"]]);
   });
 
-  it("never loads the synth for a performer who makes no sound", async () => {
+  it("never loads the synth for a troupe that makes no sound", async () => {
     let loads = 0;
     const voice = createStageVoice(async () => (loads++, calls), { makeContext: () => fakeContext([]), muted: () => false });
-    voice.set({ triggers: [[0, 0.2, 0]] }, 5); // the beak opens, nothing is heard
-    voice.set(null, 0);
-    await new Promise((done) => setTimeout(done));
+    voice.set([{ sound: { triggers: [[0, 0.2, 0]] } }, { sound: null }], 5); // the beaks open, nothing is heard
+    voice.set([], 0);
+    await settle();
     expect(loads).toBe(0);
+  });
+
+  describe("a troupe", () => {
+    it("gives each duck its own speaker: two ducks quack at once, each one call at a time", async () => {
+      const { voice, log } = await voiceWith([
+        { triggers: [[0, 0, 0], [1, 1, 0]] },
+        { triggers: [[0, 0, 0], [1, 1, 0], [1.05, 0, 1]] }, // its wheee cuts its own quack
+      ]);
+      voice.follow(1.0);
+      voice.follow(1.06);
+      expect(log).toEqual([["start", 4800, 0], ["start", 2400, 0], ["stop"], ["start", 189600, expect.closeTo(0.01, 5)]]);
+    });
+
+    it("sings every song as a part of a chorus when two ducks sing, each part its duck's place", async () => {
+      const asked = [];
+      const synth = { ...calls, song: (seed, voice, notes, seconds, part) => (asked.push(part), calls.song(seed, voice, notes, seconds)) };
+      const { voice, log } = await voiceWith([song, { triggers: [[0, 1, 0]] }, song], { synth });
+      expect(asked).toEqual([{ choral: true, variant: 0 }, { choral: true, variant: 2 }]);
+      voice.follow(1.5);
+      expect(log).toEqual([["start", 105600, 1.5], ["start", 105600, 1.5]]);
+    });
+
+    it("leaves a lone singer solo", async () => {
+      const asked = [];
+      const synth = { ...calls, song: (seed, voice, notes, seconds, part) => (asked.push(part), calls.song(seed, voice, notes, seconds)) };
+      await voiceWith([{ triggers: [[0, 1, 0]] }, song], { synth });
+      expect(asked).toEqual([{ choral: false, variant: 1 }]);
+    });
+
+    it("mixes every duck through one limiter before the speakers, so a chorus never clips", async () => {
+      const { voice, wiring } = await voiceWith([song, song, song]);
+      voice.follow(1.5);
+      expect(wiring).toEqual([
+        ["limiter", "speakers"],
+        ["gain", "limiter"],
+        ["source", "gain"],
+        ["source", "gain"],
+        ["source", "gain"],
+      ]);
+    });
+
+    it("falls silent for every duck where a cut-short performance stops", async () => {
+      const { voice, log } = await voiceWith([song, { triggers: [[0, 0, 0], [1.6, 1, 0]] }], { duration: 1.5 });
+      for (let at = 1.2; at < 1.7; at += 0.02) voice.follow(at);
+      // The song's take ends where the trace does, and the quack due after it never comes.
+      expect(log.filter(([what]) => what === "start")).toEqual([["start", 72000, 1.2]]);
+    });
   });
 
   describe("on a page the browser keeps silent until a gesture", () => {
     const suspended = async () => {
-      const made = await voiceWith({ triggers: [[0, 1, 0]] }, { duration: 1, state: "suspended" });
+      const made = await voiceWith([{ triggers: [[0, 1, 0]] }], { duration: 1, state: "suspended" });
       for (const at of [0.02, 0.04, 0.06]) made.voice.follow(at);
       return made;
     };
@@ -176,10 +231,10 @@ describe("createStageVoice", () => {
     let release;
     const slow = new Promise((done) => { release = done; });
     const voice = createStageVoice(() => slow, { makeContext: () => fakeContext(log), muted: () => false });
-    voice.set({ ...song, triggers: [[0, 1, 0]] }, 1);
-    voice.set(null, 0);
+    voice.set([{ sound: { ...song, triggers: [[0, 1, 0]] } }], 1);
+    voice.set([], 0);
     release(calls);
-    await new Promise((done) => setTimeout(done));
+    await settle();
     voice.follow(0.02);
     expect(log).toEqual([]);
   });

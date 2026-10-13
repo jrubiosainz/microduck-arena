@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CTRL_DT } from "./replay.js";
-import { DUCK_SEED, callSamples, choirOf, mouthTrack, songSamples, voiceEvents } from "./duck-voice.js";
+import { DUCK_SEED, callSamples, choirOf, limiter, mouthTrack, songSamples, voiceEvents } from "./duck-voice.js";
 
 const pulls = (triggers) => ({ triggers });
 /** A note as arena/timeline.py sound_of stores it: [t, for, midi, level, open, formant]. */
@@ -204,5 +204,16 @@ describe("choirOf", () => {
     expect(choirOf([sings, quacks, { sound: null }])).toBe(false);
     expect(choirOf([sings])).toBe(false);
     expect(choirOf([])).toBe(false);
+  });
+});
+
+describe("limiter", () => {
+  it("limits hard and fast, just under full scale", () => {
+    const param = () => ({ value: null });
+    const node = { threshold: param(), knee: param(), ratio: param(), attack: param(), release: param() };
+    expect(limiter({ createDynamicsCompressor: () => node })).toBe(node);
+    expect(Object.fromEntries(Object.entries(node).map(([name, { value }]) => [name, value]))).toEqual({
+      threshold: -3, knee: 0, ratio: 20, attack: 0.001, release: 0.1,
+    });
   });
 });

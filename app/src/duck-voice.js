@@ -175,3 +175,18 @@ export function songSamples(calls, sound, duration, { choral = false, variant = 
 export function choirOf(ducks) {
   return ducks.filter((duck) => duck.sound?.song).length > 1;
 }
+
+/**
+ * The limiter the troupe sings through, on `context`: hard and fast, just under full scale, so a
+ * chorus of ducks never clips while one duck at the synth's own level passes under it. The stage
+ * and the clip's soundtrack each end their mix with one.
+ */
+export function limiter(context) {
+  const node = context.createDynamicsCompressor();
+  node.threshold.value = -3;
+  node.knee.value = 0;
+  node.ratio.value = 20;
+  node.attack.value = 0.001;
+  node.release.value = 0.1;
+  return node;
+}

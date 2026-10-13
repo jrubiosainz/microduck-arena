@@ -529,9 +529,9 @@ export async function createViewer(
       return { ...entry, rig, marker, plate, tier, gazeTarget: new Vector3(), mouth, jaw };
     });
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
-    // What a lane's trace holds is what it performed: a cut-short performance falls silent with it.
-    const performer = talent ? lanes[0] : null;
-    voice?.set(performer?.sound ?? null, performer ? frameCount(performer.trace) * CTRL_DT : 0);
+    // Every duck on the stage sounds for as long as the troupe's traces perform: a cut-short
+    // performance falls silent with them. A race makes no sound.
+    voice?.set(talent ? lanes : [], player.duration);
     const progress = [];
     if (event?.length_m && lanes.length) {
       for (let second = 0; second < player.duration; second += .1) {
