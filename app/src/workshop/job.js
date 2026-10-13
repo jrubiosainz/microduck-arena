@@ -253,7 +253,7 @@ export async function mountJob(root, { status, account, route }) {
 
   async function play(body) {
     if (!(await stadium) || left || selected !== body.checkpoint) return;
-    viewer.setLanes([{ trace: body.trace, triggers: body.triggers, tier: "trial", livery: "classic", name: `checkpoint ${body.checkpoint}` }], event);
+    viewer.setLanes([{ trace: body.trace, sound: body.sound, tier: "trial", livery: "classic", name: `checkpoint ${body.checkpoint}` }], event);
   }
 
   async function pick(n) {

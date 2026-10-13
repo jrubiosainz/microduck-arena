@@ -36,6 +36,59 @@ describe("loadCalls", () => {
   });
 });
 
+/** Goertzel: the power of `samples` at `hz`. */
+function power(samples, hz) {
+  const k = 2 * Math.cos((2 * Math.PI * hz) / 48000);
+  let s1 = 0;
+  let s2 = 0;
+  for (const x of samples) {
+    const s0 = x + k * s1 - s2;
+    s2 = s1;
+    s1 = s0;
+  }
+  return s1 * s1 + s2 * s2 - k * s1 * s2;
+}
+const crossings = (samples) => samples.reduce((n, x, i) => n + (i > 0 && (samples[i - 1] < 0) !== (x < 0) ? 1 : 0), 0);
+const peak = (samples) => samples.reduce((top, x) => Math.max(top, Math.abs(x)), 0);
+
+describe("loadCalls: the song and the tuned voice", () => {
+  it("sings each note at its pitch, A4 at 440 Hz and A5 at 880 Hz, for exactly the length asked", async () => {
+    const calls = await loadCalls(wasm);
+    const sung = calls.song(28, {}, [[0, 0.5, 69, 1, 0.9, 0], [0.5, 0.5, 81, 1, 0.9, 0]], 1.2);
+    expect(sung).toHaveLength(57600);
+    const a4 = sung.subarray(0.1 * 48000, 0.4 * 48000);
+    const a5 = sung.subarray(0.6 * 48000, 0.9 * 48000);
+    expect(power(a4, 440)).toBeGreaterThan(10 * power(a4, 415.3));
+    expect(power(a4, 440)).toBeGreaterThan(10 * power(a4, 466.2));
+    expect(power(a5, 880)).toBeGreaterThan(10 * power(a5, 830.6));
+    expect(power(a5, 880)).toBeGreaterThan(10 * power(a5, 932.3));
+  });
+
+  it("is silent before the first note and after the last one's release", async () => {
+    const calls = await loadCalls(wasm);
+    const sung = calls.song(28, {}, [[0.5, 0.5, 69, 1, 0.9, 0]], 1.5);
+    expect(peak(sung.subarray(0, 0.45 * 48000))).toBeLessThan(1e-3);
+    expect(peak(sung.subarray(0.6 * 48000, 0.9 * 48000))).toBeGreaterThan(0.1);
+    expect(peak(sung.subarray(1.3 * 48000))).toBeLessThan(1e-3);
+  });
+
+  it("never returns an empty song", async () => {
+    const calls = await loadCalls(wasm);
+    expect(calls.song(28, {}, [[0, 1, 69, 1, 0.9, 0]], 0)).toHaveLength(1);
+  });
+
+  it("tunes the quack and the wheee: a low pitch is low, a high one high, an absent knob the seed's own", async () => {
+    const calls = await loadCalls(wasm);
+    // No breath in either: its noise crosses zero at any pitch and would blur the comparison.
+    const low = calls.chirp(28, 0, { pitch: 0, breath: 0 });
+    const high = calls.chirp(28, 0, { pitch: 1, breath: 0 });
+    expect(crossings(high) / high.length).toBeGreaterThan(2 * (crossings(low) / low.length));
+    expect(calls.chirp(28, 0, {})).toEqual(calls.chirp(28, 0));
+    expect(calls.chirp(28, 0, { buzz: 0 })).not.toEqual(calls.chirp(28, 0));
+    expect(calls.wheee(28, 0, 1, { vibrato: 1 })).not.toEqual(calls.wheee(28, 0, 1));
+  });
+});
+
 describe("windGust", () => {
   const seeded = (seed) => () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;

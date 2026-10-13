@@ -590,20 +590,22 @@ def _stored(api, event_id, run_id):
     return next(r for r in api.app.state.store.runs(event_id) if r.run_id == run_id)
 
 
-def test_a_stage_entry_keeps_the_triggers_its_timeline_pulls(api):
+def test_a_stage_entry_keeps_the_sound_its_timeline_makes(api):
     stand = (0.0,) * 13
     pulled = Timeline(2.0, (0.0, 0.5, 1.0), (stand,) * 3, ((0.0, 0.0), (1.0, 0.0), (0.0, 0.0)))
     _TIMELINES["alice/best_alpha_walking"] = (pulled, "c" * 64)
     body = submit(api, event="got-a-talent").json()
-    assert _stored(api, "got-a-talent", body["run_id"]).triggers == [[0.0, 0.0, 0.0], [0.5, 1.0, 0.0], [1.0, 0.0, 0.0]]
+    assert _stored(api, "got-a-talent", body["run_id"]).sound == {
+        "triggers": [[0.0, 0.0, 0.0], [0.5, 1.0, 0.0], [1.0, 0.0, 0.0]],
+    }
 
 
-def test_a_race_and_a_still_performance_keep_no_triggers(api):
+def test_a_race_and_a_still_performance_keep_no_sound(api):
     race = submit(api).json()
-    assert _stored(api, "sprint-2m", race["run_id"]).triggers is None
+    assert _stored(api, "sprint-2m", race["run_id"]).sound is None
     _TIMELINES["alice/best_alpha_walking"] = (performance(1.0), "d" * 64)
     still = submit(api, event="got-a-talent").json()
-    assert _stored(api, "got-a-talent", still["run_id"]).triggers is None
+    assert _stored(api, "got-a-talent", still["run_id"]).sound is None
 
 
 def test_a_speed_sent_to_a_stage_is_ignored_not_a_500(api):

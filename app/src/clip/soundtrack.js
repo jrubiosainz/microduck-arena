@@ -4,7 +4,7 @@
 // segments, no smoothing afterwards, no mixing left to ffmpeg.
 
 import { olaAt, scheduleOla } from "../crowd-behaviour.js";
-import { callSamples } from "../duck-voice.js";
+import { callSamples, songSamples } from "../duck-voice.js";
 import { SAMPLE_RATE } from "../live/score.js";
 import { loadCalls } from "../live/voice.js";
 import { stadiumDirection } from "./direction.js";
@@ -51,13 +51,15 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
   limiter.connect(context.destination);
 
   // The synth only for a clip whose duck makes a sound: every race and silent performance skips it.
-  const synth = score.cues.some((cue) => cue.call) ? await calls() : null;
+  const synth = score.cues.some((cue) => cue.call || cue.song) ? await calls() : null;
   const cues = await Promise.all(
     score.cues.map(async (cue) => ({
       ...cue,
       buffer: cue.call
-        ? synthBuffer(context, callSamples(synth, cue.call))
-        : await context.decodeAudioData(await load(cue.file)),
+        ? synthBuffer(context, callSamples(synth, cue.call, cue.voice))
+        : cue.song
+          ? synthBuffer(context, songSamples(synth, cue.song.sound, cue.song.duration))
+          : await context.decodeAudioData(await load(cue.file)),
     })),
   );
   for (const cue of cues) {

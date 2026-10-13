@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from arena.constants import CTRL_DT
-from arena.timeline import Timeline, TimelineError, constant_timeline, load_timeline, trigger_track
+from arena.timeline import Note, Timeline, TimelineError, constant_timeline, load_timeline, sound_of
 
 LIMIT_S = 20.0
 
@@ -82,7 +82,7 @@ def test_triggers_are_read_per_keyframe_and_released_when_left_out(tmp_path):
     assert timeline.commands[1] == (1.0,) + (0.0,) * 12
 
 
-def test_the_trigger_track_keeps_the_changes_only(tmp_path):
+def test_the_sound_keeps_the_trigger_changes_only(tmp_path):
     """RT held over two keyframes is one pull, not two: the replay quacks on a change."""
     raw = good(keyframes=[
         {"t": 0.0, "triggers": [1, 0]},
@@ -91,13 +91,56 @@ def test_the_trigger_track_keeps_the_changes_only(tmp_path):
         {"t": 3.0, "head": [0, 0, 0.3, 0]},
         {"t": 4.0, "triggers": [0, 1]},
     ])
-    track = trigger_track(load_timeline(write(tmp_path, raw), LIMIT_S))
-    assert track == [[0.0, 1.0, 0.0], [2.0, 0.0, 0.0], [4.0, 0.0, 1.0]]
+    assert sound_of(load_timeline(write(tmp_path, raw), LIMIT_S)) == {
+        "triggers": [[0.0, 1.0, 0.0], [2.0, 0.0, 0.0], [4.0, 0.0, 1.0]],
+    }
 
 
-def test_a_performance_that_pulls_nothing_has_no_track(tmp_path):
-    assert trigger_track(load_timeline(write(tmp_path, good()), LIMIT_S)) is None
-    assert trigger_track(constant_timeline((0.0,) * 13, 20.0)) is None
+def test_the_sound_carries_each_note_resolved_and_the_voice(tmp_path):
+    raw = good(voice={"pitch": 0.3}, song=[
+        {"t": 1.0, "note": "A4", "for": 0.5},
+        {"t": 2.0, "note": "C5", "for": 1.0, "dynamic": "p", "vowel": "mm"},
+    ])
+    assert sound_of(load_timeline(write(tmp_path, raw), LIMIT_S)) == {
+        "voice": {"pitch": 0.3},
+        "song": [[1.0, 0.5, 69, 0.70, 0.90, 0.0], [2.0, 1.0, 72, pytest.approx(0.40 * 0.65), 0.05, -2.0]],
+    }
+
+
+def test_a_performance_that_sings_nothing_and_pulls_nothing_has_no_sound(tmp_path):
+    assert sound_of(load_timeline(write(tmp_path, good()), LIMIT_S)) is None
+    # A voice nobody hears is nothing to store.
+    assert sound_of(load_timeline(write(tmp_path, good(voice={"pitch": 1})), LIMIT_S)) is None
+    assert sound_of(constant_timeline((0.0,) * 13, 20.0)) is None
+
+
+def test_a_song_and_a_voice_load_beside_the_keyframes(tmp_path):
+    raw = good(voice={"pitch": 0.3, "breath": 0}, song=[
+        {"t": 1.0, "note": "C5", "for": 0.5},
+        {"t": 1.5, "note": "eb4", "for": 0.25, "dynamic": "p", "vowel": "oo"},
+        {"t": 2.0, "note": "F#3", "for": 1.0},
+    ])
+    timeline = load_timeline(write(tmp_path, raw), LIMIT_S)
+    assert timeline.voice == {"pitch": 0.3, "breath": 0.0}
+    assert timeline.song == (
+        Note(1.0, 0.5, 72, "mf", "ah"),
+        Note(1.5, 0.25, 63, "p", "oo"),
+        Note(2.0, 1.0, 54, "mf", "ah"),
+    )
+    # The policy never hears it: the command numbers are the keyframes' alone.
+    assert timeline.commands == load_timeline(write(tmp_path, good()), LIMIT_S).commands
+
+
+def test_a_timeline_without_a_song_or_a_voice_has_neither(tmp_path):
+    timeline = load_timeline(write(tmp_path, good()), LIMIT_S)
+    assert (timeline.voice, timeline.song) == ({}, ())
+
+
+def test_notes_written_end_to_end_in_decimals_follow_each_other(tmp_path):
+    """0.1 + 0.2 is 0.30000000000000004 in floating point: a note at 0.3 still follows one at 0.1 for 0.2,
+    and a note ending exactly at duration_s fits."""
+    raw = good(song=[{"t": 0.1, "note": "C4", "for": 0.2}, {"t": 0.3, "note": "D4", "for": 9.7}])
+    assert len(load_timeline(write(tmp_path, raw), LIMIT_S).song) == 2
 
 
 @pytest.mark.parametrize(
@@ -132,6 +175,30 @@ def test_a_performance_that_pulls_nothing_has_no_track(tmp_path):
         (good(keyframes=[{"t": 0.0, "triggers": [0, True]}]), r"keyframes\[0\]\.triggers\[1\]: expected a number"),
         (good(keyframes=[{"t": 0.0, "triggers": [1.5, 0]}]), r"keyframes\[0\]\.triggers\[0\]: 1.5 is outside \[0, 1\]"),
         (good(keyframes=[{"t": 0.0, "triggers": [0, -0.1]}]), r"keyframes\[0\]\.triggers\[1\]: -0.1 is outside \[0, 1\]"),
+        (good(voice=[0.3]), r"voice: expected an object, got list"),
+        (good(voice={"speed": 1}), r"voice: unknown keys \['speed'\]"),
+        (good(voice={"pitch": 1.5}), r"voice\.pitch: 1\.5 is outside \[0, 1\]"),
+        (good(voice={"buzz": "0.5"}), r"voice\.buzz: expected a number"),
+        (good(song=[]), r"song: expected 1 to 1000 notes in a list, got 0"),
+        (good(song={"t": 0}), r"song: expected 1 to 1000 notes in a list, got a dict"),
+        (good(song=[{"t": 0.01 * i, "note": "C4", "for": 0.02} for i in range(1001)]), r"song: expected 1 to 1000 notes"),
+        (good(song=["C4"]), r"song\[0\]: expected an object, got str"),
+        (good(song=[{"t": 0, "note": "C4", "for": 1, "level": 1}]), r"song\[0\]: unknown keys \['level'\]"),
+        (good(song=[{"t": 0, "for": 1}]), r"song\[0\]: missing 'note'"),
+        (good(song=[{"t": -1, "note": "C4", "for": 1}]), r"song\[0\]\.t: -1\.0 is before the start of the performance"),
+        (good(song=[{"t": 0, "note": "C4", "for": 0.01}]), r"song\[0\]\.for: must be at least one control step \(0\.02 s\), got 0\.01"),
+        (good(song=[{"t": 0, "note": "C4", "for": 1.5}, {"t": 1.2, "note": "D4", "for": 1}]), r"song\[1\]\.t: 1\.2 starts before song\[0\] ends \(1\.5\)"),
+        (good(song=[{"t": 9.5, "note": "C4", "for": 0.9}]), r"song\[0\]: ends at 10\.4, after the end of the performance \(10 s\)"),
+        (good(song=[{"t": 0, "note": "H4", "for": 1}]), r"song\[0\]\.note: 'H4' is not a note name"),
+        (good(song=[{"t": 0, "note": "C", "for": 1}]), r"song\[0\]\.note: 'C' is not a note name"),
+        (good(song=[{"t": 0, "note": 60, "for": 1}]), r"song\[0\]\.note: 60 is not a note name"),
+        (good(song=[{"t": 0, "note": "C8", "for": 1}]), r"song\[0\]\.note: 'C8' is outside C2 to C7"),
+        (good(song=[{"t": 0, "note": "B1", "for": 1}]), r"song\[0\]\.note: 'B1' is outside C2 to C7"),
+        (good(song=[{"t": 0, "note": "C4", "for": 1, "dynamic": "loud"}]), r"song\[0\]\.dynamic: 'loud' is not one of ppp pp p mp mf f ff"),
+        (good(song=[{"t": 0, "note": "C4", "for": 1, "dynamic": ["f"]}]), r"song\[0\]\.dynamic: \['f'\] is not one of"),
+        (good(song=[{"t": 0, "note": "C4", "for": 1, "vowel": "uh"}]), r"song\[0\]\.vowel: 'uh' is not one of ah eh ee oh oo mm"),
+        (good(song=[{"t": 0, "note": "C4", "for": 1, "vowel": 3}]), r"song\[0\]\.vowel: 3 is not one of"),
+        (good(song=[{"t": 0, "note": "C" + "1" * 5000, "for": 1}]), r"song\[0\]\.note: 'C1+' is not a note name"),
     ],
 )
 def test_a_malformed_timeline_is_refused_with_where(tmp_path, raw, said):

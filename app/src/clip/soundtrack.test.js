@@ -53,4 +53,23 @@ describe("renderSoundtrack", () => {
       calls: () => { throw new Error("the synth was loaded"); },
     });
   });
+
+  it("renders the song from the robot's synth at its instant, as long as the performance lets it", async () => {
+    const log = [];
+    const asked = [];
+    const calls = {
+      song: (seed, voice, notes, seconds) => (asked.push(seconds), new Float32Array(Math.round(seconds * 48000)).fill(0.25)),
+    };
+    const sound = { song: [[0.5, 1, 69, 0.7, 0.9, 0]] };
+    const score = { crowd: null, cues: [{ at: 0.3, song: { sound, duration: 1 }, gain: 1 }] };
+    await renderSoundtrack(score, 2, {
+      Context: fakeContext(log),
+      load: () => { throw new Error("a song cue fetched a file"); },
+      calls: async () => calls,
+    });
+    expect(asked).toEqual([1]);
+    expect(log).toHaveLength(1);
+    expect(log[0].at).toBe(0.3);
+    expect(log[0].buffer.data).toHaveLength(48000);
+  });
 });

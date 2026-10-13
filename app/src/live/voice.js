@@ -30,15 +30,26 @@ export async function loadSynth(fetcher = fetch) {
   };
 }
 
-/** The robot pad's two calls in its own synthesiser: `chirp(seed, variant)` is
- * RT's quack, `wheee(seed, variant, segment)` LT's ride (0 its start, 1 its
- * loop). Each is a copy, kept however many calls follow. */
+/** The knobs a performance's voice may set, in the order the synth takes them; a knob left out is NaN, the seed's own. */
+const KNOBS = ["pitch", "brightness", "buzz", "vibrato", "breath"];
+const knobs = (voice = {}) => KNOBS.map((name) => voice[name] ?? NaN);
+
+/** The stage duck's voice in the robot's synthesiser, tuned by a performance's `voice` knobs:
+ * `chirp(seed, variant, voice)` is RT's quack, `wheee(seed, variant, segment, voice)` LT's ride
+ * (0 its start, 1 its loop), and `song(seed, voice, notes, seconds)` the whole song from t = 0,
+ * its notes as arena/timeline.py sound_of stores them. Each is a copy, kept however many calls follow. */
 export async function loadCalls(fetcher = fetch) {
-  const { memory, chirp, wheee, samples } = await voiceExports(fetcher);
+  const { memory, chirp, wheee, notes, song, samples } = await voiceExports(fetcher);
   const copy = (length) => new Float32Array(memory.buffer, samples(), length).slice();
   return {
-    chirp: (seed, variant) => copy(chirp(seed, variant)),
-    wheee: (seed, variant, segment) => copy(wheee(seed, variant, segment)),
+    chirp: (seed, variant, voice) => copy(chirp(seed, variant, ...knobs(voice))),
+    wheee: (seed, variant, segment, voice) => copy(wheee(seed, variant, segment, ...knobs(voice))),
+    song(seed, voice, written, seconds) {
+      // Asked for first: making room may grow the memory, which detaches older views of it.
+      const room = notes(written.length);
+      new Float64Array(memory.buffer, room, written.length * 6).set(written.flat());
+      return copy(song(seed, ...knobs(voice), seconds));
+    },
   };
 }
 

@@ -45,9 +45,9 @@ describe("clipScore", () => {
   it("puts the duck's quack and wheee on the tape after the settle, cut where the performance ends", () => {
     const event = { id: "got-a-talent", course: "stage", clip: { tape_max_s: 20, sounds: ["crowd", "verdict"] } };
     const plan = clipPlan(250, 20, 26); // a 5 s performance after 26 frames of settle
-    const triggers = [[0, 0, 0], [1, 1, 0], [1.2, 0, 0], [4, 0, 1]];
+    const sound = { triggers: [[0, 0, 0], [1, 1, 0], [1.2, 0, 0], [4, 0, 1]] };
     const run = { run_id: "r1", seeds_finished: 1, event };
-    const voice = clipScore({ run, plan, trace: new Float32Array(21 * 276), triggers }).cues.filter((cue) => cue.call);
+    const voice = clipScore({ run, plan, trace: new Float32Array(21 * 276), sound }).cues.filter((cue) => cue.call);
     expect(voice.map((cue) => cue.call)).toEqual([
       { tag: "chirp", variant: 0, start: 1, end: 4 },
       { tag: "wheee", variant: 0, start: 4, end: 5 },
@@ -56,10 +56,23 @@ describe("clipScore", () => {
     expect(voice[1].at).toBeCloseTo(3 + 0.52 + 4);
   });
 
-  it("a performance that pulls nothing adds no voice", () => {
+  it("a performance that makes no sound adds no voice", () => {
     const event = { id: "got-a-talent", course: "stage", clip: { tape_max_s: 20, sounds: ["crowd", "verdict"] } };
     const run = { run_id: "r1", seeds_finished: 1, event };
-    const score = clipScore({ run, plan: clipPlan(250, 20, 26), trace: new Float32Array(21 * 276), triggers: null });
+    const score = clipScore({ run, plan: clipPlan(250, 20, 26), trace: new Float32Array(21 * 276), sound: null });
     expect(score.cues.some((cue) => cue.call)).toBe(false);
+  });
+
+  it("puts the duck's song on the tape at the performance's start, and its calls in its voice", () => {
+    const event = { id: "got-a-talent", course: "stage", clip: { tape_max_s: 20, sounds: ["crowd", "verdict"] } };
+    const plan = clipPlan(250, 20, 26); // a 5 s performance after 26 frames of settle
+    const sound = { voice: { pitch: 1 }, song: [[0.5, 1, 69, 0.7, 0.9, 0]], triggers: [[0, 0, 0], [2, 1, 0]] };
+    const run = { run_id: "r1", seeds_finished: 1, event };
+    const cues = clipScore({ run, plan, trace: new Float32Array(21 * 276), sound }).cues;
+    const sung = cues.find((cue) => cue.song);
+    expect(sung.at).toBeCloseTo(3 + 0.52);
+    expect(sung.song.sound).toBe(sound);
+    expect(sung.song.duration).toBeCloseTo(5);
+    expect(cues.find((cue) => cue.call).voice).toEqual({ pitch: 1 });
   });
 });
