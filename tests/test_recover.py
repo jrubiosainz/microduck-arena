@@ -251,3 +251,22 @@ def test_recover_plays_a_troupe_with_its_borrowed_policies(tmp_path, monkeypatch
     store = LocalStore(tmp_path)
     [record] = recover(store, [load_event("got-a-talent")], reader=TALENT_LISTED)
     assert trace_codec.decode(store.trace(record.run_id)).shape[:2] == (2, 50)
+
+
+def test_a_troupe_whose_borrowed_policy_left_the_hub_is_skipped_and_said(tmp_path, monkeypatch):
+    from arena.hub_fetch import FetchError
+    from arena.manifest import load_event
+    from arena.recover import recover
+    from arena.store import LocalStore
+
+    def fetch_policy(repo_id, revision=None, event=None):
+        # As fetch_references prefixes it: the first duck that plays the policy, then its repo.
+        raise FetchError("ducks[1]: pollen-robotics/microduck-sitter: could not read pollen-robotics/microduck-sitter: 404")
+
+    monkeypatch.setattr("arena.hub_fetch.fetch_policy", fetch_policy)
+    store, said = LocalStore(tmp_path), []
+    assert recover(store, [load_event("got-a-talent")], reader=TALENT_LISTED, on_event=said.append) == []
+    assert store.runs("got-a-talent") == []
+    [message] = said
+    assert "alice/talent" in message and "got-a-talent" in message
+    assert "ducks[1]: pollen-robotics/microduck-sitter" in message
