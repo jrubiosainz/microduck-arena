@@ -6,7 +6,9 @@ file); with --hf-jobs it prints what hf_jobs prints and writes the run into
 $FAKE_HUB/<ckpt repo>/ instead, which `hf download` copies back. `publish
 --dry-run` writes ./publish-<name>/ with $FAKE_UV_ONNX as policy.onnx; a real
 `publish` prints the commit URL the real one prints and, with `--enter`, the
-line an entry prints (FAKE_UV_ENTER_REFUSED=1: the refusal, exit 3). FAKE_UV_FAIL_<COMMAND>=1
+line an entry prints (FAKE_UV_ENTER_REFUSED=1: the refusal, exit 3).
+A call's `--timeline` file is read as the call runs and logged with it: the workshop's resolved
+copy is a temp file, gone once the call returns. FAKE_UV_FAIL_<COMMAND>=1
 makes that command fail; FAKE_UV_TRAIN_S keeps `train` alive that long;
 FAKE_UV_RESUBMIT=1 prints a second `[job] id:` line, as `train --hf-jobs`
 does when a volume mount fails and it resubmits. `hf auth login` prints what
@@ -111,8 +113,10 @@ def publish(argv):
 
 def main():
     argv = sys.argv[1:]
+    timeline = flag(argv, "--timeline")
     with open(os.environ["FAKE_UV_LOG"], "a") as log:
-        log.write(json.dumps({"argv": argv, "cwd": os.getcwd()}) + "\n")
+        log.write(json.dumps({"argv": argv, "cwd": os.getcwd(),
+                              "timeline": Path(timeline).read_text() if timeline else None}) + "\n")
     assert argv[:2] == ["run", "--no-sync"], argv
     command, rest = argv[2], argv[3:]
     if os.environ.get(f"FAKE_UV_FAIL_{command.upper()}"):

@@ -123,7 +123,8 @@ def _ticket(source_, voted: bool, key: str | None) -> dict:
         "checkpoints": rows,
         "best": best,
         "job_url": _job_url(live, record),
-        "published": (published(run) or [None])[-1] if run else None,
+        # The newest entry: a duck published for a troupe is a policy, not an entry.
+        "published": next((e for e in reversed(published(run)) if "entered" in e), None) if run else None,
     }
 
 

@@ -89,7 +89,7 @@ describe("Publish & compete", () => {
     type(p.el.querySelector("textarea"), "It leans into every step.");
     p.el.querySelector(".publish__go").click();
     await flush();
-    expect(on.onPublish).toHaveBeenCalledWith({ checkpoint: 1000, name: "sprint-2m-first", description: "It leans into every step.", allow_dirty: false });
+    expect(on.onPublish).toHaveBeenCalledWith({ checkpoint: 1000, name: "sprint-2m-first", description: "It leans into every step.", allow_dirty: false }, expect.any(Function));
     const result = p.el.querySelector(".result");
     expect(result.hidden).toBe(false);
     expect(result.querySelector("b").textContent).toBe("4.89 s");
@@ -106,6 +106,24 @@ describe("Publish & compete", () => {
     await flush();
     expect(p.el.querySelector(".publish__status").textContent).toContain("did not enter it: 403");
     expect(p.el.querySelector(".publish__go").disabled).toBe(false);
+  });
+
+  it("says which duck of a troupe it is publishing, then shows the entry", async () => {
+    const on = handlers();
+    let finish;
+    on.onPublish.mockImplementationOnce((values, onProgress) => new Promise((resolve) => {
+      onProgress({ done: 1, of: 3 });
+      finish = resolve;
+    }));
+    const p = panel(on);
+    p.update({ job: JOB, code: CODE, account: IN, selected: 1000 });
+    type(p.el.querySelector("textarea"), "It sits and sings.");
+    p.el.querySelector(".publish__go").click();
+    await flush();
+    expect(p.el.querySelector(".publish__status").textContent).toBe("Publishing duck 2/3…");
+    finish({ entered: "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s", page_url: "http://arena.test/#/r/x" });
+    await flush();
+    expect(p.el.querySelector(".result").hidden).toBe(false);
   });
 
   it("keeps what is typed, and a fork address being typed, across redraws", () => {

@@ -22,6 +22,7 @@ from tests.workshop.conftest import REFERENCE, make_run
 
 URL = "/api/workshop/challenges/got-a-talent"
 TASK = "Mjlab-GotATalent-MicroDuck"
+AAA = "a" * 40
 BBB = "b" * 40
 REF = f"pollen-robotics/microduck-roller@{'c' * 40}"
 
@@ -238,3 +239,76 @@ def test_an_evaluation_stored_before_troupes_is_measured_again(stage, checkout):
     del older["format"]
     cache.write_text(json.dumps(older))
     assert stored(run, 1, timeline_key(checkout, talent(stage))) is None
+
+
+def publish(stage, star, **fields):
+    body = {"checkpoint": 1, "name": "my talent", "description": "It sits and sings.", **fields}
+    return stage.post(f"{URL}/jobs/{star.name}/publish", json=body)
+
+
+def test_one_click_publishes_each_local_duck_then_enters_the_star_naming_them_by_their_commits(stage, checkout, fakes):
+    star, walker = runs(checkout)
+    local = f"local:sprint_2m/{walker.name}@1"
+    text = troupe_text((local, 0.0, 0.5, 90), (local, 0.0, -0.5, -90))
+    stage.timeline.write_text(text)
+    assert publish(stage, star).json() == {"publishing": {"done": 1, "of": 2}}
+    (duck,) = fakes.calls("publish")
+    assert duck[3:7] == ["--run", str(walker), "--checkpoint", "1"]
+    assert duck[duck.index("--repo") + 1] == "alice/microduck-my-talent-duck-1"
+    assert {"--no-private", "--force"} <= set(duck) and "--enter" not in duck and "--timeline" not in duck
+    entered = publish(stage, star).json()
+    assert entered["page_url"] == "http://arena.test/#/r/fakerun1"
+    last = fakes.calls("publish")[-1]
+    assert last[3:7] == ["--run", str(star), "--checkpoint", "1"] and "--enter" in last
+    sent = json.loads(fakes.timelines()[-1])
+    named = f"alice/microduck-my-talent-duck-1@{AAA}"
+    assert [d["policy"] for d in sent["ducks"]] == ["self", named, named]
+    assert stage.timeline.read_text() == text  # the author's own file keeps its local forms
+    (remembered,) = json.loads((walker / "workshop" / "published.json").read_text())
+    assert (remembered["checkpoint"], remembered["repo"], remembered["revision"]) == (1, "alice/microduck-my-talent-duck-1", AAA)
+    assert "entered" not in remembered
+    # A duck published for a troupe is a policy, not an entry: its own training still says so.
+    (walker_ticket,) = stage.get("/api/workshop/challenges/sprint-2m/jobs").json()["jobs"]
+    assert walker_ticket["published"] is None
+
+
+def test_a_duck_published_before_is_reused_from_its_runs_published_json(stage, checkout, fakes):
+    star, walker = runs(checkout)
+    (walker / "workshop").mkdir()
+    (walker / "workshop" / "published.json").write_text(json.dumps([
+        {"checkpoint": 1, "repo": "alice/microduck-walker", "revision": BBB,
+         "entered": "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s", "page_url": "http://arena.test/#/r/w",
+         "at": "2026-10-13T10:00:00+00:00"}]))
+    stage.timeline.write_text(troupe_text((f"local:sprint_2m/{walker.name}@1", 0.0, 0.5, 0)))
+    assert publish(stage, star).status_code == 200
+    (only,) = fakes.calls("publish")
+    assert "--enter" in only
+    assert [d["policy"] for d in json.loads(fakes.timelines()[-1])["ducks"]] == ["self", f"alice/microduck-walker@{BBB}"]
+
+
+def test_a_failed_entry_keeps_its_ducks_published_and_the_next_click_reuses_them(stage, checkout, fakes, monkeypatch):
+    star, walker = runs(checkout)
+    stage.timeline.write_text(troupe_text((f"local:sprint_2m/{walker.name}@1", 0.0, 0.5, 0)))
+    monkeypatch.setenv("FAKE_UV_ENTER_REFUSED", "1")
+    assert publish(stage, star).json() == {"publishing": {"done": 1, "of": 2}}
+    refused = publish(stage, star)
+    assert refused.status_code == 400 and "did not enter it" in refused.json()["detail"]
+    monkeypatch.delenv("FAKE_UV_ENTER_REFUSED")
+    assert publish(stage, star).status_code == 200
+    assert ["--enter" in call for call in fakes.calls("publish")] == [False, True, True]  # the duck once
+
+
+def test_the_preview_of_a_troupe_publishes_no_duck(stage, checkout, fakes):
+    star, walker = runs(checkout)
+    stage.timeline.write_text(troupe_text((f"local:sprint_2m/{walker.name}@1", 0.0, 0.5, 0)))
+    assert publish(stage, star, dry_run=True).status_code == 200
+    (only,) = fakes.calls("publish")
+    assert "--dry-run" in only
+
+
+def test_a_troupe_naming_a_checkpoint_this_checkout_does_not_hold_publishes_nothing(stage, checkout, fakes):
+    star, walker = runs(checkout)
+    stage.timeline.write_text(troupe_text((f"local:sprint_2m/{walker.name}@7", 0.0, 0.5, 0)))
+    refused = publish(stage, star)
+    assert refused.status_code == 400 and "no such checkpoint" in refused.json()["detail"]
+    assert fakes.calls("publish") == []

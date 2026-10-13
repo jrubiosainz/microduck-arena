@@ -12,6 +12,7 @@ rig its manifest names.
 """
 
 import hashlib
+import json
 from pathlib import Path
 
 from ..hub_fetch import fetch_references
@@ -108,3 +109,23 @@ def _checkpoint_file(root, policy: str) -> Path:
         if (path.parent.parent.name, path.parent.name) == (folder, run_id):
             return path
     raise FileNotFoundError(policy)
+
+
+def local_ducks(root, troupe) -> list[tuple[str, int, Run, int, Challenge]]:
+    """Each checkpoint of this machine the troupe names, once, in the order its ducks name them: the
+    `local:` policy, the first duck that names it, and its run, checkpoint and challenge."""
+    found = []
+    for policy in troupe.references():
+        if policy.startswith(LOCAL):
+            first = next(k for k, duck in enumerate(troupe.ducks) if duck.policy == policy)
+            found.append((policy, first, *resolve_local(root, policy)))
+    return found
+
+
+def resolved(text: str, on_hub: dict[str, str]) -> str:
+    """A timeline's text as the Arena reads it: each `local:` duck named instead by the
+    "owner/repo@revision" its checkpoint was published at."""
+    raw = json.loads(text)
+    for duck in raw["ducks"]:
+        duck["policy"] = on_hub.get(duck["policy"], duck["policy"])
+    return json.dumps(raw, indent=2) + "\n"

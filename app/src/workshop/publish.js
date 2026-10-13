@@ -1,5 +1,6 @@
 // Publish & compete: the checkpoint the page has chosen goes to the user's Hugging Face account and is
-// entered on the Arena by `uv run publish --enter`. A name, and a word for the commentators, are both
+// entered on the Arena by `uv run publish --enter`; a troupe's ducks of this machine go first, one at a
+// time, and the page says which. A name, and a word for the commentators, are both
 // needed. The fork and the push are ticked above the button: a nudge, not a gate. What is typed stays
 // through every redraw of the page, and no button is rebuilt under the pointer.
 
@@ -107,7 +108,7 @@ export function publishPanel({ event, folder }, { onPublish, onPreview, onPush, 
     say("Exporting, uploading and racing on the Arena (a minute or two)…");
     $(".result").hidden = true;
     try {
-      const done = await onPublish(values());
+      const done = await onPublish(values(), ({ done: published, of }) => say(`Publishing duck ${published + 1}/${of}…`));
       say("");
       const link = el("a", "", "See it on the Arena ↗");
       Object.assign(link, { href: done.page_url, target: "_blank", rel: "noopener" });

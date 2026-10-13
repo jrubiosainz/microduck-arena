@@ -121,7 +121,15 @@ export async function mountJob(root, { status, account, route }) {
 
   // A write (a push, a fork, a stop) is followed by a fresh look, which also drops any poll still out.
   const panel = publishPanel({ event, folder: challenge.folder }, {
-    onPublish: (values) => api.publishJob(event.id, job.id, values),
+    // A troupe publishes its ducks of this machine one call at a time, the star last: until the star's
+    // entry comes back, each answer says how far it got.
+    onPublish: async (values, onProgress) => {
+      for (;;) {
+        const done = await api.publishJob(event.id, job.id, values);
+        if (!done.publishing) return done;
+        onProgress(done.publishing);
+      }
+    },
     onPreview: (values) => api.publishJob(event.id, job.id, { ...values, dry_run: true }),
     onPush: async () => {
       await api.pushCode();

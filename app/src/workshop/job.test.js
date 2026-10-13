@@ -189,6 +189,26 @@ describe("a training's page", () => {
     expect(viewer.dispose).toHaveBeenCalled();
   });
 
+  it("publishes a troupe call by call until the star is entered", async () => {
+    api.getJob.mockResolvedValue(JOB);
+    api.publishJob
+      .mockResolvedValueOnce({ publishing: { done: 1, of: 2 } })
+      .mockResolvedValueOnce({ repo: "alice/microduck-first", revision: "a".repeat(40), env: null,
+        entered: "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s", page_url: "http://arena.test/#/r/x" });
+    const root = document.createElement("div");
+    const page = await open(root);
+    await settle();
+    const words = root.querySelector(".publish textarea");
+    words.value = "It leans into every step.";
+    words.dispatchEvent(new Event("input"));
+    root.querySelector(".publish__go").click();
+    // vi.waitFor steps the fake clock 50 ms at a time: well before the next poll.
+    await vi.waitFor(() => expect(root.querySelector(".publish .result").hidden).toBe(false));
+    expect(api.publishJob).toHaveBeenCalledTimes(2);
+    expect(api.publishJob.mock.calls[1]).toEqual(api.publishJob.mock.calls[0]);
+    page.leave();
+  });
+
   it("keeps its bars through a poll, and a bar picked from the keyboard keeps the focus", async () => {
     api.getJob.mockResolvedValue(JOB);
     const root = document.createElement("div");

@@ -185,7 +185,12 @@ def fakes(tmp_path, monkeypatch):
         rows = [json.loads(line)["argv"] for line in log.read_text().splitlines()] if log.exists() else []
         return [argv for argv in rows if command is None or argv[2] == command]
 
-    return SimpleNamespace(bin=bin_dir, gpu=gpu, calls=calls)
+    def timelines():
+        """The text of each `publish --timeline` file, in call order, as the call read it."""
+        rows = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        return [row["timeline"] for row in rows if row["argv"][2] == "publish" and row["timeline"] is not None]
+
+    return SimpleNamespace(bin=bin_dir, gpu=gpu, calls=calls, timelines=timelines)
 
 
 class FakeHub:

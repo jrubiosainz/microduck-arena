@@ -3,7 +3,9 @@
 The workshop writes no manifest, uploads nothing and calls no Arena itself: `publish --run
 --enter` does all three, exactly as from a shell. The preview of the Hub card is the same command
 with `--dry-run`. The real one prints the commit it made and the entry's time and page, which the
-workshop opens and remembers next to the run.
+workshop opens and remembers next to the run. A troupe's ducks that are checkpoints of this machine
+are published first, without `--enter` (`publish_policy`), and remembered next to their own run with
+no entry line.
 
 The workshop's evaluations export a checkpoint with the same command and `--dry-run` (`export`): it
 bakes the observation normaliser in and checks the 61 → 14 shape exactly as the real publish will.
@@ -63,6 +65,11 @@ def _run(root, args: list[str]) -> str:
     return output
 
 
+# Public, or the Arena cannot read it; --force because publishing a name again is a new commit on the
+# same repo, and the Arena pins the commit it raced.
+_PUBLIC = ["--no-private", "--force"]
+
+
 def preview(root, run, checkpoint, repo, name, description, event_id, allow_dirty, timeline=None) -> dict:
     args = publish_args(run, checkpoint, repo, name, description, load_event(event_id), allow_dirty, timeline)
     _run(root, [*args, "--dry-run"])
@@ -118,7 +125,8 @@ PUBLISHED = "published.json"
 
 
 def published(run) -> list[dict]:
-    """Every entry published from this run, oldest first."""
+    """Every policy published from this run, oldest first: its entries, and the ducks a troupe
+    published from it (no `entered`, no `page_url`)."""
     try:
         entries = json.loads((run.path / "workshop" / PUBLISHED).read_text())
     except (OSError, ValueError):
@@ -134,13 +142,20 @@ def _remember(run, entry: dict) -> None:
     os.replace(tmp, path)
 
 
+def published_at(run, checkpoint: int) -> str | None:
+    """The newest policy published from checkpoint n of this run, entered or not, as a timeline names
+    it ("owner/repo@revision"); None when it never was."""
+    for entry in reversed(published(run)):
+        if entry.get("checkpoint") == checkpoint:
+            return f"{entry['repo']}@{entry['revision']}"
+    return None
+
+
 def publish(root, run, checkpoint, repo, name, description, event_id, allow_dirty, *,
             arena: str, code_url: str | None, timeline=None) -> dict:
     args = publish_args(run, checkpoint, repo, name, description, load_event(event_id), allow_dirty, timeline)
-    # Public, or the Arena cannot read it; --force because publishing a name again is a new commit on
-    # the same repo, and the Arena pins the commit it raced. No --livery (every workshop entry wears
-    # the default) and no --speed (a race is always swept).
-    args += ["--no-private", "--force", "--enter", "--arena", arena]
+    # No --livery (every workshop entry wears the default) and no --speed (a race is always swept).
+    args += [*_PUBLIC, "--enter", "--arena", arena]
     if code_url:
         args += ["--code-url", code_url]
     output = _run(root, args)
@@ -151,3 +166,17 @@ def publish(root, run, checkpoint, repo, name, description, event_id, allow_dirt
              "page_url": entered.group(2), "at": datetime.now(UTC).isoformat(timespec="seconds")}
     _remember(run, entry)
     return {**{k: entry[k] for k in ("repo", "revision", "entered", "page_url")}, "output": output}
+
+
+def publish_policy(root, run, checkpoint, repo, name, description, event_id, allow_dirty) -> dict:
+    """Publish checkpoint n to `repo` without entering it: a duck that a troupe's entry names by this
+    commit. Remembered in the run's published.json like an entry, with no `entered` nor `page_url`:
+    a published policy, not an entry."""
+    args = publish_args(run, checkpoint, repo, name, description, load_event(event_id), allow_dirty)
+    output = _run(root, [*args, *_PUBLIC])
+    commit = _COMMIT.search(output)
+    if not commit:
+        raise PublishError(output + "\n[workshop] publish printed no commit for the troupe to name")
+    _remember(run, {"checkpoint": checkpoint, "repo": repo, "revision": commit.group(1),
+                    "at": datetime.now(UTC).isoformat(timespec="seconds")})
+    return {"repo": repo, "revision": commit.group(1)}

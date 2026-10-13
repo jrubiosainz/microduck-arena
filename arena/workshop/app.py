@@ -7,6 +7,7 @@ site and served from the same folder, so the replay uses the site's viewer.
 
 import re
 import shutil
+import tempfile
 import threading
 import webbrowser
 from contextlib import asynccontextmanager
@@ -25,6 +26,7 @@ from ..timeline import TimelineError, load_troupe
 from ..web.routes_read import event_summary
 from .challenges import (
     RECIPE,
+    TIMELINE,
     Challenge,
     ChallengeError,
     is_stage,
@@ -39,12 +41,20 @@ from .evaluations import evaluate_checkpoint, evaluate_forever, stored
 from .hub import Hub, HubUnreachable
 from .jobs import recorded_jobs, remember_job
 from .login import BrowserLogin, LoginError
-from .publishing import PublishError, exported, preview, publish, repo_for
+from .publishing import (
+    PublishError,
+    exported,
+    preview,
+    publish,
+    publish_policy,
+    published_at,
+    repo_for,
+)
 from .runs import find_runs
 from .shell import ShellError, commit_all, git
 from .tickets import source, ticket, ticket_detail, ticket_state, tickets
 from .training import Training
-from .troupe import candidates, timeline_key
+from .troupe import candidates, local_ducks, resolved, timeline_key
 from .watch import watch_forever
 
 NO_SITE = (
@@ -378,6 +388,12 @@ class PublishRequest(BaseModel):
 
 @router.post("/challenges/{event}/jobs/{ticket_id}/publish")
 async def publish_route(event: str, ticket_id: str, body: PublishRequest, request: Request) -> dict:
+    """Publish & compete: one click, which may take several calls. A troupe's ducks that are
+    checkpoints of this machine go first, one call each: each is published to a repo of its own
+    without entering, or reused from its run's published.json, and the call answers how far it got.
+    The call that finds them all on the Hub publishes the star with a copy of the timeline that names
+    them by their commits, and enters it. timeline.json itself keeps its local forms, so the author
+    keeps iterating, and a failed entry leaves the published ducks for the next click to reuse."""
     ws = _workshop(request)
     challenge = _challenge_or_404(ws, event)
     found = source(ws, challenge, ticket_id)
@@ -398,23 +414,38 @@ async def publish_route(event: str, ticket_id: str, body: PublishRequest, reques
         )
     # A stage publishes its performance beside the weights; one the Arena would refuse is never uploaded.
     timeline = timeline_file(challenge) if is_stage(challenge) and timeline_file(challenge).exists() else None
+    ducks = []
     if timeline is not None:
         try:
-            load_troupe(timeline, load_event(challenge.event))
+            ducks = local_ducks(ws.root, load_troupe(timeline, load_event(challenge.event), allow_local=True))
         except TimelineError as exc:
             raise HTTPException(status_code=400, detail=f"Your performance cannot be published: {exc}") from exc
     user = await run_in_threadpool(_hub_user, ws)
     if not user:
         raise HTTPException(status_code=400, detail="Log in to Hugging Face first.")
     repo = repo_for(user, body.name)
-    args = (ws.root, run, body.checkpoint, repo, body.name, body.description.strip(), challenge.event, body.allow_dirty)
+    description = body.description.strip()
+    args = (ws.root, run, body.checkpoint, repo, body.name, description, challenge.event, body.allow_dirty)
     env = code_url(ws.root, run.provenance.get("commit"))
     if not ws.publishing.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="A publish is already running.")
     try:
         if body.dry_run:
             return {"repo": repo, **await run_in_threadpool(preview, *args, timeline=timeline)}
-        entered = await run_in_threadpool(publish, *args, arena=ws.arena, code_url=env, timeline=timeline)
+        on_hub = {policy: published_at(duck_run, n) for policy, _, duck_run, n, _ in ducks}
+        waiting = [duck for duck in ducks if on_hub[duck[0]] is None]
+        if waiting:
+            _, first, duck_run, n, duck_challenge = waiting[0]
+            name = f"{body.name} duck {first}"
+            await run_in_threadpool(publish_policy, ws.root, duck_run, n, repo_for(user, name), name,
+                                    description, duck_challenge.event, body.allow_dirty)
+            return {"publishing": {"done": len(ducks) - len(waiting) + 1, "of": len(ducks) + 1}}
+        with tempfile.TemporaryDirectory() as tmp:
+            if ducks:
+                timeline = Path(tmp) / TIMELINE
+                timeline.write_text(resolved(timeline_file(challenge).read_text(encoding="utf-8"), on_hub),
+                                    encoding="utf-8")
+            entered = await run_in_threadpool(publish, *args, arena=ws.arena, code_url=env, timeline=timeline)
     except PublishError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
