@@ -15,7 +15,7 @@ from arena.constants import TRACE_WIDTH
 from arena.hub_fetch import FetchedPolicy, FetchError
 from arena.timeline import TimelineError
 from arena.workshop import troupe
-from arena.workshop.evaluations import evaluate_checkpoint, stored
+from arena.workshop.evaluations import RETRY_S, evaluate_checkpoint, evaluate_next, stored
 from arena.workshop.runs import find_runs
 from arena.workshop.troupe import local_policy, resolve_local, timeline_key
 from tests.workshop.conftest import REFERENCE, make_run
@@ -167,6 +167,42 @@ def test_save_and_play_says_which_hub_policy_is_out_of_reach(stage, checkout, mo
     response = stage.get(f"{URL}/jobs/{star.name}/checkpoints/1")
     assert response.status_code == 502
     assert "ducks[1]: pollen-robotics/microduck-roller" in response.json()["detail"]
+
+
+def test_a_stage_whose_hub_policy_cannot_be_fetched_waits_aside_while_the_races_play(stage, checkout, monkeypatch):
+    # The stage's training is the newest: the worker comes to its checkpoint first.
+    make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent", stamp="2026-09-29_10-00-00")
+    make_run(checkout, "walker", checkpoints=(1,))
+    stage.timeline.write_text(troupe_text((REF, 0.5, 0.0, 180)))
+    asked = []
+
+    def fetch(wanted, event):
+        asked.append(wanted.references())
+        return offline(wanted, event)
+
+    monkeypatch.setattr(troupe, "fetch_references", fetch)
+    ws, now = stage.app.state.workshop, time.time()
+    with pytest.raises(FetchError, match=r"ducks\[1\]"):
+        evaluate_next(ws, now)
+    assert evaluate_next(ws, now + 1) is True  # the sprint's checkpoint, meanwhile
+    (race,) = find_runs(checkout, "Mjlab-Sprint2m-MicroDuck")
+    assert stored(race, 1, None)["seeds_total"] == 5
+    assert evaluate_next(ws, now + 2) is False  # nothing else waits, and the Hub is not asked again
+    assert asked == [(REF,)]
+
+
+def test_a_stage_set_aside_is_tried_again_once_its_minute_has_passed(stage, checkout, monkeypatch):
+    make_run(checkout, "first", checkpoints=(1,), task=TASK, experiment="got_a_talent")
+    stage.timeline.write_text(troupe_text((REF, 0.5, 0.0, 180)))
+    monkeypatch.setattr(troupe, "fetch_references", offline)
+    ws, now = stage.app.state.workshop, time.time()
+    with pytest.raises(FetchError):
+        evaluate_next(ws, now)
+    monkeypatch.setattr(troupe, "fetch_references", lambda wanted, event: {REF: roller()})
+    assert evaluate_next(ws, now + RETRY_S - 1) is False  # the Hub is back, but its minute is not over
+    assert evaluate_next(ws, now + RETRY_S) is True
+    (run,) = find_runs(checkout, TASK)
+    assert "error" not in stored(run, 1, timeline_key(checkout, talent(stage)))
 
 
 def test_a_troupe_naming_a_checkpoint_this_checkout_does_not_hold_fails_and_says_which(stage, checkout):

@@ -10,9 +10,9 @@ checkpoint, per Arena runner version and per FORMAT, trace included, so a page r
 checkpoint that cannot be measured — a failed export, a policy that does not load, a race that breaks,
 a duck the troupe cannot cast — is stored as a failure, with the checkpoint file's modification time,
 and tried again only once that file changes. A troupe's Hub policy that cannot be fetched (an offline
-laptop, a Hub outage) is the Hub's state, not the checkpoint's: nothing is stored, and the worker tries
-again on its next pass. A checkpoint file younger than FRESH_S waits: a local training may still be
-writing it.
+laptop, a Hub outage, a repo gone) is the Hub's state, not the checkpoint's: nothing is stored, and the
+worker sets that challenge aside for RETRY_S, evaluating the others' checkpoints meanwhile. A
+checkpoint file younger than FRESH_S waits: a local training may still be writing it.
 
 On a stage, each checkpoint plays the challenge's timeline.json with its whole troupe, the checkpoint
 as the star ("self"). `troupe.timeline_key` names that performance: an edit, or a local duck's
@@ -42,6 +42,8 @@ from .troupe import performers_for, timeline_key
 
 FRESH_S = 30.0
 IDLE_S = 5.0
+# How long a challenge whose troupe's Hub policy could not be fetched waits before the Hub is asked again.
+RETRY_S = 60.0
 # What a stored evaluation holds. 2: every duck's trace, duck-major, with the cast and a stage summary
 # per duck. A body of another form is measured again, as one of another runner version is.
 FORMAT = 2
@@ -169,13 +171,20 @@ def next_checkpoint(root, challenges, now: float | None = None):
     return None
 
 
-def evaluate_next(ws) -> bool:
-    """Evaluate one checkpoint; False when none is waiting."""
-    found = next_checkpoint(ws.root, list(ws.challenges.values()))
+def evaluate_next(ws, now: float | None = None) -> bool:
+    """Evaluate one checkpoint of a challenge not set aside; False when none is waiting. A FetchError
+    sets its challenge aside for RETRY_S, and is raised for the worker to say."""
+    now = time.time() if now is None else now
+    ready = [c for c in ws.challenges.values() if ws.aside.get(c.event, now) <= now]
+    found = next_checkpoint(ws.root, ready, now)
     if found is None:
         return False
     challenge, run, n = found
-    evaluate_checkpoint(ws.root, run, n, challenge)
+    try:
+        evaluate_checkpoint(ws.root, run, n, challenge)
+    except FetchError:
+        ws.aside[challenge.event] = now + RETRY_S
+        raise
     return True
 
 

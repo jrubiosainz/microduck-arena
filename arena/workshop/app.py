@@ -75,6 +75,9 @@ class Workshop:
     publishing: threading.Lock = field(default_factory=threading.Lock)
     # Set when the app stops: the background workers end.
     stopping: threading.Event = field(default_factory=threading.Event)
+    # The challenges the evaluator set aside, by event id, until when (time.time()): one whose troupe
+    # names a Hub policy the Hub did not hand over. Only the evaluator's thread uses it.
+    aside: dict[str, float] = field(default_factory=dict)
 
 
 def has_gpu() -> bool:
