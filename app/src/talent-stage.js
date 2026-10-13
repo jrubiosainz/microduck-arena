@@ -66,17 +66,18 @@ export function stageCameraTarget(trace, seconds, placer) {
 
 // A duck stands from its feet, 0.14 m below its trunk, to its crest, 0.23 m above.
 const DUCK_HEIGHTS = [-0.14, 0.23];
-// How far beyond the stage's sides the auditorium's wing walls stand. A camera keeps 0.3 m inside
-// them: past them it would look through their backs.
+// How far beyond the stage's sides the auditorium's wing walls stand. A camera inside the theatre
+// keeps 0.3 m inside them: past them it would look through their backs.
 const WINGS = 2.5;
-// From this elevation up, a low camera behind the jury desk's line sees the stage's front edge
-// over the judges' heads and the audience's.
-const OVER = 0.4;
+// Behind the jury desk's line, a camera inside the theatre stands at least this many metres above
+// its target for every metre behind the line, over the desk and, row after row, the audience's
+// heads, which climb about 0.4 m a metre.
+const CLEARANCE = 0.5;
 
 // How far from `target` a camera on `bearing`, raised by `elevation`, stands for every duck, feet
-// to crest, to take no more of the frame than a lone performer does: what it spans across the
-// view against the horizontal field, along and up the view against the vertical one, a duck nearer
-// the camera than the target needing more.
+// to crest, to keep within the lone performer's 1.18 margin of the frame's edges: what it spans
+// across the view against the horizontal field, along and up the view against the vertical one,
+// a duck nearer the camera than the target needing more.
 function troupeReach(ducks, target, bearing, elevation, tanAcross, tanUp) {
   const sin = Math.sin(elevation), cos = Math.cos(elevation);
   let reach = 0;
@@ -91,6 +92,30 @@ function troupeReach(ducks, target, bearing, elevation, tanAcross, tanUp) {
     }
   }
   return reach;
+}
+
+// The theatre's interior as a camera on `bearing` round `target` may use it: how far it may stand
+// at an elevation before the wings or the backdrop (`walls`) and over the desk's line (`desk`), and
+// the lowest elevation from which it may stand so far, all in closed form.
+function interior(target, bearing, depth, width) {
+  const ahead = Math.cos(bearing), aside = Math.sin(bearing);
+  // How far the camera may run over the floor, before the nearer wing or the backdrop.
+  const run = Math.min(
+    (width / 2 + WINGS - 0.3 - Math.sign(aside) * target.x) / Math.abs(aside),
+    ahead < 0 ? (depth / 2 - 0.1 - target.z) / -ahead : Infinity,
+  );
+  // Behind the desk's line, which runs `line` before the target, the camera keeps over the slope:
+  // span·sin e ≥ CLEARANCE·(span·cos e·ahead − line), that is span·climb·cos(e + turn) ≤ CLEARANCE·line.
+  const line = target.z + depth / 2 + 0.08;
+  const slope = CLEARANCE * Math.max(0, ahead);
+  const climb = Math.hypot(slope, 1), turn = Math.atan2(1, slope);
+  return {
+    walls: rise => run / Math.cos(rise),
+    desk: rise => (slope * Math.cos(rise) > Math.sin(rise)
+      ? CLEARANCE * line / (slope * Math.cos(rise) - Math.sin(rise)) : Infinity),
+    lowest: span => Math.max(Math.acos(Math.min(1, run / span)),
+      Math.acos(Math.min(1, CLEARANCE * line / (span * climb))) - turn),
+  };
 }
 
 // The broadcast clock keeps moving during clip titles, even while replay time
@@ -162,31 +187,37 @@ export function stageCameraPose(seconds, subjects, aspect, fov, depth = 2.6, wid
     }
   }
   // A troupe is filmed on the bearing its middle alone would be, from as far as holding every duck
-  // takes. Where that is past the wings, behind the backdrop, or, for a low camera, behind the
-  // desk's line under the judges' heads, the camera rises instead of swinging out: the lowest
-  // elevation from the shot's own that places it inside, found by halving. A lone duck needs no
-  // more than the shot's own distance and elevation.
+  // takes. The opening and the crane look in from outside; every other camera stays inside the
+  // theatre, rising rather than swinging out. It rises by the elevations, from the shot's own up to
+  // overhead, at which a bound cannot hold the troupe, counted until the troupe first fits it
+  // (`walls`, `desk`: the nearest it has come), then, in closed form, as far again as the troupe's
+  // distance from there needs. Against the wings and the backdrop, rising first turns a deep
+  // troupe's depth into height on screen, so the lowest elevation that holds it can leap from one
+  // frame to the next: that count is soft, over half a fit more, and the camera glides where it
+  // would jump. Over the desk's line the room grows faster than the depth shows, and the count is
+  // all but sharp. A lone duck fits at the shot's own elevation, and nothing is counted.
   const bearing = Math.atan2(dx, -dz);
   const tanUp = Math.tan(fov * Math.PI / 360);
-  const wings = width / 2 + WINGS - 0.3;
-  const place = rise => {
-    const reach = Math.max(distance, troupeReach(ducks, target, bearing, rise, tanUp * aspect, tanUp));
-    const run = reach * Math.cos(rise);
-    return { rise, reach, x: target.x + Math.sin(bearing) * run, z: target.z - Math.cos(bearing) * run };
-  };
-  const inside = ({ rise, x, z }) => Math.abs(x) <= wings
-    && (!low || (z <= depth / 2 - 0.1 && (z >= -depth / 2 - 0.08 || rise >= OVER)));
-  let lo = elevation, hi = Math.PI / 2;
-  if (inside(place(lo))) hi = lo;
-  while (hi - lo > 1e-12) {
-    const mid = (lo + hi) / 2;
-    if (inside(place(mid))) hi = mid;
-    else lo = mid;
+  const reach = rise => Math.max(distance, troupeReach(ducks, target, bearing, rise, tanUp * aspect, tanUp));
+  const room = low ? interior(target, bearing, depth, width) : null;
+  let rise = elevation;
+  if (room) {
+    const cell = (Math.PI / 2 - elevation) / 120;
+    let walls = Infinity, desk = Infinity;
+    for (let i = 0; i < 120; i++) {
+      const e = elevation + (i + 0.5) * cell;
+      walls = Math.min(walls, reach(e) / room.walls(e));
+      desk = Math.min(desk, reach(e) / room.desk(e));
+      rise += cell * Math.min(1, Math.max(0, (walls - 1) / 0.5, (desk - 1) / 0.05));
+    }
+    rise = Math.max(rise, room.lowest(reach(rise)));
   }
-  const camera = place(hi);
+  const span = room ? Math.min(reach(rise), room.walls(rise), room.desk(rise)) : reach(rise);
+  // The lone camera's offsets scaled, not recomputed, so that a lone duck's stays exactly where it was.
+  const scale = span * Math.cos(rise) / horizontal;
   return {
     shot,
-    position: [camera.x, target.y + Math.sin(camera.rise) * camera.reach, camera.z],
+    position: [target.x + dx * scale, target.y + Math.sin(rise) * span, target.z + dz * scale],
     target: target.toArray(),
   };
 }

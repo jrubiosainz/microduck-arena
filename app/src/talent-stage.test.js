@@ -47,8 +47,8 @@ describe("the MicroDuck Got a Talent broadcast camera", () => {
     expect(after.shot).toBe("crane");
     expect(after.position).toEqual(end.position);
   });
-  it("frames a lone performer exactly as it always has", () => {
-    // Taken from the camera before troupes, for the performer above.
+  it("frames a lone performer exactly as it always has, a centred one in every shot at both aspects", () => {
+    // Taken from the camera before troupes (0737cbd), for the performer above...
     const before = [
       [16 / 9, 4, [0.22570329630569386, 0.29702503451609114, -1.0532500891160745], [0.4, 0.18, 0.1]],
       [16 / 9, 8, [-0.42583949082768935, 0.35399089951391566, -0.7020673712856054], [0.4, 0.18, 0.1]],
@@ -57,10 +57,51 @@ describe("the MicroDuck Got a Talent broadcast camera", () => {
       [9 / 16, 4, [-0.9158909874814564, 0.3787024028692959, -1.38], [0.4, 0.18, 0.1]],
       [9 / 16, 20, [-2.2931488880415913, 4.862977596065165, -11.231835275359844], [0.4, 0.83, 0.1]],
     ];
-    for (const [aspect, time, position, target] of before) {
-      const pose = stageCameraPose(time, subjects, aspect, 42);
-      pose.position.forEach((value, i) => expect(value).toBeCloseTo(position[i], 9));
-      pose.target.forEach((value, i) => expect(value).toBeCloseTo(target[i], 9));
+    // ...and for a duck at the stage's centre, every 1.5 s of the cycle and of a clip's held outro.
+    const centred = [
+      [16 / 9, 0, [2.195513320197183, 3.7973637553038615, -7.097497700214189], [0, 0.8300000000000001, 0]],
+      [16 / 9, 1.5, [1.4268703599973978, 3.367409666221225, -6.6944449479794805], [0, 0.8300000000000001, 0]],
+      [16 / 9, 3, [-0.21584914853287993, 0.3009696986009032, -1.1861829267316353], [0, 0.18000000000000002, 0]],
+      [16 / 9, 4.5, [-0.1543332796760558, 0.29505270247368515, -1.1362560286514083], [0, 0.18000000000000002, 0]],
+      [16 / 9, 6, [-0.09776240603813176, 0.289135706346467, -1.083314498824379], [0, 0.18000000000000002, 0]],
+      [16 / 9, 7.5, [-0.8354228206990366, 0.3577115215832839, -0.7717428163661004], [0, 0.18000000000000002, 0]],
+      [16 / 9, 9, [-0.803647286755018, 0.34614591951335627, -0.862656011813596], [0, 0.18000000000000002, 0]],
+      [16 / 9, 10.5, [-0.7627225288340035, 0.3333692031699481, -0.9528970026054674], [0, 0.18000000000000002, 0]],
+      [16 / 9, 12, [3.3055501813912618, 1.161959192494971, 0.544469571681202], [0, 0.33, -0.25]],
+      [16 / 9, 13.5, [3.3501738311818254, 1.161959192494971, 0.3280823495727987], [0, 0.33, -0.25]],
+      [16 / 9, 15, [0.4149302902557396, 0.25028999070325886, -1.0940530787414524], [0, 0.18000000000000002, 0]],
+      [16 / 9, 16.5, [0.33492951002944404, 0.24673600240927385, -1.0592409501935804], [0, 0.18000000000000002, 0]],
+      [16 / 9, 18, [-1.0946142984082035, 2.721329322632573, -6.015371387626082], [0, 0.8300000000000001, 0]],
+      [16 / 9, 19.5, [-1.4062771336971576, 3.001299743827607, -6.288707501998697], [0, 0.8300000000000001, 0]],
+      [16 / 9, 21, [-1.7387600792488929, 3.29886421367925, -6.536162703086906], [0, 0.8300000000000001, 0]],
+      [16 / 9, 22.5, [-2.0898769159288384, 3.6136712210539614, -6.756003923129685], [0, 0.8300000000000001, 0]],
+      [16 / 9, 24, [-2.457295620594802, 3.9453467384692043, -6.9466763946591685], [0, 0.8300000000000001, 0]],
+      [16 / 9, 25.5, [-2.457295620594802, 3.9453467384692043, -6.9466763946591685], [0, 0.8300000000000001, 0]],
+      [9 / 16, 0, [3.9031347914616585, 6.10531334276242, -12.617773689269669], [0, 0.8300000000000001, 0]],
+      [9 / 16, 1.5, [2.5366584177731517, 5.340950517726623, -11.901235463074633], [0, 0.8300000000000001, 0]],
+      [9 / 16, 3, [-1.5120938204898329, 0.3854002366738789, -1.3800000000000001], [0, 0.18000000000000002, 0]],
+      [9 / 16, 4.5, [-1.373492606723261, 0.3753534859670044, -1.3800000000000001], [0, 0.18000000000000002, 0]],
+      [9 / 16, 6, [-1.2274319334693995, 0.3653067352601299, -1.3800000000000001], [0, 0.18000000000000002, 0]],
+      [9 / 16, 7.5, [-1.418504361662189, 0.481744891613784, -1.3103790367861539], [0, 0.18000000000000002, 0]],
+      [9 / 16, 9, [-1.4501991229421476, 0.4621071027301693, -1.3800000000000001], [0, 0.18000000000000002, 0]],
+      [9 / 16, 10.5, [-1.5461608212408793, 0.4404129049996356, -1.3800000000000001], [0, 0.18000000000000002, 0]],
+      [9 / 16, 12, [3.3055501813912618, 1.161959192494971, 0.544469571681202], [0, 0.33, -0.25]],
+      [9 / 16, 13.5, [3.3501738311818254, 1.161959192494971, 0.3280823495727987], [0, 0.33, -0.25]],
+      [9 / 16, 15, [1.42926820955728, 0.29934873685918495, -1.3800000000000001], [0, 0.18000000000000002, 0]],
+      [9 / 16, 16.5, [1.2859793181497112, 0.29331425016405765, -1.3800000000000001], [0, 0.18000000000000002, 0]],
+      [9 / 16, 18, [-1.9459809749479169, 4.192363240235686, -10.693993578001923], [0, 0.8300000000000001, 0]],
+      [9 / 16, 19.5, [-2.5000482376838353, 4.690088433471301, -11.179924447997683], [0, 0.8300000000000001, 0]],
+      [9 / 16, 21, [-3.0911290297758094, 5.219091935429778, -11.619844805487832], [0, 0.8300000000000001, 0]],
+      [9 / 16, 22.5, [-3.7153367394290466, 5.778748837429265, -12.010673641119443], [0, 0.8300000000000001, 0]],
+      [9 / 16, 24, [-4.368525547724092, 6.36839420172303, -12.34964692383852], [0, 0.8300000000000001, 0]],
+      [9 / 16, 25.5, [-4.368525547724092, 6.36839420172303, -12.34964692383852], [0, 0.8300000000000001, 0]],
+    ];
+    for (const [ducks, poses] of [[subjects, before], [[new Vector3(0, 0.14, 0)], centred]]) {
+      for (const [aspect, time, position, target] of poses) {
+        const pose = stageCameraPose(time, ducks, aspect, 42);
+        pose.position.forEach((value, i) => expect(value).toBeCloseTo(position[i], 9));
+        pose.target.forEach((value, i) => expect(value).toBeCloseTo(target[i], 9));
+      }
     }
   });
 });
@@ -86,19 +127,45 @@ describe("the broadcast camera on a troupe", () => {
       }
     }
   });
-  it("keeps every camera inside the theatre, and a low one on the bearing it takes a lone duck from", () => {
+  it("keeps every camera but the opening's and the crane's inside the theatre, a low one on a lone duck's bearing", () => {
     // The wing walls stand at ±4.4 m and the backdrop beyond the stage's back edge; past either, a
-    // camera looks through their backs.
+    // camera looks through their backs. The opening and the crane look in from outside, as they
+    // always have. A camera may stand on the limit itself, to the last bit of a float.
     const bearing = pose => Math.atan2(pose.position[0] - pose.target[0], pose.target[2] - pose.position[2]);
     for (const aspect of [16 / 9, 9 / 16]) {
       for (let time = 0; time <= 24; time += 0.5) {
         const pose = stageCameraPose(time, troupe, aspect, 42, 2.6);
-        expect(Math.abs(pose.position[0])).toBeLessThanOrEqual(4.1);
+        const inside = pose.shot !== "opening" && pose.shot !== "crane";
+        if (inside) expect(Math.abs(pose.position[0])).toBeLessThan(4.1 + 1e-9);
         expect(pose.position[2]).toBeLessThan(1.3);
-        if (aspect > 1 && pose.shot !== "opening" && pose.shot !== "crane") {
+        if (aspect > 1 && inside) {
           const lone = stageCameraPose(time, troupe.slice(0, 1), aspect, 42, 2.6);
           expect(Math.abs(bearing(pose) - bearing(lone))).toBeLessThan(15 * Math.PI / 180);
         }
+      }
+    }
+  });
+  it.each([16 / 9, 9 / 16])("glides within every shot at aspect %s, however the troupe spreads", aspect => {
+    // A lone duck's camera moves at most 0.039 m from one frame to the next at 30 fps, in the 9:16
+    // opening's dolly. A troupe's follows the same bearings and timing, and where it climbs over the
+    // jury or within the wings, it climbs smoothly: it never jumps.
+    const V = (x, z) => new Vector3(x, 0.14, z);
+    const troupes = [
+      [V(0.64, -1.07), V(0.35, -0.06), V(0.92, -0.22)], // downstage: its front camera on the desk's line
+      troupe,
+      [V(-1.2, 0), V(1.2, 0)], // across the stage
+      [V(-1.5, 1), V(0, 1), V(1.5, 1)], // along the back
+      [V(0.3, -1), V(0.3, 0), V(0.3, 1)], // from front to back
+      [V(-1.6, -1), V(1.6, -1), V(-1.6, 1), V(1.6, 1)], // in the four corners
+    ];
+    for (const ducks of troupes) {
+      let previous = stageCameraPose(0, ducks, aspect, 42);
+      for (let frame = 1; frame <= 24 * 30; frame++) {
+        const pose = stageCameraPose(frame / 30, ducks, aspect, 42);
+        if (pose.shot === previous.shot) {
+          expect(new Vector3(...pose.position).distanceTo(new Vector3(...previous.position))).toBeLessThan(0.05);
+        }
+        previous = pose;
       }
     }
   });
