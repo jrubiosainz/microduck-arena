@@ -1,6 +1,6 @@
 import { Spherical, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import { cameraPose, dragPose, travelPose } from "./viewer.js";
+import { cameraPose, dragPose, stageLanes, travelPose } from "./viewer.js";
 
 describe("cameraPose", () => {
   it("chases the leader from behind and trackside by default, at the original close distance", () => {
@@ -64,5 +64,27 @@ describe("dragPose", () => {
     const turned = dragPose(pose, 0.3);
     turned.position.forEach((value, i) => expect(value).toBeCloseTo(expected[i], 9));
     expect(turned.target).toBe(pose.target);
+  });
+});
+
+describe("stageLanes", () => {
+  const trace = new Float32Array(21);
+  const duck = { trace, lead: 0, sound: null, rig: "legs", livery: "purple", start: { x: 0, y: 0, yaw: 0 }, star: false };
+
+  it("puts every duck of the performance on the stage in duck order, each on its own rig, the star alone named", () => {
+    const ducks = [{ ...duck, star: true }, { ...duck, rig: "rollers", livery: "classic", start: { x: 0.4, y: -0.6, yaw: 90 } }, duck];
+    const lanes = stageLanes([{ runId: "r1", name: "alice", livery: "purple", tier: "ghost", colour: "#ff7a2f", ducks }]);
+    expect(lanes.map((lane) => [lane.rig, lane.livery, lane.start, lane.name, lane.opacity])).toEqual([
+      ["legs", "purple", duck.start, "alice", 1],
+      ["rollers", "classic", { x: 0.4, y: -0.6, yaw: 90 }, undefined, 1],
+      ["legs", "purple", duck.start, undefined, 1],
+    ]);
+  });
+
+  it("takes a workshop checkpoint's lane as a troupe of one, drawn centred on the event's rig", () => {
+    const [lane] = stageLanes([{ trace, sound: null, tier: "trial", livery: "classic", name: "checkpoint 500" }]);
+    expect(lane).toMatchObject({ trace, star: true, opacity: 1, name: "checkpoint 500" });
+    expect(lane.start).toBeUndefined();
+    expect(lane.rig).toBeUndefined();
   });
 });

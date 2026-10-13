@@ -2,10 +2,11 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { BoxGeometry, PerspectiveCamera, Raycaster, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { buildTalentStage, stageCameraPose, stageLayout, placeStagePerformer, stageCameraTarget } from "./talent-stage.js";
+import { buildTalentStage, stageCameraPose, stageLayout, placeStageDuck, placeStagePerformer, stageCameraTarget } from "./talent-stage.js";
 import { applyFrame } from "./replay.js";
 import { meshNames, buildRigTree, STAND, TRUNK_HEIGHT } from "./rig.js";
 
+const STAGE = { id: "got-a-talent", course: "stage", size_m: [2.6, 3.8] };
 const subjects = [new Vector3(0.4, 0.14, 0.1)];
 
 describe("the MicroDuck Got a Talent broadcast camera", () => {
@@ -46,17 +47,64 @@ describe("the MicroDuck Got a Talent broadcast camera", () => {
     expect(after.shot).toBe("crane");
     expect(after.position).toEqual(end.position);
   });
+  it("frames a lone performer exactly as it always has", () => {
+    // Taken from the camera before troupes, for the performer above.
+    const before = [
+      [16 / 9, 4, [0.22570329630569386, 0.29702503451609114, -1.0532500891160745], [0.4, 0.18, 0.1]],
+      [16 / 9, 8, [-0.42583949082768935, 0.35399089951391566, -0.7020673712856054], [0.4, 0.18, 0.1]],
+      [16 / 9, 12, [3.7055501813912617, 1.161959192494971, 0.644469571681202], [0.4, 0.33, -0.15]],
+      [16 / 9, 16, [0.7610272280823642, 0.24792066517393552, -0.9714635177655214], [0.4, 0.18, 0.1]],
+      [9 / 16, 4, [-0.9158909874814564, 0.3787024028692959, -1.38], [0.4, 0.18, 0.1]],
+      [9 / 16, 20, [-2.2931488880415913, 4.862977596065165, -11.231835275359844], [0.4, 0.83, 0.1]],
+    ];
+    for (const [aspect, time, position, target] of before) {
+      const pose = stageCameraPose(time, subjects, aspect, 42);
+      pose.position.forEach((value, i) => expect(value).toBeCloseTo(position[i], 9));
+      pose.target.forEach((value, i) => expect(value).toBeCloseTo(target[i], 9));
+    }
+  });
+});
+
+describe("the broadcast camera on a troupe", () => {
+  // Four ducks spread over the stage, the star first.
+  const troupe = [new Vector3(0.2, 0.14, 0.1), new Vector3(-1.3, 0.14, -0.7), new Vector3(1.4, 0.14, 0.7), new Vector3(0.9, 0.14, -0.8)];
+
+  it.each([16 / 9, 9 / 16])("keeps every duck in frame at aspect %s, but in the star's close-up", aspect => {
+    const camera = new PerspectiveCamera(42, aspect, 0.02, 100);
+    for (let time = 0; time <= 24; time += 0.25) {
+      const pose = stageCameraPose(time, troupe, aspect, 42, 2.6);
+      if (pose.shot === "low-front") continue;
+      camera.position.set(...pose.position);
+      camera.lookAt(new Vector3(...pose.target));
+      camera.updateMatrixWorld();
+      for (const duck of troupe) {
+        for (const height of [-0.14, 0.23]) {
+          const projected = duck.clone().add(new Vector3(0, height, 0)).project(camera);
+          expect(Math.abs(projected.x)).toBeLessThan(0.9);
+          expect(Math.abs(projected.y)).toBeLessThan(0.9);
+        }
+      }
+    }
+  });
+  it("closes in on the star alone in the low front shot, as on a lone performer", () => {
+    for (const time of [14, 16, 17.9]) {
+      expect(stageCameraPose(time, troupe, 16 / 9, 42)).toEqual(stageCameraPose(time, troupe.slice(0, 1), 16 / 9, 42));
+    }
+  });
+  it("frames ducks all on one spot as that one duck", () => {
+    const stacked = [troupe[0], troupe[0].clone(), troupe[0].clone()];
+    for (let time = 0; time <= 24; time += 0.5) {
+      expect(stageCameraPose(time, stacked, 16 / 9, 42)).toEqual(stageCameraPose(time, troupe.slice(0, 1), 16 / 9, 42));
+    }
+  });
 });
 
 describe("theatre layout", () => {
-  it("fits existing lane traces and future stationary performances without race markings", () => {
-    for (const event of [{ id: "got-a-talent", length_m: 2 }, { id: "got-a-talent" }]) {
-      const layout = stageLayout(event);
-      expect(layout.width).toBeGreaterThan(3);
-      expect(layout.depth / 2).toBeGreaterThan(0.85);
-      expect(layout.juryZ).toBeLessThan(-layout.depth / 2);
-      expect(layout.audienceZ).toBeLessThan(layout.juryZ - 0.5);
-    }
+  it("builds the theatre round the event's own floor, centred on the physics' origin", () => {
+    const layout = stageLayout({ ...STAGE, size_m: [3, 5] });
+    expect(layout).toMatchObject({ width: 5, depth: 3, centre: 0 });
+    expect(layout.juryZ).toBeLessThan(-layout.depth / 2);
+    expect(layout.audienceZ).toBeLessThan(layout.juryZ - 0.5);
   });
 });
 
@@ -74,7 +122,7 @@ describe("the solo stage", () => {
   it("seats four official judges before the audience and follows a moving performer when seeking", () => {
     const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
     const geometries = new Map(meshNames(kinematics).map(name => [name, new BoxGeometry(0.01, 0.01, 0.01)]));
-    const stage = buildTalentStage({ id: "got-a-talent" }, { kinematics, geometries }, reachy);
+    const stage = buildTalentStage(STAGE, { kinematics, geometries }, reachy);
     const jury = stage.group.getObjectByName("judges");
     expect(jury.children.filter(child => child.name.startsWith("judge-"))).toHaveLength(4);
     expect(stage.group.getObjectByName("finish")).toBeUndefined();
@@ -151,6 +199,35 @@ it("turns the robot and its complete recorded trajectory toward the audience", (
   expect(trace).toEqual(original);
 });
 
+
+describe("a troupe's places", () => {
+  const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
+  const frame = (x, y) => [x, y, TRUNK_HEIGHT, 1, 0, 0, 0, ...STAND];
+  const trunkAt = (rig, trace) => {
+    applyFrame(rig, trace.subarray(0, 21));
+    return rig.bodies.get("trunk_base").getWorldPosition(new Vector3());
+  };
+
+  it("draws a placed duck where its trace says: x towards the audience at -Z, y to its right at -X", () => {
+    const rig = buildRigTree(kinematics);
+    const trace = Float32Array.from([...frame(0.4, -0.6), ...frame(0.5, -0.6)]);
+    placeStageDuck(rig, { trace, start: { x: 0.4, y: -0.6, yaw: 90 } }, 0);
+    const at = trunkAt(rig, trace);
+    expect(at.x).toBeCloseTo(0.6);
+    expect(at.z).toBeCloseTo(-0.4);
+    const forward = new Vector3(1, 0, 0).applyQuaternion(rig.placer.quaternion);
+    expect(forward.z).toBeCloseTo(-1);
+  });
+
+  it("centres a run recorded before troupes on its own path, as it always was", () => {
+    const rig = buildRigTree(kinematics);
+    const trace = Float32Array.from([...frame(1, 0.3), ...frame(2, 0.3)]);
+    placeStageDuck(rig, { trace, start: null }, 0);
+    const at = trunkAt(rig, trace);
+    expect(at.x).toBeCloseTo(0);
+    expect(at.z).toBeCloseTo(0.5);
+  });
+});
 
 it("rejects gait sway and vertical bounce while following deliberate travel, even when seeking", () => {
   const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));

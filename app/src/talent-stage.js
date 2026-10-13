@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, AmbientLight, BoxGeometry, CanvasTexture, CircleGeometry, Color,
+  AdditiveBlending, AmbientLight, Box3, BoxGeometry, CanvasTexture, CircleGeometry, Color,
   ConeGeometry, CylinderGeometry, DirectionalLight, DoubleSide, Group,
   Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry,
   ShaderMaterial, SphereGeometry, SpotLight, SRGBColorSpace, Vector3,
@@ -10,11 +10,12 @@ import { frameAt, frameCount, CTRL_DT } from "./replay.js";
 
 const mix = (a, b, t) => a + (b - a) * t;
 
+/** The theatre round the event's own floor (arena/manifest.py Stage.size_m): its depth runs along
+ * the physics' x, towards the audience at -Z, its width along y, across X. Its centre is the
+ * physics' origin, which a troupe's places are measured from. */
 export function stageLayout(event) {
-  const width = Math.max(3.8, (event.length_m ?? 0) + 2);
-  const depth = Math.max(2.6, (event.length_m ?? 0) + 0.8);
-  return { width, depth, centre: (event.length_m ?? 0) / 2,
-    juryZ: -depth / 2 - 0.5, audienceZ: -depth / 2 - 1.25 };
+  const [depth, width] = event.size_m;
+  return { width, depth, centre: 0, juryZ: -depth / 2 - 0.5, audienceZ: -depth / 2 - 1.25 };
 }
 
 // Rotate the complete replay, including translation, so +X forward faces the
@@ -28,6 +29,18 @@ export function placeStagePerformer(rig, trace, centre) {
   }
   rig.placer.rotation.set(0, Math.PI / 2, 0);
   rig.placer.position.set(centre + (minY + maxY) / 2, 0, (minX + maxX) / 2);
+}
+
+// A duck of a troupe stands where its trace says: the trace is in the stage's frame, its origin
+// the stage's centre, turned as placeStagePerformer turns a performer to face the audience. A run
+// recorded before troupes has no place of its own and is centred on its own path, as it always was.
+export function placeStageDuck(rig, duck, centre) {
+  if (!duck.start) {
+    placeStagePerformer(rig, duck.trace, centre);
+    return;
+  }
+  rig.placer.rotation.set(0, Math.PI / 2, 0);
+  rig.placer.position.set(centre, 0, 0);
 }
 
 // A symmetric 2.4 s Hann window removes gait sway without introducing lag.
@@ -51,16 +64,28 @@ export function stageCameraTarget(trace, seconds, placer) {
   return target;
 }
 
+// Where a troupe stands, from each duck's smoothed place: the middle of their extent, and how far
+// its corners reach from it. One duck is its own middle, with no spread.
+function troupeFrame(subjects) {
+  if (!subjects.length) return { middle: new Vector3(0, 0.14, 0), spread: 0 };
+  const box = new Box3().setFromPoints(subjects);
+  const middle = box.getCenter(new Vector3());
+  return { middle, spread: Math.hypot(box.max.x - middle.x, box.max.z - middle.z) };
+}
+
 // The broadcast clock keeps moving during clip titles, even while replay time
 // is held at zero. Each camera moves within its shot; cuts are instantaneous.
+// `subjects` are the ducks' places, the star first: every shot frames the whole
+// troupe, backed off to hold its spread, but the low front shot, the star's close-up.
 export function stageCameraPose(seconds, subjects, aspect, fov, depth = 2.6) {
-  const target = subjects[0]?.clone() ?? new Vector3(0, 0.14, 0);
-  target.y = Math.max(0.14, target.y) + 0.04;
-  const halfFov = Math.atan(Math.tan(fov * Math.PI / 360) * Math.min(1, aspect));
-  const fit = 0.32 / Math.sin(halfFov) * 1.18;
   // One cycle of shots; a clip runs past it (titles and outro around a 20 s performance), and
   // there the last shot holds rather than cutting back to the opening.
   const time = Math.min(Math.max(0, seconds), 24);
+  const { middle, spread } = troupeFrame(time >= 14 && time < 18 ? subjects.slice(0, 1) : subjects);
+  const target = middle.clone();
+  target.y = Math.max(0.14, target.y) + 0.04;
+  const halfFov = Math.atan(Math.tan(fov * Math.PI / 360) * Math.min(1, aspect));
+  const fit = (0.32 + spread) / Math.sin(halfFov) * 1.18;
   let shot, angle, distance, elevation;
   if (time < 3) {
     shot = "opening";

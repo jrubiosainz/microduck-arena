@@ -44,7 +44,7 @@ import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js"
 import { attachStadium } from "./stadium.js";
 import { isStage } from "./format.js";
 import { buildJudges } from "./judges.js";
-import { buildTalentStage, stageCameraPose, placeStagePerformer, stageCameraTarget } from "./talent-stage.js";
+import { buildTalentStage, stageCameraPose, placeStageDuck, stageCameraTarget } from "./talent-stage.js";
 import { loadGymBranding } from "./gym-branding.js";
 import { stadiumDirection } from "./clip/direction.js";
 import { buildGym } from "./gym.js";
@@ -113,6 +113,17 @@ export function attachCourse(scene, event, lanes, stripes) {
 export function placeLane(rig, laneZ) {
   rig.placer.position.z = laneZ;
   rig.placer.rotation.set(0, 0, 0);
+}
+
+/**
+ * The lanes a stage draws: one per duck of the performance it plays (cast.js stageDucks), in duck
+ * order, the star first. Every duck is drawn solid, and the plate over the star alone names the
+ * entry. The workshop's checkpoint replay hands its one duck as the entry itself. Pure, so it is
+ * testable.
+ */
+export function stageLanes(entries) {
+  return entries.flatMap((entry) => (entry.ducks ?? [{ ...entry, star: true }])
+    .map((duck) => ({ ...duck, opacity: 1, name: duck.star ? entry.name : undefined })));
 }
 
 // Project the midpoint of the feet vertically onto the course. Parenting the
@@ -258,18 +269,20 @@ export async function createViewer(
   { onChaseChange, rig: rigName = "legs", manual = false, camera: spec = null, hushed = () => false } = {},
 ) {
   // `rigName` and not `rig`, because setLanes below names each lane's built
-  // tree `rig` — the two would shadow, and it would work by accident today
-  // only because nothing reads the parameter after this line.
+  // tree `rig` — the two would shadow.
   //
-  // The rig is fixed for the life of this viewer, which matches the page: one
-  // race page shows one event, and an event declares one rig. The crowd is
-  // always on foot, in its own lighter model.
-  const [{ kinematics, geometries }, spectators, reachy, branding] = await Promise.all([
-    loadAssets(rigName),
+  // A race's lanes all stand on `rigName`, which matches the page: one race
+  // page shows one event, and an event declares one rig. A stage's troupe may
+  // mix legs and rollers, each duck on its own, so both rigs are loaded. The
+  // crowd is always on foot, in its own lighter model.
+  const [legs, rollers, spectators, reachy, branding] = await Promise.all([
+    loadAssets("legs"),
+    loadAssets("rollers"),
     loadAssets("legs", CROWD_MODEL),
     loadGlb("reachy-mini/reachy-mini.glb"),
     loadGymBranding(),
   ]);
+  const rigs = { legs, rollers };
 
   // Under SwiftShader MSAA cost 2.7× per frame (401 → 151 ms at 1080p), and a
   // clip is encoded by x264 anyway, which softens edges; the interactive pages keep it.
@@ -414,7 +427,7 @@ export async function createViewer(
   function setLanes(entries, event, playerOptions = {}) {
     clearScene();
     const talent = isStage(event);
-    if (talent) entries = entries.slice(0, 1);
+    if (talent) entries = stageLanes(entries);
     raceLights.forEach(light => { light.visible = !talent; });
     scene.background.set(talent ? 0x050716 : 0xb8dce7);
     scene.environmentIntensity = talent ? STAGE_ENV_INTENSITY : ENV_INTENSITY;
@@ -485,6 +498,8 @@ export async function createViewer(
     }
     lanes = entries.map((entry, i) => {
       const tier = entry.tier ?? "ghost";
+      // A duck of a troupe stands on its own rig; a race's lanes on the event's.
+      const { kinematics, geometries } = rigs[entry.rig ?? rigName];
       const rig = buildRigTree(kinematics);
       // No colour override: each geom keeps its own colour from the kinematics.
       // Painting the whole duck one lane colour erased every seam between shell,
@@ -502,7 +517,7 @@ export async function createViewer(
       rig.placer.traverse(node => {
         if (node.isMesh) Object.assign(node, { receiveShadow: true, castShadow: true });
       });
-      if (talent) placeStagePerformer(rig, entry.trace, stage.layout.centre);
+      if (talent) placeStageDuck(rig, entry, stage.layout.centre);
       else placeLane(rig, z);
       // How the performance sounds (duck-voice.js): the beak follows its triggers and its song.
       const mouth = talent ? mouthTrack(entry.sound, frameCount(entry.trace), entry.lead) : null;
@@ -604,7 +619,7 @@ export async function createViewer(
       const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
       const pose = dragPose(stage
         ? stageCameraPose(manual ? seconds : player.time,
-          lanes.length ? [stageCameraTarget(lanes[0].trace, player.time, lanes[0].rig.placer)] : [],
+          lanes.map((lane) => stageCameraTarget(lane.trace, player.time, lane.rig.placer)),
           camera.aspect, camera.fov, stage.layout.depth)
         : travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel),
       SWEEP_TURN * sweepAt((performance.now() - swept) / 1000));
