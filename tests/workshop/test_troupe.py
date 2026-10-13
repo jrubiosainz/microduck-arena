@@ -272,6 +272,19 @@ def test_one_click_publishes_each_local_duck_then_enters_the_star_naming_them_by
     assert walker_ticket["published"] is None
 
 
+def test_a_long_name_still_gives_each_duck_a_repo_of_its_own(stage, checkout, fakes):
+    """A repo's name keeps 60 characters of the entry's: the duck's own end is kept within them."""
+    star, walker = runs(checkout)
+    stage.timeline.write_text(troupe_text((f"local:sprint_2m/{walker.name}@1", 0.0, 0.5, 0)))
+    name = "The Brother John round sung in four parts by four ducks on stage"
+    assert len(name) == 64
+    publish(stage, star, name=name)
+    publish(stage, star, name=name)
+    duck, entry = (call[call.index("--repo") + 1] for call in fakes.calls("publish"))
+    assert duck == "alice/microduck-the-brother-john-round-sung-in-four-parts-by-four-duc-duck-1"
+    assert entry == "alice/microduck-the-brother-john-round-sung-in-four-parts-by-four-ducks-on-s"
+
+
 def test_a_duck_published_before_is_reused_from_its_runs_published_json(stage, checkout, fakes):
     star, walker = runs(checkout)
     (walker / "workshop").mkdir()

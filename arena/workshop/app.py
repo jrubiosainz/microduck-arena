@@ -43,6 +43,7 @@ from .jobs import recorded_jobs, remember_job
 from .login import BrowserLogin, LoginError
 from .publishing import (
     PublishError,
+    duck_name,
     exported,
     preview,
     publish,
@@ -436,7 +437,7 @@ async def publish_route(event: str, ticket_id: str, body: PublishRequest, reques
         waiting = [duck for duck in ducks if on_hub[duck[0]] is None]
         if waiting:
             _, first, duck_run, n, duck_challenge = waiting[0]
-            name = f"{body.name} duck {first}"
+            name = duck_name(body.name, first)
             await run_in_threadpool(publish_policy, ws.root, duck_run, n, repo_for(user, name), name,
                                     description, duck_challenge.event, body.allow_dirty)
             return {"publishing": {"done": len(ducks) - len(waiting) + 1, "of": len(ducks) + 1}}

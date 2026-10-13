@@ -35,12 +35,24 @@ class PublishError(RuntimeError):
     """`publish` failed; the message is its whole output."""
 
 
+# How much of a name a repo's keeps.
+_SLUG_CHARS = 60
+
+
 def slug(text: str) -> str:
-    return _UNSAFE.sub("-", text.lower()).strip("-")[:60].strip("-") or "policy"
+    return _UNSAFE.sub("-", text.lower()).strip("-")[:_SLUG_CHARS].strip("-") or "policy"
 
 
 def repo_for(user: str, name: str) -> str:
     return f"{user}/microduck-{slug(name)}"
+
+
+def duck_name(name: str, k: int) -> str:
+    """What duck k of a troupe entered as `name` is published as: the entry's slug, cut before the
+    duck's own end rather than after it, so that each duck gets a repo of its own however long the
+    name."""
+    end = f"-duck-{k}"
+    return slug(name)[: _SLUG_CHARS - len(end)].strip("-") + end
 
 
 def publish_args(run, checkpoint: int, repo: str, name: str, description: str, event, allow_dirty: bool,
