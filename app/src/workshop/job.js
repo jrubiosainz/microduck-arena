@@ -134,9 +134,10 @@ export async function mountJob(root, { status, account, route }) {
   });
   $(".score").after(panel.el);
   if (stage) {
-    $(".ckpts").after(performancePanel({ guide: `${status.arena}/${eventGuideHref(event.id)}` }, {
+    $(".ckpts").after(performancePanel({ guide: `${status.arena}/${eventGuideHref(event.id)}`, event }, {
       load: () => api.getTimeline(event.id),
       save: (text) => api.saveTimeline(event.id, text),
+      performers: () => api.getPerformers(event.id),
       // The new moves on the stage at once: the checkpoint chosen is played again with them.
       onSaved: () => {
         evaluations.clear();

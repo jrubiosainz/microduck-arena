@@ -19,6 +19,7 @@ from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, standings
 from ..store import CLIP_MEDIA, RunRecord, clip_version
+from ..timeline import EDGE_MARGIN_M, MIN_SPACING_M
 from ..trace import decode, decode_settle
 
 router = APIRouter(prefix="/api")
@@ -77,7 +78,14 @@ def event_summary(manifest: Manifest) -> dict:
     else:
         # The stage's floor and its cap, so the server's placement rules, the workshop's plan and
         # the drawn stage read the same numbers, as the walls are served for a lane.
-        summary |= {"size_m": list(manifest.course.size_m), "max_ducks": manifest.course.max_ducks}
+        summary |= {
+            "size_m": list(manifest.course.size_m),
+            "max_ducks": manifest.course.max_ducks,
+            # Where a duck may start, as arena.timeline refuses it: the workshop's placement plan
+            # turns a spot magenta with the loader's own numbers rather than copies of them.
+            "edge_margin_m": EDGE_MARGIN_M,
+            "min_spacing_m": MIN_SPACING_M,
+        }
     return summary
 
 

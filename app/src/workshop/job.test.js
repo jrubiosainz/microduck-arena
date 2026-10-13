@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   stopJob: vi.fn(),
   getTimeline: vi.fn(async () => ({ text: "{}" })),
   saveTimeline: vi.fn(async (event, text) => ({ text })),
+  getPerformers: vi.fn(async () => []),
 }));
 vi.mock("./api.js", () => api);
 const viewer = vi.hoisted(() => ({ setLanes: vi.fn(), setBrightness: vi.fn(), dispose: vi.fn(), follow() {}, sweep() {} }));
@@ -30,7 +31,8 @@ const CODE = { fork: null, changes: [], identity: true, commit: "abc1234", unpus
 const SPRINT = { id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null, metric: "time", rig: "legs",
   length_m: 2, slope_deg: 0, sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21 };
 const TALENT = { id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", course: "stage",
-  metric: "votes", rig: "legs", time_limit_s: 20, vote: { ballot_min: 2 } };
+  metric: "votes", rig: "legs", time_limit_s: 20, vote: { ballot_min: 2 },
+  size_m: [2.6, 3.8], max_ducks: 4, edge_margin_m: 0.3, min_spacing_m: 0.3 };
 const status = (event) => ({ arena: "https://arena.test", gpu: false, challenges: [{ event, folder: "sprint_2m", task: "S", recipe: {}, knobs: [], running: 1 }] });
 const account = { get: () => ({ phase: "in", user: "alice", canPay: true }), logIn: vi.fn(), check: vi.fn() };
 const settle = async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); };
@@ -102,6 +104,8 @@ describe("a training's page", () => {
     await settle();
     expect(root.querySelector(".performance textarea")).not.toBeNull();
     expect(api.getTimeline).toHaveBeenCalledWith("got-a-talent");
+    expect(root.querySelector(".performance .placement")).not.toBeNull();
+    expect(api.getPerformers).toHaveBeenCalledWith("got-a-talent");
     root.querySelector(".ckpts .bars i").click();
     await settle();
     expect(root.querySelector(".score__value").textContent).toBe("No fall");

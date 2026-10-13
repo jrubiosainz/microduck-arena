@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from arena.timeline import EDGE_MARGIN_M, MIN_SPACING_M
 from arena.trace import encode
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
@@ -278,6 +279,13 @@ def test_a_stage_event_is_served_without_a_lane_or_a_sweep(client):
         assert key not in talent, key
     assert talent["time_limit_s"] == 20.0
     assert talent["seeds"] == 1
+
+
+def test_a_stage_serves_where_a_duck_may_start(client):
+    """The workshop's plan refuses a spot with the loader's own numbers, not copies of them."""
+    api, _ = client
+    talent = next(e for e in api.get("/api/events").json()["events"] if e["id"] == "got-a-talent")
+    assert (talent["edge_margin_m"], talent["min_spacing_m"]) == (EDGE_MARGIN_M, MIN_SPACING_M)
 
 
 def test_a_stage_serves_its_floor_and_how_many_ducks_it_takes(client):

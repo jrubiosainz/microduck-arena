@@ -32,6 +32,7 @@ export const publishJob = (event, id, body) => post(`${jobUrl(event, id)}/publis
 export const pushCode = () => post("/api/workshop/code/push");
 export const getTimeline = (event) => json(`${challengeUrl(event)}/timeline`);
 export const saveTimeline = (event, text) => post(`${challengeUrl(event)}/timeline`, { text });
+export const getPerformers = (event) => json(`${challengeUrl(event)}/performers`).then((body) => body.performers);
 
 /** A checkpoint's stored evaluation, its trace cut into one Float32Array per duck as the viewer takes them; `{checkpoint, error}` when it failed. */
 export async function getCheckpoint(event, id, n) {

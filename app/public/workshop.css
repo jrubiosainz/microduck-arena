@@ -210,6 +210,24 @@ details.output summary { margin: 26px 0 8px; }
 .performance__text { display: block; width: 100%; min-height: 16em; resize: vertical; border: 0; outline: 0;
   color: inherit; background: transparent; }
 
+/* The placement plan: the stage from above, over the performance's text, the audience at the bottom. */
+.placement { margin: 0 0 12px; }
+.placement--off { opacity: 0.45; pointer-events: none; }
+.placement__stage { display: block; width: 100%; height: auto; touch-action: none; user-select: none; }
+.placement__floor { fill: var(--warm-paper); stroke: var(--ink); stroke-width: 2; }
+.placement__room { fill: none; stroke: var(--ink-70); stroke-dasharray: 6 4; }
+.placement__audience { font-family: var(--mono); font-size: 14px; letter-spacing: 0.16em; fill: var(--ink-70); text-anchor: middle; }
+.placement__duck { cursor: grab; }
+.placement__body { fill: var(--paper); stroke: var(--ink); stroke-width: 2; }
+.placement__duck--star .placement__body { fill: var(--orange); }
+/* The charter has no red: magenta is its hot signal. */
+.placement__duck--refused .placement__body { fill: var(--magenta); }
+.placement__duck text { font-family: var(--display); font-size: 15px; fill: var(--ink); text-anchor: middle;
+  dominant-baseline: central; pointer-events: none; }
+.placement__heading { stroke: var(--ink); stroke-width: 2; }
+.placement__handle { fill: var(--cyan); stroke: var(--ink); stroke-width: 1.5; }
+.placement__bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: 6px; }
+
 /* Publish & compete: the commentators' badge, the two checks, the result. */
 .booth { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
 .booth__heads { display: flex; }
