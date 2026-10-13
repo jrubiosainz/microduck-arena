@@ -211,6 +211,26 @@ describe("the broadcast camera on a troupe", () => {
       }
     }
   });
+  it.each([16 / 9, 9 / 16])("leaves a duck that goes off the stage out of the shot it leaves in and of every one after, at aspect %s", aspect => {
+    // A roller drifting behind the back edge from 4 s, off the stage from 6 s, to stand 3.3 m back as the
+    // borrowed roller of a real troupe did; the star and another duck stay on the stage.
+    const star = V(0.2, 0.1), other = V(-0.8, -0.3);
+    const placesAt = (seconds) => [star, other, V(0.9, Math.min(3.3, 0.5 + 0.5 * Math.max(0, seconds - 4)))];
+    const pair = () => [star, other];
+    for (let frame = 0; frame <= 24 * 30; frame++) {
+      const time = frame / 30;
+      const pose = stageCameraPose(time, placesAt(time), aspect, 42, 2.6, 3.8, placesAt);
+      if (pose.shot !== "low-front") expect(edge(pose, pair(), aspect)).toBeLessThanOrEqual(0.86);
+      // From the front shot, the one it leaves in, the camera films the other two as if it were not there.
+      if (time >= 3) expect(pose).toEqual(stageCameraPose(time, pair(), aspect, 42, 2.6, 3.8, pair));
+    }
+  });
+  it("frames the star wherever it goes, even off the stage", () => {
+    const star = V(2.4, 0.3), gone = V(-0.5, 2);
+    for (let time = 0; time <= 24; time += 0.25) {
+      expect(stageCameraPose(time, [star, gone], 16 / 9, 42)).toEqual(stageCameraPose(time, [star], 16 / 9, 42));
+    }
+  });
   it("closes in on the star alone in the low front shot, as on a lone performer", () => {
     for (const time of [14, 16, 17.9]) {
       expect(stageCameraPose(time, troupe, 16 / 9, 42)).toEqual(stageCameraPose(time, troupe.slice(0, 1), 16 / 9, 42));

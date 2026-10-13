@@ -73,8 +73,16 @@ const WINGS = 2.5;
 // as it stands behind the line: over the judges, who sit 0.3 m behind it with their heads about
 // 0.3 m above a duck's middle, and a metre over the front row's seats.
 const CLEARANCE = 1;
-// A troupe's shot is fitted at this many moments past its first, up to its last.
+// A troupe's shot is planned at this many moments past its first, up to its last.
 const MOMENTS = 12;
+// How far past an edge of the stage a duck's middle stands once it has left it: its own half-width
+// (half the 0.3 m the loader keeps between two ducks' middles), and a little more, so that a duck
+// on the rim is still part of the performance and one that went past it is no longer.
+const OFF_STAGE = 0.2;
+// The cycle of shots: each one's name, and when it starts and ends on the broadcast clock, in seconds.
+const CYCLE = [["opening", 0, 3], ["front", 3, 7], ["three-quarter", 7, 11], ["jury", 11, 14], ["low-front", 14, 18], ["crane", 18, 24]];
+// The shot of the cycle that runs at `time`; past its end, the crane holds.
+const shotOf = (time) => CYCLE.find(([, , end]) => time < end) ?? CYCLE[CYCLE.length - 1];
 
 // How far from `target` a camera on `bearing`, raised by `elevation`, stands for every duck, feet
 // to crest, to keep within the lone performer's 1.18 margin of the frame's edges: what it spans
@@ -120,43 +128,33 @@ function shotAt(time, middle, aspect, fov, depth) {
   target.y = Math.max(0.14, target.y) + 0.04;
   const halfFov = Math.atan(Math.tan(fov * Math.PI / 360) * Math.min(1, aspect));
   const fit = 0.32 / Math.sin(halfFov) * 1.18;
-  let shot, start, end, angle, distance, elevation;
-  if (time < 3) {
-    shot = "opening"; start = 0; end = 3;
-    const u = time / 3;
+  const [shot, start, end] = shotOf(time);
+  const u = (time - start) / (end - start);
+  let angle, distance, elevation;
+  if (shot === "opening") {
     angle = mix(0.3, 0.12, u);
     distance = mix(8, 6.6, u) / Math.min(1, aspect);
     elevation = mix(0.38, 0.33, u);
     target.y += 0.65;
-  } else if (time < 7) {
-    shot = "front"; start = 3; end = 7;
-    const u = (time - 3) / 4;
+  } else if (shot === "front") {
     angle = mix(-0.18, -0.06, u);
     distance = fit * mix(1.15, 1, u);
     elevation = 0.1;
-  } else if (time < 11) {
-    shot = "three-quarter"; start = 7; end = 11;
-    const u = (time - 7) / 4;
+  } else if (shot === "three-quarter") {
     angle = mix(-0.85, -0.65, u);
     distance = fit * mix(1.08, 1.18, u);
     elevation = mix(0.16, 0.12, u);
-  } else if (time < 14) {
-    shot = "jury"; start = 11; end = 14;
-    const u = (time - 11) / 3;
+  } else if (shot === "jury") {
     angle = mix(1.85, 1.72, u);
     distance = Math.max(fit, 3.5);
     elevation = 0.24;
     target.y += 0.15;
     target.z -= 0.25;
-  } else if (time < 18) {
-    shot = "low-front"; start = 14; end = 18;
-    const u = (time - 14) / 4;
+  } else if (shot === "low-front") {
     angle = mix(0.4, 0.25, u);
     distance = fit * mix(1.15, 1, u);
     elevation = 0.06;
   } else {
-    shot = "crane"; start = 18; end = 24;
-    const u = (time - 18) / 6;
     angle = mix(-0.18, -0.34, u);
     distance = mix(6.4, 8, u) / Math.min(1, aspect);
     elevation = mix(0.3, 0.4, u);
@@ -179,27 +177,16 @@ function shotAt(time, middle, aspect, fov, depth) {
   return { shot, start, end, inside, target, distance, elevation, horizontal, dx, dz, bearing: Math.atan2(dx, -dz) };
 }
 
-// The last shot fitted, which every frame of that shot asks for again.
-let fitted = { key: null, fit: null };
-
-// How a troupe's camera films a shot, fitted once for the whole shot from where the troupe stands
-// at every moment of it, first frame to last, so that it is the same at every frame and the camera
-// glides: null where the lone duck's camera already holds the troupe inside the theatre, a fiftieth
-// of its distance to spare; else a bearing that turns steadily through the shot, from the lone
-// duck's at its first frame to its last (the lone camera's slide along the desk's line, seen from
-// farther, would sweep the troupe's), and the least lift above the shot's own elevation at which
-// the camera, holding each moment's troupe, stays inside. Raising a camera turns a deep troupe's
-// depth into height on screen, so the lift is found by stepping up until the troupe fits, then halving.
-function shotFit(view, pick, placesAt, aspect, fov, depth, width) {
+// How an interior shot's camera films the troupe framed at each of its `moments`, the same at every
+// frame so that the camera glides: null where the lone duck's camera already holds the troupe inside
+// the theatre, a fiftieth of its distance to spare; else a bearing that turns steadily through the
+// shot, from the lone duck's at its first frame to its last (the lone camera's slide along the desk's
+// line, seen from farther, would sweep the troupe's), and the least lift above the shot's own
+// elevation at which the camera, holding each moment's troupe, stays inside. Raising a camera turns
+// a deep troupe's depth into height on screen, so the lift is found by stepping up until the troupe
+// fits, then halving.
+function shotFit(moments, aspect, fov, depth, width) {
   const tanUp = Math.tan(fov * Math.PI / 360);
-  const moments = Array.from({ length: MOMENTS + 1 }, (_, k) => {
-    // The shot's last moment just before it cuts away.
-    const time = Math.min(view.start + (view.end - view.start) * k / MOMENTS, view.end - 1e-6);
-    const ducks = pick(placesAt(time));
-    return { u: k / MOMENTS, ducks, at: shotAt(time, middleOf(ducks), aspect, fov, depth) };
-  });
-  const key = JSON.stringify([view.shot, aspect, fov, depth, width, moments.map(({ ducks }) => ducks.map((d) => [d.x, d.y, d.z]))]);
-  if (fitted.key === key) return fitted.fit;
   const turn = [moments[0].at.bearing, moments[MOMENTS].at.bearing];
   const fits = (lift, bearingAt) => moments.every(({ u, ducks, at }) => {
     const rise = at.elevation + lift, bearing = bearingAt(u, at);
@@ -222,29 +209,56 @@ function shotFit(view, pick, placesAt, aspect, fov, depth, width) {
     }
     fit = { turn, lift: high };
   }
-  fitted = { key, fit };
   return fit;
+}
+
+// The shot last planned, which every frame of it asks for again: the same shot of the same troupe,
+// whose `placesAt` says where it stands at any moment.
+let planned = { placesAt: null, key: null };
+
+// How the shot at `time` films the troupe, worked out once, at its first frame, from where the troupe
+// stands at every moment of it, first frame to last, so that every frame of it films the same ducks
+// the same way: which ducks it frames (`framed`, their indices) and how an interior shot's camera
+// moves (`fit`, shotFit).
+function shotPlan(time, placesAt, aspect, fov, depth, width) {
+  const [shot, start, end] = shotOf(time);
+  const key = JSON.stringify([shot, aspect, fov, depth, width]);
+  if (planned.placesAt === placesAt && planned.key === key) return planned;
+  // The shot's moments, its last just before it cuts away, and where the troupe stands at each.
+  const times = Array.from({ length: MOMENTS + 1 }, (_, k) => Math.min(start + (end - start) * k / MOMENTS, end - 1e-6));
+  const places = times.map(placesAt);
+  // The star always, alone in its close-up. Any other duck as long as it stays on the stage: one that
+  // walks or rolls off it during a shot is out of all of it, rather than jolting the camera as it goes.
+  const onStage = (place) => Math.abs(place.z) <= depth / 2 + OFF_STAGE && Math.abs(place.x) <= width / 2 + OFF_STAGE;
+  const framed = places[0].map((_, k) => k).filter((k) => k === 0
+    || (shot !== "low-front" && places.every((troupe) => onStage(troupe[k]))));
+  const moments = times.map((moment, k) => {
+    const ducks = framed.map((i) => places[k][i]);
+    return { u: k / MOMENTS, ducks, at: shotAt(moment, middleOf(ducks), aspect, fov, depth) };
+  });
+  planned = { placesAt, key, framed, fit: moments[0].at.inside ? shotFit(moments, aspect, fov, depth, width) : null };
+  return planned;
 }
 
 // The broadcast clock keeps moving during clip titles, even while replay time
 // is held at zero. Each camera moves within its shot; cuts are instantaneous.
-// `subjects` are the ducks' places, the star first: every shot frames the whole
-// troupe from its middle, but the low front shot, the star's close-up. `placesAt`
-// gives their places at any moment of the broadcast clock, so that a shot is fitted
-// once to all its troupe will do; a troupe that holds still needs none.
+// `subjects` are the ducks' places, the star first: every shot frames the troupe
+// on the stage from its middle, and the star wherever it is, but the low front
+// shot, the star's close-up. `placesAt` gives their places at any moment of the
+// broadcast clock, so that a shot is planned once to all its troupe will do: the
+// same function for as long as the troupe is the same. A troupe that holds still needs none.
 export function stageCameraPose(seconds, subjects, aspect, fov, depth = 2.6, width = 3.8, placesAt = () => subjects) {
   // One cycle of shots; a clip runs past it (titles and outro around a 20 s performance), and
   // there the last shot holds rather than cutting back to the opening.
   const time = Math.min(Math.max(0, seconds), 24);
-  const pick = (places) => (time >= 14 && time < 18 ? places.slice(0, 1) : places);
-  const ducks = pick(subjects);
+  const { framed, fit } = shotPlan(time, placesAt, aspect, fov, depth, width);
+  const ducks = framed.map((k) => subjects[k]);
   const view = shotAt(time, middleOf(ducks), aspect, fov, depth);
   const { target } = view;
   const tanUp = Math.tan(fov * Math.PI / 360);
   // The opening and the crane look in from outside the theatre, and every camera inside it that
   // already holds the troupe rides the lone duck's path; both stand as far as holding every duck of
   // this frame takes. A lone duck's stands exactly where it always has: its offsets are scaled, by 1.
-  const fit = view.inside ? shotFit(view, pick, placesAt, aspect, fov, depth, width) : null;
   if (!fit) {
     const span = Math.max(view.distance, troupeReach(ducks, target, view.bearing, view.elevation, tanUp * aspect, tanUp));
     const scale = span * Math.cos(view.elevation) / view.horizontal;
