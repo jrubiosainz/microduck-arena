@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from ..hub_fetch import FetchError
 from ..manifest import load_event
 from ..timeline import TimelineError, load_troupe
 from ..web.routes_read import event_summary
@@ -281,7 +282,10 @@ def checkpoint(event: str, ticket_id: str, n: int, request: Request) -> dict:
         raise HTTPException(status_code=404, detail=f"Checkpoint {n} is not evaluated yet.")
     body = stored(run, n, timeline_key(ws.root, challenge))
     if body is None and is_stage(challenge) and exported(run, n):
-        body = evaluate_checkpoint(ws.root, run, n, challenge)
+        try:
+            body = evaluate_checkpoint(ws.root, run, n, challenge)
+        except FetchError as exc:  # it names the duck whose policy the Hub did not hand over
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     if body is None:
         raise HTTPException(status_code=404, detail=f"Checkpoint {n} is not evaluated yet.")
     return {"checkpoint": n, "error": body["error"]} if "error" in body else body

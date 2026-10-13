@@ -9,8 +9,10 @@ its checkpoints in order, so a training's tickets fill in as it goes. A result i
 checkpoint, per Arena runner version and per FORMAT, trace included, so a page replays it at once. A
 checkpoint that cannot be measured — a failed export, a policy that does not load, a race that breaks,
 a duck the troupe cannot cast — is stored as a failure, with the checkpoint file's modification time,
-and tried again only once that file changes. A checkpoint file younger than FRESH_S waits: a local
-training may still be writing it.
+and tried again only once that file changes. A troupe's Hub policy that cannot be fetched (an offline
+laptop, a Hub outage) is the Hub's state, not the checkpoint's: nothing is stored, and the worker tries
+again on its next pass. A checkpoint file younger than FRESH_S waits: a local training may still be
+writing it.
 
 On a stage, each checkpoint plays the challenge's timeline.json with its whole troupe, the checkpoint
 as the star ("self"). `troupe.timeline_key` names that performance: an edit, or a local duck's
@@ -27,6 +29,7 @@ import time
 from ..cast import duck_record
 from ..constants import RUNNER_VERSION
 from ..evaluate import evaluate
+from ..hub_fetch import FetchError
 from ..manifest import load_event
 from ..policy import load_policy
 from ..stage import summaries
@@ -133,11 +136,13 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
 
 def evaluate_checkpoint(root, run, n: int, challenge) -> dict:
     """Measure checkpoint n with the challenge's timeline as it is now, store what came of it, and
-    return that body."""
+    return that body. A FetchError (a Hub policy of the troupe out of reach) is raised, not stored."""
     mtime = _mtime(run, n)
     key = timeline_key(root, challenge)
     try:
         body = _measure(root, run, n, challenge, key)
+    except FetchError:
+        raise
     except Exception as exc:  # noqa: BLE001 — stored, so the worker moves on to the next checkpoint
         error = str(exc) if isinstance(exc, PublishError) else f"{type(exc).__name__}: {exc}"
         body = {"checkpoint": n, "error": error, "mtime": mtime, "runner_version": RUNNER_VERSION,

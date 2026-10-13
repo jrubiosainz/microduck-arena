@@ -10,8 +10,9 @@ import time
 
 import pytest
 
+from arena import hub_fetch
 from arena.constants import TRACE_WIDTH
-from arena.hub_fetch import FetchedPolicy
+from arena.hub_fetch import FetchedPolicy, FetchError
 from arena.timeline import TimelineError
 from arena.workshop import troupe
 from arena.workshop.evaluations import evaluate_checkpoint, stored
@@ -41,6 +42,21 @@ def runs(checkout):
 
 def talent(stage):
     return stage.app.state.workshop.challenges["got-a-talent"]
+
+
+def roller() -> FetchedPolicy:
+    """What the Arena fetches for REF: the reference walker's weights, on the rig its manifest names."""
+    repo, revision = REF.split("@")
+    return FetchedPolicy(repo_id=repo, filename="policy.onnx", revision=revision, path=REFERENCE,
+                         url=f"https://huggingface.co/{repo}/resolve/{revision}/policy.onnx", rig="rollers")
+
+
+def offline(wanted, event):
+    """The Arena's own fetch, the Hub out of reach: an offline laptop, or a Hub outage."""
+    def unreachable(repo_id, revision):
+        raise ConnectionError("huggingface.co did not answer")
+
+    return hub_fetch.fetch_references(wanted, event, info=unreachable)
 
 
 def play(stage, checkout, star, n=1):
@@ -120,15 +136,37 @@ def test_a_hub_reference_plays_what_the_arena_fetches_on_the_rig_its_manifest_na
 
     def fetch(wanted, event):
         asked.append(wanted.references())
-        repo, revision = REF.split("@")
-        return {REF: FetchedPolicy(repo_id=repo, filename="policy.onnx", revision=revision, path=REFERENCE,
-                                   url=f"https://huggingface.co/{repo}/resolve/{revision}/policy.onnx", rig="rollers")}
+        return {REF: roller()}
 
     monkeypatch.setattr(troupe, "fetch_references", fetch)
     stage.timeline.write_text(troupe_text((REF, 0.5, 0.0, 180)))
     body = play(stage, checkout, star)
     assert asked == [(REF,)]
     assert [(duck["policy"], duck["rig"]) for duck in body["cast"]] == [("self", "legs"), (REF, "rollers")]
+
+
+def test_a_hub_policy_out_of_reach_fails_no_checkpoint_and_plays_once_the_hub_is_back(stage, checkout, monkeypatch):
+    """An outage is the Hub's state, not the checkpoint's: nothing is stored, and the next pass plays."""
+    star, _ = runs(checkout)
+    stage.timeline.write_text(troupe_text((REF, 0.5, 0.0, 180)))
+    monkeypatch.setattr(troupe, "fetch_references", offline)
+    with pytest.raises(FetchError, match=r"ducks\[1\]: pollen-robotics/microduck-roller"):
+        play(stage, checkout, star)
+    assert not (star / "workshop" / "model_1.json").exists()
+    monkeypatch.setattr(troupe, "fetch_references", lambda wanted, event: {REF: roller()})
+    assert "error" not in play(stage, checkout, star)
+    (run,) = find_runs(checkout, TASK)
+    assert stored(run, 1, timeline_key(checkout, talent(stage))) is not None
+
+
+def test_save_and_play_says_which_hub_policy_is_out_of_reach(stage, checkout, monkeypatch):
+    star, _ = runs(checkout)
+    play(stage, checkout, star)  # exported, and played with the timeline as committed
+    stage.timeline.write_text(troupe_text((REF, 0.5, 0.0, 180)))
+    monkeypatch.setattr(troupe, "fetch_references", offline)
+    response = stage.get(f"{URL}/jobs/{star.name}/checkpoints/1")
+    assert response.status_code == 502
+    assert "ducks[1]: pollen-robotics/microduck-roller" in response.json()["detail"]
 
 
 def test_a_troupe_naming_a_checkpoint_this_checkout_does_not_hold_fails_and_says_which(stage, checkout):
