@@ -13,11 +13,12 @@ import {
   getTrace,
 } from "./api.js";
 
-function respondWith({ ok = true, status = 200, statusText = "OK", body, bytes }) {
+function respondWith({ ok = true, status = 200, statusText = "OK", body, bytes, headers = {} }) {
   globalThis.fetch = vi.fn(async () => ({
     ok,
     status,
     statusText,
+    headers: new Headers(headers),
     json: async () => {
       if (body === undefined) throw new Error("not json");
       return body;
@@ -54,19 +55,25 @@ describe("the error contract", () => {
     await expect(getTrace("x")).rejects.toThrow("502 Bad Gateway");
   });
 
-  it("returns a Float32Array on success", async () => {
+  it("returns one duck's Float32Array when the server counts no ducks: a lane's", async () => {
     const source = new Float32Array([1.5, 2.5, 3.5]);
     respondWith({ bytes: source.buffer });
-    const trace = await getTrace("01OK");
-    expect(trace).toBeInstanceOf(Float32Array);
-    expect([...trace]).toEqual([1.5, 2.5, 3.5]);
+    const ducks = await getTrace("01OK");
+    expect(ducks).toHaveLength(1);
+    expect(ducks[0]).toBeInstanceOf(Float32Array);
+    expect([...ducks[0]]).toEqual([1.5, 2.5, 3.5]);
+  });
+
+  it("cuts a troupe's trace into its ducks, in duck order", async () => {
+    respondWith({ bytes: new Float32Array([1, 2, 3, 4, 5, 6]).buffer, headers: { "X-Duck-Count": "3" } });
+    expect((await getTrace("01OK")).map((duck) => [...duck])).toEqual([[1, 2], [3, 4], [5, 6]]);
   });
 
   it("fetches a run's settle the way it fetches its trace", async () => {
-    respondWith({ bytes: new Float32Array([0.5]).buffer });
-    const settle = await getSettle("01OK");
+    respondWith({ bytes: new Float32Array([0.5, 0.25]).buffer, headers: { "X-Duck-Count": "2" } });
+    const settles = await getSettle("01OK");
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/runs/01OK/settle");
-    expect([...settle]).toEqual([0.5]);
+    expect(settles.map((duck) => [...duck])).toEqual([[0.5], [0.25]]);
   });
 });
 
@@ -130,12 +137,11 @@ describe("the ballot", () => {
     await expect(getBallotTrace("tok.mac", 2)).rejects.toThrow("502 Bad Gateway");
   });
 
-  it("returns a Float32Array fetched over the ballot-scoped url", async () => {
-    const source = new Float32Array([1.5, 2.5, 3.5]);
-    respondWith({ bytes: source.buffer });
-    const trace = await getBallotTrace("tok.mac", 2);
-    expect(trace).toBeInstanceOf(Float32Array);
-    expect([...trace]).toEqual([1.5, 2.5, 3.5]);
+  it("returns every duck of a lane, fetched over the ballot-scoped url", async () => {
+    const source = new Float32Array([1.5, 2.5, 3.5, 4.5]);
+    respondWith({ bytes: source.buffer, headers: { "X-Duck-Count": "2" } });
+    const ducks = await getBallotTrace("tok.mac", 2);
+    expect(ducks.map((duck) => [...duck])).toEqual([[1.5, 2.5], [3.5, 4.5]]);
     expect(fetch.mock.calls[0][0]).toBe("/api/ballots/tok.mac/lanes/2/trace");
   });
 });

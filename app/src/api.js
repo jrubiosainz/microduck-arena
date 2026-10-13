@@ -1,6 +1,8 @@
 // Every call the page makes. Errors surface the server's own message, which for
 // a rejected policy is the same sentence the robot's daemon would give.
 
+import { splitDucks } from "./replay.js";
+
 export async function detailFrom(response) {
   try {
     const body = await response.json();
@@ -57,15 +59,18 @@ async function frames(path) {
   const response = await fetch(path);
   // Same contract as every other call: the server's own sentence, not a status.
   if (!response.ok) throw new Error(await detailFrom(response));
-  // Raw little-endian float32 from the server, 21 values per frame.
-  return new Float32Array(await response.arrayBuffer());
+  // Raw little-endian float32 from the server, 21 values per frame, one duck after the other: a
+  // stage sends every duck of its troupe (X-Duck-Count), a lane its one duck.
+  const ducks = Number(response.headers.get("X-Duck-Count") ?? 1);
+  return splitDucks(new Float32Array(await response.arrayBuffer()), ducks);
 }
 
+/** A run's trace, one per duck, in duck order: a lane's is its one duck. */
 export function getTrace(runId) {
   return frames(`/api/runs/${runId}/trace`);
 }
 
-/** The untimed settle before a run's trace, from the reset pose; empty for a run stored before settles were recorded. */
+/** The untimed settle before a run's trace, from the reset pose, one per duck; empty for a run stored before settles were recorded. */
 export function getSettle(runId) {
   return frames(`/api/runs/${runId}/settle`);
 }
@@ -88,14 +93,10 @@ export async function getBallot(eventId) {
   return response.json();
 }
 
-/** One lane's replay. Addressed through the ballot, so no run id is exposed. */
+/** One lane's replay, one trace per duck. Addressed through the ballot, so no run id is exposed. */
 export const ballotTraceUrl = (ballot, lane) => `/api/ballots/${ballot}/lanes/${lane}/trace`;
 
-export async function getBallotTrace(ballot, lane) {
-  const response = await fetch(ballotTraceUrl(ballot, lane));
-  if (!response.ok) throw new Error(await detailFrom(response));
-  return new Float32Array(await response.arrayBuffer());
-}
+export const getBallotTrace = (ballot, lane) => frames(ballotTraceUrl(ballot, lane));
 
 export const castVote = (eventId, ballot, lane) =>
   json(`/api/events/${encodeURIComponent(eventId)}/vote`, {

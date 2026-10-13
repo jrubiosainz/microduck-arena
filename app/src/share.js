@@ -32,11 +32,13 @@ export function postText(run, { origin, network }) {
   const earned = run.receipts.reduce((sum, r) => sum + r.points, 0);
   const points = earned > 0 ? ` (+${earned} pts)` : "";
   const stage = isStage(run.event);
+  // A troupe is shared as the robot ducks it is.
+  const troupe = stage && run.cast.length > 1;
   let result;
   if (stage) {
     result = run.seeds_finished === 0
-      ? `Its performance on ${run.event.title} was cut short.`
-      : `On ${run.event.title} it gave a ${run.score.toFixed(2)} s performance${points}.`;
+      ? `${troupe ? "Their" : "Its"} performance on ${run.event.title} was cut short.`
+      : `On ${run.event.title} ${troupe ? "they" : "it"} gave a ${run.score.toFixed(2)} s performance${points}.`;
   } else if (run.seeds_finished === 0) {
     const fell = run.per_seed.some((s) => s.status === "fall");
     result = `On ${run.event.title} it finished 0/${total} seeds on its feet — ${fell ? "it ate the floor" : "it ran out of time"}.`;
@@ -45,8 +47,8 @@ export function postText(run, { origin, network }) {
     result = `On ${run.event.title} it finished ${run.seeds_finished}/${total} seeds in ${run.score.toFixed(3)} s${place}${points}.`;
   }
   const lines = [
-    `I coded a robot duck to ${stage ? "perform" : "walk"}. ${result}`,
-    `${stage ? "Watch it" : "Beat it"}: ${origin}/r/${run.run_id}`,
+    `I coded ${troupe ? "robot ducks" : "a robot duck"} to ${stage ? "perform" : "walk"}. ${result}`,
+    `${troupe ? "Watch them" : stage ? "Watch it" : "Beat it"}: ${origin}/r/${run.run_id}`,
   ];
   if (run.policy_url) lines.push(`Weights: ${run.policy_url.replace(/^https?:\/\//, "")}`);
   lines.push([HASHTAG, MENTIONS[network]].filter(Boolean).join(" "));

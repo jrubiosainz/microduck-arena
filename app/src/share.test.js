@@ -46,14 +46,25 @@ describe("postText", () => {
 });
 
 describe("postText for a performance", () => {
+  const duck = { policy: "self", rig: null, start: null, sound: null };
+  const stageRun = { event: { title: "MicroDuck Got a Talent", course: "stage" }, seeds_total: 1, seeds_finished: 1,
+    score: 20, receipts: [{ points: 100 }], per_seed: [], run_id: "r1", rank: 1, on_board: true, policy_url: null, cast: [duck] };
+
   it("shares a performance as one", () => {
-    const stageRun = { event: { title: "MicroDuck Got a Talent", course: "stage" }, seeds_total: 1, seeds_finished: 1,
-      score: 20, receipts: [{ points: 100 }], per_seed: [], run_id: "r1", rank: 1, on_board: true, policy_url: null };
     const text = postText(stageRun, { origin: "https://arena.test", network: "linkedin" });
     expect(text).toContain("I coded a robot duck to perform. On MicroDuck Got a Talent it gave a 20.00 s performance (+100 pts).");
     expect(text).toContain("Watch it: https://arena.test/r/r1");
     expect(postText({ ...stageRun, seeds_finished: 0, receipts: [] }, { origin: "https://arena.test", network: "linkedin" }))
       .toContain("Its performance on MicroDuck Got a Talent was cut short.");
+  });
+
+  it("shares a troupe as robot ducks", () => {
+    const troupe = { ...stageRun, cast: [duck, duck, duck] };
+    const text = postText(troupe, { origin: "https://arena.test", network: "linkedin" });
+    expect(text).toContain("I coded robot ducks to perform. On MicroDuck Got a Talent they gave a 20.00 s performance (+100 pts).");
+    expect(text).toContain("Watch them: https://arena.test/r/r1");
+    expect(postText({ ...troupe, seeds_finished: 0, receipts: [] }, { origin: "https://arena.test", network: "linkedin" }))
+      .toContain("Their performance on MicroDuck Got a Talent was cut short.");
   });
 });
 

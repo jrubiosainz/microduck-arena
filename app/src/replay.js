@@ -13,6 +13,15 @@ export function frameCount(trace) {
   return Math.floor(trace.length / TRACE_WIDTH);
 }
 
+/**
+ * A troupe's trace or settle as the server sends it, every duck's frames one after the other,
+ * cut into one per duck, in duck order: views, no copy. A lane's is its one duck.
+ */
+export function splitDucks(values, ducks) {
+  const length = values.length / ducks;
+  return Array.from({ length: ducks }, (_, k) => values.subarray(k * length, (k + 1) * length));
+}
+
 /** A view onto one frame — no copy, so this is cheap inside a render loop. */
 export function frameAt(trace, index) {
   const start = index * TRACE_WIDTH;

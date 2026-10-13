@@ -7,6 +7,7 @@
 import { getClip, getMe, getRun, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { boardsheetMarkup, wireBoardsheet } from "./boardsheet.js";
+import { featured, replayLane } from "./cast.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { formatSpeed, isStage } from "./format.js";
 import { colourLanes, lanesFor } from "./lanes.js";
@@ -66,6 +67,26 @@ export function receiptCard(receipt) {
   const card = el("span", `receipt ${TONES[receipt.act]}`);
   card.append(el("strong", "receipt-points", `+${receipt.points}`), el("span", "mono-label", what));
   return card;
+}
+
+/**
+ * The policies a troupe borrowed, each credited to its author and linked to its repo at the commit
+ * that performed: they earn nothing from it, but they are named. Null when every duck is the
+ * author's own.
+ */
+export function featuring(cast) {
+  const policies = featured(cast);
+  if (!policies.length) return null;
+  const line = el("span", null, "featuring ");
+  policies.forEach((policy, i) => {
+    const link = el("a", null, `@${policy.user} · ${policy.policy_name}`);
+    link.href = `https://huggingface.co/${policy.repo_id}/tree/${policy.revision}`;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    if (i) line.append(", ");
+    line.append(link);
+  });
+  return line;
 }
 
 /**
@@ -132,7 +153,10 @@ export async function renderRun(root, runId, state) {
   $("title").href = raceHref(run.event.id);
   const who = el("a", null, `@${run.user}`);
   who.href = playerHref(run.user);
-  $("byline").append(who, ` · ${run.policy_name} · ${run.submitted_at.slice(0, 10)}`);
+  $("byline").append(who, ` · ${run.policy_name}`);
+  const credits = featuring(run.cast);
+  if (credits) $("byline").append(" · ", credits);
+  $("byline").append(` · ${run.submitted_at.slice(0, 10)}`);
   const scoringHelp = el("a", null, "How points work");
   scoringHelp.href = guideHref("points");
   $("byline").append(" · ", scoringHelp);
@@ -255,12 +279,10 @@ export async function renderRun(root, runId, state) {
     }
     const fetched = await Promise.all(runIds.map(traceFor));
     if (leaving.signal.aborted) return;
-    const lanes = runIds.map((id, i) => ({
+    const lanes = runIds.map((id, i) => replayLane(run.event, byId.get(id).cast, fetched[i], {
       runId: id,
-      trace: fetched[i],
       tier: tiers.get(id) ?? "ghost",
       livery: byId.get(id).livery,
-      sound: byId.get(id).sound,
       // The plate over the duck.
       name: byId.get(id).user,
     }));

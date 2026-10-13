@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { JOINT_NAMES, buildRigTree } from "./rig.js";
-import { CTRL_DT, Player, TRACE_WIDTH, applyFrame, frameAt, frameCount, leadIn, standing } from "./replay.js";
+import { CTRL_DT, Player, TRACE_WIDTH, applyFrame, frameAt, frameCount, leadIn, splitDucks, standing } from "./replay.js";
 
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
 
@@ -41,6 +41,23 @@ describe("trace geometry", () => {
     expect(frame.length).toBe(TRACE_WIDTH);
     expect(frame[0]).toBeCloseTo(0.2, 6);
     expect(frame.buffer).toBe(trace.buffer);
+  });
+});
+
+describe("splitDucks", () => {
+  it("cuts a troupe's frames into one trace per duck, in duck order, without copying", () => {
+    const values = Float32Array.from([...traceOf(2), ...traceOf(2).map((v) => v + 100)]);
+    const [first, second] = splitDucks(values, 2);
+    expect(frameCount(first)).toBe(2);
+    expect(frameCount(second)).toBe(2);
+    expect(first[0]).toBe(0);
+    expect(second[0]).toBe(100);
+    expect(second.buffer).toBe(values.buffer);
+  });
+
+  it("hands a lane its one duck whole", () => {
+    const values = traceOf(3);
+    expect(splitDucks(values, 1)).toEqual([values]);
   });
 });
 

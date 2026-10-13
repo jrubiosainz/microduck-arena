@@ -8,6 +8,7 @@ import {
   withdrawRun,
 } from "./api.js";
 import { boardsheetMarkup, podium, wireBoardsheet } from "./boardsheet.js";
+import { replayLane } from "./cast.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
@@ -216,7 +217,7 @@ export async function renderRace(root, { event, state }) {
   const traces = new Map();
   const liveries = new Map(); // run id -> the colourway it raced in
   const names = new Map(); // run id -> whose run it is, for the plate over its duck
-  const sounds = new Map(); // run id -> how its performance sounds
+  const casts = new Map(); // run id -> every duck it put on the stage (cast.js)
 
   async function traceFor(runId) {
     if (!traces.has(runId)) traces.set(runId, await getTrace(runId));
@@ -225,15 +226,13 @@ export async function renderRace(root, { event, state }) {
 
   async function race(runIds, tiers = new Map()) {
     const published = await Promise.all(runIds.map(traceFor));
-    const lanes = runIds.map((runId, i) => ({
+    const lanes = runIds.map((runId, i) => replayLane(event, casts.get(runId), published[i], {
       runId,
-      trace: published[i],
       tier: tiers.get(runId) ?? "ghost",
       // A published run keeps the colourway it raced in.
       livery: liveries.get(runId) ?? "classic",
       // The plate over the duck: the viewer builds one for a lane with a name.
       name: names.get(runId),
-      sound: sounds.get(runId),
     }));
     viewer.setLanes(arrangeLanes(board, isStage(event) ? lanes.slice(0, 1) : lanes), event);
   }
@@ -247,7 +246,7 @@ export async function renderRace(root, { event, state }) {
       for (const row of rows) {
         liveries.set(row.run_id, row.livery ?? "classic");
         names.set(row.run_id, row.user);
-        sounds.set(row.run_id, row.sound);
+        casts.set(row.run_id, row.cast);
       }
       return rows;
     },

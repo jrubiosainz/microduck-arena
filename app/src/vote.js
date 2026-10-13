@@ -6,6 +6,7 @@
 // land on how a duck WALKS and not on whose it is.
 
 import { castVote, getBallot, getBallotTrace, getMe } from "./api.js";
+import { replayLane } from "./cast.js";
 import { LANE_COLORS, LANE_CSS } from "./course.js";
 import { isStage } from "./format.js";
 import { dress, raceHref } from "./router.js";
@@ -268,14 +269,12 @@ export async function renderVote(root, { event, state }) {
     const traces = await Promise.all(
       Array.from({ length: ballot.lanes }, (_, lane) => getBallotTrace(ballot.ballot, lane)),
     );
-    const entries = traces.map((trace, lane) => ({
+    const entries = traces.map((duckTraces, lane) => replayLane(event, ballot.cast[lane], duckTraces, {
       runId: null,
-      trace,
-      // Every performer wears the same livery on an anonymous ballot.
+      // Every performer wears the same livery on an anonymous ballot, every duck of a troupe too.
       tier: "leader",
       livery: "classic",
       colour: LANE_COLORS[lane % LANE_COLORS.length],
-      sound: ballot.sound[lane],
     }));
     const solo = isStage(event);
     viewer.setLanes(solo ? entries.slice(0, 1) : entries, event);

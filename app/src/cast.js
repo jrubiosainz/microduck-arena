@@ -1,0 +1,47 @@
+// A performance's troupe on the page: the record's `cast` (arena/store.py RunRecord.cast; a board
+// row and a run carry it, a ballot lane carries it anonymous, every policy "self" or "borrowed")
+// beside the traces the server sends for it, one per duck. Duck 0 is the star: the entry's own
+// policy, the one the followspot follows.
+
+import { isStage } from "./format.js";
+import { leadIn } from "./replay.js";
+
+/**
+ * Every duck of a performance as the stage draws it, in duck order: its trace (after `lead` frames
+ * of its settle when `settles` are given, as a clip plays it), how it sounds, the rig it stands on
+ * (the event's when the cast names none), its livery, and where its author placed it — null for a
+ * run recorded before troupes, which the stage centres on its own path. A duck of the author's own
+ * policy wears the entry's livery; a borrowed one the plain `classic`, so the colours stay the
+ * author's.
+ */
+export function stageDucks(cast, traces, settles, { livery, eventRig, lead = 0 }) {
+  return cast.map((duck, k) => ({
+    trace: settles ? leadIn(settles[k], traces[k], lead) : traces[k],
+    lead,
+    sound: duck.sound,
+    rig: duck.rig ?? eventRig,
+    livery: duck.policy === "self" ? livery : "classic",
+    start: duck.start,
+    star: k === 0,
+  }));
+}
+
+/**
+ * One run as a lane of the viewer, from its traces (api.js, one per duck): on a stage its
+ * performance, every duck of its cast; on a lane the one duck that raced. `lane` is what the page
+ * draws it with: run id, name, tier, colour, livery.
+ */
+export function replayLane(event, cast, traces, lane) {
+  return isStage(event)
+    ? { ...lane, ducks: stageDucks(cast, traces, null, { livery: lane.livery, eventRig: event.rig }) }
+    : { ...lane, trace: traces[0] };
+}
+
+/** The policies a troupe borrowed from the Hub, each once, in the order its ducks first bring them. */
+export function featured(cast) {
+  const policies = new Map();
+  for (const { policy } of cast) {
+    if (policy !== "self") policies.set(`${policy.repo_id}@${policy.revision}`, policy);
+  }
+  return [...policies.values()];
+}

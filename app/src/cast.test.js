@@ -1,0 +1,84 @@
+import { describe, expect, it } from "vitest";
+import { featured, replayLane, stageDucks } from "./cast.js";
+import { TRACE_WIDTH, frameCount } from "./replay.js";
+
+const STAGE = { id: "got-a-talent", course: "stage", rig: "legs" };
+const SPRINT = { id: "sprint-2m", course: "lane", rig: "legs" };
+/** A borrowed policy as arena/cast.py borrowed_source records it. */
+const borrowed = (user, name) => ({
+  repo_id: `${user}/microduck-${name}`, filename: "policy.onnx", revision: "a".repeat(40),
+  url: `https://huggingface.co/${user}/microduck-${name}/resolve/${"a".repeat(40)}/policy.onnx`,
+  model_sha256: "f".repeat(64), user, policy_name: name,
+});
+const walker = borrowed("bob", "walker");
+const frames = (count, value) => new Float32Array(count * TRACE_WIDTH).fill(value);
+const SINGS = { song: [[0, 1, 69, 0.7, 0.9, 0]] };
+
+describe("stageDucks", () => {
+  const cast = [
+    { policy: "self", rig: null, start: { x: 0, y: 0, yaw: 0 }, sound: SINGS },
+    { policy: walker, rig: "rollers", start: { x: 0.4, y: -0.6, yaw: 90 }, sound: null },
+    { policy: "self", rig: null, start: { x: -0.4, y: 0.6, yaw: 0 }, sound: null },
+  ];
+  const traces = [frames(3, 0), frames(3, 1), frames(3, 2)];
+
+  it("draws every duck in duck order, the star first, each on its own trace, rig and place, singing its own sound", () => {
+    expect(stageDucks(cast, traces, null, { livery: "purple", eventRig: "legs" })).toEqual([
+      { trace: traces[0], lead: 0, sound: SINGS, rig: "legs", livery: "purple", start: cast[0].start, star: true },
+      { trace: traces[1], lead: 0, sound: null, rig: "rollers", livery: "classic", start: cast[1].start, star: false },
+      { trace: traces[2], lead: 0, sound: null, rig: "legs", livery: "purple", start: cast[2].start, star: false },
+    ]);
+  });
+
+  it("dresses the author's own ducks in the entry's livery on an anonymous ballot too", () => {
+    const ballot = cast.map((duck) => ({ ...duck, policy: duck.policy === "self" ? "self" : "borrowed" }));
+    expect(stageDucks(ballot, traces, null, { livery: "classic", eventRig: "legs" }).map((duck) => duck.livery))
+      .toEqual(["classic", "classic", "classic"]);
+  });
+
+  it("keeps a run recorded before troupes as it was: one duck, on the event's rig, with no place of its own", () => {
+    const [star] = stageDucks([{ policy: "self", rig: null, start: null, sound: null }], [frames(2, 0)], null, { livery: "purple", eventRig: "legs" });
+    expect(star).toMatchObject({ rig: "legs", livery: "purple", start: null, star: true });
+  });
+
+  it("plays each duck's settle first, every duck in step", () => {
+    const settles = [frames(2, 10), frames(2, 11), frames(2, 12)];
+    const ducks = stageDucks(cast, traces, settles, { livery: "purple", eventRig: "legs", lead: 2 });
+    for (const [k, duck] of ducks.entries()) {
+      expect(frameCount(duck.trace)).toBe(5);
+      expect(duck.trace[0]).toBe(10 + k);
+      expect(duck.trace[2 * TRACE_WIDTH]).toBe(k);
+      expect(duck.lead).toBe(2);
+    }
+  });
+});
+
+describe("replayLane", () => {
+  const lane = { runId: "r1", tier: "ghost", livery: "purple", name: "alice" };
+
+  it("puts a stage's whole performance in its lane, every duck of its cast", () => {
+    const cast = [{ policy: "self", rig: null, start: null, sound: null }, { policy: walker, rig: "rollers", start: null, sound: null }];
+    const traces = [frames(2, 0), frames(2, 1)];
+    const made = replayLane(STAGE, cast, traces, lane);
+    expect(made).toMatchObject(lane);
+    expect(made.ducks.map((duck) => [duck.trace, duck.rig, duck.livery])).toEqual([[traces[0], "legs", "purple"], [traces[1], "rollers", "classic"]]);
+    expect(made.trace).toBeUndefined();
+  });
+
+  it("races a lane's one duck, as it always has", () => {
+    const trace = frames(2, 0);
+    expect(replayLane(SPRINT, [{ policy: "self", rig: null, start: null, sound: null }], [trace], lane)).toEqual({ ...lane, trace });
+  });
+});
+
+describe("featured", () => {
+  it("credits each borrowed policy once, in the order the troupe brings them", () => {
+    const roller = borrowed("carol", "roller");
+    const cast = [{ policy: "self" }, { policy: walker }, { policy: roller }, { policy: { ...walker } }, { policy: "self" }];
+    expect(featured(cast)).toEqual([walker, roller]);
+  });
+
+  it("credits nobody when every duck is the author's own", () => {
+    expect(featured([{ policy: "self" }, { policy: "self" }])).toEqual([]);
+  });
+});
