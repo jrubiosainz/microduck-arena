@@ -6,7 +6,7 @@ from arena.commentary.context import label, nature, result_facts, technical_text
 from arena.evaluate import SeedResult
 from arena.manifest import load_event
 from arena.points import Receipt
-from tests.test_store import make_record
+from tests.test_store import WALKER, make_record
 
 
 def seeds(finished, total=5, status="fall"):
@@ -171,3 +171,45 @@ def test_a_performance_cut_short_says_so_without_a_time_or_a_fall():
     result = {f.ref: f for f in result_facts(record, load_event("got-a-talent"), [record], [])}["run#/result"]
     assert result.text == "The performance was cut short."
     assert result.tags == ("performance",)
+
+
+ON_STAGE = {"rig": "legs", "start": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "sound": None}
+
+
+def troupe_run(*policies, policy_name="sitter"):
+    """xia's performance, one duck per policy in order: "self" or a borrowed duck's credit."""
+    return make_record(
+        user="xia", event_id="got-a-talent", policy_name=policy_name, score=20.0, seeds_finished=1,
+        per_seed=(SeedResult(seed=1, status="finish", time_s=20.0),), submitted_at="2026-09-11T10:00:00Z",
+        cast=tuple({**ON_STAGE, "policy": policy} for policy in policies),
+    )
+
+
+def facts_of(record):
+    return {f.ref: f for f in result_facts(record, load_event("got-a-talent"), [record], [])}
+
+
+def test_a_troupe_is_named_in_order_each_borrowed_duck_by_its_author_and_policy():
+    facts = facts_of(troupe_run("self", WALKER, "self"))
+    assert facts["run#/troupe"].text == (
+        "The performance has 3 ducks: @xia's sitter (the star), @yan's walker and @xia's sitter again.")
+    assert facts["run#/troupe"].kind == "result"
+    # The participant is still the entrant alone: votes and points are theirs.
+    assert facts["run#/participant"].text == "The participant is @xia, performing a policy named sitter."
+
+
+def test_a_pair_and_a_borrowed_policy_played_twice():
+    assert facts_of(troupe_run("self", "self"))["run#/troupe"].text == (
+        "The performance has 2 ducks: @xia's sitter (the star) and @xia's sitter again.")
+    assert facts_of(troupe_run("self", WALKER, WALKER))["run#/troupe"].text == (
+        "The performance has 3 ducks: @xia's sitter (the star), @yan's walker and @yan's walker again.")
+
+
+def test_a_name_that_is_not_a_label_is_left_out_of_the_troupe():
+    record = troupe_run("self", {**WALKER, "policy_name": "<b>walker</b>"}, policy_name="sitter_v2")
+    assert facts_of(record)["run#/troupe"].text == (
+        "The performance has 2 ducks: @xia's policy (the star) and @yan's policy.")
+
+
+def test_one_duck_is_told_as_it_always_was():
+    assert "run#/troupe" not in facts_of(stage_run())

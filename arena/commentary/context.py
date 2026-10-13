@@ -123,6 +123,30 @@ def _points(record: RunRecord, receipts: list[Receipt]) -> Fact | None:
     return Fact("run#/points", f"This run earned {total} points: {parts}.", "result", tags)
 
 
+def _troupe(record: RunRecord) -> Fact | None:
+    """Who performs when more than one duck does, in order: each by its author and its policy's name,
+    the entry's own first as the star, a policy already named "again". A name that is not a label goes
+    unsaid, as the participant's does. None for one duck: the participant fact says it all."""
+    if len(record.cast) < 2:
+        return None
+    seen, ducks = set(), []
+    for k, duck in enumerate(record.cast):
+        source = duck["policy"]
+        if source == "self":
+            who, name, which = record.user, record.policy_name, "self"
+        else:
+            who, name, which = source["user"], source["policy_name"], (source["repo_id"], source["revision"])
+        said = f"@{who}'s {name}" if label(name) else f"@{who}'s policy"
+        if k == 0:
+            said += " (the star)"
+        elif which in seen:
+            said += " again"
+        seen.add(which)
+        ducks.append(said)
+    listed = ", ".join(ducks[:-1]) + " and " + ducks[-1]
+    return Fact("run#/troupe", f"The performance has {len(ducks)} ducks: {listed}.", "result")
+
+
 NOTE_MAX = 280
 # What an author may write in a note and not in a name: a unit (m/s, km/h, rad/s: a short word,
 # one slash, a shorter one, not a path's a/b/c) and a snake_case word.
@@ -152,7 +176,7 @@ def _note(record: RunRecord) -> Fact | None:
 
 def result_facts(record: RunRecord, manifest: Manifest, event_runs, receipts) -> tuple[Fact, ...]:
     """The run itself: the event, who ran, what the clock says (on a stage, how
-    long the performance lasts), where it stands and what it earned. `event_runs`
+    long the performance lasts, and who performs when a troupe does), where it stands and what it earned. `event_runs`
     are the counting runs of the event as they stood when this one was published,
     this one included; a voted event's board is not a clock, so it gets no board
     fact."""
@@ -169,6 +193,9 @@ def result_facts(record: RunRecord, manifest: Manifest, event_runs, receipts) ->
              "result", ("participant",)),
         _result(record, manifest),
     ]
+    troupe = _troupe(record)
+    if troupe:
+        facts.append(troupe)
     if note:
         facts.append(note)
     if manifest.metric != "votes":
