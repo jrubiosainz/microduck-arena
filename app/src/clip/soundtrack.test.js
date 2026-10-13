@@ -1,17 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { renderSoundtrack } from "./soundtrack.js";
 
-function fakeContext(log) {
+/** An offline context whose sources log their starts, and whose nodes log what they feed (`wiring`). */
+function fakeContext(log, wiring = []) {
   return class {
     constructor(channels, length) {
       this.length = length;
-      this.destination = {};
+      this.destination = { name: "speakers" };
     }
     createDynamicsCompressor() {
-      return { threshold: {}, knee: {}, ratio: {}, attack: {}, release: {}, connect() {} };
+      return {
+        name: "limiter", threshold: {}, knee: {}, ratio: {}, attack: {}, release: {},
+        connect: (to) => wiring.push(["limiter", to.name]),
+      };
     }
     createGain() {
-      return { gain: {}, connect() {} };
+      return { name: "gain", gain: {}, connect: (to) => wiring.push(["gain", to.name]) };
     }
     createBuffer(channels, length) {
       const data = new Float32Array(length);
@@ -61,7 +65,7 @@ describe("renderSoundtrack", () => {
       song: (seed, voice, notes, seconds) => (asked.push(seconds), new Float32Array(Math.round(seconds * 48000)).fill(0.25)),
     };
     const sound = { song: [[0.5, 1, 69, 0.7, 0.9, 0]] };
-    const score = { crowd: null, cues: [{ at: 0.3, song: { sound, duration: 1 }, gain: 1 }] };
+    const score = { crowd: null, cues: [{ at: 0.3, song: { sound, duration: 1, part: { choral: false, variant: 0 } }, gain: 1 }] };
     await renderSoundtrack(score, 2, {
       Context: fakeContext(log),
       load: () => { throw new Error("a song cue fetched a file"); },
@@ -71,5 +75,22 @@ describe("renderSoundtrack", () => {
     expect(log).toHaveLength(1);
     expect(log[0].at).toBe(0.3);
     expect(log[0].buffer.data).toHaveLength(48000);
+  });
+
+  it("sings a troupe's chorus, each duck its own part, every voice through the limiter", async () => {
+    const asked = [];
+    const wiring = [];
+    const calls = {
+      song: (seed, voice, notes, seconds, part) => (asked.push(part), new Float32Array(Math.round(seconds * 48000))),
+    };
+    const sound = { song: [[0.5, 1, 69, 0.7, 0.9, 0]] };
+    const cues = [0, 1].map((variant) => ({ at: 0.3, song: { sound, duration: 1, part: { choral: true, variant } }, gain: 1 }));
+    await renderSoundtrack({ crowd: null, cues }, 2, {
+      Context: fakeContext([], wiring),
+      load: () => { throw new Error("a song cue fetched a file"); },
+      calls: async () => calls,
+    });
+    expect(asked).toEqual([{ choral: true, variant: 0 }, { choral: true, variant: 1 }]);
+    expect(wiring).toEqual([["limiter", "speakers"], ["gain", "limiter"], ["gain", "limiter"]]);
   });
 });

@@ -3,6 +3,7 @@
 // asks for the soundtrack once. ?run=<id>&layout=landscape|vertical&frame=N.
 
 import { getRun, getSettle, getTrace } from "../api.js";
+import { credit, stageDucks } from "../cast.js";
 import { LANE_COLORS } from "../course.js";
 import { formatScore, isStage } from "../format.js";
 import { lanesFor } from "../lanes.js";
@@ -39,8 +40,8 @@ function letter(run) {
   const earned = run.receipts.reduce((sum, r) => sum + r.points, 0);
   const dnf = run.seeds_finished === 0;
   for (const id of ["top-title", "intro-title"]) $(id).textContent = run.event.title;
-  $("top-participant").textContent = who;
-  $("intro-line").textContent = who;
+  // The captions credit a troupe whole; the recorder's tag keeps to its author.
+  for (const id of ["top-participant", "intro-line"]) $(id).textContent = credit(run);
   $("osd-rec").textContent = `REC · ${who}`;
   $("osd-event").textContent = run.event.title.toUpperCase();
   $("fig-time").textContent = formatScore(run.score, { finished: run.seeds_finished });
@@ -68,13 +69,20 @@ function base64(bytes) {
 async function main() {
   const run = await getRun(params.get("run"));
   const lanes = lanesFor(run);
+  // One trace and one settle per duck: a race's lane has one, a stage's troupe every duck.
   const [traces, settles] = await Promise.all([
     Promise.all(lanes.map((lane) => getTrace(lane.run_id))),
     Promise.all(lanes.map((lane) => getSettle(lane.run_id).then(standing))),
   ]);
-  // Every lane from where its duck stands, all in step.
-  const settle = Math.max(...settles.map(frameCount));
-  const replays = lanes.map((_, i) => leadIn(settles[i], traces[i], settle));
+  // Every lane from where its ducks stand, all in step.
+  const settle = Math.max(...settles.map(([first]) => frameCount(first)));
+  const replays = lanes.map((_, i) => leadIn(settles[i][0], traces[i][0], settle));
+  // A stage plays the author's performance alone: every duck of its troupe from its settle. Each
+  // beak moves on the stage; the clip's soundtrack plays the voices.
+  const stage = isStage(run.event);
+  const ducks = stage
+    ? stageDucks(lanes[0].cast, traces[0], settles[0], { livery: lanes[0].livery, eventRig: run.event.rig, lead: settle })
+    : [];
   const config = run.event.clip;
   const camera = { ...config.camera, distance: DISTANCE[layout] };
   const viewer = await createViewer($("stage"), { rig: run.event.rig, manual: true, camera });
@@ -82,14 +90,11 @@ async function main() {
     lanes
       .map((lane, i) => ({
         runId: lane.run_id,
-        trace: replays[i],
         livery: lane.livery,
         colour: LANE_COLORS[i % LANE_COLORS.length],
         opacity: 1,
         name: `@${lane.user}`,
-        // The beak only: the clip's soundtrack plays the voice. Its lane starts with the settle.
-        sound: lane.sound,
-        lead: settle,
+        ...(stage ? { ducks } : { trace: replays[i] }),
       }))
       // The camera stands beyond the last lane: reversed, the author's duck is
       // the one in the foreground, still in the colour its page gives it.
@@ -97,8 +102,8 @@ async function main() {
     run.event,
     { loop: false },
   );
-  const plan = clipPlan(frameCount(traces[0]), config.tape_max_s, settle);
-  const score = clipScore({ run, plan, trace: replays[0], sound: lanes[0].sound });
+  const plan = clipPlan(frameCount(traces[0][0]), config.tape_max_s, settle);
+  const score = clipScore({ run, plan, trace: replays[0], ducks });
   const crowdDirection = stadiumDirection(score.crowd ?? {});
   letter(run);
 

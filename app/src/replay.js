@@ -28,16 +28,24 @@ export function frameAt(trace, index) {
   return trace.subarray(start, start + TRACE_WIDTH);
 }
 
-/**
- * The settle from where the duck stands on the floor. The roller rig spawns at
- * the walking rig's height on its longer, wheeled legs, so its reset pose has
- * the wheels 2 cm deep and the solver lifts the trunk out over the first steps;
- * a walking duck drops onto the floor instead, and keeps every frame.
- */
-export function standing(settle) {
+/** The first frames of a settle in which the trunk only rises. */
+function rising(settle) {
   let f = 0;
   while (f + 1 < frameCount(settle) && frameAt(settle, f + 1)[2] > frameAt(settle, f)[2]) f++;
-  return settle.subarray(f * TRACE_WIDTH);
+  return f;
+}
+
+/**
+ * Every duck's settle (api.js getSettle) from where the ducks stand on the
+ * floor. The roller rig spawns at the walking rig's height on its longer,
+ * wheeled legs, so its reset pose has the wheels 2 cm deep and the solver lifts
+ * the trunk out over the first steps; a walking duck drops onto the floor
+ * instead, and keeps every frame. A troupe shares one physics, so every duck
+ * loses the frames its slowest roller needs, and the ducks stay in step.
+ */
+export function standing(settles) {
+  const cut = Math.max(...settles.map(rising));
+  return settles.map((settle) => settle.subarray(cut * TRACE_WIDTH));
 }
 
 /**

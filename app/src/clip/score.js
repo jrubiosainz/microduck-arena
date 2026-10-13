@@ -2,7 +2,7 @@
 // direction and every cue at its instant. Pure. Each sound source is a
 // function here and a name in the event's [clip] sounds.
 
-import { voiceEvents } from "../duck-voice.js";
+import { choirOf, voiceEvents } from "../duck-voice.js";
 import { isStage } from "../format.js";
 import { CTRL_DT, frameAt } from "../replay.js";
 
@@ -41,7 +41,11 @@ const SOURCES = {
   ],
 };
 
-export function clipScore({ run, plan, trace, sound }) {
+/**
+ * `trace` is the author's lane, settle included; `ducks` the stage's troupe in duck order (cast.js
+ * stageDucks), each with how it sounds, and none for a race.
+ */
+export function clipScore({ run, plan, trace, ducks }) {
   const sounds = run.event.clip.sounds;
   const verdict = run.seeds_finished > 0 ? "pass" : "fail";
   const start = plan.intro / plan.fps;
@@ -50,11 +54,13 @@ export function clipScore({ run, plan, trace, sound }) {
   // The performance starts on the tape after the settle; its length is the author's trace, cut short or not.
   const performed = start + plan.settle * CTRL_DT;
   const length = (plan.steps - plan.settle) * CTRL_DT;
-  const voice = [
+  // Every duck's calls and song, as on the stage: two or more singers sing their parts as a chorus.
+  const choral = choirOf(ducks);
+  const voice = ducks.flatMap(({ sound }, index) => [
     ...voiceEvents(sound, length).map((call) => ({ at: performed + call.start, call, voice: sound.voice, gain: GAINS.voice })),
-    // The song is one take from the performance's start, as on the stage.
-    ...(sound?.song ? [{ at: performed, song: { sound, duration: length }, gain: GAINS.voice }] : []),
-  ];
+    // A song is one take from the performance's start, the duck's part of the chorus or solo.
+    ...(sound?.song ? [{ at: performed, song: { sound, duration: length, part: { choral, variant: index } }, gain: GAINS.voice }] : []),
+  ]);
   return {
     // The same run always sounds the same, whichever layout renders it.
     seed: fnv(run.run_id),

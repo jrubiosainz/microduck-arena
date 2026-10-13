@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { featured, replayLane, stageDucks } from "./cast.js";
+import { credit, featured, replayLane, stageDucks } from "./cast.js";
 import { TRACE_WIDTH, frameCount } from "./replay.js";
 
 const STAGE = { id: "got-a-talent", course: "stage", rig: "legs" };
@@ -80,5 +80,23 @@ describe("featured", () => {
 
   it("credits nobody when every duck is the author's own", () => {
     expect(featured([{ policy: "self" }, { policy: "self" }])).toEqual([]);
+  });
+});
+
+describe("credit", () => {
+  const run = { user: "alice", policy_name: "sitter" };
+
+  it("names the author and the star's policy for a lone duck", () => {
+    expect(credit({ ...run, cast: [{ policy: "self" }] })).toBe("@alice · sitter");
+  });
+
+  it("counts a troupe's ducks, featuring each borrowed policy once", () => {
+    const roller = borrowed("carol", "roller");
+    const cast = [{ policy: "self" }, { policy: walker }, { policy: "self" }, { policy: roller }, { policy: walker }];
+    expect(credit({ ...run, cast })).toBe("@alice · sitter · 5 ducks, featuring @bob · walker, @carol · roller");
+  });
+
+  it("features nobody in a troupe of the author's own", () => {
+    expect(credit({ ...run, cast: [{ policy: "self" }, { policy: "self" }, { policy: "self" }] })).toBe("@alice · sitter · 3 ducks");
   });
 });

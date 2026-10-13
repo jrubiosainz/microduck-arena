@@ -88,19 +88,26 @@ describe("leadIn", () => {
 });
 
 describe("standing", () => {
+  // A roller-sprint-2m settle's first frames, from the run log.
+  const roller = settleOf([0.12, 0.1268, 0.1327, 0.1357, 0.1359, 0.1337, 0.1294]);
+  const walker = settleOf([0.12, 0.1174, 0.115, 0.1151, 0.1151, 0.1151, 0.1151]);
+
   it("drops the frames the solver spends lifting the roller rig's wheels out of the floor", () => {
-    // A roller-sprint-2m settle's first frames, from the run log.
-    const settle = settleOf([0.12, 0.1268, 0.1327, 0.1357, 0.1359, 0.1337, 0.1294]);
-    expect([...standing(settle)]).toEqual([...settle.subarray(4 * TRACE_WIDTH)]);
+    expect(standing([roller]).map((settle) => [...settle])).toEqual([[...roller.subarray(4 * TRACE_WIDTH)]]);
   });
 
   it("keeps every frame of a walking duck dropping onto the floor", () => {
-    const settle = settleOf([0.12, 0.1174, 0.115, 0.1151]);
-    expect(standing(settle)).toEqual(settle);
+    expect(standing([walker])).toEqual([walker]);
+  });
+
+  it("keeps a troupe in step: every duck loses the frames its roller needs", () => {
+    const [legs, wheels] = standing([walker, roller]);
+    expect([...legs]).toEqual([...walker.subarray(4 * TRACE_WIDTH)]);
+    expect([...wheels]).toEqual([...roller.subarray(4 * TRACE_WIDTH)]);
   });
 
   it("keeps a run stored without a settle empty", () => {
-    expect(frameCount(standing(new Float32Array(0)))).toBe(0);
+    expect(standing([new Float32Array(0)]).map(frameCount)).toEqual([0]);
   });
 });
 

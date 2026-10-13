@@ -45,3 +45,14 @@ export function featured(cast) {
   }
   return [...policies.values()];
 }
+
+/**
+ * Who performs, as a clip's caption says it: the author and the star's policy, then for a troupe
+ * how many ducks, featuring the policies it borrowed.
+ */
+export function credit(run) {
+  const who = `@${run.user} · ${run.policy_name}`;
+  if (run.cast.length === 1) return who;
+  const guests = featured(run.cast).map((policy) => `@${policy.user} · ${policy.policy_name}`);
+  return `${who} · ${run.cast.length} ducks${guests.length ? `, featuring ${guests.join(", ")}` : ""}`;
+}

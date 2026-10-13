@@ -1,10 +1,11 @@
 // The whole soundtrack in one offline render: the stadium's voices under a
-// continuous direction, every cue at its instant, a limiter at the end so no
-// sample reaches ±1 (the live programme refuses a clip that clips). No
-// segments, no smoothing afterwards, no mixing left to ffmpeg.
+// continuous direction, every cue at its instant — every duck of a troupe
+// beside the others — and the troupe's limiter at the end so no sample reaches
+// ±1 (the live programme refuses a clip that clips). No segments, no smoothing
+// afterwards, no mixing left to ffmpeg.
 
 import { olaAt, scheduleOla } from "../crowd-behaviour.js";
-import { callSamples, songSamples } from "../duck-voice.js";
+import { callSamples, limiter, songSamples } from "../duck-voice.js";
 import { SAMPLE_RATE } from "../live/score.js";
 import { loadCalls } from "../live/voice.js";
 import { stadiumDirection } from "./direction.js";
@@ -42,13 +43,8 @@ function synthBuffer(context, samples) {
 /** Interleaved stereo float32 at 48 kHz, exactly `seconds` long. */
 export async function renderSoundtrack(score, seconds, { Context = OfflineAudioContext, load = fetchWav, calls = loadCalls } = {}) {
   const context = new Context(2, Math.ceil(seconds * RATE), RATE);
-  const limiter = context.createDynamicsCompressor();
-  limiter.threshold.value = -3;
-  limiter.knee.value = 0;
-  limiter.ratio.value = 20;
-  limiter.attack.value = 0.001;
-  limiter.release.value = 0.1;
-  limiter.connect(context.destination);
+  const limit = limiter(context);
+  limit.connect(context.destination);
 
   // The synth only for a clip whose duck makes a sound: every race and silent performance skips it.
   const synth = score.cues.some((cue) => cue.call || cue.song) ? await calls() : null;
@@ -58,7 +54,7 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
       buffer: cue.call
         ? synthBuffer(context, callSamples(synth, cue.call, cue.voice))
         : cue.song
-          ? synthBuffer(context, songSamples(synth, cue.song.sound, cue.song.duration))
+          ? synthBuffer(context, songSamples(synth, cue.song.sound, cue.song.duration, cue.song.part))
           : await context.decodeAudioData(await load(cue.file)),
     })),
   );
@@ -68,7 +64,7 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
     const gain = context.createGain();
     gain.gain.value = cue.gain;
     source.connect(gain);
-    gain.connect(limiter);
+    gain.connect(limit);
     source.start(cue.at);
   }
 
@@ -76,12 +72,12 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
 
   for (let t = 0; t < seconds; t += 28) {
     const { start } = olaAt(t);
-    if (start < seconds) scheduleOla(context, limiter, start);
+    if (start < seconds) scheduleOla(context, limit, start);
   }
   await prepareStadium(Context);
   const crowd = context.createGain();
   crowd.gain.value = CROWD_GAIN;
-  crowd.connect(limiter);
+  crowd.connect(limit);
   const engine = new StadiumAmbience(context, {
     direction: stadiumDirection(score.crowd),
     seed: score.seed,
