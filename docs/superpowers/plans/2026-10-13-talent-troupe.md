@@ -147,6 +147,7 @@ class FetchedPolicy:
     rig: str | None = None             # rig_of(manifest), or None without a manifest (the event's rig applies)
     borrowed: dict[str, "FetchedPolicy"] = field(default_factory=dict)   # by reference, a stage's v2 only
 def fetch_references(troupe: Troupe, event, download=..., info=...) -> dict[str, FetchedPolicy]
+    # every Hub reference once, at its commit; a `local:` duck is skipped (the workshop plays it)
 def hub_name(fetched: FetchedPolicy) -> str              # routes_submit's _hub_name, moved here
 def first_duck(troupe: Troupe, reference: str) -> str    # "ducks[k]: owner/repo", the first duck playing it
 
@@ -160,6 +161,7 @@ def cast_of(event: Manifest, troupe: Troupe | None, star: Policy, rig: str | Non
     # `rig` is the star's (fetched.rig, or None for the event's); troupe None = the star alone on the event's command
 def load_borrowed(troupe: Troupe | None, references: Mapping[str, FetchedPolicy]) -> dict[str, tuple[FetchedPolicy, Policy]]
     # each reference loaded once; a PolicyError is re-raised as "ducks[k]: owner/repo: <reason>"
+def duck_record(policy, rig: str, duck: Duck) -> dict    # {"policy", "rig", "start", "sound"}: one entry of RunRecord.cast
 def borrowed_source(fetched: FetchedPolicy, policy: Policy) -> dict
     # {"repo_id", "filename", "revision", "url", "model_sha256", "user", "policy_name"}
 
@@ -386,7 +388,7 @@ kind = "stage"
 with:
 
 ```toml
-# plays it once, for at most time_limit_s. Voters judge the show.
+# plays it once, for at most time_limit_s. Voters judge the performance.
 #
 # The floor is size_m: 2.6 m deep along x (towards the audience) by 3.8 m wide
 # along y, the stage the pages draw. One entry puts a troupe of up to max_ducks
@@ -527,8 +529,8 @@ from arena.timeline import (
     Start,
     TimelineError,
     Troupe,
+    Timeline,
     constant_timeline,
-    load_timeline,
     load_troupe,
     solo,
     split_local,
@@ -567,7 +569,10 @@ def test_a_version_1_file_is_a_troupe_of_one_self_duck_at_the_centre(tmp_path):
            "keyframes": [{"t": 0.0}, {"t": 2.0, "twist": [1, 0, 0], "triggers": [1, 0]}]}
     path = write(tmp_path, raw)
     loaded = load_troupe(path, TALENT)
-    assert loaded == Troupe(10.0, (Duck(SELF, Start(), load_timeline(path, TALENT.time_limit_s)),))
+    still, sit = (0.0,) * 13, (1.0,) + (0.0,) * 12
+    alone = Timeline(10.0, (0.0, 2.0), (still, sit), ((0.0, 0.0), (1.0, 0.0)), {"pitch": 0.3},
+                     (Note(1.0, 0.5, 69, "mf", "ah"),))
+    assert loaded == Troupe(10.0, (Duck(SELF, Start(), alone),))
     assert loaded.references() == ()
 
 
@@ -761,7 +766,8 @@ _EPS_M = 1e-9
 @dataclass(frozen=True)
 class Start:
     """Where a duck starts, in the stage's frame: metres from the centre along x (towards the
-    audience) and y (to the audience's right), and its heading in degrees, 0 facing the audience."""
+    audience) and y (to the audience's right), and its heading in degrees, 0 facing the audience.
+    Not arena.manifest.Start, the event's start rules (keyframe, settle, perturbation)."""
 
     x: float = 0.0
     y: float = 0.0
@@ -2431,6 +2437,37 @@ Expected: PASS. This run includes the golden run (`run_once` now plays a troupe 
 /usr/bin/git commit -m "Several ducks share one physics on the stage, each with its own rig, place, policy and timeline, and a troupe of one plays bit for bit as a lone duck did"
 ```
 
+- [ ] **Step 8: The old runner's copy goes, its proof kept in history**
+
+`tests/legacy_stage.py` has done its job: the commit above proves, test run included, that a troupe of one plays bit for bit as the lone duck did. A frozen copy of deleted code is not kept. In `tests/test_run_stage.py`:
+
+1. Delete `from tests import legacy_stage`.
+2. Delete `test_a_troupe_of_one_plays_bit_for_bit_as_a_lone_duck_did`.
+3. In `test_duck_0_keeps_a_lone_ducks_streams_and_the_others_have_their_own`, replace the two lines
+
+```python
+    lone = legacy_stage.run_stage(talent, walker, timeline, seed=1)
+    assert np.array_equal(troupe.settle[0, 0], lone.settle[0])
+```
+
+with
+
+```python
+    lone = run_stage(talent, alone(walker, timeline), seed=1)
+    assert np.array_equal(troupe.settle[0, 0], lone.settle[0, 0])
+```
+
+Then delete `tests/legacy_stage.py`.
+
+Run: `uv run --no-config --frozen --extra dev pytest -q -p no:cacheprovider tests/test_run_stage.py`
+Expected: PASS. `grep -rn "legacy_stage" arena tests` prints nothing.
+
+```bash
+/usr/bin/git rm -q tests/legacy_stage.py
+/usr/bin/git add tests/test_run_stage.py
+/usr/bin/git commit -m "The lone duck's old runner leaves the tests: the troupe path played it bit for bit, and history keeps the proof"
+```
+
 ---
 
 ### Task 5: Borrowed policies are fetched, and a troupe plays
@@ -2454,7 +2491,7 @@ Expected: PASS. This run includes the golden run (`run_once` now plays a troupe 
     - `fetch_references(troupe, event, download=…, info=…) -> dict[str, FetchedPolicy]`;
     - `hub_name(fetched) -> str` and `first_duck(troupe, reference) -> str`;
     - `check_manifest`, which on a stage takes legs or rollers per duck.
-  - `arena/cast.py`: `Cast(performers, record)`, `cast_of(event, troupe, star, rig, borrowed) -> Cast`, `borrowed_source(fetched, policy) -> dict`, and `load_borrowed(troupe, references) -> dict[str, tuple[FetchedPolicy, Policy]]`.
+  - `arena/cast.py`: `Cast(performers, record)`, `cast_of(event, troupe, star, rig, borrowed) -> Cast`, `duck_record(policy, rig, duck) -> dict`, `borrowed_source(fetched, policy) -> dict`, and `load_borrowed(troupe, references) -> dict[str, tuple[FetchedPolicy, Policy]]`.
   - `arena/evaluate.py`: `evaluate(manifest, policy, cast: tuple[Performer, ...] | None = None)`.
   - `arena/timeline.py`: `load_timeline` is gone.
 
@@ -2709,16 +2746,7 @@ def test_a_borrowed_file_that_does_not_load_names_the_first_duck_that_plays_it(t
 
 `tests/test_evaluate_stage.py`:
 
-1. Change the imports to:
-
-```python
-from arena.constants import CTRL_DT, NUM_JOINTS, RUNNER_VERSION, TRACE_WIDTH
-from arena.evaluate import evaluate
-from arena.manifest import load_event
-from arena.policy import load_policy
-from arena.runner import Performer
-from arena.timeline import Start, Timeline
-```
+1. Add `from arena.runner import Performer` after the `arena.policy` import, and change `from arena.timeline import Timeline` to `from arena.timeline import Start, Timeline`. Every other import stays as it is: `ASSET_ROOT` feeds the walker fixture, and Task 4 already added `TRACE_WIDTH`.
 
 2. Replace `test_a_timeline_sets_the_performance_and_its_length` and `test_a_race_refuses_a_timeline` (Task 4 changed only their shape assertions) with:
 
@@ -2767,7 +2795,7 @@ from pathlib import Path
 from .constants import NUM_JOINTS, OBS_SIZE
 from .manifest import RIGS
 from .policy import MAX_MODEL_BYTES
-from .timeline import TimelineError, Troupe, load_troupe, split_reference
+from .timeline import LOCAL, TimelineError, Troupe, load_troupe, split_reference
 ```
 
 3. Replace the `FetchedPolicy` dataclass with the following, and add the two functions after it:
@@ -2914,6 +2942,8 @@ def fetch_references(troupe: Troupe, event, download=_default_download, info=_de
     refusal names the first duck that plays it."""
     borrowed = {}
     for reference in troupe.references():
+        if reference.startswith(LOCAL):
+            continue  # a checkpoint of the workshop's own machine: it plays from there, never the Hub
         repo_id, commit = split_reference(reference)
         try:
             _, pinned, filename, manifest = _checked(repo_id, None, commit, event, download, info)
@@ -2945,7 +2975,7 @@ from .hub_fetch import FetchedPolicy, first_duck, hub_name
 from .manifest import Manifest
 from .policy import Policy, PolicyError, load_policy
 from .runner import Performer
-from .timeline import SELF, Troupe, constant_timeline, solo, sound_of
+from .timeline import SELF, Duck, Troupe, constant_timeline, solo, sound_of
 
 
 @dataclass(frozen=True)
@@ -2983,6 +3013,12 @@ def load_borrowed(troupe: Troupe | None, references: Mapping[str, FetchedPolicy]
     return borrowed
 
 
+def duck_record(policy, rig: str, duck: Duck) -> dict:
+    """How a run keeps one duck: whose policy it plays (`policy`, as the caller credits it), its rig,
+    where it starts and how it is heard."""
+    return {"policy": policy, "rig": rig, "start": duck.start.to_dict(), "sound": sound_of(duck.timeline)}
+
+
 def cast_of(event: Manifest, troupe: Troupe | None, star: Policy, rig: str | None,
             borrowed: Mapping[str, tuple[FetchedPolicy, Policy]]) -> Cast:
     """A stage entry's cast. `star` plays every "self" duck, on `rig` (its manifest's, or None for the
@@ -2998,8 +3034,7 @@ def cast_of(event: Manifest, troupe: Troupe | None, star: Policy, rig: str | Non
             fetched, policy = borrowed[duck.policy]
             duck_rig, credit = fetched.rig or event.rig, borrowed_source(fetched, policy)
         performers.append(Performer(policy, duck_rig, duck.start, duck.timeline))
-        record.append({"policy": credit, "rig": duck_rig, "start": duck.start.to_dict(),
-                       "sound": sound_of(duck.timeline)})
+        record.append(duck_record(credit, duck_rig, duck))
     return Cast(tuple(performers), tuple(record))
 ```
 
@@ -3027,7 +3062,7 @@ def _evaluate_stage(manifest: Manifest, policy, cast: tuple[Performer, ...] | No
         cast = (Performer(policy, manifest.rig, Start(), constant_timeline(manifest.command, manifest.time_limit_s)),)
 ```
 
-The next line, `seed = manifest.seeds[0]`, stays as it is. So do the call `run_stage(manifest, cast, seed)` and the rest of the function.
+The next line, `seed = manifest.seeds[0]`, stays as it is. Replace Task 4's `outcome = run_stage(manifest, (Performer(policy, manifest.rig, Start(), timeline),), seed)` with `outcome = run_stage(manifest, cast, seed)`. The rest of the function stays.
 
 - [ ] **Step 4: Run them to see them pass**
 
@@ -3041,12 +3076,8 @@ Expected: PASS, every test.
 1. Change `from arena.timeline import Timeline` to:
 
 ```python
-import hashlib
-
 from arena.timeline import SELF, Duck, Start, Timeline, Troupe, solo
 ```
-
-The `import hashlib` goes with the standard imports at the top.
 
 2. Replace the `_TIMELINES` comment with `# A repo id registered here also carries this timeline.json, as (Troupe, sha256).`.
 3. Replace `_fetched` with:
@@ -3153,38 +3184,9 @@ def test_recover_plays_a_troupe_with_its_borrowed_policies(tmp_path, monkeypatch
     [record] = recover(store, [load_event("got-a-talent")], reader=TALENT_LISTED)
     assert trace_codec.decode(store.trace(record.run_id)).shape[:2] == (2, 50)
 
-
-def test_a_troupe_whose_borrowed_policy_is_gone_is_skipped_and_said(tmp_path, monkeypatch):
-    """Recovery re-races what the store lost; a troupe whose borrowed repo left the Hub cannot be."""
-    from arena.hub_fetch import FetchError
-    from arena.manifest import load_event
-    from arena.recover import recover
-    from arena.store import LocalStore
-
-    gone = "ducks[1]: pollen-robotics/microduck-sitter: could not read pollen-robotics/microduck-sitter: 404"
-
-    def fetch_policy(repo_id, revision=None, event=None):
-        raise FetchError(gone)
-
-    monkeypatch.setattr("arena.hub_fetch.fetch_policy", fetch_policy)
-    said = []
-    assert recover(LocalStore(tmp_path), [load_event("got-a-talent")], reader=TALENT_LISTED, on_event=said.append) == []
-    assert said == [f"skipped alice/talent on got-a-talent: FetchError: {gone}"]
 ```
 
-(The second test is a guard. It passes today, and it must keep passing.)
-
-`tests/test_cli.py`:
-
-1. Replace the three line assertions of `test_score_on_a_stage_summarises_the_performance` with:
-
-```python
-    assert lines[0] == "stage: 2.00 s played, timeline.json (2 keyframes)"
-    assert re.fullmatch(r"duck 0: fell (no|at \d+\.\d\d s) · seated \d+\.\d s · standing \d+\.\d s", lines[1])
-    assert len(lines) == 2
-```
-
-2. Append:
+`tests/test_cli.py` (Task 4 already made `test_score_on_a_stage_summarises_the_performance` read one line per duck): append
 
 ```python
 SITTER = "pollen-robotics/microduck-sitter@" + "a" * 40
@@ -3309,7 +3311,6 @@ Run: `uv run --no-config --frozen --extra dev pytest -q -p no:cacheprovider test
 Expected: FAIL.
 - routes_submit and recover: `AttributeError: 'FetchedPolicy' object has no attribute 'timeline'`.
 - The CLI troupe test: exit 1, because `load_timeline` refuses a version 2 file.
-- The CLI summary test: its `duck 0:` line is not there.
 
 Run: `uv run --no-config --frozen --extra dev pytest -q -m "not network" -p no:cacheprovider tests/workshop/test_performance.py`
 Expected: FAIL. The four new tests fail: `load_timeline` refuses a version 2 file, so the save and the publish give the wrong refusal, and the evaluation stores the wrong error.
@@ -3611,6 +3612,7 @@ def test_a_ballot_carries_each_lanes_cast_and_never_whose_policies(client):
 
 `tests/test_routes_submit.py`:
 
+0. Add `import hashlib` with the standard imports at the top.
 1. In `test_a_stage_entry_keeps_the_sound_its_timeline_makes`, replace the assertion with:
 
 ```python
@@ -3948,7 +3950,7 @@ Expected: PASS.
 - Produces:
   - wasm: `song(seed: u32, pitch, brightness, buzz, vibrato, breath, seconds: f64, choral: u32, variant: u32) -> usize`. `choral` 1 renders through `Stream::choral(&tuned, variant)`; otherwise `Stream::new(&tuned, "song", 0)` as today, and `variant` is ignored.
   - `app/src/live/voice.js` `loadCalls(...)`: `song(seed, voice, notes, seconds, { choral = false, variant = 0 } = {})`.
-  - `app/src/duck-voice.js`: `songSamples(calls, sound, duration, { choral = false, variant = 0 } = {})` (CONTRACT ISSUE: keeps `duration`) and `choirOf(ducks)`. `choirOf` is true when two or more of `ducks` (`[{ sound }]`) have a `song`.
+  - `app/src/duck-voice.js`: `songSamples(calls, sound, duration, { choral = false, variant = 0 } = {})` and `choirOf(ducks)`. `choirOf` is true when two or more of `ducks` (`[{ sound }]`) have a `song`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -4463,7 +4465,7 @@ describe("limiter", () => {
 
 Run: `cd app && npx vitest run src/stage-voice.test.js src/duck-voice.test.js`
 Expected: FAIL.
-- 14 of the 18 stage-voice tests fail, because today's `set` reads a list of ducks as a performer with no sound and plays nothing.
+- 15 of the 19 stage-voice tests fail, because today's `set` reads a list of ducks as a performer with no sound and plays nothing.
 - The limiter test fails with `limiter is not a function`.
 
 - [ ] **Step 3: Implement**
@@ -6013,8 +6015,8 @@ Expected: `✓ built`.
 
 **Files:**
 - Create: `arena/workshop/troupe.py`, `tests/workshop/test_troupe.py`
-- Modify: `arena/workshop/evaluations.py`, `arena/workshop/publishing.py`, `arena/workshop/challenges.py`, `arena/workshop/tickets.py`, `arena/workshop/app.py`, `app/src/workshop/api.js`, `app/src/workshop/job.js`, `app/public/workshop.css`
-- Test: `tests/workshop/conftest.py`, `tests/workshop/test_performance.py`, `app/src/workshop/job.test.js`
+- Modify: `arena/workshop/evaluations.py`, `arena/workshop/publishing.py`, `arena/workshop/challenges.py`, `arena/workshop/tickets.py`, `arena/workshop/app.py`, `app/src/workshop/api.js`, `app/src/workshop/job.js`, `app/public/workshop.css`, `app/src/viewer.js`
+- Test: `tests/workshop/conftest.py`, `tests/workshop/test_performance.py`, `app/src/workshop/job.test.js`, `app/src/viewer.test.js`
 
 **Interfaces:**
 - Consumes: Task 2's `load_troupe(path, event, *, allow_local=True)`, `Troupe.references()`, `Duck.policy/.start/.timeline`, `Start.to_dict()`, `solo`, `split_local`, `SELF`, `LOCAL`, `TimelineError`; Task 3's `stage.summaries`; Task 4's `runner.Performer`; Task 5's `evaluate(manifest, policy, cast)`, `hub_fetch.fetch_references(troupe, event)` and `FetchedPolicy.path/.rig`; the existing `timeline.sound_of`; Task 10's `splitDucks(values, ducks)` (app/src/replay.js) and `stageDucks(cast, traces, settles, { livery, eventRig, lead })` (app/src/cast.js); Task 11's stage lane entry `{ name, livery, ducks }`.
@@ -6316,7 +6318,6 @@ rig its manifest names.
 """
 
 import hashlib
-from dataclasses import replace
 
 from ..hub_fetch import fetch_references
 from ..manifest import load_event
@@ -6368,9 +6369,8 @@ def performers_for(root, troupe, star_onnx, star_rig, event) -> tuple[Performer,
         if policy.startswith(LOCAL):
             run, n, challenge = resolve_local(root, policy)
             played[policy] = (load_policy(export(root, run, n)), load_event(challenge.event).rig)
-    # A local form is no repo to fetch: only the Hub's ducks go to the Hub.
-    hub = replace(troupe, ducks=tuple(duck for duck in troupe.ducks if not duck.policy.startswith(LOCAL)))
-    for policy, fetched in fetch_references(hub, event).items():
+    # fetch_references leaves the local forms alone, and names a refusal by the troupe's own numbers.
+    for policy, fetched in fetch_references(troupe, event).items():
         played[policy] = (load_policy(fetched.path), fetched.rig or event.rig)
     return tuple(Performer(*played[duck.policy], duck.start, duck.timeline) for duck in troupe.ducks)
 
@@ -6407,7 +6407,7 @@ def timeline_key(root, challenge) -> str | None:
 
 - [ ] **Step 5: `evaluations.py` plays the whole troupe**
 
-Replace `arena/workshop/evaluations.py` with the file below. It supersedes Tasks 5 and 6's edits to the file and keeps what they added: the body's `cast` and `ducks`, and the troupe played through `evaluate(event, policy, cast)`. Task 5's all-"self" refusal and `EvaluationError` go. Delete Task 5's `test_a_duck_playing_another_policy_is_not_played_here` from `tests/workshop/test_performance.py`: a duck playing another policy plays now.
+Replace `arena/workshop/evaluations.py` with the file below. It supersedes Tasks 5 and 6's edits to the file and keeps what they added: the body's `cast` and `ducks`, and the troupe played through `evaluate(event, policy, cast)`. Task 5's all-"self" refusal and `EvaluationError` go. From `tests/workshop/test_performance.py`, delete two of Task 5's tests: `test_a_duck_playing_another_policy_is_not_played_here` (a duck playing another policy plays now) and `test_the_page_saves_a_troupe_naming_a_checkpoint_of_this_machine` (`tests/workshop/test_troupe.py` holds its successor under the same name).
 
 ```python
 """Every checkpoint, evaluated: exported as `publish` would, then played with the Arena's own evaluator.
@@ -6436,12 +6436,14 @@ import os
 import tempfile
 import time
 
+from ..cast import duck_record
 from ..constants import RUNNER_VERSION
 from ..evaluate import evaluate
 from ..manifest import load_event
 from ..policy import load_policy
 from ..stage import summaries
-from ..timeline import SELF, constant_timeline, load_troupe, solo, sound_of
+from ..timeline import constant_timeline, load_troupe, solo
+from ..trace import as_ducks
 from .challenges import timeline_file
 from .publishing import PublishError, export
 from .runs import find_runs
@@ -6519,14 +6521,12 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
                   else solo(constant_timeline(event.command, event.time_limit_s)))
         cast = performers_for(root, troupe, onnx, event.rig, event)
         result = evaluate(event, cast[0].policy, cast)
-        body["cast"] = [
-            {"policy": duck.policy, "rig": performer.rig, "start": duck.start.to_dict(), "sound": sound_of(duck.timeline)}
-            for duck, performer in zip(troupe.ducks, cast)
-        ]
+        # A duck's policy as the timeline names it: "self", a Hub reference, or a local checkpoint.
+        body["cast"] = [duck_record(duck.policy, performer.rig, duck) for duck, performer in zip(troupe.ducks, cast)]
         body["stage"] = summaries(result.trace, event.termination)
     else:
         result = evaluate(event, load_policy(onnx))
-        body["cast"] = [{"policy": SELF, "rig": None, "start": None, "sound": None}]
+        body["cast"] = None  # a race: one duck, nothing to place or hear
     return body | {
         "score": result.score,
         "command_vx": result.command_vx,
@@ -6535,7 +6535,7 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
         "per_seed": [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in result.per_seed],
         "trace_seed": result.trace_seed,
         # Duck-major, as the Arena serves a trace: the page cuts it into `ducks` traces.
-        "ducks": len(body["cast"]),
+        "ducks": len(as_ducks(result.trace)),
         "trace_b64": base64.b64encode(result.trace.astype("<f4").tobytes()).decode("ascii"),
         "runner_version": result.runner_version,
         "format": FORMAT,
@@ -6678,7 +6678,7 @@ Run: `uv run --no-config --frozen --extra dev pytest -q -p no:cacheprovider test
 Expected: PASS.
 
 Run: `uv run --no-config --frozen --extra dev pytest -q -m "not network" -p no:cacheprovider tests/workshop`
-Expected: PASS, the count the start's + 8.
+Expected: PASS, every test. Report the count.
 
 - [ ] **Step 8: The training's page plays every duck and says what each did**
 
@@ -7557,12 +7557,12 @@ Expected: PASS, apart from the 4 known `brightness.test.js` failures.
 
 **Files:**
 - Modify: `arena/workshop/publishing.py`, `arena/workshop/troupe.py`, `arena/workshop/tickets.py`, `arena/workshop/app.py`, `app/src/workshop/publish.js`, `app/src/workshop/job.js`
-- Test: `tests/workshop/fake_uv.py`, `tests/workshop/conftest.py`, `tests/workshop/test_troupe.py`, `app/src/workshop/publish.test.js`, `app/src/workshop/job.test.js`
+- Test: `tests/workshop/fake_uv.py`, `tests/workshop/conftest.py`, `tests/workshop/test_troupe.py`, `app/src/workshop/publish.test.js`, `app/src/workshop/job.test.js`, `tests/workshop/test_performance.py`
 
 **Interfaces:**
 - Consumes: Task 13's `resolve_local`, `troupe.py` and `published`; Task 2's `load_troupe(…, allow_local=True)`.
 - Produces:
-  - `publish_policy(root, run, checkpoint, repo, name, description, event_id, allow_dirty) -> {"repo", "revision"}` (see CONTRACT ISSUES).
+  - `publish_policy(root, run, checkpoint, repo, name, description, event_id, allow_dirty) -> {"repo", "revision"}`.
   - `published_at(run, checkpoint) -> "owner/repo@revision" | None` in `publishing.py`.
   - `local_ducks(root, troupe) -> [(policy, first duck index, run, n, challenge)]` and `resolved(text, on_hub) -> str` in `troupe.py`.
   - The publish route answers `{"publishing": {"done": k, "of": m}}` while local ducks remain, and today's entry once the star is entered.
@@ -7725,6 +7725,8 @@ def test_a_troupe_naming_a_checkpoint_this_checkout_does_not_hold_publishes_noth
   });
 ```
 
+From `tests/workshop/test_performance.py`, delete Task 5's `test_a_troupe_naming_a_checkpoint_of_this_machine_is_not_published`: from this task on, a checkpoint of this machine is published first, then entered.
+
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `uv run --no-config --frozen --extra dev pytest -q -p no:cacheprovider tests/workshop/test_troupe.py`
@@ -7737,7 +7739,7 @@ Expected: FAIL in the new test: `onProgress is not a function`.
 
 `arena/workshop/publishing.py`:
 
-1. Replace the module docstring's first paragraph with:
+1. Replace the whole module docstring (both of its paragraphs) with:
 
 ```
 Publish a run's checkpoint with `uv run publish`, which also enters it on the Arena.
@@ -7961,7 +7963,7 @@ Run: `cd app && npx vitest run src/workshop/job.test.js`
 Expected: PASS.
 
 Run: `uv run --no-config --frozen --extra dev pytest -q -m "not network" -p no:cacheprovider tests/workshop`
-Expected: PASS, the count Task 13's + 5.
+Expected: PASS, every test. Report the count.
 
 Run: `cd app && npm test`
 Expected: PASS, apart from the 4 known `brightness.test.js` failures.
@@ -7969,7 +7971,7 @@ Expected: PASS, apart from the 4 known `brightness.test.js` failures.
 - [ ] **Step 8: Commit**
 
 ```bash
-/usr/bin/git add arena/workshop/publishing.py arena/workshop/troupe.py arena/workshop/tickets.py arena/workshop/app.py tests/workshop/fake_uv.py tests/workshop/conftest.py tests/workshop/test_troupe.py app/src/workshop/publish.js app/src/workshop/publish.test.js app/src/workshop/job.js app/src/workshop/job.test.js
+/usr/bin/git add arena/workshop/publishing.py arena/workshop/troupe.py arena/workshop/tickets.py arena/workshop/app.py tests/workshop/fake_uv.py tests/workshop/conftest.py tests/workshop/test_troupe.py tests/workshop/test_performance.py app/src/workshop/publish.js app/src/workshop/publish.test.js app/src/workshop/job.js app/src/workshop/job.test.js
 /usr/bin/git commit -m "One click publishes a whole troupe: each checkpoint of this machine goes to a repo of its own first, or is reused, then the star enters with a timeline naming them by their commits"
 ```
 
