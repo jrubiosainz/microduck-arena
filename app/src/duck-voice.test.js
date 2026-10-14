@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { CTRL_DT } from "./replay.js";
-import { DUCK_SEED, callSamples, choirOf, limiter, mouthTrack, songSamples, voiceEvents } from "./duck-voice.js";
+import {
+  CEILING, DUCK_SEED, callSamples, ceiling, choirOf, limiter, mouthTrack, songSamples, underCeiling, voiceEvents,
+} from "./duck-voice.js";
 
 const pulls = (triggers) => ({ triggers });
 /** A note as arena/timeline.py sound_of stores it: [t, for, midi, level, open, formant]. */
@@ -215,5 +217,38 @@ describe("limiter", () => {
     expect(Object.fromEntries(Object.entries(node).map(([name, { value }]) => [name, value]))).toEqual({
       threshold: -3, knee: 0, ratio: 20, attack: 0.001, release: 0.1,
     });
+  });
+});
+
+describe("ceiling", () => {
+  const { curve } = ceiling({ createWaveShaper: () => ({}) });
+  /** The input a point of the curve answers: a WaveShaper spreads its curve over -1 to 1. */
+  const input = (i) => (2 * i) / (curve.length - 1) - 1;
+
+  it("passes the mix untouched up to 0.9 of full scale", () => {
+    for (let i = 0; i < curve.length; i++) {
+      if (Math.abs(input(i)) <= 0.9) expect(curve[i]).toBe(Math.fround(input(i)));
+    }
+  });
+
+  it("bends a louder sample smoothly under the ceiling, and holds it there past full scale", () => {
+    for (let i = 1; i < curve.length; i++) expect(curve[i]).toBeGreaterThan(curve[i - 1]);
+    // Past -1 and 1 a WaveShaper holds its curve's ends: the loudest it can ever answer.
+    expect(curve[0]).toBe(-curve.at(-1));
+    expect(curve.at(-1)).toBeLessThan(CEILING);
+  });
+});
+
+describe("underCeiling", () => {
+  it("leaves a mix under the ceiling as it is", () => {
+    const mix = Float32Array.of(0.5, -0.98, 0.2);
+    expect(underCeiling(mix.slice())).toEqual(mix);
+  });
+
+  it("scales a mix that overshoots as a whole, its peak to the ceiling", () => {
+    const mix = underCeiling(Float32Array.of(0.5, -1.041, 1.02));
+    expect(mix[1]).toBeCloseTo(-CEILING, 6);
+    expect(mix[0] / mix[1]).toBeCloseTo(0.5 / -1.041, 6);
+    expect(mix[2] / mix[1]).toBeCloseTo(1.02 / -1.041, 6);
   });
 });

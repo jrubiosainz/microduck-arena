@@ -1,12 +1,13 @@
 // The troupe's voices on a live stage: each duck's song as one take from t = 0 and its calls one at a
 // time (duck-voice.js), played on the replay's own clock. Each duck has its own speaker, as each
 // robot does; two or more singers sing their parts as a chorus, and the whole troupe goes through one
-// limiter, so a chorus never clips. A jump — the loop coming round, a scrub, new lanes — stops what
-// plays and starts what the new time is inside, from where it is: a wheee resumes mid-ride, a song
-// mid-phrase. Nothing waits on a sound: no Web Audio, a muted Arena or a context the browser keeps
-// suspended until a gesture (the first click or key resumes it) leave the replay playing in silence.
+// limiter and its ceiling, so a chorus never clips. A jump — the loop coming round, a scrub, new
+// lanes — stops what plays and starts what the new time is inside, from where it is: a wheee resumes
+// mid-ride, a song mid-phrase. Nothing waits on a sound: no Web Audio, a muted Arena or a context the
+// browser keeps suspended until a gesture (the first click or key resumes it) leave the replay
+// playing in silence.
 
-import { callSamples, choirOf, limiter, songSamples, voiceEvents } from "./duck-voice.js";
+import { callSamples, ceiling, choirOf, limiter, songSamples, voiceEvents } from "./duck-voice.js";
 import { SAMPLE_RATE } from "./live/score.js";
 
 /** A step longer than this between two frames is a jump, not playback. */
@@ -93,7 +94,9 @@ export function createStageVoice(loadCalls, { makeContext = () => new AudioConte
         if (!context) {
           context = makeContext();
           const limit = limiter(context);
-          limit.connect(context.destination);
+          const ceiled = ceiling(context);
+          limit.connect(ceiled);
+          ceiled.connect(context.destination);
           output = context.createGain();
           output.gain.value = GAIN;
           output.connect(limit);

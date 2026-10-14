@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { CEILING } from "../duck-voice.js";
 import { renderSoundtrack } from "./soundtrack.js";
 
-/** An offline context whose sources log their starts, and whose nodes log what they feed (`wiring`). */
-function fakeContext(log, wiring = []) {
+/**
+ * An offline context whose sources log their starts, whose nodes log what they feed (`wiring`),
+ * and whose render is `rendered` on both sides.
+ */
+function fakeContext(log, wiring = [], rendered = (length) => new Float32Array(length)) {
   return class {
     constructor(channels, length) {
       this.length = length;
@@ -29,8 +33,8 @@ function fakeContext(log, wiring = []) {
       return { decoded: true };
     }
     async startRendering() {
-      const silent = new Float32Array(this.length);
-      return { getChannelData: () => silent };
+      const side = rendered(this.length);
+      return { getChannelData: () => side };
     }
   };
 }
@@ -92,5 +96,23 @@ describe("renderSoundtrack", () => {
     });
     expect(asked).toEqual([{ choral: true, variant: 0 }, { choral: true, variant: 1 }]);
     expect(wiring).toEqual([["limiter", "speakers"], ["gain", "limiter"], ["gain", "limiter"]]);
+  });
+
+  it("brings a render the limiter let overshoot under full scale, scaled as a whole", async () => {
+    // A chorus of eight's onset through the compressor: 0.35 dB over full scale.
+    const loud = (length) => Float32Array.from({ length }, (_, i) => 1.041 * Math.sin(i / 7));
+    const pcm = await renderSoundtrack({ crowd: null, cues: [] }, 1, { Context: fakeContext([], [], loud) });
+    const peak = pcm.reduce((most, sample) => Math.max(most, Math.abs(sample)), 0);
+    expect(peak).toBeLessThanOrEqual(1);
+    expect(peak).toBeCloseTo(CEILING, 6);
+    expect(pcm[2 * 10] / pcm[2 * 3]).toBeCloseTo(Math.sin(10 / 7) / Math.sin(3 / 7), 6);
+  });
+
+  it("leaves a render under the ceiling as it rendered", async () => {
+    const quiet = (length) => Float32Array.from({ length }, (_, i) => 0.9 * Math.sin(i / 7));
+    const pcm = await renderSoundtrack({ crowd: null, cues: [] }, 1, { Context: fakeContext([], [], quiet) });
+    const side = quiet(48000);
+    expect(pcm.filter((_, i) => i % 2 === 0)).toEqual(side);
+    expect(pcm.filter((_, i) => i % 2 === 1)).toEqual(side);
   });
 });

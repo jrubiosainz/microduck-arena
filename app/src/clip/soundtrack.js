@@ -1,11 +1,12 @@
 // The whole soundtrack in one offline render: the stadium's voices under a
 // continuous direction, every cue at its instant — every duck of a troupe
-// beside the others — and the troupe's limiter at the end so no sample reaches
-// ±1 (the live programme refuses a clip that clips). No segments, no smoothing
+// beside the others — and the troupe's limiter at the end, the render then
+// scaled under its ceiling if an onset got through, so no sample reaches ±1
+// (the live programme refuses a clip that clips). No segments, no smoothing
 // afterwards, no mixing left to ffmpeg.
 
 import { olaAt, scheduleOla } from "../crowd-behaviour.js";
-import { callSamples, limiter, songSamples } from "../duck-voice.js";
+import { callSamples, limiter, songSamples, underCeiling } from "../duck-voice.js";
 import { SAMPLE_RATE } from "../live/score.js";
 import { loadCalls } from "../live/voice.js";
 import { stadiumDirection } from "./direction.js";
@@ -68,7 +69,7 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
     source.start(cue.at);
   }
 
-  if (!score.crowd) return interleave(await context.startRendering());
+  if (!score.crowd) return underCeiling(interleave(await context.startRendering()));
 
   for (let t = 0; t < seconds; t += 28) {
     const { start } = olaAt(t);
@@ -103,7 +104,7 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
   }
   try {
     const [buffer] = await Promise.all([context.startRendering(), ...pauses]);
-    return interleave(buffer);
+    return underCeiling(interleave(buffer));
   } finally {
     engine.dispose();
   }

@@ -33,6 +33,12 @@ const TAIL_S = 0.2;
 const FADE_S = 0.005;
 /** The variants of each call in the robot's bank (sounds::variant_count). */
 const VARIANTS = { chirp: 12, wheee: 6 };
+/** The mix's ceiling, a little under full scale: no sample of the stage or the clip passes it. */
+export const CEILING = 0.99;
+/** Where the stage's ceiling starts to bend a sample: under it, the mix passes untouched. */
+const KNEE = 0.9;
+/** The points of the stage's ceiling curve over -1 to 1; a shaper is a straight line between two. */
+const CURVE_POINTS = 4097;
 
 /** The change a track holds at `t`: its last at or before it. */
 function pulledAt(track, t) {
@@ -178,8 +184,9 @@ export function choirOf(ducks) {
 
 /**
  * The limiter the troupe sings through, on `context`: hard and fast, just under full scale, so a
- * chorus of ducks never clips while one duck at the synth's own level passes under it. The stage
- * and the clip's soundtrack each end their mix with one.
+ * chorus of ducks stays under it while one duck at the synth's own level passes. The stage and the
+ * clip's soundtrack each end their mix with one, then with a ceiling: a compressor lets a fast onset
+ * through for a millisecond, which a chorus of eight takes 0.35 dB over full scale.
  */
 export function limiter(context) {
   const node = context.createDynamicsCompressor();
@@ -189,4 +196,35 @@ export function limiter(context) {
   node.attack.value = 0.001;
   node.release.value = 0.1;
   return node;
+}
+
+/**
+ * The stage's ceiling after its limiter, on `context`: a shaper that passes the mix untouched up to
+ * KNEE and bends a louder sample smoothly towards CEILING, never reaching it; past full scale it
+ * holds its curve's ends. It works sample by sample, as a live mix must.
+ */
+export function ceiling(context) {
+  const node = context.createWaveShaper();
+  const room = CEILING - KNEE;
+  node.curve = Float32Array.from({ length: CURVE_POINTS }, (_, i) => {
+    const input = (2 * i) / (CURVE_POINTS - 1) - 1;
+    const over = Math.abs(input) - KNEE;
+    return over <= 0 ? input : Math.sign(input) * (KNEE + room * Math.tanh(over / room));
+  });
+  return node;
+}
+
+/**
+ * The clip's rendered mix under CEILING, in place: scaled as a whole when its peak passes it, which
+ * changes its level and nothing else, and left as it is otherwise. The clip has its whole mix in
+ * hand; the stage does not.
+ */
+export function underCeiling(samples) {
+  let peak = 0;
+  for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
+  if (peak > CEILING) {
+    const gain = CEILING / peak;
+    for (let i = 0; i < samples.length; i++) samples[i] *= gain;
+  }
+  return samples;
 }

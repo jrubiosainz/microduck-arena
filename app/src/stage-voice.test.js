@@ -29,6 +29,7 @@ function fakeContext(log, wiring = []) {
     createDynamicsCompressor: () => ({
       ...node("limiter"), threshold: {}, knee: {}, ratio: {}, attack: {}, release: {},
     }),
+    createWaveShaper: () => node("ceiling"),
     createBuffer: (channels, length) => ({ length, copyToChannel() {} }),
     createBufferSource() {
       const source = {
@@ -167,11 +168,12 @@ describe("createStageVoice", () => {
       expect(asked).toEqual([{ choral: false, variant: 1 }]);
     });
 
-    it("mixes every duck through one limiter before the speakers, so a chorus never clips", async () => {
+    it("mixes every duck through one limiter and its ceiling before the speakers, so a chorus never clips", async () => {
       const { voice, wiring } = await voiceWith([song, song, song]);
       voice.follow(1.5);
       expect(wiring).toEqual([
-        ["limiter", "speakers"],
+        ["limiter", "ceiling"],
+        ["ceiling", "speakers"],
         ["gain", "limiter"],
         ["source", "gain"],
         ["source", "gain"],
