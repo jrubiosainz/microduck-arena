@@ -305,15 +305,13 @@ and each one only when it is needed.
   1. the wheel on pollen-robotics/microduck-arena-wheels with tag v0.5.0;
   2. push main;
   3. microduck-challenges relocked onto 0.5.0 and pushed straight after.
-- **Step 2 (raise to 16).** Measure:
-  - simulation time at 16 ducks with contacts (today 20 s of stage costs 1.5 s on this Mac for one
-    duck);
-  - a 16-duck clip on the HF Job (t4-small, EGL);
-  - the ballot's frame rate;
-  - trace weight;
-  - the worst-case download of 16 distinct policies (decide on a total cap).
-
-  Fix what is slow (shadows, level of detail), then change `max_ducks`.
+- **Step 2 (raise the cap), done 2026-10-14 at 8 instead of 16** (the owner's decision: the stage is
+  too small for 16). Measured on this Mac with an 8-duck troupe: 12 s of performance simulate in
+  about 2.8 s (one onnxruntime thread per policy, about 3 s of CPU), the run page holds its frame
+  rate, a clip frame costs about 52 ms on a GPU, and the trace is about 400 KB on the wire. The
+  measurement found the mix going 0.35 dB over full scale on a chorus, now held under it by a true
+  ceiling. Still to watch on the Space: the simulation on its 2-vCPU container, the clip on the
+  HF Job, and a ballot's uncompressed traces (about 1.6 MB for four lanes of 12 s).
 
 ## 7. The finishing session (after both pieces of work)
 
