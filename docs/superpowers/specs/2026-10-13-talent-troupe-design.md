@@ -17,6 +17,9 @@ its own keyframes, its own tuned voice and its own song. They all share one phys
 push each other. The workshop composes the troupe, places the ducks with the mouse, plays it, and
 publishes every policy and the entry **in one click**.
 
+**2026-10-14, the owner's decision:** the cap is **8 ducks**, not 16: the stage (2.6 × 3.8 m) is too
+small for 16. `max_ducks = 8` in `got-a-talent.toml`.
+
 **Success.**
 - A troupe of 4 mixed-rig ducks performs on every page and in the clip as it did in the workshop:
   - each duck in its place;

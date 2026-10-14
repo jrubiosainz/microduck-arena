@@ -124,7 +124,7 @@ without a timeline stands still for 20 s.
 
 ### Troupe
 
-A performance can put up to **4 ducks** on the stage. They share one physics: they can bump into
+A performance can put up to **8 ducks** on the stage. They share one physics: they can bump into
 each other, push each other over, or hold each other up. Each duck has its own policy, place,
 keyframes, voice and song. Such a file is `"timeline_version": 2`, with a `ducks` list where version 1
 has `keyframes`:

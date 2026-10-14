@@ -14,11 +14,11 @@ seeds        = [1]
 #
 # The floor is size_m: 2.6 m deep along x (towards the audience) by 3.8 m wide
 # along y, the stage the pages draw. One entry puts a troupe of up to max_ducks
-# ducks on it: 4 for now, 16 once that cost is measured.
+# ducks on it: 8, the owner's cap of 2026-10-14, this floor being too small for more.
 [course]
 kind      = "stage"
 size_m    = [2.6, 3.8]
-max_ducks = 4
+max_ducks = 8
 
 # What an entry without a timeline plays for the whole 20 s: standing still.
 [command]

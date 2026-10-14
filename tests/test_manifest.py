@@ -318,7 +318,7 @@ def test_got_a_talent_declares_its_ballot_and_its_window():
 
 def test_got_a_talent_is_a_stage_played_once_for_20_s():
     talent, sprint = load_event("got-a-talent"), load_event("sprint-2m")
-    assert talent.course == Stage(size_m=(2.6, 3.8), max_ducks=4)
+    assert talent.course == Stage(size_m=(2.6, 3.8), max_ducks=8)
     assert talent.sweep is None
     assert talent.seeds == (1,)
     assert talent.time_limit_s == 20.0

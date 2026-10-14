@@ -292,7 +292,7 @@ def test_a_stage_serves_its_floor_and_how_many_ducks_it_takes(client):
     """The server's placement rules, the workshop's plan and the drawn stage read these same numbers."""
     api, _ = client
     events = {e["id"]: e for e in api.get("/api/events").json()["events"]}
-    assert (events["got-a-talent"]["size_m"], events["got-a-talent"]["max_ducks"]) == ([2.6, 3.8], 4)
+    assert (events["got-a-talent"]["size_m"], events["got-a-talent"]["max_ducks"]) == ([2.6, 3.8], 8)
     assert "size_m" not in events["sprint-2m"] and "max_ducks" not in events["sprint-2m"]
 
 
