@@ -126,6 +126,12 @@ def test_a_start_on_the_margin_or_exactly_the_spacing_apart_is_taken(tmp_path):
     assert len(load_troupe(write(tmp_path, raw), TALENT).ducks) == 4
 
 
+def test_a_troupe_as_large_as_the_event_takes_is_taken(tmp_path):
+    """The cap is a troupe's size, not one less: eight ducks in two rows of four."""
+    rows = [duck(SELF, start={"x": x, "y": y}) for x in (0.5, -0.5) for y in (-1.2, -0.4, 0.4, 1.2)]
+    assert len(load_troupe(write(tmp_path, troupe(*rows)), TALENT).ducks) == TALENT.course.max_ducks == 8
+
+
 @pytest.mark.parametrize(
     "raw, said",
     [
