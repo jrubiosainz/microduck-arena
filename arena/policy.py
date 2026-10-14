@@ -65,8 +65,12 @@ def load_policy(path: Path) -> Policy:
     if size > MAX_MODEL_BYTES:
         raise PolicyError(f"model is {size} bytes, larger than the {MAX_MODEL_BYTES} byte limit")
 
+    # One thread per policy: a troupe runs up to eight in one process, and onnxruntime's default
+    # pools, a thread per core for each, would spin them against the simulation on a 2-vCPU Space.
     options = ort.SessionOptions()
     options.log_severity_level = 3
+    options.intra_op_num_threads = 1
+    options.inter_op_num_threads = 1
     try:
         session = ort.InferenceSession(str(path), options, providers=["CPUExecutionProvider"])
     except Exception as exc:  # onnxruntime raises a variety of types here
