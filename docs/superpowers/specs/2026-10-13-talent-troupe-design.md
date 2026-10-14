@@ -49,7 +49,7 @@ A test keeps a race refusing a timeline.
 | **One author, one entry, several policies** | The owner's choice over a troupe of copies of one policy, and over duos between participants. Rules out shared entries, split votes and consent flows. |
 | **One shared physics: ducks touch** | The owner's choice over independent "ghost" simulations. The runner learns several robots in one model. Ducks can push each other over, and no policy was trained for that; the show takes it as it comes. |
 | **Legs and rollers may mix** | The owner's choice. The rig is decided per duck, from its policy's manifest, on a stage. A race keeps the rig of its event. |
-| **The entry stays the star's policy repo (approach A)** | `ducks[0]` is `"self"`: the entered repo's own `policy.onnx`, the star the followspot follows. Every field that reads "the entry's policy" keeps its meaning: board row, dedupe, download, card. Rules out a weights-less troupe repo (approach B) and a troupe with no policy of the author's own. |
+| **The entry stays the star's policy repo (approach A)** | `ducks[0]` is `"self"`: the entered repo's own `policy.onnx`, the star. Every field that reads "the entry's policy" keeps its meaning: board row, dedupe, download, card. Rules out a weights-less troupe repo (approach B) and a troupe with no policy of the author's own. |
 | **Other ducks are Hub references pinned to a full commit** | `owner/repo@<40 hex>`, or `"self"` again. A branch name would make a run that cannot be reproduced. Any public policy may join, and its author is credited. |
 | **Policies stay blind** | The 61-D observation is unchanged: a duck never sees another. That is why every published policy joins a troupe as it is, with no retraining. |
 | **A v1 timeline is a troupe of one** | Every existing `timeline.json`, with or without `voice` and `song`, loads as duck 0 at the centre facing the audience. A test proves that a troupe of one plays bit-identically to today's `run_stage`, so one code path remains and `RUNNER_VERSION` stays 4. |
@@ -203,8 +203,9 @@ performance. `_already_entered` stays correct unchanged.
 - **Camera.** The shots frame the troupe: the Hann-smoothed centre of every duck, with the
   distance fitted to their spread. The cycle's close shot stays on the star. One duck frames as
   today.
-- **Light.** The followspot follows the star, and every duck has its shadow. The shadows are the
-  first cost to measure at 16.
+- **Light.** A lone duck keeps its followspot. A troupe has no one duck to follow (owner, 2026-10-14):
+  a wash from the middle of the front truss lights the whole stage, and every duck casts its shadow
+  in it.
 - **Voice.**
   - Each duck has its own beak (`mouthTrack(sound)`) and its own calls under the song spec's
     one-speaker rule.

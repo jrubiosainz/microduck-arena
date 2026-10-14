@@ -302,8 +302,9 @@ function titleMap() {
 }
 
 /** A theatre in metres, with the performance floor still at physics y=0.
- * The jury and audience face +Z; the LED proscenium is upstage at +Z. */
-export function buildTalentStage(event, spectators, reachy) {
+ * The jury and audience face +Z; the LED proscenium is upstage at +Z.
+ * `ducks` is how many perform: one is followed by a spot, a troupe gets the whole stage lit. */
+export function buildTalentStage(event, spectators, reachy, ducks) {
   const layout = stageLayout(event);
   const { width, depth, centre, juryZ, audienceZ } = layout;
   const group = new Group(); group.name = "talent-theatre";
@@ -428,36 +429,73 @@ export function buildTalentStage(event, spectators, reachy) {
   group.add(new AmbientLight(0x758bbb, 0.15));
   const fill = new DirectionalLight(0xaacbff, 0.45); fill.position.set(centre, 1.5, -3); group.add(fill);
   const rim = new DirectionalLight(0xc986ff, 0.8); rim.position.set(centre, 2, backZ); group.add(rim);
-  // A followspot hung at the end of the front truss: its operator keeps the
-  // performer in a tight pool, and the beam shows in the haze.
-  const FOLLOW_ANGLE = 0.07;
-  const followSpot = new SpotLight(0xfff0da, 150, 0, FOLLOW_ANGLE, 0.3, 2);
-  followSpot.name = "follow-spot";
-  // Only the performer stands in its narrow cone: a shadow map cheap to redraw every frame.
-  followSpot.castShadow = true;
-  followSpot.shadow.mapSize.set(1024, 1024);
-  followSpot.shadow.camera.far = 8;
-  followSpot.shadow.bias = -0.0002;
-  followSpot.position.set(centre + width / 2 + 0.45, 2.8, -depth / 2);
-  group.add(followSpot, followSpot.target);
-  const follow = new Object3D(); follow.position.copy(followSpot.position); group.add(follow);
-  // A unit cone from its apex along +Z: scaled to the throw, it widens with the light.
-  const shaftGeometry = new ConeGeometry(Math.tan(FOLLOW_ANGLE), 1, 32, 1, true)
-    .translate(0, -0.5, 0).rotateX(-Math.PI / 2);
-  const shaftMaterial = new ShaderMaterial({
-    uniforms: { tint: { value: new Color(0xfff0da) } }, transparent: true, depthWrite: false,
-    blending: AdditiveBlending, side: DoubleSide,
-    vertexShader: "varying vec2 vUv; varying vec3 vNormal, vView; void main(){vUv=uv;vNormal=normalMatrix*normal;vec4 p=modelViewMatrix*vec4(position,1.0);vView=-p.xyz;gl_Position=projectionMatrix*p;}",
-    // Faint at grazing angles so the cone reads as a volume, not a surface.
-    fragmentShader: "varying vec2 vUv; varying vec3 vNormal, vView; uniform vec3 tint; void main(){float facing=abs(dot(normalize(vNormal),normalize(vView)));gl_FragColor=vec4(tint,0.16*pow(facing,2.0)*mix(0.45,1.0,vUv.y));}",
-  });
-  const headGeometry = new CylinderGeometry(0.09, 0.12, 0.5, 16).rotateX(Math.PI / 2).translate(0, 0, -0.22);
-  const lensGeometry = new CircleGeometry(0.085, 20);
-  [shaftGeometry, headGeometry, lensGeometry].forEach(geometry => geometries.add(geometry));
-  materials.add(shaftMaterial);
-  const shaft = new Mesh(shaftGeometry, shaftMaterial); shaft.name = "follow-beam";
-  follow.add(shaft, new Mesh(headGeometry, black), new Mesh(lensGeometry, led(0xfff0da)));
-  const _axis = new Vector3();
+  // A lone performer is followed by a spot; a troupe has no one to follow, and the whole stage is lit.
+  const light = ducks > 1 ? stageWash() : followSpot();
+
+  function followSpot() {
+    // A followspot hung at the end of the front truss: its operator keeps the
+    // performer in a tight pool, and the beam shows in the haze.
+    const FOLLOW_ANGLE = 0.07;
+    const spot = new SpotLight(0xfff0da, 150, 0, FOLLOW_ANGLE, 0.3, 2);
+    spot.name = "follow-spot";
+    // Only the performer stands in its narrow cone: a shadow map cheap to redraw every frame.
+    spot.castShadow = true;
+    spot.shadow.mapSize.set(1024, 1024);
+    spot.shadow.camera.far = 8;
+    spot.shadow.bias = -0.0002;
+    spot.position.set(centre + width / 2 + 0.45, 2.8, -depth / 2);
+    group.add(spot, spot.target);
+    const follow = new Object3D(); follow.position.copy(spot.position); group.add(follow);
+    // A unit cone from its apex along +Z: scaled to the throw, it widens with the light.
+    const shaftGeometry = new ConeGeometry(Math.tan(FOLLOW_ANGLE), 1, 32, 1, true)
+      .translate(0, -0.5, 0).rotateX(-Math.PI / 2);
+    const shaftMaterial = new ShaderMaterial({
+      uniforms: { tint: { value: new Color(0xfff0da) } }, transparent: true, depthWrite: false,
+      blending: AdditiveBlending, side: DoubleSide,
+      vertexShader: "varying vec2 vUv; varying vec3 vNormal, vView; void main(){vUv=uv;vNormal=normalMatrix*normal;vec4 p=modelViewMatrix*vec4(position,1.0);vView=-p.xyz;gl_Position=projectionMatrix*p;}",
+      // Faint at grazing angles so the cone reads as a volume, not a surface.
+      fragmentShader: "varying vec2 vUv; varying vec3 vNormal, vView; uniform vec3 tint; void main(){float facing=abs(dot(normalize(vNormal),normalize(vView)));gl_FragColor=vec4(tint,0.16*pow(facing,2.0)*mix(0.45,1.0,vUv.y));}",
+    });
+    const headGeometry = new CylinderGeometry(0.09, 0.12, 0.5, 16).rotateX(Math.PI / 2).translate(0, 0, -0.22);
+    const lensGeometry = new CircleGeometry(0.085, 20);
+    [shaftGeometry, headGeometry, lensGeometry].forEach(geometry => geometries.add(geometry));
+    materials.add(shaftMaterial);
+    const shaft = new Mesh(shaftGeometry, shaftMaterial); shaft.name = "follow-beam";
+    follow.add(shaft, new Mesh(headGeometry, black), new Mesh(lensGeometry, led(0xfff0da)));
+    const axis = new Vector3();
+    return {
+      pose(subjects) {
+        spot.target.position.copy(subjects[0] ?? new Vector3(centre, 0.1, 0));
+        // The shaft runs through the performer and sinks into the floor: long enough
+        // that the highest point of its open rim is below the stage, so no rim shows.
+        const source = spot.position;
+        axis.subVectors(spot.target.position, source).normalize();
+        follow.lookAt(spot.target.position);
+        shaft.scale.setScalar(source.y / (-axis.y - Math.tan(FOLLOW_ANGLE) * Math.sqrt(1 - axis.y ** 2)));
+      },
+      dispose() { spot.dispose(); },
+    };
+  }
+
+  function stageWash() {
+    // A wash from the middle of the front truss, aimed between the floor's corners and just wide enough
+    // that every corner stands inside its soft edge. It casts every duck's shadow.
+    const PENUMBRA = 0.3;
+    const wash = new SpotLight(0xfff0da, 80, 0, Math.PI / 4, PENUMBRA, 2);
+    wash.name = "stage-wash";
+    wash.castShadow = true;
+    wash.shadow.mapSize.set(2048, 2048);
+    wash.shadow.camera.far = 8;
+    wash.shadow.bias = -0.0002;
+    wash.position.set(centre, 2.8, -depth / 2);
+    const corners = [[-1, -1], [-1, 1], [1, -1], [1, 1]]
+      .map(([across, along]) => new Vector3(centre + across * width / 2, 0, along * depth / 2).sub(wash.position).normalize());
+    const aim = corners.reduce((sum, corner) => sum.add(corner), new Vector3()).normalize();
+    wash.target.position.copy(wash.position).add(aim);
+    wash.angle = (Math.max(...corners.map(corner => corner.angleTo(aim))) + 0.02) / (1 - PENUMBRA);
+    group.add(wash, wash.target);
+    return { pose() {}, dispose() { wash.dispose(); } };
+  }
   // Soft additive shafts show the moving lights in the theatrical haze.
   const beamGeometry = new ConeGeometry(0.48, 2.8, 24, 1, true);
   beamGeometry.translate(0, -1.4, 0); geometries.add(beamGeometry);
@@ -479,13 +517,7 @@ export function buildTalentStage(event, spectators, reachy) {
 
   function pose(seconds, subjects, mood) {
     panel.pose(seconds, subjects); audience.pose(seconds, mood);
-    followSpot.target.position.copy(subjects[0] ?? new Vector3(centre, 0.1, 0));
-    // The shaft runs through the performer and sinks into the floor: long enough
-    // that the highest point of its open rim is below the stage, so no rim shows.
-    const source = followSpot.position;
-    _axis.subVectors(followSpot.target.position, source).normalize();
-    follow.lookAt(followSpot.target.position);
-    shaft.scale.setScalar(source.y / (-_axis.y - Math.tan(FOLLOW_ANGLE) * Math.sqrt(1 - _axis.y ** 2)));
+    light.pose(subjects);
     beams.forEach((beam, i) => {
       beam.rotation.set(0.25 + 0.16 * Math.sin(seconds * 0.43 + i), 0,
         0.35 * Math.sin(seconds * 0.37 + i * 1.3));
@@ -494,7 +526,7 @@ export function buildTalentStage(event, spectators, reachy) {
   return {
     group, layout, pose, crowd: audience,
     dispose() {
-      panel.dispose(); audience.dispose(); followSpot.dispose();
+      panel.dispose(); audience.dispose(); light.dispose();
       geometries.forEach(geometry => geometry.dispose());
       materials.forEach(material => material.dispose());
       textures.forEach(texture => texture.dispose());

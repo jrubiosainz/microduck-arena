@@ -143,7 +143,7 @@ has `keyframes`:
 ```
 
 - `policy` says who performs:
-  - `"self"` is the policy you enter, the star: the followspot follows it. The first duck is always
+  - `"self"` is the policy you enter, the star: your name stands over it. The first duck is always
     `"self"`, and any other duck may be `"self"` again.
   - Any public policy on the Hub joins as `"owner/repo@<commit>"`, pinned to its full 40-character
     commit (a repo's commit history on the Hub lists them). A branch name would make a performance
@@ -156,6 +156,8 @@ has `keyframes`:
   sings in a choir: in a chord, vibrato, buzz and breath fight the tuning, so the choir holds them
   back and those three knobs are heard much less. A duck singing alone sounds as described above.
   Each duck still makes one sound at a time.
+- A lone duck performs in a followspot. A troupe has the whole stage lit, and every duck casts its
+  shadow.
 - `duration_s` is the troupe's: every duck performs for the same time. A fall stops no one; if the
   physics itself breaks down, the whole troupe stops together.
 - A version 1 file is a troupe of one: the star, at the centre, facing the audience, with the file's

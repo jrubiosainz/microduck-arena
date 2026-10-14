@@ -452,7 +452,7 @@ export async function createViewer(
     courseLength = event?.length_m ?? 2;
     if (talent) {
       slopeDeg = 0;
-      stage = buildTalentStage(event, spectators, reachy);
+      stage = buildTalentStage(event, spectators, reachy, entries.length);
       course = stage.group;
       scene.add(course);
     } else if (event) {

@@ -267,7 +267,7 @@ describe("the solo stage", () => {
   it("seats four official judges before the audience and follows a moving performer when seeking", () => {
     const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
     const geometries = new Map(meshNames(kinematics).map(name => [name, new BoxGeometry(0.01, 0.01, 0.01)]));
-    const stage = buildTalentStage(STAGE, { kinematics, geometries }, reachy);
+    const stage = buildTalentStage(STAGE, { kinematics, geometries }, reachy, 1);
     const jury = stage.group.getObjectByName("judges");
     expect(jury.children.filter(child => child.name.startsWith("judge-"))).toHaveLength(4);
     expect(stage.group.getObjectByName("finish")).toBeUndefined();
@@ -315,9 +315,35 @@ describe("the solo stage", () => {
     expect(rimTop).toBeLessThan(1e-6);
     expect(rimTop).toBeGreaterThan(-0.01);
     expect(stage.group.getObjectByName("follow-pool")).toBeUndefined();
+    expect(stage.group.getObjectByName("stage-wash")).toBeUndefined();
     const shared = vi.spyOn(reachy.getObjectByProperty("isMesh", true).geometry, "dispose");
     stage.dispose();
     expect(shared).not.toHaveBeenCalled();
+    geometries.forEach(geometry => geometry.dispose());
+  });
+
+  it("lights a troupe's whole stage from the front truss, with no followspot", () => {
+    const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
+    const geometries = new Map(meshNames(kinematics).map(name => [name, new BoxGeometry(0.01, 0.01, 0.01)]));
+    const stage = buildTalentStage(STAGE, { kinematics, geometries }, reachy, 8);
+    expect(stage.group.getObjectByName("follow-spot")).toBeUndefined();
+    expect(stage.group.getObjectByName("follow-beam")).toBeUndefined();
+    const wash = stage.group.getObjectByName("stage-wash");
+    expect(wash.isSpotLight).toBe(true);
+    expect(wash.castShadow).toBe(true);
+    stage.pose(8, [new Vector3(0.8, 0.13, -0.2), new Vector3(-1.5, 0.13, 1.1)]);
+    stage.group.updateMatrixWorld(true);
+    // Every corner of the floor stands in the full beam, inside its soft edge.
+    const source = wash.getWorldPosition(new Vector3());
+    const axis = wash.target.getWorldPosition(new Vector3()).sub(source).normalize();
+    const { width, depth, centre } = stageLayout(STAGE);
+    for (const x of [centre - width / 2, centre + width / 2]) {
+      for (const z of [-depth / 2, depth / 2]) {
+        const corner = new Vector3(x, 0, z).sub(source).normalize();
+        expect(corner.angleTo(axis)).toBeLessThan(wash.angle * (1 - wash.penumbra));
+      }
+    }
+    stage.dispose();
     geometries.forEach(geometry => geometry.dispose());
   });
 });
