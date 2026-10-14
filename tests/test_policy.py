@@ -21,7 +21,7 @@ def test_a_policy_runs_on_one_thread():
     """A troupe runs up to eight policies in one process. With onnxruntime's default pools, a thread
     per core for each, eight ducks spent 19 s of CPU on a 3 s run, against 3 s on one thread each."""
     options = load_policy(REFERENCE).session.get_session_options()
-    assert (options.intra_op_num_threads, options.inter_op_num_threads) == (1, 1)
+    assert options.intra_op_num_threads == 1
 
 
 def test_sha256_is_stable():

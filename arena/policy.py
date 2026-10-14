@@ -70,7 +70,6 @@ def load_policy(path: Path) -> Policy:
     options = ort.SessionOptions()
     options.log_severity_level = 3
     options.intra_op_num_threads = 1
-    options.inter_op_num_threads = 1
     try:
         session = ort.InferenceSession(str(path), options, providers=["CPUExecutionProvider"])
     except Exception as exc:  # onnxruntime raises a variety of types here
