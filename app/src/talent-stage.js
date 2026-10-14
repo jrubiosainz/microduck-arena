@@ -1,7 +1,7 @@
 import {
   AdditiveBlending, AmbientLight, Box3, BoxGeometry, CanvasTexture, CircleGeometry, Color,
   ConeGeometry, CylinderGeometry, DirectionalLight, DoubleSide, Group,
-  Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry,
+  Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, Ray,
   ShaderMaterial, SphereGeometry, SpotLight, SRGBColorSpace, Vector3,
 } from "three";
 import { crowd } from "./stadium.js";
@@ -118,6 +118,13 @@ function farthest(target, bearing, rise, depth, width) {
   return Math.min(run / Math.cos(rise), behind > 0 ? CLEARANCE * line / behind : Infinity);
 }
 
+/** The two loudspeakers beside the stage's front corners, as boxes in the theatre's frame: what the
+ * theatre builds, and what a camera inside it sees past. */
+export function stageSpeakers(width, depth) {
+  return [-1, 1].map((side) => new Box3().setFromCenterAndSize(
+    new Vector3(side * (width / 2 + 0.4), 0.25, -depth / 2 + 0.2), new Vector3(0.24, 0.66, 0.3)));
+}
+
 const middleOf = (ducks) =>
   ducks.length ? new Box3().setFromPoints(ducks).getCenter(new Vector3()) : new Vector3(0, 0.14, 0);
 
@@ -177,22 +184,45 @@ function shotAt(time, middle, aspect, fov, depth) {
   return { shot, start, end, inside, target, distance, elevation, horizontal, dx, dz, bearing: Math.atan2(dx, -dz) };
 }
 
+// How near a loudspeaker an interior camera may stand: nearer, a speaker's black side fills the picture.
+const SPEAKER_CLEARANCE = 1;
+const _ray = new Ray(), _point = new Vector3(), _direction = new Vector3(), _hit = new Vector3();
+
+// Whether a camera at `eye` stands clear of the loudspeakers' `boxes` and sees every duck, feet to
+// crest, past them.
+function clearOf(boxes, eye, ducks) {
+  return boxes.every((box) => box.distanceToPoint(eye) >= SPEAKER_CLEARANCE) && ducks.every((duck) => DUCK_HEIGHTS.every((height) => {
+    _point.set(duck.x, duck.y + height, duck.z);
+    _ray.set(eye, _direction.subVectors(_point, eye).normalize());
+    const reach = eye.distanceTo(_point);
+    return boxes.every((box) => _ray.intersectBox(box, _hit) === null || eye.distanceTo(_hit) > reach);
+  }));
+}
+
 // How an interior shot's camera films the troupe framed at each of its `moments`, the same at every
 // frame so that the camera glides: null where the lone duck's camera already holds the troupe inside
-// the theatre, a fiftieth of its distance to spare; else a bearing that turns steadily through the
-// shot, from the lone duck's at its first frame to its last (the lone camera's slide along the desk's
-// line, seen from farther, would sweep the troupe's), and the least lift above the shot's own
-// elevation at which the camera, holding each moment's troupe, stays inside. Raising a camera turns
-// a deep troupe's depth into height on screen, so the lift is found by stepping up until the troupe
-// fits, then halving.
+// the theatre, a fiftieth of its distance to spare, clear of the loudspeakers when it frames more than
+// one duck; else a bearing
+// that turns steadily through the shot, from the lone duck's at its first frame to its last (the lone
+// camera's slide along the desk's line, seen from farther, would sweep the troupe's), and the least
+// lift above the shot's own elevation at which the camera, holding each moment's troupe, stays inside
+// clear of the speakers. Raising a camera turns a deep troupe's depth into height on screen and takes it
+// over the speakers, so the lift is found by stepping up until the troupe fits, then halving.
 function shotFit(moments, aspect, fov, depth, width) {
   const tanUp = Math.tan(fov * Math.PI / 360);
   const turn = [moments[0].at.bearing, moments[MOMENTS].at.bearing];
+  const speakers = stageSpeakers(width, depth);
   const fits = (lift, bearingAt) => moments.every(({ u, ducks, at }) => {
     const rise = at.elevation + lift, bearing = bearingAt(u, at);
-    const span = Math.max(at.distance, troupeReach(ducks, at.target, bearing, rise, tanUp * aspect, tanUp) * 1.02);
+    const reach = troupeReach(ducks, at.target, bearing, rise, tanUp * aspect, tanUp);
     // A lone duck's own camera may stand exactly on a bound: a float's last bit is not past it.
-    return span <= farthest(at.target, bearing, rise, depth, width) * (1 + 1e-12);
+    if (Math.max(at.distance, reach * 1.02) > farthest(at.target, bearing, rise, depth, width) * (1 + 1e-12)) return false;
+    // A lone duck, and the star in its close-up, are filmed as they always have been.
+    if (ducks.length < 2) return true;
+    const span = Math.max(at.distance, reach), run = span * Math.cos(rise);
+    const eye = new Vector3(at.target.x + Math.sin(bearing) * run, at.target.y + Math.sin(rise) * span,
+      at.target.z - Math.cos(bearing) * run);
+    return clearOf(speakers, eye, ducks);
   });
   let fit = null;
   if (!fits(0, (u, at) => at.bearing)) {
@@ -383,11 +413,12 @@ export function buildTalentStage(event, spectators, reachy, ducks) {
     for (const sign of [-1, 1]) bar([x - 0.11, 2.65 + sign * 0.11, backZ - 0.08],
       [x + 0.11, 2.65 - sign * 0.11, backZ - 0.08], 0.018, white);
   }
-  for (const side of [-1, 1]) {
+  for (const [i, side] of [-1, 1].entries()) {
     const x = centre + side * (width / 2 + 0.4);
     for (const dx of [-0.07, 0.07]) bar([x + dx, -0.2, backZ], [x + dx, 2.95, backZ], 0.022, steel);
     for (let n = 0; n < 11; n++) bar([x - 0.07, n * 0.26, backZ], [x + 0.07, (n + 1) * 0.26, backZ], 0.012, steel);
-    box([0.24, 0.66, 0.3], [x, 0.25, -depth / 2 + 0.2], black, "speaker");
+    const speaker = stageSpeakers(width, depth)[i];
+    box(speaker.getSize(new Vector3()).toArray(), speaker.getCenter(new Vector3()).add(new Vector3(centre, 0, 0)).toArray(), black, "speaker");
   }
   for (const z of [backZ, -depth / 2]) bar([centre - width / 2 - 0.5, 2.95, z],
     [centre + width / 2 + 0.5, 2.95, z], 0.028, steel);

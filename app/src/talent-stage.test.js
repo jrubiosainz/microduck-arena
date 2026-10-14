@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { BoxGeometry, PerspectiveCamera, Raycaster, Vector3 } from "three";
+import { BoxGeometry, PerspectiveCamera, Ray, Raycaster, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { buildTalentStage, stageCameraPose, stageLayout, placeStageDuck, placeStagePerformer, stageCameraTarget } from "./talent-stage.js";
+import { buildTalentStage, stageCameraPose, stageLayout, stageSpeakers, placeStageDuck, placeStagePerformer, stageCameraTarget } from "./talent-stage.js";
 import { applyFrame } from "./replay.js";
 import { meshNames, buildRigTree, STAND, TRUNK_HEIGHT } from "./rig.js";
 
@@ -191,6 +191,35 @@ describe("the broadcast camera on a troupe", () => {
           expect(new Vector3(...pose.position).distanceTo(new Vector3(...previous.position))).toBeLessThan(0.05);
         }
         previous = pose;
+      }
+    }
+  });
+  // The vertical clip's stage is 1080 by 1233 pixels, between its title and its result bands.
+  it.each([16 / 9, 4 / 3, 1, 1080 / 1233, 3 / 4, 9 / 16])("films a troupe from clear of the loudspeakers, every duck in sight, at aspect %s", aspect => {
+    // A camera inside the theatre that backs off to hold a wide troupe neither hides a duck behind the
+    // speakers at the stage's front corners nor stands so near one that its black side fills the
+    // picture. Eight ducks in two diagonal rows, a roller at the end of them, as Wake-up Call stood at
+    // its three-quarter shot.
+    const choir = [V(-1.55, 0.58), V(-0.4, 1.02), V(0.02, 0.78), V(-0.82, 0.89), V(-0.39, 0.49), V(0.05, 0.34), V(0.39, 0.04), V(0.45, 0.42)];
+    const speakers = stageSpeakers(3.8, 2.6);
+    for (const ducks of [choir, troupe, [V(-1.6, -1), V(1.6, -1), V(-1.6, 1), V(1.6, 1)]]) {
+      for (let time = 3; time < 18; time += 0.25) {
+        const pose = stageCameraPose(time, ducks, aspect, 42);
+        const eye = new Vector3(...pose.position);
+        // The star's close-up is a lone duck's, filmed as it always has been.
+        if (pose.shot === "low-front") continue;
+        // The plan checks a shot's thirteen moments: between them a camera may come a centimetre nearer.
+        for (const speaker of speakers) expect(speaker.distanceToPoint(eye)).toBeGreaterThan(0.99);
+        for (const duck of ducks) {
+          for (const height of [-0.14, 0.23]) {
+            const point = duck.clone().add(new Vector3(0, height, 0));
+            const ray = new Ray(eye, point.clone().sub(eye).normalize());
+            for (const speaker of speakers) {
+              const hit = ray.intersectBox(speaker, new Vector3());
+              expect(hit === null || hit.distanceTo(eye) > point.distanceTo(eye)).toBe(true);
+            }
+          }
+        }
       }
     }
   });
