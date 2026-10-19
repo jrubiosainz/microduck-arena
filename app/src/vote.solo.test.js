@@ -23,7 +23,8 @@ it("plays MicroDuck Got a Talent ballot entries one at a time and lets the viewe
   const root = document.createElement("div");
   const event = { id: "got-a-talent", title: "MicroDuck Got a Talent", rig: "legs", course: "stage" };
   await renderVote(root, { event, state: {} });
-  expect(getBallotTrace).toHaveBeenCalledTimes(3);
+  // Its three lanes first; the field loaded behind it fetches its own after.
+  expect(getBallotTrace.mock.calls.slice(0, 3)).toEqual([["test", 0], ["test", 1], ["test", 2]]);
   expect(viewer.setLanes.mock.lastCall[0]).toHaveLength(1);
   expect(viewer.setLanes.mock.lastCall[0][0].ducks.map((duck) => duck.trace[0])).toEqual([0]);
   // Played once, not looped, so the next performance can follow it.

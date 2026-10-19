@@ -140,9 +140,11 @@ export const DEAD_BALLOT_MESSAGE = "That ballot is not valid any more. Ask for a
  * Split out from `renderVote` so all four states are testable without WebGL,
  * a viewer or a fetch. `initialStatus` seeds the status line for a panel
  * drawn to carry a message forward (a dead ballot recovered into a fresh
- * field) rather than one reached by a click of its own.
+ * field) rather than one reached by a click of its own. `onCounted(cast)` is
+ * called once a vote is counted and its ceremony is over: the moment the
+ * booth moves on to the next field.
  */
-export function votePanel(ballot, onPick, initialStatus) {
+export function votePanel(ballot, onPick, initialStatus, onCounted) {
   const panel = el("div", "vote-panel");
 
   if (ballot.state === "signed-out") {
@@ -200,15 +202,19 @@ export function votePanel(ballot, onPick, initialStatus) {
       for (const b of buttons) b.disabled = true;
 
       const settle = onPick?.(lane);
-      // Fire-and-forget: the ceremony watches `settle` on its own timers and
-      // must never make the caller wait for it, or a slow browser turning
-      // theatre into lag would be worse than no ceremony at all.
-      if (!prefersReducedMotion()) runCeremony(lane, settle);
+      // The ceremony watches `settle` on its own timers and the vote never
+      // waits for it, or a slow browser turning theatre into lag would be
+      // worse than no ceremony at all. Only the next field does, below.
+      const ceremony = prefersReducedMotion() ? null : runCeremony(lane, settle);
 
       try {
-        await settle;
-        // Success swaps this whole panel for the next one; leave the buttons
-        // disabled rather than flash them back on right before that happens.
+        const cast = await settle;
+        // Success swaps this whole panel for the next one once the ceremony is
+        // over: building the next stage mid-flight froze the envelope for over
+        // a second (measured 2026-10-19). Until then the buttons stay disabled
+        // rather than flash back on. No cast is a click that moved nothing on.
+        await ceremony;
+        if (cast) onCounted?.(cast);
       } catch (error) {
         // The server writes this sentence for a person to read (an expired
         // ballot, a quota lost to another tab) — show it, and give the
@@ -313,15 +319,14 @@ export async function renderVote(root, { event, state }) {
   const onStage = root.querySelector(".on-stage");
 
   let busy = false;
+  // The field after the one on screen, loading while it plays: a vote shows it
+  // at once instead of waiting for the server to draw it.
+  let upcoming;
 
-  async function next(message) {
+  // A field: what one ballot request answers and, for a ballot, its lanes' replays.
+  async function load() {
     const ballot = await getBallot(event.id);
-    if (ballot.state !== "ballot") {
-      viewer.setLanes([], event);
-      onStage?.replaceChildren();
-      booth.replaceChildren(votePanel(ballot));
-      return;
-    }
+    if (ballot.state !== "ballot") return { ballot };
     const traces = await Promise.all(
       Array.from({ length: ballot.lanes }, (_, lane) => getBallotTrace(ballot.ballot, lane)),
     );
@@ -332,6 +337,34 @@ export async function renderVote(root, { event, state }) {
       livery: "classic",
       colour: LANE_COLORS[lane % LANE_COLORS.length],
     }));
+    return { ballot, entries };
+  }
+
+  /**
+   * After a vote: the quota panel if it was the day's last, otherwise the field
+   * loaded meanwhile — loaded again if that failed — with the count the cast
+   * answered, its own being from before this vote.
+   */
+  async function advance(ballot, cast) {
+    if (cast.cast_today >= ballot.per_day) {
+      show({ ballot: { state: "quota", cast_today: cast.cast_today, per_day: ballot.per_day } });
+      return;
+    }
+    const field = await upcoming.catch(load);
+    show(field.entries ? { ...field, ballot: { ...field.ballot, cast_today: cast.cast_today } } : field);
+  }
+
+  function show({ ballot, entries }, message) {
+    if (!entries) {
+      viewer.setLanes([], event);
+      onStage?.replaceChildren();
+      booth.replaceChildren(votePanel(ballot));
+      return;
+    }
+    upcoming = load();
+    // A field no vote comes for is never awaited; a vote whose field failed
+    // loads it again (advance), so the failure is not lost, only unreported.
+    upcoming.catch(() => {});
     if (!solo) viewer.setLanes(entries, event);
     booth.replaceChildren(
       votePanel(ballot, async (lane) => {
@@ -340,23 +373,22 @@ export async function renderVote(root, { event, state }) {
         if (busy) return;
         busy = true;
         try {
-          const cast = await castVote(event.id, ballot.ballot, lane);
-          await next();
-          // The ceremony reads the points off this once the field has moved on.
-          return cast;
+          // The ceremony seals and pays on this as soon as the server answers.
+          return await castVote(event.id, ballot.ballot, lane);
         } catch (error) {
           if (error.message === DEAD_BALLOT_MESSAGE) {
             // This ballot cannot be retried into working — draw a fresh
             // field so the booth recovers itself, and carry the message
-            // into it so the visitor still learns why.
-            await next(error.message);
+            // into it so the visitor still learns why. Fresh, not the one
+            // loaded with it: drawn together, both may have expired.
+            show(await load(), error.message);
             return;
           }
           throw error;
         } finally {
           busy = false;
         }
-      }, message),
+      }, message, (cast) => advance(ballot, cast)),
     );
     if (solo) {
       const order = runningOrder(entries.length, (index) => {
@@ -366,7 +398,7 @@ export async function renderVote(root, { event, state }) {
         onStage.replaceChildren(el("span", "on-stage__label", "On stage"), el("span", "on-stage__num", String(index + 1)));
       });
       booth.prepend(order.element);
-      // Until a vote draws the next field and this row leaves the page.
+      // Until a vote puts the next field on and this row leaves the page.
       (function follow() {
         if (!order.element.isConnected) return;
         order.follow(viewer.player);
@@ -378,5 +410,5 @@ export async function renderVote(root, { event, state }) {
     }
   }
 
-  await next();
+  show(await load());
 }
