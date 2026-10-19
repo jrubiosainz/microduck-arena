@@ -712,6 +712,147 @@ table.board .withdraw:focus-visible,
 .vote-status { margin: 0.75rem 0 0; color: var(--ink-70); font-size: 0.85rem; min-height: 1.2em; }
 .vote-status.bad { color: var(--orange-inked); font-weight: 600; }
 
+/* ── a stage's running order ──────────────────────────────────────────── */
+
+/* A ticket per performance (vote.js runningOrder), in its post-it's colour:
+   the name on the ticket, the number on a stub torn along a dotted line. The
+   one on stage stands up straight and raised, an ON STAGE tag on its edge and
+   its replay's progress under the name; the others lean like the post-its. */
+.acts {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 22px 14px;
+  margin: 26px 0 0;
+}
+.act {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  min-width: 9.6rem;
+  padding: 9px 0 9px 12px;
+  border: 2px solid var(--ink);
+  background: var(--pick);
+  color: #12131a;
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+  cursor: pointer;
+  rotate: -1.2deg;
+  transition: translate 0.12s ease, box-shadow 0.12s ease, rotate 0.12s ease;
+}
+.act:nth-child(even) { rotate: 1deg; }
+.act:hover { translate: 0 -2px; }
+.act:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+.act[aria-pressed="true"] {
+  rotate: 0deg;
+  translate: 0 -5px;
+  box-shadow: 6px 6px var(--shadow-blur) var(--ink);
+}
+.act__label {
+  font: 400 0.95rem/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+}
+.act__num {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  margin-left: 12px;
+  padding: 0 14px;
+  border-left: 2px dashed var(--ink);
+  font: 400 2.2rem/1 var(--display);
+}
+.act__bar {
+  height: 5px;
+  margin: 7px 0 0;
+  background: rgba(16, 16, 24, 0.16);
+  visibility: hidden;
+}
+.act[aria-pressed="true"] .act__bar { visibility: visible; }
+.act__bar > span {
+  display: block;
+  width: calc(var(--progress, 0) * 100%);
+  height: 100%;
+  background: var(--ink);
+}
+.act__tag {
+  position: absolute;
+  top: -13px;
+  left: 10px;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 400 0.68rem/1 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.act[aria-pressed="true"] .act__tag { display: inline-flex; }
+/* The tally light of a camera that is live. */
+.act__tag::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--magenta);
+  animation: act-live 1s steps(2, jump-none) infinite;
+}
+@keyframes act-live { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .act__tag::before { animation: none; } }
+/* Watched to its end. */
+.act__seen {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  display: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+  font: 700 0.75rem/1 var(--body);
+}
+.act--seen .act__seen { display: grid; }
+
+/* The same post-it in the picture's corner, so a voter watching the stage
+   rather than the tickets still knows which performance it is. */
+.on-stage {
+  position: absolute;
+  z-index: 1;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  pointer-events: none;
+}
+.on-stage:empty { display: none; }
+.on-stage__label {
+  padding: 5px 9px;
+  background: var(--deep-ink);
+  color: var(--paper);
+  border: 2px solid var(--paper-60);
+  border-right: 0;
+  font: 400 0.8rem/1 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.on-stage__num {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border: 2px solid var(--ink);
+  background: var(--pick);
+  color: #12131a;
+  font: 400 1.6rem/1 var(--display);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+  rotate: -3deg;
+}
+
 /* ── the ballot ceremony ──────────────────────────────────────────────── */
 
 /* Everything below is `runCeremony`'s overlay (see vote.js): a post-it flies

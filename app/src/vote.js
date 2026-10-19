@@ -232,6 +232,57 @@ export function votePanel(ballot, onPick, initialStatus) {
   return panel;
 }
 
+/**
+ * A stage's running order: a ticket per performance, in the colour and number
+ * of its post-it in the ballot below, so what is watched and what is voted for
+ * are the same thing at a glance. The one on stage stands raised and marked,
+ * and the ones watched to their end are ticked.
+ *
+ * `play(index)` puts a performance on stage. `follow(player)`, every frame,
+ * fills the playing ticket's bar and, once its replay has ended, puts the next
+ * one on — 1, 2, 3, 1 … — so a voter sees the whole field without a click.
+ */
+export function runningOrder(count, play) {
+  const row = el("div", "acts");
+  row.setAttribute("aria-label", "The performances on this ballot");
+  let current = 0;
+  const tickets = Array.from({ length: count }, (_, index) => {
+    const ticket = el("button", "act");
+    ticket.type = "button";
+    ticket.style.setProperty("--pick", LANE_CSS[index % LANE_CSS.length]);
+    ticket.setAttribute("aria-label", `Watch performance ${index + 1}`);
+    const bar = el("span", "act__bar");
+    bar.append(el("span"));
+    ticket.append(
+      el("span", "act__tag", "On stage"),
+      el("span", "act__label", "Performance"),
+      el("span", "act__num", String(index + 1)),
+      bar,
+      el("span", "act__seen", "✓"),
+    );
+    ticket.addEventListener("click", () => show(index));
+    row.append(ticket);
+    return ticket;
+  });
+
+  function show(index) {
+    current = index;
+    tickets.forEach((ticket, i) => ticket.setAttribute("aria-pressed", String(i === index)));
+    play(index);
+  }
+
+  show(0);
+  return {
+    element: row,
+    follow({ time, duration, playing }) {
+      tickets[current].style.setProperty("--progress", String(duration ? time / duration : 0));
+      if (playing) return;
+      tickets[current].classList.add("act--seen");
+      show((current + 1) % count);
+    },
+  };
+}
+
 export async function renderVote(root, { event, state }) {
   // Started, not awaited: the booth does not read it, and /api/me folds the
   // whole run log for two numbers on a chip.
@@ -242,13 +293,16 @@ export async function renderVote(root, { event, state }) {
   root.replaceChildren(signage(undefined));
   identity.then((me) => settleIdentity(root, me));
 
+  // A stage shows its performances one at a time, and says in the picture's
+  // corner which one is on, with the ticket's own colour and number.
+  const solo = isStage(event);
   const hall = el("main", "hall");
   hall.innerHTML = `
     <div class="votehead">
       <h2 class="racetitle">${event.title}</h2>
       <a class="votehead__back" href="${raceHref(event.id)}">Back to the challenge</a>
     </div>
-    <div class="stage"><canvas id="stage"></canvas></div>
+    <div class="stage"><canvas id="stage"></canvas>${solo ? '<p class="on-stage" aria-hidden="true"></p>' : ""}</div>
     <div id="booth"></div>
   `;
   root.append(hall, footer());
@@ -256,6 +310,7 @@ export async function renderVote(root, { event, state }) {
   const viewer = await createViewer(root.querySelector("#stage"), { rig: event.rig });
   state.viewer = viewer;
   const booth = root.querySelector("#booth");
+  const onStage = root.querySelector(".on-stage");
 
   let busy = false;
 
@@ -263,6 +318,7 @@ export async function renderVote(root, { event, state }) {
     const ballot = await getBallot(event.id);
     if (ballot.state !== "ballot") {
       viewer.setLanes([], event);
+      onStage?.replaceChildren();
       booth.replaceChildren(votePanel(ballot));
       return;
     }
@@ -276,8 +332,7 @@ export async function renderVote(root, { event, state }) {
       livery: "classic",
       colour: LANE_COLORS[lane % LANE_COLORS.length],
     }));
-    const solo = isStage(event);
-    viewer.setLanes(solo ? entries.slice(0, 1) : entries, event);
+    if (!solo) viewer.setLanes(entries, event);
     booth.replaceChildren(
       votePanel(ballot, async (lane) => {
         // A second click while the first is in flight would spend two ballots
@@ -304,19 +359,19 @@ export async function renderVote(root, { event, state }) {
       }, message),
     );
     if (solo) {
-      const watch = el("div", "vote-picks");
-      watch.setAttribute("aria-label", "Watch performances individually");
-      entries.forEach((entry, index) => {
-        const button = el("button", "", `Watch performance ${index + 1}`);
-        button.type = "button";
-        button.setAttribute("aria-pressed", String(index === 0));
-        button.addEventListener("click", () => {
-          viewer.setLanes([entry], event);
-          for (const other of watch.children) other.setAttribute("aria-pressed", String(other === button));
-        });
-        watch.append(button);
+      const order = runningOrder(entries.length, (index) => {
+        // Once, not looped: its end is the cue for the next.
+        viewer.setLanes([entries[index]], event, { loop: false });
+        onStage.style.setProperty("--pick", LANE_CSS[index % LANE_CSS.length]);
+        onStage.replaceChildren(el("span", "on-stage__label", "On stage"), el("span", "on-stage__num", String(index + 1)));
       });
-      booth.prepend(watch);
+      booth.prepend(order.element);
+      // Until a vote draws the next field and this row leaves the page.
+      (function follow() {
+        if (!order.element.isConnected) return;
+        order.follow(viewer.player);
+        requestAnimationFrame(follow);
+      })();
       booth.querySelectorAll(".vote-pick").forEach((button, index) => {
         button.setAttribute("aria-label", `Vote for performance ${index + 1}`);
       });
