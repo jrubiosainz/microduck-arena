@@ -60,7 +60,8 @@ def hub_ballots(tmp_path, remote, **options):
 
 
 def test_since_reads_the_hub_once_then_answers_from_memory(tmp_path, remote):
-    old, recent = make_ballot(cast_at=f"{day(6)}T10:00:00Z"), make_ballot(cast_at=f"{day(1)}T10:00:00Z")
+    old = make_ballot(cast_at=f"{day(6)}T10:00:00Z")
+    recent = make_ballot(cast_at=f"{day(1)}T10:00:00Z")
     on_hub(remote, old)
     on_hub(remote, recent)
     ballots, hub = hub_ballots(tmp_path, remote)
@@ -85,9 +86,11 @@ def test_a_cast_is_counted_at_once_and_committed_by_the_writer(tmp_path, remote)
     ballots.cast(ballot)
     assert ballots.since(day(6)) == [ballot]
     ballots.flush(5)
-    assert hub.commits == [
-        (f"votes/{ballot.day}/{ballot.ballot_id}.json", f"{ballot.event_id}: {ballot.voter} voted", ballot.to_dict())
-    ]
+    assert hub.commits == [(
+        f"votes/{ballot.day}/{ballot.ballot_id}.json",
+        f"{ballot.event_id}: {ballot.voter} voted",
+        ballot.to_dict(),
+    )]
 
 
 def test_a_failed_commit_is_retried_until_it_lands_in_order(tmp_path, remote):

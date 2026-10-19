@@ -9,10 +9,13 @@ The leaderboard is never stored, only derived (see index.py).
 
 import json
 import os
+import shutil
+import tempfile
 import threading
 import time
 import uuid
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -559,13 +562,24 @@ class HubStore:
 
     Every write is a new file, so commits never conflict on content. Reads go
     through a local snapshot, which is also what the index scans at boot.
+
+    A snapshot is built by difference, one at a time. `snapshot_download` at a new
+    revision costs a HEAD per file, because a file cached for an older commit has no
+    pointer under the new one: 10–25 s for ~1,800 files on the Space, up to 57 s when
+    twenty requests each ran the same refresh at once (its log, 2026-10-19). Every
+    vote, first visit and clip is a commit, so that was the cost of nearly every read
+    after one. Instead, the Hub's tree at the new head is compared with the folder
+    built last: a file whose blob is unchanged is linked where it already was, and
+    only new or changed files are downloaded.
     """
 
-    def __init__(self, repo_id: str, token: str | None = None, snapshot_ttl_s: float = 20.0):
+    def __init__(
+        self, repo_id: str, token: str | None = None, snapshot_ttl_s: float = 20.0, api=None
+    ):
         from huggingface_hub import HfApi
 
         self.repo_id = repo_id
-        self.api = HfApi(token=token or os.environ.get("HF_TOKEN"))
+        self.api = api or HfApi(token=token or os.environ.get("HF_TOKEN"))
         # Reads go through a snapshot, and rendering one leaderboard asks the
         # store for every run. Without this, that is a network round trip per
         # request — the board would feel broken even with ten entries in it.
@@ -575,6 +589,15 @@ class HubStore:
         self._snapshot_ttl_s = snapshot_ttl_s
         self._snapshot: LocalStore | None = None
         self._snapshot_at = 0.0
+        # Concurrent readers of a stale snapshot wait for one refresh, not one each.
+        self._refreshing = threading.Lock()
+        # Each snapshot is a folder of symlinks into the Hub cache, named by the commit
+        # it was built from: path -> (blob id, target) for the latest, and the latest
+        # two folders, so a reader still holding the previous one keeps working.
+        self._root = Path(tempfile.mkdtemp(prefix="arena-store-"))
+        self._files: dict[str, tuple[str, str]] = {}
+        self._commit: str | None = None
+        self._folders: list[Path] = []
 
     def append(
         self, record: RunRecord, trace_blob: bytes, model_blob: bytes | None = None
@@ -625,21 +648,64 @@ class HubStore:
         self._snapshot = None
 
     def snapshot(self, fresh: bool = False) -> LocalStore:
-        from huggingface_hub import snapshot_download
-
-        if (
-            not fresh
-            and self._snapshot is not None
-            and time.monotonic() - self._snapshot_at < self._snapshot_ttl_s
-        ):
+        with self._refreshing:
+            if (
+                not fresh
+                and self._snapshot is not None
+                and time.monotonic() - self._snapshot_at < self._snapshot_ttl_s
+            ):
+                return self._snapshot
+            head = self.api.repo_info(self.repo_id, repo_type="dataset").sha
+            if head != self._commit:
+                self._build(head)
+            self._snapshot = LocalStore(self._folders[-1])
+            self._snapshot_at = time.monotonic()
             return self._snapshot
-        # The clips' media stay out of the snapshot — a boot would otherwise
-        # download every video ever rendered. clip_file fetches one on demand.
-        self._snapshot = LocalStore(Path(snapshot_download(
-            self.repo_id, repo_type="dataset", ignore_patterns=["*.mp4", "*.png"]
-        )))
-        self._snapshot_at = time.monotonic()
-        return self._snapshot
+
+    def _build(self, head: str) -> None:
+        """The folder for commit `head`, downloading only what the last one lacks."""
+        from huggingface_hub.hf_api import RepoFile
+
+        # The clips' media stay out — a boot would otherwise download every video
+        # ever rendered; clip_file fetches one on demand. So do the votes: the
+        # store never reads them (HubBallots does), and each would be a download.
+        tree = {
+            entry.path: entry.blob_id
+            for entry in self.api.list_repo_tree(
+                self.repo_id, recursive=True, revision=head, repo_type="dataset"
+            )
+            if isinstance(entry, RepoFile)
+            and not entry.path.endswith((".mp4", ".png"))
+            and not entry.path.startswith("votes/")
+        }
+        files = {
+            path: self._files[path]
+            for path, blob in tree.items()
+            if path in self._files and self._files[path][0] == blob
+        }
+        missing = [path for path in tree if path not in files]
+
+        def fetch(path: str) -> str:
+            return os.path.realpath(
+                self.api.hf_hub_download(self.repo_id, path, repo_type="dataset", revision=head)
+            )
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            fetched = zip(missing, pool.map(fetch, missing))
+            files |= {path: (tree[path], target) for path, target in fetched}
+
+        folder = self._root / head
+        # Left over by a build that failed half-way, if any: start it again.
+        shutil.rmtree(folder, ignore_errors=True)
+        folder.mkdir()
+        for path, (_, target) in files.items():
+            link = folder / path
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(target)
+        self._files, self._commit = files, head
+        self._folders.append(folder)
+        while len(self._folders) > 2:
+            shutil.rmtree(self._folders.pop(0))
 
     def runs(self, event_id: str) -> list[RunRecord]:
         return self.snapshot().runs(event_id)
@@ -811,7 +877,8 @@ class HubBallots:
             if ballot.ballot_id in self._by_id:
                 raise FileExistsError(f"ballot {ballot.ballot_id} already cast in {self.repo_id}")
             if self._queue and time.monotonic() - self._queue[0][1] > self._stuck_after_s:
-                raise BallotLogStuck(f"ballot {self._queue[0][0].ballot_id} is still owed to the Hub")
+                owed = self._queue[0][0].ballot_id
+                raise BallotLogStuck(f"ballot {owed} is still owed to the Hub")
             self._by_id[ballot.ballot_id] = ballot
             self._queue.append((ballot, time.monotonic()))
             self._owed.notify_all()

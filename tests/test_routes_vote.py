@@ -199,7 +199,8 @@ def test_a_vote_the_log_cannot_take_is_refused_and_the_ballot_stays_open(client,
     assert refused.json()["detail"] == "Votes cannot be saved right now. Try again in a minute."
 
     monkeypatch.undo()
-    assert api.post("/api/events/got-a-talent/vote", json=payload).json() == {"points": 2, "cast_today": 1}
+    accepted = api.post("/api/events/got-a-talent/vote", json=payload)
+    assert accepted.json() == {"points": 2, "cast_today": 1}
 
 
 def test_voting_twice_with_one_ballot_changes_nothing(client):
