@@ -125,6 +125,12 @@ def create_app(config: ArenaConfig) -> FastAPI:
             # that opened them.
             app.state.commentary.stop()
 
+    @app.on_event("shutdown")
+    def _commit_owed_votes() -> None:
+        # A vote is acknowledged before the Hub has it (HubBallots): a restart
+        # first commits the ones this process answered.
+        app.state.ballots.flush(8)
+
     @app.get("/api/health")
     def health() -> dict:
         return {

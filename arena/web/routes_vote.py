@@ -34,7 +34,7 @@ from pydantic import BaseModel
 from .. import votes
 from ..manifest import Manifest, ManifestError, load_event
 from ..points import SCHEDULE
-from ..store import Ballot
+from ..store import Ballot, BallotLogStuck
 from ..trace import decode
 from .routes_auth import current_user
 from .routes_read import frames_response
@@ -244,13 +244,11 @@ def cast_vote(event_id: str, body: VoteBody, request: Request) -> dict:
         # token, or moved today's count, in the time since _open() above ran
         # outside it.
         #
-        # The cliff this lock names: on a deployed Space it spans THREE Hub
-        # round trips — the snapshot_download inside _window() below, then
-        # file_exists and create_commit inside ballots.cast() further down —
-        # so every voter on every votable event queues behind whoever is
-        # mid-commit. Deliberate, not accidental: at twenty ballots a day per
-        # person it costs nothing, and a per-voter lock table is machinery
-        # this does not need yet. If it ever bites, this is where to look.
+        # Memory only, on a deployed Space too: the log is read from the Hub
+        # once (HubBallots) and a cast is committed there after the answer, so
+        # no voter queues behind another's Hub round trips. It used to span
+        # three of them, and the run store's refresh behind them took tens of
+        # seconds.
         fresh = book.get(body.ballot)
         spent = votes.cast_today(_window(request, manifest, now), voter, event_id, now)
         if fresh is None or fresh.spent:
@@ -279,5 +277,12 @@ def cast_vote(event_id: str, body: VoteBody, request: Request) -> dict:
             # Belt-and-braces only: `fresh.spent` above is what actually
             # guards this now, since the log's own day-sharding cannot.
             return {"points": 0, "cast_today": spent}
+        except BallotLogStuck as exc:
+            # The Hub has not taken a vote for a while: acknowledging more would
+            # promise points a restart could take back. The ballot stays open,
+            # so the same click works again once the Hub does.
+            raise HTTPException(
+                status_code=503, detail="Votes cannot be saved right now. Try again in a minute."
+            ) from exc
         book.spend(body.ballot)
         return {"points": SCHEDULE["ballot"], "cast_today": spent + 1}

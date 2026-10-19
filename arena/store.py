@@ -12,6 +12,7 @@ import os
 import threading
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -25,6 +26,9 @@ _TAIL_BITS = 60  # 12 base32 chars
 # The files a ready clip holds beside its clip.json (arena/clips.py writes them,
 # routes_read.py serves them by these exact names).
 CLIP_MEDIA = ("landscape.mp4", "vertical.mp4", "poster.png")
+
+# The longest a vote's writer waits between two tries at the Hub.
+BALLOT_RETRY_CAP_S = 60.0
 
 
 def clip_version(manifest: dict) -> str:
@@ -288,6 +292,7 @@ class Ballot:
 class Ballots(Protocol):
     def cast(self, ballot: Ballot) -> None: ...
     def since(self, first_day: str) -> list[Ballot]: ...
+    def flush(self, timeout: float) -> None: ...
 
 
 def days_from(first_day: str, today: str) -> list[str]:
@@ -337,6 +342,9 @@ class LocalBallots:
                 Ballot.from_dict(json.loads(p.read_text())) for p in sorted(shard.glob("*.json"))
             )
         return sorted(out, key=lambda b: (b.cast_at, b.ballot_id))
+
+    def flush(self, timeout: float) -> None:
+        """Nothing is owed: a cast is on disk when it returns."""
 
 
 class Store(Protocol):
@@ -752,65 +760,123 @@ class HubStore:
         self._snapshot = None
 
 
-class HubBallots:
-    """The ballot log on the same dataset repo, read through its OWN snapshot.
+class BallotLogStuck(RuntimeError):
+    """The Hub has not taken an acknowledged vote for too long: take no more until it does."""
 
-    Two things matter here and neither is an optimisation detail. The snapshot
-    is separate from the run store's, so casting a vote never invalidates the
-    board's cache — voting must not make the leaderboard slow. And it is
-    downloaded with `allow_patterns` over the window only, so a read costs the
-    same in a year as it does today. That is what lets the log stay append-only
+
+class HubBallots:
+    """The ballot log on the same dataset repo, read from the Hub once and kept in memory.
+
+    The Space is the only writer of `votes/`, so after the first read every vote it
+    learns of is one it cast itself: `since` answers from memory and never touches the
+    network again. A cast is counted the moment it is made and committed to the Hub
+    by a background writer, after the answer — the voter no longer waits on Hub round
+    trips that took seconds, and the run store's refresh behind them took tens.
+
+    That makes a vote acknowledged before it is durable, a risk the owner accepted on
+    2026-10-19 for the seconds it lasts: the writer retries every failure, the app's
+    shutdown flushes what is owed, and a ballot left waiting more than
+    `stuck_after_s` (an expired token, an outage) makes `cast` refuse new votes
+    rather than keep acknowledging ones a restart would lose.
+
+    The log is read with `allow_patterns` over the window's days only, so the read
+    costs the same in a year as it does today. That is what lets it stay append-only
     with nothing ever pruned: the repo grows, reads do not.
     """
 
-    def __init__(self, repo_id: str, token: str | None = None, snapshot_ttl_s: float = 10.0):
+    def __init__(
+        self,
+        repo_id: str,
+        token: str | None = None,
+        api=None,
+        retry_s: float = 1.0,
+        stuck_after_s: float = 30.0,
+    ):
         from huggingface_hub import HfApi
 
         self.repo_id = repo_id
-        self.api = HfApi(token=token or os.environ.get("HF_TOKEN"))
-        self._snapshot_ttl_s = snapshot_ttl_s
-        self._snapshot: LocalBallots | None = None
-        self._snapshot_at = 0.0
-        self._patterns: tuple[str, ...] = ()
+        self.api = api or HfApi(token=token or os.environ.get("HF_TOKEN"))
+        self._retry_s = retry_s
+        self._stuck_after_s = stuck_after_s
+        # One condition guards the ballots, the earliest day read and the queue of
+        # ballots owed to the Hub, each with the moment it was queued.
+        self._owed = threading.Condition()
+        self._by_id: dict[str, Ballot] = {}
+        self._from: str | None = None
+        self._queue: deque[tuple[Ballot, float]] = deque()
+        self._writer: threading.Thread | None = None
 
     def cast(self, ballot: Ballot) -> None:
+        with self._owed:
+            if ballot.ballot_id in self._by_id:
+                raise FileExistsError(f"ballot {ballot.ballot_id} already cast in {self.repo_id}")
+            if self._queue and time.monotonic() - self._queue[0][1] > self._stuck_after_s:
+                raise BallotLogStuck(f"ballot {self._queue[0][0].ballot_id} is still owed to the Hub")
+            self._by_id[ballot.ballot_id] = ballot
+            self._queue.append((ballot, time.monotonic()))
+            self._owed.notify_all()
+            if self._writer is None:
+                self._writer = threading.Thread(target=self._write, name="arena-votes", daemon=True)
+                self._writer.start()
+
+    def _write(self) -> None:
+        """Commit the queued ballots in order, each until it lands."""
         from huggingface_hub import CommitOperationAdd
 
-        path = f"votes/{ballot.day}/{ballot.ballot_id}.json"
-        if self.api.file_exists(self.repo_id, path, repo_type="dataset"):
-            raise FileExistsError(f"ballot {ballot.ballot_id} already cast in {self.repo_id}")
-        self.api.create_commit(
-            repo_id=self.repo_id,
-            repo_type="dataset",
-            commit_message=f"{ballot.event_id}: {ballot.voter} voted",
-            operations=[
-                CommitOperationAdd(
-                    path_in_repo=path,
-                    path_or_fileobj=json.dumps(ballot.to_dict(), indent=2).encode(),
+        wait = self._retry_s
+        while True:
+            with self._owed:
+                self._owed.wait_for(lambda: self._queue)
+                ballot = self._queue[0][0]
+            try:
+                self.api.create_commit(
+                    repo_id=self.repo_id,
+                    repo_type="dataset",
+                    commit_message=f"{ballot.event_id}: {ballot.voter} voted",
+                    operations=[
+                        CommitOperationAdd(
+                            path_in_repo=f"votes/{ballot.day}/{ballot.ballot_id}.json",
+                            path_or_fileobj=json.dumps(ballot.to_dict(), indent=2).encode(),
+                        )
+                    ],
                 )
-            ],
-        )
-        # Your own vote must be in the count the page shows you next.
-        self._snapshot = None
+            except Exception as exc:  # noqa: BLE001 — the vote was acknowledged: it must land
+                print(
+                    f"votes: commit of {ballot.ballot_id} failed ({type(exc).__name__}: {exc}), "
+                    f"retrying in {wait:g} s"
+                )
+                time.sleep(wait)
+                wait = min(wait * 2, BALLOT_RETRY_CAP_S)
+                continue
+            wait = self._retry_s
+            with self._owed:
+                self._queue.popleft()
+                self._owed.notify_all()
+
+    def flush(self, timeout: float) -> None:
+        """Wait, at most `timeout` seconds, for every acknowledged vote to reach the Hub."""
+        with self._owed:
+            self._owed.wait_for(lambda: not self._queue, timeout)
 
     def since(self, first_day: str) -> list[Ballot]:
-        from huggingface_hub import snapshot_download
-
-        today = datetime.now(UTC).date().isoformat()
-        patterns = tuple(f"votes/{day}/*" for day in days_from(first_day, today))
-        stale = (
-            self._snapshot is None
-            or patterns != self._patterns
-            or time.monotonic() - self._snapshot_at >= self._snapshot_ttl_s
-        )
-        if stale:
-            self._snapshot = LocalBallots(
-                Path(
-                    snapshot_download(
-                        self.repo_id, repo_type="dataset", allow_patterns=list(patterns)
-                    )
+        with self._owed:
+            if self._from is None or first_day < self._from:
+                # Only the days not read yet: up to today on the first read, up to the
+                # day before the earliest one read on a wider window's.
+                last = (
+                    (date.fromisoformat(self._from) - timedelta(days=1)).isoformat()
+                    if self._from
+                    else datetime.now(UTC).date().isoformat()
                 )
+                download = self.api.snapshot_download(
+                    self.repo_id,
+                    repo_type="dataset",
+                    allow_patterns=[f"votes/{day}/*" for day in days_from(first_day, last)],
+                )
+                for ballot in LocalBallots(Path(download)).since(first_day):
+                    self._by_id.setdefault(ballot.ballot_id, ballot)
+                self._from = first_day
+            return sorted(
+                (b for b in self._by_id.values() if b.day >= first_day),
+                key=lambda b: (b.cast_at, b.ballot_id),
             )
-            self._snapshot_at = time.monotonic()
-            self._patterns = patterns
-        return self._snapshot.since(first_day)

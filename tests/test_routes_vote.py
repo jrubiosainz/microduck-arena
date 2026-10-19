@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from arena.manifest import load_event
+from arena.store import BallotLogStuck
 from arena.trace import encode
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
@@ -180,6 +181,25 @@ def test_voting_records_the_whole_field_and_pays_the_voter(client):
     assert len(ballot.candidates) == 3
     assert ballot.choice == ballot.candidates[1]
     assert ballot.ballot_id == body["ballot"]
+
+
+def test_a_vote_the_log_cannot_take_is_refused_and_the_ballot_stays_open(client, monkeypatch):
+    api, app = client
+    for name in ("ann", "bob"):
+        enter(app, name)
+    body = api.get("/api/events/got-a-talent/ballot").json()
+    payload = {"ballot": body["ballot"], "lane": 0}
+
+    def stuck(ballot):
+        raise BallotLogStuck("a ballot is still owed to the Hub")
+
+    monkeypatch.setattr(app.state.ballots, "cast", stuck)
+    refused = api.post("/api/events/got-a-talent/vote", json=payload)
+    assert refused.status_code == 503
+    assert refused.json()["detail"] == "Votes cannot be saved right now. Try again in a minute."
+
+    monkeypatch.undo()
+    assert api.post("/api/events/got-a-talent/vote", json=payload).json() == {"points": 2, "cast_today": 1}
 
 
 def test_voting_twice_with_one_ballot_changes_nothing(client):
