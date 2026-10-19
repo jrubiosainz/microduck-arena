@@ -1,10 +1,10 @@
 import hashlib
 import json
-import shutil
 import threading
 import time
 from types import SimpleNamespace
 
+import pytest
 from huggingface_hub.hf_api import RepoFile, RepoFolder
 
 from arena.store import HubStore, Withdrawal
@@ -12,41 +12,50 @@ from tests.test_store import make_record
 
 
 class FakeHub:
-    """The dataset as a folder whose head moves on every `commit()`: the tree names each file
-    by a hash of its bytes, as the Hub's blob id does, and a download copies it into a cache."""
+    """The dataset as files whose head moves on every `commit()`. Each head keeps the files it
+    had, as a Hub revision does: the tree at a head names each file by a hash of its bytes, as
+    the Hub's blob id does, and a download at a head copies that head's bytes into a cache."""
 
     def __init__(self, tmp_path, info_delay_s=0.0):
-        self.remote, self.cache = tmp_path / "remote", tmp_path / "cache"
-        self.remote.mkdir()
-        self.head, self.info_delay_s = 0, info_delay_s
+        self.cache = tmp_path / "cache"
+        self.files: dict[str, bytes] = {}
+        self.trees: dict[str, dict[str, bytes]] = {}
+        self.head, self.info_delay_s, self.down = 0, info_delay_s, False
         self.infos = 0
         self.downloads: list[list[str]] = [[]]
 
+    @property
+    def sha(self):
+        return f"commit-{self.head}"
+
     def put(self, path, data: bytes):
-        (self.remote / path).parent.mkdir(parents=True, exist_ok=True)
-        (self.remote / path).write_bytes(data)
+        self.files[path] = data
 
     def commit(self):
         self.head += 1
+        self.trees[self.sha] = dict(self.files)
         self.downloads.append([])
 
-    def repo_info(self, repo_id, repo_type):
+    def repo_info(self, repo_id, repo_type, timeout):
+        if self.down:
+            raise ConnectionError("the Hub is away")
         self.infos += 1
+        # The head as it was when asked: a commit landing meanwhile is the next head.
+        self.trees.setdefault(self.sha, dict(self.files))
+        sha = self.sha
         time.sleep(self.info_delay_s)
-        return SimpleNamespace(sha=f"commit-{self.head}")
+        return SimpleNamespace(sha=sha)
 
     def list_repo_tree(self, repo_id, recursive, revision, repo_type):
         yield RepoFolder(path="runs", oid="folder")
-        for path in sorted(self.remote.rglob("*")):
-            if path.is_file():
-                blob = hashlib.sha1(path.read_bytes()).hexdigest()
-                yield RepoFile(path=path.relative_to(self.remote).as_posix(), size=1, oid=blob)
+        for path, data in sorted(self.trees[revision].items()):
+            yield RepoFile(path=path, size=len(data), oid=hashlib.sha1(data).hexdigest())
 
     def hf_hub_download(self, repo_id, filename, repo_type, revision):
         self.downloads[-1].append(filename)
         out = self.cache / revision / filename
         out.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(self.remote / filename, out)
+        out.write_bytes(self.trees[revision][filename])
         return str(out)
 
     def create_commit(self, repo_id, repo_type, commit_message, operations):
@@ -112,7 +121,7 @@ def test_a_file_gone_from_the_hub_is_gone_from_the_snapshot(tmp_path):
     hub.put(f"clips/{record.run_id}/pending.json", b"{}")
     store = HubStore("org/runs", api=hub, snapshot_ttl_s=0)
     assert store.clip_state(record.run_id) == ("pending", None)
-    (hub.remote / f"clips/{record.run_id}/pending.json").unlink()
+    del hub.files[f"clips/{record.run_id}/pending.json"]
     hub.commit()
     assert store.clip_state(record.run_id) == ("none", None)
 
@@ -131,6 +140,20 @@ def test_a_reader_keeps_its_folder_for_one_refresh(tmp_path):
     hub.commit()
     store.snapshot()
     assert not held.root.exists()
+
+
+def test_a_head_seen_before_is_built_again_without_losing_the_snapshot(tmp_path):
+    hub = FakeHub(tmp_path)
+    record = make_record()
+    publish(hub, record)
+    store = HubStore("org/runs", api=hub, snapshot_ttl_s=0)
+    store.snapshot()
+    hub.put("seen/a.json", b"{}")
+    hub.commit()
+    store.snapshot()
+    # The dataset's last commit undone: the head is the one the previous folder was built from.
+    hub.head -= 1
+    assert store.runs(record.event_id) == [record]
 
 
 def test_concurrent_readers_share_one_refresh(tmp_path):
@@ -157,3 +180,40 @@ def test_a_write_is_read_back_at_once(tmp_path):
                       withdrawn_at="2026-10-19T10:00:00Z")
     store.withdraw(gone)
     assert store.withdrawals() == [gone]
+
+
+def test_a_write_is_read_back_even_while_another_refresh_builds_an_older_head(tmp_path):
+    hub = FakeHub(tmp_path)
+    record = make_record()
+    publish(hub, record)
+    store = HubStore("org/runs", api=hub)
+    store.snapshot()
+    store.refresh()
+    # Another request starts the refresh and reads the head before the write lands.
+    hub.info_delay_s = 0.3
+    other = threading.Thread(target=store.snapshot)
+    other.start()
+    time.sleep(0.1)
+    hub.info_delay_s = 0.0
+    gone = Withdrawal(run_id=record.run_id, event_id=record.event_id, user=record.user,
+                      withdrawn_at="2026-10-19T10:00:00Z")
+    store.withdraw(gone)
+    assert store.withdrawals() == [gone]
+    other.join()
+
+
+def test_a_hub_hiccup_keeps_the_last_snapshot(tmp_path):
+    hub = FakeHub(tmp_path)
+    record = make_record()
+    publish(hub, record)
+    store = HubStore("org/runs", api=hub, snapshot_ttl_s=0)
+    store.runs(record.event_id)
+    hub.down = True
+    assert store.runs(record.event_id) == [record]
+
+
+def test_a_hub_down_at_the_first_read_is_an_error(tmp_path):
+    hub = FakeHub(tmp_path)
+    hub.down = True
+    with pytest.raises(ConnectionError):
+        HubStore("org/runs", api=hub).snapshot()

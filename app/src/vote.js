@@ -130,7 +130,7 @@ async function runCeremony(lane, settle) {
 // quota race or a wrong-event ballot, no retry of THIS ballot ever succeeds —
 // a booth left open past its TTL, or one that outlived a Space restart, looks
 // alive but answers every click the same way forever. That is the one
-// failure `renderVote`'s `next()` recovers from itself, by drawing a fresh
+// failure `renderVote` recovers from itself, by drawing a fresh
 // field instead of leaving the visitor to click a dead one.
 export const DEAD_BALLOT_MESSAGE = "That ballot is not valid any more. Ask for a new one.";
 
@@ -213,8 +213,10 @@ export function votePanel(ballot, onPick, initialStatus, onCounted) {
         // over: building the next stage mid-flight froze the envelope for over
         // a second (measured 2026-10-19). Until then the buttons stay disabled
         // rather than flash back on. No cast is a click that moved nothing on.
+        // A next field that cannot be loaded lands below like a refused vote:
+        // a click on this spent ballot answers no points and tries again.
         await ceremony;
-        if (cast) onCounted?.(cast);
+        if (cast) await onCounted?.(cast);
       } catch (error) {
         // The server writes this sentence for a person to read (an expired
         // ballot, a quota lost to another tab) — show it, and give the

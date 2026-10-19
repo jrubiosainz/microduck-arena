@@ -113,3 +113,17 @@ it("loads the next field again after the vote when loading it ahead failed", asy
   root.querySelector(".vote-pick").click();
   await vi.waitFor(() => expect(onStage()).toBe(played("C")));
 });
+
+it("says why and gives the buttons back when the next field cannot be loaded at all", async () => {
+  getBallot
+    .mockResolvedValueOnce(ballot("A"))
+    .mockRejectedValueOnce(new Error("Internal Server Error"))
+    .mockRejectedValueOnce(new Error("Internal Server Error"));
+  castVote.mockResolvedValueOnce({ points: 1, cast_today: 1 });
+  const root = await open();
+  root.querySelector(".vote-pick").click();
+  await vi.waitFor(() => expect(root.querySelector(".vote-status.bad")?.textContent)
+    .toBe("Internal Server Error"));
+  const disabled = [...root.querySelectorAll(".vote-pick")].map((button) => button.disabled);
+  expect(disabled).toEqual([false, false]);
+});

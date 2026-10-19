@@ -119,11 +119,10 @@ class VoteBody(BaseModel):
     lane: int
 
 
-# The quota's check and the ballot's write are one critical section. Reading
-# cast_today scans a week of shards — real seconds that grow with the
-# contest — and without a lock four concurrent votes against a cap of one
-# each read the same "0 so far" and all four land. Per-process is the right
-# scope: a Space is one container.
+# The quota's check and the ballot's write are one critical section: without
+# a lock four concurrent votes against a cap of one each read the same "0 so
+# far" and all four land. Per-process is the right scope: a Space is one
+# container.
 _vote_lock = threading.Lock()
 
 

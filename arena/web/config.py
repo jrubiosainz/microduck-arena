@@ -246,7 +246,7 @@ class ArenaConfig:
         return LocalStore(self.ensure_store())
 
     def build_ballots(self):
-        """The ballot log this deployment writes to. Same repo, own snapshot."""
+        """The ballot log this deployment writes to. Same repo, read once and kept in memory."""
         if self.dataset_repo and self.hf_token:
             return HubBallots(self.dataset_repo, token=self.hf_token)
         return LocalBallots(self.ensure_store())

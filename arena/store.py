@@ -32,6 +32,8 @@ CLIP_MEDIA = ("landscape.mp4", "vertical.mp4", "poster.png")
 
 # The longest a vote's writer waits between two tries at the Hub.
 BALLOT_RETRY_CAP_S = 60.0
+# The longest a store refresh waits for the Hub to name its head.
+STORE_HEAD_TIMEOUT_S = 10.0
 
 
 def clip_version(manifest: dict) -> str:
@@ -591,9 +593,14 @@ class HubStore:
         self._snapshot_at = 0.0
         # Concurrent readers of a stale snapshot wait for one refresh, not one each.
         self._refreshing = threading.Lock()
-        # Each snapshot is a folder of symlinks into the Hub cache, named by the commit
-        # it was built from: path -> (blob id, target) for the latest, and the latest
-        # two folders, so a reader still holding the previous one keeps working.
+        # Counts the writes and refresh() calls. A snapshot remembers the count from
+        # before it read the head, so a write landing while another request's refresh
+        # builds an older head still makes the writer's next read ask again.
+        self._dropped = 0
+        self._snapshot_dropped = 0
+        # Each snapshot is a folder of symlinks into the Hub cache, one per build:
+        # path -> (blob id, target) and the commit for the latest, and the latest two
+        # folders, so a reader still holding the previous one keeps working.
         self._root = Path(tempfile.mkdtemp(prefix="arena-store-"))
         self._files: dict[str, tuple[str, str]] = {}
         self._commit: str | None = None
@@ -645,21 +652,37 @@ class HubStore:
         )
         # The board must show your own entry the instant you publish it, so a
         # write drops the cache rather than waiting out the TTL.
-        self._snapshot = None
+        self.refresh()
 
     def snapshot(self, fresh: bool = False) -> LocalStore:
         with self._refreshing:
             if (
                 not fresh
                 and self._snapshot is not None
+                and self._snapshot_dropped == self._dropped
                 and time.monotonic() - self._snapshot_at < self._snapshot_ttl_s
             ):
                 return self._snapshot
-            head = self.api.repo_info(self.repo_id, repo_type="dataset").sha
-            if head != self._commit:
-                self._build(head)
+            dropped = self._dropped
+            try:
+                # Bounded: every reader of a stale snapshot waits behind this call.
+                head = self.api.repo_info(
+                    self.repo_id, repo_type="dataset", timeout=STORE_HEAD_TIMEOUT_S
+                ).sha
+                if head != self._commit:
+                    self._build(head)
+            except Exception as exc:  # a Hub hiccup must not take the site down
+                # The last snapshot is complete and on disk: serve it until the next
+                # refresh, as snapshot_download fell back to its cache. Before any, the
+                # store has nothing to serve.
+                if not self._folders:
+                    raise
+                print(
+                    f"store: refresh failed ({type(exc).__name__}: {exc}), keeping {self._commit}"
+                )
             self._snapshot = LocalStore(self._folders[-1])
             self._snapshot_at = time.monotonic()
+            self._snapshot_dropped = dropped
             return self._snapshot
 
     def _build(self, head: str) -> None:
@@ -694,10 +717,8 @@ class HubStore:
             fetched = zip(missing, pool.map(fetch, missing))
             files |= {path: (tree[path], target) for path, target in fetched}
 
-        folder = self._root / head
-        # Left over by a build that failed half-way, if any: start it again.
-        shutil.rmtree(folder, ignore_errors=True)
-        folder.mkdir()
+        # A folder of its own, even for a head built before (a commit undone).
+        folder = Path(tempfile.mkdtemp(prefix=f"{head[:12]}-", dir=self._root))
         for path, (_, target) in files.items():
             link = folder / path
             link.parent.mkdir(parents=True, exist_ok=True)
@@ -731,7 +752,7 @@ class HubStore:
             ],
         )
         # The board must show the withdrawal immediately, not after the TTL.
-        self._snapshot = None
+        self.refresh()
 
     def withdrawals(self) -> list[Withdrawal]:
         return self.snapshot().withdrawals()
@@ -757,7 +778,7 @@ class HubStore:
             ],
         )
         # The dot must go out the moment the page is seen, not after the TTL.
-        self._snapshot = None
+        self.refresh()
 
     def seen(self) -> frozenset[str]:
         return self.snapshot().seen()
@@ -774,7 +795,7 @@ class HubStore:
                 for name, blob in files.items()
             ],
         )
-        self._snapshot = None
+        self.refresh()
 
     def mark_clip_pending(self, run_id: str, user: str, event_id: str, queued_at: str) -> None:
         # Written once, like a seen file: a re-queue after a crash must not
@@ -821,9 +842,9 @@ class HubStore:
         return self.snapshot().failed_clips()
 
     def refresh(self) -> None:
-        """The next read downloads again: what another process wrote — a clip
+        """The next read asks the Hub again: what another process wrote — a clip
         job, say — is seen now rather than after the TTL."""
-        self._snapshot = None
+        self._dropped += 1
 
 
 class BallotLogStuck(RuntimeError):
