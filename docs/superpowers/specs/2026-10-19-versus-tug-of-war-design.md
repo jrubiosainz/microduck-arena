@@ -104,8 +104,9 @@ sweep in a versus.
 **Judge** (my call on the details):
 
 - The first duck whose trunk goes below the floor level over the pit loses the bout.
-- At the bout time limit (20 s to start with), if nobody is in the pit, the duck towards which the
-  marker moved loses, as in a real tug of war.
+- At the bout time limit (20 s to start with), if nobody is in the pit, the duck the marker moved
+  away from loses: as in a real tug of war, the winner pulls the marker to their side of the pit's
+  centre line.
 - A duck knocked over but not in the pit stays in play: it can still be dragged.
 - Both in the pit on the same frame, or a marker exactly back at the centre at the time limit:
   the marker's side decides, then the higher rating. (A rule that never needs a replay.)
