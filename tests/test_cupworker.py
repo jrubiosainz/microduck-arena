@@ -16,6 +16,7 @@ from arena import cupworker
 from arena.constants import NUM_JOINTS, OBS_SIZE, RUNNER_VERSION
 from arena.cup import Cup, cup_times, draw_groups, ends_at, iso, parse_iso
 from arena.cupworker import (
+    LOAD_PATIENCE,
     CupWorker,
     Standing,
     all_cups,
@@ -197,6 +198,18 @@ def gone(user):
     return load
 
 
+def flaky(user):
+    """A load for which `user`'s policy fails once, as on a Hub away for a moment."""
+    failed = []
+
+    def load(entrant):
+        if entrant.user == user and not failed:
+            failed.append(entrant.user)
+            raise FetchError(f"could not read {user}/tug: 503")
+        return entrant.user
+    return load
+
+
 def written(root):
     """Every cup file and every clip's pending marker, by path."""
     return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*"))
@@ -298,7 +311,7 @@ def test_a_withdrawal_after_close_changes_nothing(tmp_path, no_physics):
 
 
 def test_an_entrant_whose_policy_no_longer_loads_is_left_out_after_ten_minutes(tmp_path, no_physics):
-    store, clock, said = LocalStore(tmp_path), Clock(T1), []
+    store, clock, said = LocalStore(tmp_path), Clock(datetime(2026, 10, 23, 14, tzinfo=UTC)), []  # the close instant
     enter(store, 6)
     cups = CupWorker(store, FakeClips(), events=[EARLY], load=gone("p2"), now=clock, log=said.append)
     cups.tick()
@@ -320,12 +333,16 @@ def test_a_drawn_duck_whose_policy_no_longer_loads_stands_still_after_ten_minute
     played = []
     monkeypatch.setattr(cupworker, "play_match", lambda m, a, b, seeds, ratings, model=None:
                         played.append((a, b)) or fake_play(m, a, b, seeds, ratings))
-    clock = Clock(T1)
-    restarted = worker(store, clock, load=gone("p2"))
+    clock, said = Clock(T1), []
+    restarted = CupWorker(store, FakeClips(), events=[EARLY], load=gone("p2"), now=clock, log=said.append)
     restarted.tick()
     assert load_cup(store, "tug-of-war", 1).matches == () and played == []
-    clock.at = datetime(2026, 10, 23, 14, 10, tzinfo=UTC)
+    clock.at = T1 + LOAD_PATIENCE - timedelta(seconds=1)
     restarted.tick()
+    assert load_cup(store, "tug-of-war", 1).matches == () and played == []
+    clock.at = T1 + LOAD_PATIENCE
+    restarted.tick()
+    assert any("p2 (FetchError: could not read p2/tug: 404)" in line and "standing still" in line for line in said)
     cup = load_cup(store, "tug-of-war", 1)
     assert [e.user for e in cup.entrants] == ["p0", "p1", "p2", "p3", "p4", "p5"] and len(cup.matches) == 9
     duck = lambda i: "standing" if cup.entrants[i].user == "p2" else cup.entrants[i].user
@@ -333,6 +350,61 @@ def test_a_drawn_duck_whose_policy_no_longer_loads_stands_still_after_ten_minute
         (duck(m.a), duck(m.b)) for m in cup.matches]
     assert any("standing" in (duck(m.a), duck(m.b)) for m in cup.matches)
     assert np.array_equal(Standing().act(np.zeros(OBS_SIZE, np.float32)), np.zeros(NUM_JOINTS, np.float32))
+
+
+def test_a_policy_that_fails_once_hours_after_the_close_still_plays(tmp_path, no_physics, monkeypatch):
+    """A process whose first look at a cup comes hours after its close (a deploy across it, a crash while it played)
+    still gives every policy LOAD_PATIENCE, at the draw and at the matches."""
+    late = datetime(2026, 10, 23, 17, tzinfo=UTC)
+    drawn = LocalStore(tmp_path / "draw")
+    enter(drawn, 6)
+    cups = worker(drawn, Clock(late), load=flaky("p2"))
+    cups.tick()
+    assert load_cup(drawn, "tug-of-war", 1) is None
+    cups.now.at = late + timedelta(seconds=30)
+    cups.tick()
+    assert [e.user for e in load_cup(drawn, "tug-of-war", 1).entrants] == ["p0", "p1", "p2", "p3", "p4", "p5"]
+
+    resumed = LocalStore(tmp_path / "play")
+    enter(resumed, 6)
+    worker(Crashing(resumed, 2), Clock(T1)).tick()  # the draw lands, the matches do not
+    played = []
+    monkeypatch.setattr(cupworker, "play_match", lambda m, a, b, seeds, ratings, model=None:
+                        played.append((a, b)) or fake_play(m, a, b, seeds, ratings))
+    cups = worker(resumed, Clock(late), load=flaky("p2"))
+    cups.tick()
+    assert load_cup(resumed, "tug-of-war", 1).matches == () and played == []
+    cups.now.at = late + timedelta(seconds=30)
+    cups.tick()
+    assert len(load_cup(resumed, "tug-of-war", 1).matches) == 9
+    assert "p2" in {duck for pair in played for duck in pair} and not any(isinstance(d, Standing) for p in played for d in p)
+
+
+def test_cups_whose_closes_passed_while_the_space_was_down_are_drawn_as_at_their_close_and_aired_in_order(
+        tmp_path, no_physics):
+    store, clock = LocalStore(tmp_path), Clock(datetime(2026, 10, 30, 15, 1, tzinfo=UTC))
+    enter(store, 6)
+    store.append(make_record(run_id="R6", event_id="tug-of-war", user="p0", score=9.0,
+                             submitted_at="2026-10-25T09:00:00Z"), b"t")
+    store.append(make_record(run_id="R7", event_id="tug-of-war", user="p6", score=0.5,
+                             submitted_at="2026-10-26T09:00:00Z"), b"t")
+    cups = worker(store, clock)
+    cups.tick()
+    first, second = load_cup(store, "tug-of-war", 1), load_cup(store, "tug-of-war", 2)
+    assert [e.run_id for e in first.entrants] == ["R0", "R1", "R2", "R3", "R4", "R5"]
+    assert [e.run_id for e in second.entrants] == ["R6", "R1", "R2", "R3", "R4", "R5", "R7"]
+    assert len(first.matches) == 9 and len(second.matches) == 12
+    render(store, 1)
+    render(store, 2)
+    cups.tick()
+    first = load_cup(store, "tug-of-war", 1)
+    assert first.order["starts_at"] == "2026-10-30T15:11:00Z" and load_cup(store, "tug-of-war", 2).order is None
+    clock.at = ends_at(first) - timedelta(seconds=1)
+    cups.tick()
+    assert load_cup(store, "tug-of-war", 2).order is None
+    clock.at = ends_at(first)
+    cups.tick()
+    assert load_cup(store, "tug-of-war", 2).order["starts_at"] == "2026-10-30T17:00:00Z"
 
 
 def test_too_few_entrants_skip_the_week(tmp_path, no_physics):

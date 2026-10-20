@@ -41,7 +41,7 @@ from .trace import encode
 
 # An order fixed late still leaves the live this long to lay the show before it starts.
 ORDER_LEAD = timedelta(minutes=10)
-# How long after the close an entrant's policy may fail to load before the cup goes on without it.
+# How long a policy may fail to load, from this process's first try at a cup's step, before the cup goes on without it.
 LOAD_PATIENCE = timedelta(minutes=10)
 # A match clip that failed is launched again this often, as long as it stays failed.
 CLIP_RETRY = timedelta(minutes=10)
@@ -159,6 +159,7 @@ class CupWorker:
         self.log = log
         self.show = show
         self._relaunched: dict[str, datetime] = {}  # match id -> when its failed clip was last launched again
+        self._tried: dict[tuple[str, int, str], datetime] = {}  # (event, number, "draw" | "play") -> first try here
         self._stopped = threading.Event()
 
     def tick(self) -> None:
@@ -194,9 +195,12 @@ class CupWorker:
             if cup.order is None:
                 self._schedule(cup, now)
 
-    def _load(self, manifest: Manifest, number: int, entrants: Iterable[Entrant], now: datetime) -> dict | None:
+    def _load(self, manifest: Manifest, number: int, step: str, entrants: Iterable[Entrant],
+              now: datetime) -> dict | None:
         """Each entrant's policy by run id, leaving out those that fail; None while one fails within LOAD_PATIENCE of
-        the close, so a Hub that is down for a moment costs nobody their place."""
+        this process's first try at the step, so a Hub away for a moment costs nobody their place, however long after
+        the close the process first looks (a deploy across it, a crash while the cup played)."""
+        first_try = self._tried.setdefault((manifest.id, number, step), now)
         policies, missing = {}, []
         for entrant in entrants:
             try:
@@ -205,17 +209,18 @@ class CupWorker:
                 missing.append(f"{entrant.user} ({type(exc).__name__}: {exc})")
         if not missing:
             return policies
-        if now < cup_times(manifest.cup, number)[0] + LOAD_PATIENCE:
+        if now < first_try + LOAD_PATIENCE:
             self.log(f"cups: {manifest.id} #{number} waits for {', '.join(missing)}")
             return None
-        self.log(f"cups: {manifest.id} #{number} goes on without {', '.join(missing)}")
+        self.log(f"cups: {manifest.id} #{number} goes on without {', '.join(missing)}" if step == "draw" else
+                 f"cups: {manifest.id} #{number} plays {', '.join(missing)} standing still: drawn, they keep their place")
         return policies
 
     def _draw(self, manifest: Manifest, number: int, now: datetime) -> tuple[Cup | None, dict | None]:
         close_at, premiere_at = cup_times(manifest.cup, number)
         withdrawn = frozenset(w.run_id for w in self.store.withdrawals() if w.withdrawn_at <= iso(close_at))
         found = entrants_at(self.store.runs(manifest.id), withdrawn, close_at)
-        policies = self._load(manifest, number, found, now)
+        policies = self._load(manifest, number, "draw", found, now)
         if policies is None:
             return None, None
         entrants = tuple(e for e in found if e.run_id in policies)
@@ -233,7 +238,7 @@ class CupWorker:
         write), they are loaded again under the same patience. The draw is frozen: a duck whose policy no longer loads
         keeps its place and plays standing still, rather than holding the cup forever."""
         if policies is None:
-            policies = self._load(manifest, cup.number, cup.entrants, now)
+            policies = self._load(manifest, cup.number, "play", cup.entrants, now)
             if policies is None:
                 return None
         cup, files = compute_matches(manifest, cup, lambda e: policies.get(e.run_id, Standing()))
