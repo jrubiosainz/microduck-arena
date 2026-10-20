@@ -118,10 +118,11 @@ export function cutPit(floor, { pit_m, width_m }) {
 
 const UP = new Vector3(0, 1, 0);
 
-/** The string, 2 mm thick, with a red ribbon hanging at its middle; `update` ties it to two MJCF ends. */
+/** The string, a 4 mm rope in ink (it reads against the cyan rail and the stands behind it), with a red
+ * ribbon hanging at its middle; `update` ties it to two MJCF ends. */
 export function buildString() {
   const group = new Group();
-  const rope = new Mesh(new CylinderGeometry(0.001, 0.001, 1, 6), flat(PALETTE.paper));
+  const rope = new Mesh(new CylinderGeometry(0.002, 0.002, 1, 6), flat(PALETTE.ink));
   rope.name = "string";
   const ribbon = new BoxGeometry(0.012, 0.05, 0.003);
   ribbon.translate(0, -0.025, 0);

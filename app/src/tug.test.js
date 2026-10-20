@@ -1,6 +1,7 @@
 import { PerspectiveCamera, Raycaster, Vector3 } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { OVERRUN } from "./course.js";
+import { PALETTE, colour } from "./palette.js";
 import { buildGym } from "./gym.js";
 import { TRACE_WIDTH } from "./replay.js";
 import {
@@ -69,6 +70,11 @@ describe("the tug drawn", () => {
     [0, 0.15, 0].forEach((v, i) => expect(rope.position.toArray()[i]).toBeCloseTo(v, 9));
     expect(new Vector3(0, 1, 0).applyQuaternion(rope.quaternion).x).toBeCloseTo(1, 9);
     expect(string.group.getObjectByName("marker").position.toArray()).toEqual(rope.position.toArray());
+  });
+  it("makes the string a 4 mm rope in ink, dark against the cyan rail and the stands behind it", () => {
+    const rope = buildString().group.getObjectByName("string");
+    expect(rope.geometry.parameters.radiusTop * 2).toBeCloseTo(0.004, 9);
+    expect(rope.material.color.equals(colour(PALETTE.ink))).toBe(true);
   });
   it("reads the winch's pull on its dial", () => {
     const fillText = vi.fn();
