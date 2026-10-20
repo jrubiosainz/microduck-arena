@@ -1698,9 +1698,9 @@ it("lists the cups a player played and how far they went, each the way to its pa
 
 - [ ] **Step 2: Build the site.** `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus/app && npm run build`
 
-- [ ] **Step 3: Enter six ducks into a scratch store.**
-  - **Policies.** Plan B (`docs/superpowers/plans/2026-10-19-versus-b-tug-recipe.md`) names where its intermediate ONNX exports land. If any exist, take up to six from different training steps. Otherwise use `arena/assets/policies/BEST_alpha_walking.onnx` six times.
-  - **One call per duck,** with users `nico`, `ann`, `bob`, `cat`, `dan`, `eve` and liveries cycling `classic`, `charcoal`, `purple`, `blue`:
+- [ ] **Step 3: Enter four ducks into a scratch store** (four entrants: one group, six matches and a final; enough to show every page and the clip without hours of local renders).
+  - **Policies.** Four exports from different trainings in `/Users/nicolasrabault/Projects/HuggingFace/microduck-challenges/.claude/worktrees/tug-of-war/logs/tug_of_war/onnx/`. Otherwise use `arena/assets/policies/BEST_alpha_walking.onnx` four times.
+  - **One call per duck,** with users `nico`, `ann`, `bob`, `cat` and liveries `classic`, `charcoal`, `purple`, `blue`:
 
     `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus && uv run --no-config --frozen arena score <onnx> --event tug-of-war --user <user> --name <name> --livery <livery> --store <scratch>/cup-store`
 
@@ -1725,21 +1725,20 @@ print(len(cup.matches), cup.order and cup.order["starts_at"])
 ```
 
   - Run `cd …/versus && uv run --no-config --frozen python <scratch>/rehearse.py <scratch>/cup-store 2026-10-30T15:01:00+00:00`.
-  - Expected: nine `owed tug-of-war-0001-00N` lines, then `9 None`. Note the wall time of the real physics.
+  - Expected: seven `owed tug-of-war-0001-00N` lines (`000`–`005` the group, `006` the final), then `7 None`. Note the wall time of the real physics.
 
-- [ ] **Step 5: Render every match clip on this Mac.** Make one foreground call per match, `timeout: 600000` (about 8 min each):
-
-  `cd …/versus && uv run --no-config --frozen arena clip tug-of-war-0001-00N --store <scratch>/cup-store`
-
+- [ ] **Step 5: Render two match clips on this Mac, and stand in for the other five.** Two renders show all a render can get wrong; more would only cost hours.
+  - **Render** `tug-of-war-0001-002` (the third match: Plan D's show rehearsal airs it) and the final `tug-of-war-0001-006` (its match page plays it). **The controller renders, not a subagent** (no subagent waits on a background run): `cd …/versus && uv run --no-config --frozen arena clip <id> --store <scratch>/cup-store`, both with `run_in_background` at once, each awaited by a Monitor until-loop on its `clip.json` (Plan A measured ~1.6 s a frame here).
   - **Expected output:** `landscape: <s> s, …`. A match of three full bouts gives 67.08 s, one won in the pit gives less.
   - **Frames to look at.** Pull them with `ffmpeg -ss <t> -i <scratch>/cup-store/clips/<id>/landscape.mp4 -frames:v 1 <scratch>/<id>-<t>.png` at the intro (1 s), mid-bout and the outro, and look at them. Check for:
     - the title card "Tug of War · Cup #1" over "<stage> · A vs B";
     - the score bug changing after each bout;
     - both ducks on the rope;
     - the "X wins 2–1" stamp.
-  - **Timing.** Read the `timing.bouts` in `clip.json`.
+  - **Timing.** Read the `timing.bouts` in both `clip.json`s.
+  - **The five others** (`000`, `001`, `003`, `004`, `005`): `<scratch>/stub_clips.py <scratch>/cup-store` starts `arena.cli._app_on_loopback(store, reveal_all=True)`, opens each `clip.html?match=<id>&layout=landscape&frame=0` with `arena.recorder`'s `Chrome` and `_open`'s steps, reads `window.clip.plan`, saves a `Page.captureScreenshot` (`tab.send`) after `window.clip.draw(plan.frames - 30)` (look at each: both ducks, the bug, the "X wins" stamp), and stores with `put_clip` a `clip.json` alone: `{"run_id": <id>, "version": "stub", "layouts": {"landscape": {"seconds": plan.seconds, "timing": {"bouts": plan.bouts}}}}` (what the worker and Plan D's `match_footage` read; no mp4).
 
-- [ ] **Step 6: Fix the order.** Run `rehearse.py` at `2026-10-30T15:40:00+00:00`. Expected: `9 2026-10-30T17:00:00Z`.
+- [ ] **Step 6: Fix the order.** Run `rehearse.py` at `2026-10-30T15:40:00+00:00`. Expected: `7 2026-10-30T17:00:00Z`.
 
 - [ ] **Step 7: Serve at a fake time and screenshot.** Write `<scratch>/serve_at.py`. It sets `routes_cups.now = lambda: <argv time>`, then calls `uvicorn.run(create_app(ArenaConfig.from_env(store_dir=<argv store>, dev_user="nico")), port=<argv port>)`.
   - **For each time:**
@@ -1748,10 +1747,10 @@ print(len(cup.matches), cup.order and cup.order["starts_at"])
     - look at the PNG;
     - stop the server.
   - **Times:**
-    - `2026-10-30T16:59:00+00:00`: the `ready` countdown, the six entrants by rating, no groups;
+    - `2026-10-30T16:59:00+00:00`: the `ready` countdown, the four entrants by rating, no groups;
     - `2026-10-30T17:01:30+00:00`: airing, the first group match(es) with results and tables counting only them, the knockout "To be decided", a "Watch it live" link;
-    - `2026-10-30T18:30:00+00:00`: the champion, the tables, the full bracket, nine match links;
-    - at the same time, `#/m/tug-of-war-0001-008`: the final's page with the stadium, the bouts and the clip;
+    - `2026-10-30T18:30:00+00:00`: the champion, the table, the final, seven match links;
+    - at the same time, `#/m/tug-of-war-0001-006`: the final's page with the stadium, the bouts and the clip;
     - at the same time, `#/p/nico`: the cup line;
     - `2026-10-30T16:00:00+00:00`, `#/`: the tug card's corner "Cup #1 · in 1h 0m".
   - **Where they miss.** Where a screenshot misses the spec (section 5) or the Arena's look, fix it, add a test that pins the fix, re-run the files touched, and repeat the screenshot.
@@ -1760,7 +1759,7 @@ print(len(cup.matches), cup.order and cup.order["starts_at"])
 
 - [ ] **Step 9: Report** with:
   - the compute wall time;
-  - each clip's render wall time and length;
+  - the two clips' render wall time and length;
   - the screenshot paths;
   - anything left for the owner.
 

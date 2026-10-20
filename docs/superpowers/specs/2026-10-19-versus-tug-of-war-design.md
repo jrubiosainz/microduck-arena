@@ -17,7 +17,7 @@ Two things make a versus hard, and they shape this whole design:
   reproduces the Space's x86 numbers.
 
 The owner's answer, refined in this session: a **rating** every policy gets on its own the moment
-it is published (the pulling bench), and a **weekly cup** in which the entrants meet in groups
+it is published (bouts against a reference duck), and a **weekly cup** in which the entrants meet in groups
 then a knockout, simulated ahead and premiered on the live channel, where Peter & Ray call every
 match like a real sports broadcast.
 
@@ -43,7 +43,7 @@ match like a real sports broadcast.
    Peter & Ray at the desk with the cup's state on a big screen behind them, calling each match as
    it plays, with commentary that knows the tournament.
 4. The cup machinery (calendar, draw, groups, knockout, secrecy, premiere, cup page) is generic to
-   versus events; what is specific to the tug of war (string, pit, judge, bench) is the event's.
+   versus events; what is specific to the tug of war (string, pit, judge, reference duck) is the event's.
 
 ## Non-goals
 
@@ -143,7 +143,9 @@ another one.
   string and the marker. Landscape and vertical, on the HF Job, like every run.
 - **What it is not**: one fixed opponent is not the whole field; the rating says how well a duck
   pulls against the reference; the cup says who wins.
-- The pit bonus is the builder's, sized so a pit finish outweighs any marker margin.
+- The pit bonus is the builder's: 100 cm, since while the losing duck is out of the pit the marker
+  stands at most 65 cm (half the string plus half the pit) towards the winner, so a pit finish
+  outweighs any marker margin.
 
 ## 3. Training, and the first candidate
 
@@ -257,7 +259,8 @@ and in context for the stage the tournament is at." Wireframe accepted in sessio
 - **Written ahead**: every line of the show is written during the window between close and
   premiere and stored with the cup. The show plays from the store; it never waits on an LLM.
 - **After the premiere**: the cup's match clips join the channel's ordinary rotation until the
-  next cup; the bench clips are in the rotation all along, like race clips.
+  next cup; the rated runs' clips (each the entry's median bout against the reference duck) are in
+  the rotation all along, like race clips.
 
 ## Delivery: three stages, built in parallel, released together
 
@@ -269,7 +272,7 @@ budget limit (owner).
 1. **The tug and its rating.** The course (lane + pit), the string, the rating by bouts against the reference duck (first built as a winch bench, replaced 2026-10-20 night), the event with
    its rating, board, clips and commentary; the `tug_of_war` challenge recipe; the first
    candidate trained and published by the owner. The match itself (two ducks, the judge) is built
-   here too, since the cup needs it and the bench shares its course.
+   here too, since the cup and the rating both play it.
 2. **The weekly cup.** Calendar, entrants, draw, groups and knockout, computation, secrecy, match
    clips, cup page and match pages, points, the home countdown. Without stage 3, the premiere is
    the moment the page flips and the matches join the live rotation.
@@ -306,7 +309,8 @@ relock as usual, then the owner publishes the first candidate.
 
 ## My calls (the owner may object)
 
-- String ≈ 1 m taut, pit 0.3 m, bout limit 20 s, the marker rule, tie-breaks.
+- String ≈ 1 m taut, pit 0.3 m, the 100 cm pit bonus, the marker rule, tie-breaks (the 45 s bout
+  limit is the owner's).
 - A match's result is revealed when its clip has finished airing (its clip may load 30 s before it
   starts); the knockout bracket keeps group-mates apart until the final; on air, ducks are named by
   their policy names (with the player's handle when two entrants of a cup share one).

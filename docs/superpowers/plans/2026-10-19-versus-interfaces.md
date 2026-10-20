@@ -1,7 +1,7 @@
 # Versus — shared interfaces and constraints for the four plans
 
 **Spec:** `docs/superpowers/specs/2026-10-19-versus-tug-of-war-design.md` (approved by the owner
-2026-10-19). Four plans implement it and all build against the names below:
+2026-10-19, amended 2026-10-20 night). Six plans implement it and all build against the names below:
 
 | Plan | File | What it builds | Repo / branch |
 |---|---|---|---|
@@ -9,6 +9,8 @@
 | B | `2026-10-19-versus-b-tug-recipe.md` | the `tug_of_war` training recipe, the trainings, the first candidate, the publish CLI's line for a tug entry | microduck-challenges, branch `tug-of-war`; microduck_rl, branch `tug-publish-line` |
 | C | `2026-10-19-versus-c-weekly-cup.md` | calendar, entrants, secret, draw, groups, knockout, cup records, secrecy, match clips, cup and match pages, points, premiere on the live | arena, branch `versus` |
 | D | `2026-10-19-versus-d-cup-show.md` | the show: running order with the desk, play-by-play, tournament-aware writer, desk screen | arena, branch `versus` |
+| E | `2026-10-20-versus-e-reference-bouts.md` | the rating by five bouts against the reference duck, 45 s bouts, the winch removed | arena, branch `versus` |
+| F | `2026-10-20-versus-f-opponent-training.md` | training against a frozen opponent duck, the reference first; the publish line in cm | microduck-challenges, branch `tug-of-war`; microduck_rl, branch `tug-publish-line` |
 
 A section's names are owned by the plan that introduces them; a later plan uses them as written
 here. If a plan must change a name, it changes this file in the same commit.
@@ -21,7 +23,7 @@ here. If a plan must change a name, it changes this file in the same commit.
   "performance"; the cup's broadcast is the "show".
 - **Nothing leaves this Mac without the owner's yes**: no push, no wheel upload, no Space dataset
   write, no Hub publish. Exception granted by the owner on 2026-10-19: **HF Jobs trainings for
-  Plan B under the owner's account (Nico-robot) have no budget limit.** Everything is pushed
+  Plans B and F under the owner's account (Nico-robot) have no budget limit.** Everything is pushed
   together at the end (Plan D's last task lists the release steps; each needs the owner's yes).
 - **Order of execution:** A, then C, then D on one branch `versus` in one worktree. B starts once
   Plan A's Task 3 is committed (it names the commit B needs) and runs alongside, in the challenges
@@ -29,6 +31,11 @@ here. If a plan must change a name, it changes this file in the same commit.
   publish CLI in microduck_rl (worktree branch `tug-publish-line` from `challenge-recipe-publishing`);
   D's release pushes it before the challenges relock. Stages 2–3 never wait for a good policy: tests
   use the vendored walker and fakes, the local rehearsals use B's intermediate checkpoints.
+  **From 2026-10-20 night:** Plan F Task 1 (the winch out of the recipe) → Plan E Tasks 1–8 → Plan F
+  Tasks 2–8 (Task 7: trainings t8/t9 on HF Jobs, in the background) → while they train, Plan C
+  Tasks 8–14 → Plan D → Plan F Task 9 at release. E's Tasks 2 and 4 bring the challenges' pins along
+  in the same sitting (`BOUT_S = 45.0`; `compile_tug(EVENT)`, `tug_layout(EVENT.course)`), so F's
+  Tasks 2–9 call the one-argument forms.
 - **Settled by the owner (2026-10-20), no question to ask:** only the pit decides
   (a fall no longer loses: the earlier "a fall loses" ruling of the same day was reversed that
   evening, a downed duck stays in play and can be dragged in); HF Jobs trainings stay on l4x1; the first candidate's repo is
