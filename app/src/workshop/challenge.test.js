@@ -19,6 +19,9 @@ const STATUS = { arena: "https://arena.test", gpu: false, challenges: [
 const TALENT_CHALLENGE = { event: { id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", course: "stage",
   metric: "votes", rig: "legs", time_limit_s: 20, vote: { ballot_min: 2 } }, folder: "got_a_talent", task: "T",
   recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, knobs: [], running: 0 };
+const TUG_CHALLENGE = { event: { id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug",
+  metric: "mean_hold_force", rig: "legs", length_m: 4, pit_m: 0.3, bench: { top_n: 7 }, vote: null }, folder: "tug_of_war",
+  task: "W", recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, knobs: [], running: 0 };
 const account = { get: () => ({ phase: "in", user: "alice", canPay: true }), logIn: vi.fn(), check: vi.fn() };
 const TICKET = { id: "first", name: "first", where: "hf-jobs", state: "running", progress: null,
   started: "", run_id: null, dirty: false, checkpoints: [], best: null, published: null };
@@ -171,6 +174,18 @@ describe("a challenge's page", () => {
       route: { view: "challenge", event: "got-a-talent" } });
     expect(root.querySelector(".yours").textContent).toContain("timeline.json");
     expect(root.querySelector(".facts").textContent).toContain("open floor");
+  });
+
+  it("says how the Arena scores a race, and how it rates a tug on the bench", async () => {
+    const caveat = async (challenge) => {
+      const root = document.createElement("div");
+      await mountChallenge(root, { status: { ...STATUS, challenges: [challenge] }, account,
+        route: { view: "challenge", event: challenge.event.id } });
+      return root.querySelector(".racecaveat").firstChild.textContent;
+    };
+    expect(await caveat(STATUS.challenges[0])).toBe("The Arena races your duck at every speed of the sweep and keeps its best. ");
+    expect(await caveat(TUG_CHALLENGE)).toBe(
+      "The Arena rates your duck on the bench: five pulls against the winch, the mean force held, in newtons. ");
   });
 
   it("says so for a challenge that is not open here", async () => {

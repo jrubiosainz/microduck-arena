@@ -2,7 +2,7 @@
 // training, asked again every few seconds (the tickets fill in as checkpoints are saved and
 // evaluated). Only what changed is redrawn: what is typed in the form, and a focused ticket, stay.
 
-import { formatEventFacts, isStage } from "../format.js";
+import { formatEventFacts, isStage, isTug } from "../format.js";
 import { footer } from "../signage.js";
 import * as api from "./api.js";
 import { el } from "./dom.js";
@@ -49,7 +49,9 @@ function head(challenge, arena) {
     pair.append(el("dt", "", fact.label), el("dd", "", fact.value));
     facts.append(pair);
   }
-  const caveat = el("p", "racecaveat", event.metric === "votes" ? "" : "The Arena races your duck at every speed of the sweep and keeps its best. ");
+  const caveat = el("p", "racecaveat", event.metric === "votes" ? ""
+    : isTug(event) ? "The Arena rates your duck on the bench: five pulls against the winch, the mean force held, in newtons. "
+    : "The Arena races your duck at every speed of the sweep and keeps its best. ");
   const board = el("a", "help-link", "See the board on the Arena ↗");
   Object.assign(board, { href: `${arena}/#/e/${event.id}`, target: "_blank", rel: "noopener" });
   caveat.append(board);
