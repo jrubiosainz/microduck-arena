@@ -22,6 +22,7 @@ from .manifest import ManifestError, all_events, higher_wins, load_event
 from .policy import PolicyError, load_policy
 from .store import LocalStore, RunRecord, lone_cast, new_id
 from .timeline import TimelineError, load_troupe
+from .tug import SIDES, entry_side
 
 
 def _cmd_events(args) -> int:
@@ -47,12 +48,11 @@ def _print_sweep(result) -> None:
           f"{len(result.per_seed)} finished · replay from seed {result.trace_seed}")
 
 
-def _print_bench(result) -> None:
+def _print_rating(result) -> None:
     """The format Plan B's ledger reads: one line per seed, then the rating."""
-    for seed_result in result.per_seed:
-        went_out = f" at {seed_result.time_s:.2f} s" if seed_result.time_s is not None else ""
-        print(f"seed {seed_result.seed}: {seed_result.status:<8} {seed_result.force_n:.2f} N{went_out}")
-    print(f"rating: {result.score:.2f} N · replay from seed {result.trace_seed}")
+    for r in result.per_seed:
+        print(f"seed {r.seed}: {SIDES[entry_side(r.seed)]} {r.status:<8} {r.score_cm:+.1f} cm at {r.time_s:.2f} s")
+    print(f"rating: {result.score:.1f} cm · replay from seed {result.trace_seed}")
 
 
 def _print_stage(manifest, result, troupe, name: str | None) -> None:
@@ -88,7 +88,7 @@ def _cmd_score(args) -> int:
         return 1
     elif manifest.course.kind == "tug":
         result = evaluate(manifest, policy)
-        _print_bench(result)
+        _print_rating(result)
     else:
         result = evaluate(manifest, policy)
         _print_sweep(result)
@@ -136,7 +136,7 @@ def _cmd_board(args) -> int:
     print(f"{'#':<4}{'who':<16}{'policy':<20}{'rating' if rating else 'time':>10}{'seeds':>8}{cmd}")
     for row in rows:
         r = row.record
-        score = f"{r.score:>8.2f} N" if rating else f"{r.score:>9.3f}s"
+        score = f"{r.score:>7.1f} cm" if rating else f"{r.score:>9.3f}s"
         speed = "" if rating else f"{r.command_vx:>8.2f}m/s"
         print(f"{row.rank:<4}{r.user:<16}{r.policy_name:<20}"
               f"{score}{r.seeds_finished:>5}/{len(r.per_seed)}{speed}")

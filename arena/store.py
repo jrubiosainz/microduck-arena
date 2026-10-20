@@ -179,7 +179,7 @@ class RunRecord:
             score=raw["score"],
             seeds_finished=raw["seeds_finished"],
             per_seed=tuple(
-                SeedResult(seed=r["seed"], status=r["status"], time_s=r["time_s"], force_n=r.get("force_n"))
+                SeedResult(seed=r["seed"], status=r["status"], time_s=r["time_s"], score_cm=r.get("score_cm"))
                 for r in raw["per_seed"]
             ),
             trace_seed=raw["trace_seed"],

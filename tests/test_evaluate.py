@@ -11,7 +11,6 @@ from arena.evaluate import (
     evaluate,
     finalists,
     mean_finish_time,
-    mean_hold_force,
     pick_trace_seed,
     seed_row,
 )
@@ -19,7 +18,8 @@ from arena.golden import PLATFORM
 from arena.manifest import load_event
 from arena.policy import load_policy
 from arena.runner import run_once
-from arena.tug import BenchOutcome
+from arena.tug import BoutOutcome, reference_duck
+from tests.test_tug import bout_trace
 
 
 def _results(*pairs):
@@ -333,45 +333,41 @@ def test_an_unmeasured_platform_is_a_readable_refusal(monkeypatch):
     assert "BASELINES" in message
 
 
-def test_a_bench_rating_is_the_mean_force_held_over_the_seeds():
-    per_seed = (SeedResult(1, "pit", 21.7, 4.0), SeedResult(2, "held", None, 7.0))
-    assert mean_hold_force(per_seed, 30.0) == 5.5
-
-
 TUG = load_event("tug-of-war")
 
 
-def fake_bench(forces):
-    def run(manifest, policy, seed, model=None):
-        held = forces[seed] == 7.0
-        return BenchOutcome(seed, "held" if held else "pit", forces[seed], None if held else 20.0,
-                            np.full((1, 3, 21), seed, np.float32), np.zeros((1, 26, 21), np.float32), {"seed": seed})
-    return run
+def test_a_tug_is_rated_by_one_bout_a_seed_against_the_reference(monkeypatch):
+    entry, reference, played = object(), object(), []
+    bouts = {1: (1, "marker", -0.10, ()), 2: (1, "marker", -0.20, ()), 3: (1, "pit", -0.30, (1,)),
+             4: (0, "marker", 0.02, ()), 5: (0, "marker", 0.05, ())}
+    def fake(manifest, west, east, seed, model=None):
+        played.append((seed, west is entry, {id(west), id(east)} == {id(entry), id(reference)}))
+        loser, how, x, pit = bouts[seed]
+        return BoutOutcome(seed, loser, how, 45.0, bout_trace(x, pit), np.zeros((2, 26, 21)))
+    monkeypatch.setattr("arena.evaluate.reference_duck", lambda manifest: reference)
+    monkeypatch.setattr("arena.evaluate.compile_tug", lambda *args: "model")
+    monkeypatch.setattr("arena.evaluate.run_bout", fake)
+    result = evaluate(TUG, entry)
+    assert played == [(1, True, True), (2, False, True), (3, True, True), (4, False, True), (5, True, True)]
+    assert [s.status for s in result.per_seed] == ["won", "lost", "pit_won", "won", "lost"]
+    assert [s.score_cm for s in result.per_seed] == pytest.approx([10.0, -20.0, 130.0, 2.0, -5.0])
+    assert (result.score, result.trace_seed, result.seeds_finished) == (pytest.approx(23.4), 4, 5)
+    assert (result.command_vx, result.scan, result.trace.shape, result.settle.shape) == (-0.3, (), (2, 1, 21), (2, 26, 21))
 
 
-def test_a_bench_entry_is_rated_on_every_seed_and_replays_the_lower_median(monkeypatch):
-    monkeypatch.setattr("arena.evaluate.run_bench", fake_bench({1: 4.0, 2: 7.0, 3: 2.0, 4: 5.0, 5: 3.0}))
-    result = evaluate(TUG, object())
-    assert result.score == pytest.approx(4.2) and result.seeds_finished == 5 and result.scan == ()
-    assert [s.force_n for s in result.per_seed] == [4.0, 7.0, 2.0, 5.0, 3.0]
-    assert (result.trace_seed, result.bench, result.command_vx, result.trace[0, 0, 0]) == (1, {"seed": 1}, -0.3, 1.0)
+def test_the_reference_against_itself_wins_no_ground_to_speak_of():
+    result = evaluate(TUG, reference_duck(TUG))
+    assert abs(result.score) < 10.0 and not [s for s in result.per_seed if s.status.startswith("pit")]
+    assert result.trace.shape[0] == 2 and result.settle.shape == (2, 26, 21)
 
 
-def test_a_duck_that_holds_every_seed_scores_the_top_and_replays_seed_3(monkeypatch):
-    monkeypatch.setattr("arena.evaluate.run_bench", fake_bench(dict.fromkeys(range(1, 6), 7.0)))
-    result = evaluate(TUG, object())
-    assert (result.score, result.trace_seed, {s.status for s in result.per_seed}) == (7.0, 3, {"held"})
-
-
-def test_a_tug_takes_no_cast_and_rates_a_walker():
-    with pytest.raises(ValueError):
+def test_a_duck_that_walks_forward_drops_itself_in_and_rates_below_minus_the_bonus():
+    with pytest.raises(ValueError, match="against its reference duck"):   # a tug takes no cast
         evaluate(TUG, object(), cast=())
     result = evaluate(TUG, load_policy(ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"))
-    assert 0.0 <= result.score <= 7.0 and len(result.per_seed) == 5 and result.trace.shape[0] == 1
-    assert result.bench["top_n"] == 7.0
+    assert {s.status for s in result.per_seed} == {"pit_lost"} and result.score < -TUG.rating.pit_bonus_cm
 
 
-def test_a_seed_row_adds_a_force_only_on_the_bench():
-    assert seed_row(SeedResult(1, "finish", 12.5)) == {"seed": 1, "status": "finish", "time_s": 12.5}
-    assert seed_row(SeedResult(2, "held", None, 7.0)) == {"seed": 2, "status": "held", "time_s": None, "force_n": 7.0}
-    assert seed_row(SeedResult(3, "pit", 21.7, 4.77)) == {"seed": 3, "status": "pit", "time_s": 21.7, "force_n": 4.77}
+def test_a_seed_row_carries_centimetres_only_on_a_tug():
+    assert seed_row(SeedResult(2, "won", 45.0, 12.5)) == {"seed": 2, "status": "won", "time_s": 45.0, "score_cm": 12.5}
+    assert seed_row(SeedResult(1, "finish", 4.9)) == {"seed": 1, "status": "finish", "time_s": 4.9}

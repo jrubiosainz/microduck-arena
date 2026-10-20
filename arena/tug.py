@@ -24,10 +24,13 @@ import numpy as np
 
 from .constants import CTRL_DT, TRACE_WIDTH
 from .course import WINCH, compile_tug, string_offset
+from .assets import ASSET_ROOT
 from .manifest import Bench, Manifest
+from .policy import load_policy
 from .runner import _reset_by_mujoco, _start
 
 PIT_DROP_M = 0.05  # a trunk below z = -PIT_DROP_M is in the pit
+SIDES = ("west", "east")
 
 
 def string_ends(trace: np.ndarray, offset) -> np.ndarray:
@@ -165,3 +168,32 @@ def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutco
             return BoutOutcome(
                 seed, loser, how, (step + 1) * CTRL_DT, frames[:, : step + 1].copy(), settle
             )
+
+
+def reference_duck(manifest: Manifest):
+    """The frozen duck every tug rating is bouts against."""
+    return load_policy(ASSET_ROOT / "policies" / manifest.rating.reference)
+
+
+def entry_side(seed: int) -> int:
+    """The entry's side in a seed's bout: west (0) on odd seeds, east (1) on even."""
+    return (seed - 1) % 2
+
+
+def bout_status(outcome: BoutOutcome, entry: int) -> str:
+    """A bout as the entry saw it: won, lost or draw, with a pit_ prefix when the pit decided."""
+    if outcome.loser is None:
+        return "draw"
+    status = "lost" if outcome.loser == entry else "won"
+    return f"pit_{status}" if outcome.how == "pit" else status
+
+
+def bout_score_cm(outcome: BoutOutcome, entry: int, pit_bonus_cm: float, offset) -> float:
+    """The entry's score for a bout: the centimetres of ground it won, the marker's distance from
+    the centre line towards its opponent's side, plus the pit bonus when only the opponent is in."""
+    if outcome.how == "draw":  # the centre line exactly, or a step MuJoCo reset: nobody's ground
+        return 0.0
+    x = float(marker_x(outcome.trace[:, -1:], offset)[0])
+    last = outcome.trace[:, -1]
+    pits = int(in_pit(last[1 - entry])) - int(in_pit(last[entry]))
+    return 100.0 * (-x if entry == 0 else x) + pit_bonus_cm * pits

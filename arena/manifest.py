@@ -12,6 +12,7 @@ from datetime import date, time
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from .assets import ASSET_ROOT
 from .constants import CMD_SIZE, CTRL_DT
 
 EVENTS_DIR = Path(__file__).parent / "events"
@@ -20,11 +21,11 @@ RIGS = ("legs", "rollers")
 
 # What KIND of event this is, for the front page's label. A race is timed over
 # a course, a showcase is judged by vote rather than measured at all, a versus
-# event rates a duck by the force it holds against a pulling bench.
+# event rates a duck in bouts against a reference duck.
 CATEGORIES = {"race", "showcase", "versus"}
-METRICS = ("mean_finish_time", "votes", "mean_hold_force")
+METRICS = ("mean_finish_time", "votes", "mean_ground_cm")
 # Every other metric is a time or a count of votes: lower, or the vote's own rule.
-HIGHER_WINS = frozenset({"mean_hold_force"})
+HIGHER_WINS = frozenset({"mean_ground_cm"})
 
 # What an entry must be, in the policy manifest's own words
 # (mjlab_microduck.publish.manifest.KINDS): `perpetual` runs until told
@@ -89,6 +90,14 @@ class Bench:
     top_n: float
     jerk_n: float  # amplitude of each jerk sine
     jerk_hz: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class Rating:
+    """How a tug rates a duck: one bout a seed against the reference duck, a pit worth `pit_bonus_cm`."""
+
+    reference: str  # a file of arena/assets/policies
+    pit_bonus_cm: float
 
 
 @dataclass(frozen=True)
@@ -249,8 +258,9 @@ class Manifest:
     # whether the VOTE badge and the vote button exist at all.
     vote: Vote | None = None
     clip: ClipConfig = ClipConfig()
-    # Only a tug has them: the bench its rating is held against, the rules of its bouts.
+    # Only a tug has them: the bench, the rating's reference duck, the rules of its bouts.
     bench: Bench | None = None
+    rating: Rating | None = None
     bout: BoutRules | None = None
     # Only a versus event has one.
     cup: CupRules | None = None
@@ -365,6 +375,17 @@ def _bench(raw: dict) -> Bench:
     )
 
 
+def _rating(raw: dict, path: Path) -> Rating:
+    _refuse_unknown(raw, {"reference", "pit_bonus_cm"}, "[rating]")
+    name = str(_require(raw, "reference", "[rating]"))
+    if Path(name).name != name or not (ASSET_ROOT / "policies" / name).is_file():
+        raise ManifestError(f"{path}: [rating] reference {name!r} is no policy in arena/assets/policies")
+    bonus = float(_require(raw, "pit_bonus_cm", "[rating]"))
+    if bonus <= 0:
+        raise ManifestError(f"{path}: [rating] pit_bonus_cm must be positive")
+    return Rating(name, bonus)
+
+
 def _bout(raw: dict, path: Path) -> BoutRules:
     _refuse_unknown(raw, {"time_limit_s", "bouts_to_win", "max_bouts"}, "[bout]")
     rules = BoutRules(
@@ -457,12 +478,12 @@ def load_manifest(path: Path) -> Manifest:
     perturb = _require(start_raw, "perturbation", "[start]")
     term_raw = _require(raw, "termination", str(path))
 
-    if (kind == "tug") != (category == "versus") or (kind == "tug") != (metric == "mean_hold_force"):
+    if (kind == "tug") != (category == "versus") or (kind == "tug") != (metric == "mean_ground_cm"):
         raise ManifestError(
-            f"{path}: [course] kind 'tug' goes with category 'versus' and metric 'mean_hold_force'"
+            f"{path}: [course] kind 'tug' goes with category 'versus' and metric 'mean_ground_cm'"
         )
-    if kind != "tug" and ("bench" in raw or "bout" in raw):
-        raise ManifestError(f"{path}: only a tug takes [bench] and [bout]")
+    if kind != "tug" and ("bench" in raw or "rating" in raw or "bout" in raw):
+        raise ManifestError(f"{path}: only a tug takes [bench], [rating] and [bout]")
 
     if (category == "versus") != ("cup" in raw):
         raise ManifestError(
@@ -470,18 +491,23 @@ def load_manifest(path: Path) -> Manifest:
             else f"{path}: [cup] is for a versus event"
         )
 
-    bench = bout = None
+    bench = rating = bout = None
     if kind == "tug":
         if rig != "legs":
             raise ManifestError(f"{path}: a tug is for rig 'legs'")
         for section in ("sweep", "vote"):
             if section in raw:
                 raise ManifestError(f"{path}: a tug takes no [{section}]")
-        for section in ("bench", "bout"):
+        for section in ("bench", "rating", "bout"):
             if section not in raw:
                 raise ManifestError(f"{path}: a tug needs [{section}]")
         course, sweep = _tug(course_raw), None
-        bench, bout = _bench(raw["bench"]), _bout(raw["bout"], path)
+        bench, rating, bout = _bench(raw["bench"]), _rating(raw["rating"], path), _bout(raw["bout"], path)
+        if bout.time_limit_s != float(_require(raw, "time_limit_s", str(path))):
+            raise ManifestError(
+                f"{path}: a tug's time_limit_s is its bouts': "
+                f"{raw['time_limit_s']} against [bout]'s {bout.time_limit_s}"
+            )
     elif kind == "stage":
         _refuse_unknown(course_raw, {"kind", "size_m", "max_ducks"}, "[course]")
         if len(seeds) != 1:
@@ -553,6 +579,7 @@ def load_manifest(path: Path) -> Manifest:
         vote=vote,
         clip=_clip(raw.get("clip"), "[clip]"),
         bench=bench,
+        rating=rating,
         bout=bout,
         cup=_cup(raw["cup"], path) if "cup" in raw else None,
     )

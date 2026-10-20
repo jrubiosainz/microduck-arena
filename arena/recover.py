@@ -249,7 +249,7 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
             store.append(record, trace_codec.encode(result.trace, result.settle))
             restored.append(record)
             if on_event:
-                score = f"{result.score:.2f} N" if higher_wins(event.id) else f"{result.score:.3f}s"
+                score = f"{result.score:.1f} cm" if higher_wins(event.id) else f"{result.score:.3f}s"
                 on_event(f"recovered {candidate.repo_id} on {event.id}: {score}")
         except Exception as exc:  # noqa: BLE001
             # Deliberately broad, and reported rather than hidden. A recovery

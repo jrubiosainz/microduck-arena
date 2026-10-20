@@ -4,8 +4,8 @@ title        = "Tug of War"
 category     = "versus"
 kind         = "perpetual"
 rig          = "legs"
-time_limit_s = 30.0          # the bench's timed length, after the settle
-metric       = "mean_hold_force"
+time_limit_s = 45.0          # a bout's timed length, after the settle, as [bout] says
+metric       = "mean_ground_cm"
 seeds        = [1, 2, 3, 4, 5]
 
 [course]
@@ -34,6 +34,10 @@ yaw_deg   = 2.0
 fall_gravity_z = -0.5
 fall_hold_s    = 0.3
 
+[rating]                      # one bout a seed against the reference duck, the entry west on odd seeds
+reference    = "tug-reference-t7-250.onnx"   # in arena/assets/policies/
+pit_bonus_cm = 100.0          # a pit outweighs any marker margin: 65 cm at most
+
 [bench]
 ramp_n_per_s = 0.25
 top_n        = 7.0
@@ -41,12 +45,12 @@ jerk_n       = 0.4
 jerk_hz      = [0.7, 1.9]
 
 [bout]
-time_limit_s = 20.0
+time_limit_s = 45.0
 bouts_to_win = 2
 max_bouts    = 5
 
 [clip]
-tape_max_s = 30.0
+tape_max_s = 45.0
 sounds     = ["crowd", "verdict"]
 
 [cup]

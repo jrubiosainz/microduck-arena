@@ -153,13 +153,13 @@ def test_the_evaluator_and_its_threads_stop_with_the_app(checkout, fakes, hub):
     assert app.state.workshop.stopping.is_set()
 
 
-def test_a_tug_checkpoint_is_rated_on_the_bench(checkout, fakes, hub):
+def test_a_tug_checkpoint_is_rated_against_the_reference(checkout, fakes, hub):
     add_tug(checkout)
     client = reopen(checkout, hub)
     run = make_run(checkout, "first", checkpoints=(1,), task="Mjlab-TugOfWar-MicroDuck")
     assert evaluate_next(state(client)) is True
     body = client.get(f"/api/workshop/challenges/tug-of-war/jobs/{run.name}/checkpoints/1").json()
     assert body["seeds_total"] == 5
-    assert all("force_n" in seed for seed in body["per_seed"])
-    assert body["bench"]["top_n"] == 7.0
-    assert body["ducks"] == 1  # the fake export hands over the walker
+    assert all("score_cm" in seed for seed in body["per_seed"])
+    assert "bench" not in body
+    assert body["ducks"] == 2  # the fake export hands over the walker

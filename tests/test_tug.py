@@ -12,12 +12,19 @@ from arena.course import compile_tug, string_offset
 from arena.manifest import BoutRules, load_event
 from arena.policy import load_policy
 from arena.runner import _Addresses, _record
+from tests.test_assets import REFERENCE_SHA256
 from arena.tug import (
+    SIDES,
+    BoutOutcome,
     _verdict,
     bench_force,
     bench_profile,
+    bout_score_cm,
+    bout_status,
+    entry_side,
     in_pit,
     marker_x,
+    reference_duck,
     run_bench,
     run_bout,
     string_ends,
@@ -138,3 +145,24 @@ def test_a_solver_explosion_in_a_bout_is_a_draw_and_its_frame_is_left_out(monkey
     out = run_bout(SHORT, _ZeroPolicy(), _ZeroPolicy(), 1)
     assert (out.loser, out.how, out.trace.shape) == (None, "draw", (2, 10, 21)) and out.time_s == pytest.approx(11 * CTRL_DT)
     np.testing.assert_array_equal(out.trace, whole.trace[:, :10])
+
+
+def bout_trace(x, pit=()):
+    """One frame of a bout whose marker stands x m east of the centre line; the ducks in `pit` below the floor."""
+    trace = np.array([[frame((-0.6 + x, 0, 0.1), WEST)], [frame((0.6 + x, 0, 0.1), EAST)]])
+    for k in pit:
+        trace[k, 0, 2] = -0.1
+    return trace
+
+
+def test_a_bout_scores_the_ground_the_entry_won_and_the_pit_either_way():
+    out = lambda loser, how, x, pit=(): BoutOutcome(1, loser, how, 45.0, bout_trace(x, pit), np.zeros((2, 26, 21)))
+    assert [bout_score_cm(out(1, "marker", -0.1), e, 100.0, OFFSET) for e in (0, 1)] == pytest.approx([10.0, -10.0])
+    assert [bout_score_cm(out(1, "pit", -0.1, (1,)), e, 100.0, OFFSET) for e in (0, 1)] == pytest.approx([110.0, -110.0])
+    assert bout_score_cm(out(1, "marker", -0.1, (0, 1)), 0, 100.0, OFFSET) == pytest.approx(10.0)   # both in: no bonus
+    drawn = BoutOutcome(1, None, "draw", 0.02, np.zeros((2, 0, 21)), np.zeros((2, 26, 21)))        # reset before a frame
+    assert bout_score_cm(drawn, 0, 100.0, OFFSET) == 0.0 and bout_status(drawn, 1) == "draw"
+    assert [bout_status(out(1, "pit", 0.0, (1,)), e) for e in (0, 1)] == ["pit_won", "pit_lost"]
+    assert [bout_status(out(0, "marker", 0.1), e) for e in (0, 1)] == ["lost", "won"]
+    assert [entry_side(s) for s in (1, 2, 3, 4, 5)] == [0, 1, 0, 1, 0] and SIDES == ("west", "east")
+    assert reference_duck(TUG).sha256 == REFERENCE_SHA256
