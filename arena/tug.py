@@ -72,19 +72,13 @@ def bench_force(profile: dict, t_s: float) -> float:
     return min(profile["top_n"], max(0.0, pull))
 
 
-def _out(duck: np.ndarray) -> str | None:
-    """How a duck's (frames, 21) trace so far has it out at its last frame: "pit" or None."""
-    return "pit" if in_pit(duck[-1]) else None
-
-
 def _verdict(trace: np.ndarray, offset, final: bool) -> tuple[int | None, str] | None:
     """The bout's verdict after the last frame of `trace`, (2, frames, 21): (loser, how), or None
     while it goes on."""
-    outs = [_out(trace[k]) for k in (0, 1)]
-    if outs.count(None) == 1:
-        loser = 0 if outs[0] else 1
-        return loser, outs[loser]
-    if all(outs) or final:
+    inside = [in_pit(trace[k, -1]) for k in (0, 1)]
+    if inside.count(True) == 1:
+        return inside.index(True), "pit"
+    if all(inside) or final:
         x = marker_x(trace[:, -1:], offset)[0]
         return (1, "marker") if x < 0 else (0, "marker") if x > 0 else (None, "draw")
     return None
@@ -122,11 +116,10 @@ def run_bench(manifest: Manifest, policy, seed: int, model=None) -> BenchOutcome
                 seed, "pit", force, (step + 1) * CTRL_DT, frames[:, :step].copy(), settle, profile
             )
         sim.record(frames[:, step])
-        how = _out(frames[0, : step + 1])
-        if how is not None:
+        if in_pit(frames[0, step]):
             return BenchOutcome(
                 seed,
-                how,
+                "pit",
                 force,
                 (step + 1) * CTRL_DT,
                 frames[:, : step + 1].copy(),
