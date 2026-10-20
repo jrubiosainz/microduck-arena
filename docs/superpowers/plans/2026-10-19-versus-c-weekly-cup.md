@@ -1489,7 +1489,7 @@ def _stand_by(self, show):
 
 ```js
 const event = { id: "tug-of-war", title: "Tug of War", metric: "mean_ground_cm" };
-const four = ["Tank", "Lean", "Grip", "Sway"].map((name, i) => ({ user: `p${i}`, policy_name: name, livery: "classic", rating: 5 - i, run_id: `R${i}` }));
+const four = ["Tank", "Lean", "Grip", "Sway"].map((name, i) => ({ user: `p${i}`, policy_name: name, livery: "classic", rating: 50 - 5 * i, run_id: `R${i}` }));
 const open = { event, number: 1, open: 1, min_entrants: 4, state: "open", close_at: "2026-10-30T15:00:00Z",
   premiere_at: "2026-10-30T17:00:00Z", starts_at: null, entrants: four };
 const done = (i, a, b) => ({ match_id: `tug-of-war-0001-00${i}`, index: i, round: i < 6 ? "group" : "final", group: i < 6 ? "A" : null,
