@@ -5,7 +5,7 @@
 
 | Plan | File | What it builds | Repo / branch |
 |---|---|---|---|
-| A | `2026-10-19-versus-a-tug-and-bench.md` | the tug course, string, winch, bench event, bout and match physics, ranking direction, bench pages and clips | arena, branch `versus` |
+| A | `2026-10-19-versus-a-tug-and-bench.md` | the tug course, string, bout and match physics, ranking direction, the tug's pages and clips (Plan E replaced its winch bench by the rating against the reference duck) | arena, branch `versus` |
 | B | `2026-10-19-versus-b-tug-recipe.md` | the `tug_of_war` training recipe, the trainings, the first candidate, the publish CLI's line for a tug entry | microduck-challenges, branch `tug-of-war`; microduck_rl, branch `tug-publish-line` |
 | C | `2026-10-19-versus-c-weekly-cup.md` | calendar, entrants, secret, draw, groups, knockout, cup records, secrecy, match clips, cup and match pages, points, premiere on the live | arena, branch `versus` |
 | D | `2026-10-19-versus-d-cup-show.md` | the show: running order with the desk, play-by-play, tournament-aware writer, desk screen | arena, branch `versus` |
@@ -245,6 +245,11 @@ PIT_DROP_M = 0.05      # a trunk below z = -PIT_DROP_M is in the pit
 def string_ends(trace: np.ndarray, offset) -> np.ndarray   # (ducks, frames, 21) -> (ducks, frames, 3), from trunk pos + quat
 def marker_x(trace: np.ndarray, offset) -> np.ndarray     # (2, frames, 21) -> (frames,), midpoint x of the two string ends
 def in_pit(frame: np.ndarray) -> bool                       # frame (21,): trunk z < -PIT_DROP_M
+SIDES = ("west", "east")
+def reference_duck(manifest: Manifest) -> Policy            # load_policy(ASSET_ROOT / "policies" / manifest.rating.reference)
+def entry_side(seed: int) -> int                            # 0 (west) on an odd seed, 1 (east) on an even one
+def bout_status(outcome: BoutOutcome, entry: int) -> str    # "won" | "lost" | "pit_won" | "pit_lost" | "draw"
+def bout_score_cm(outcome: BoutOutcome, entry: int, pit_bonus_cm: float, offset) -> float
 
 # Only the pit decides (owner, 2026-10-20 evening): a duck is OUT when, after a control step, its
 # trunk is in the pit (in_pit of its last frame, z < -PIT_DROP_M). A duck knocked over, sitting or
@@ -298,6 +303,8 @@ def play_match(manifest: Manifest, a, b, seeds: Sequence[int], ratings: tuple[fl
 SeedResult(seed, status, time_s, score_cm: float | None = None)
 def mean_ground_cm(per_seed, time_limit_s) -> float       # METRICS["mean_ground_cm"]
 def seed_row(result: SeedResult) -> dict                  # seed, status, time_s, plus score_cm only when set; every writer of a seed uses it
+# a tug: one run_bout per seed, the entry on entry_side(seed), reference_duck opposite; trace seed = lower median by
+# (score_cm, seed), its (2, frames, 21) trace and settle; no record field (a page places the entry by trace_seed)
 
 # arena/store.py: a seed's `score_cm` is written only when set, so every stored race and
 # performance serialises as today.
@@ -307,32 +314,6 @@ def sort_key(record) -> tuple   # (-score if higher_wins(record.event_id) else s
 
 # arena/recover.py: a Hub manifest that names no event is never recovered onto the tug (entering a
 # versus enters its cup: it takes a policy entered on purpose).
-```
-
-Plan E adds:
-
-```python
-# manifest.py
-METRICS = ("mean_finish_time", "votes", "mean_ground_cm"); HIGHER_WINS = frozenset({"mean_ground_cm"})
-@dataclass(frozen=True)
-class Rating:
-    reference: str        # the reference duck: a file name in arena/assets/policies/
-    pit_bonus_cm: float   # added when the reference ends in the pit, taken off when the entry does
-# Manifest gains rating: Rating | None = None, bout: BoutRules | None = None. A tug: versus and mean_ground_cm, needs
-# [rating] and [bout], its time_limit_s equal to [bout]'s; others refuse both.
-# course.py
-def tug_layout(course, rig: str = "legs") -> list[Start]   # [west yaw 0, east yaw 180]
-def compile_tug(manifest: Manifest) -> mujoco.MjModel       # two ducks, STRING limited to (0, string_m)
-# tug.py
-SIDES = ("west", "east")
-def reference_duck(manifest: Manifest) -> Policy            # load_policy(ASSET_ROOT / "policies" / manifest.rating.reference)
-def entry_side(seed: int) -> int                            # 0 (west) on an odd seed, 1 (east) on an even one
-def bout_status(outcome: BoutOutcome, entry: int) -> str    # "won" | "lost" | "pit_won" | "pit_lost" | "draw"
-def bout_score_cm(outcome: BoutOutcome, entry: int, pit_bonus_cm: float, offset) -> float
-# evaluate.py
-SeedResult(seed, status, time_s, score_cm: float | None = None); def mean_ground_cm(per_seed, time_limit_s) -> float
-# a tug: one run_bout per seed, the entry on entry_side(seed), reference_duck opposite; trace seed = lower median by
-# (score_cm, seed), its (2, frames, 21) trace and settle; no record field (a page places the entry by trace_seed)
 ```
 
 The reference duck's bytes ship with the Arena (`arena/assets/policies/tug-reference-t7-250.onnx`,
@@ -355,8 +336,8 @@ export function formatScore(value, { finished, metric } = {})   // "12.3 cm" for
 // app/src/tug.js — new (mirrors arena/tug.py; MJCF coordinates in, three.js out)
 export function toThree([x, y, z])                  // [x, z, -y]
 export function stringEnd(frame, offset)            // [x, y, z]
-export const SIDES, REFERENCE, BOUT_WORDS; export function entrySide(seed)   // mirror tug.py's SIDES, entry_side
-export function ratingLane(traces, settles, {traceSeed, livery, name})   // the entry's bout lane
+export const SIDES, REFERENCE, BOUT_WORDS; export function entrySide(seed)   // mirror tug.py's SIDES, entry_side; REFERENCE = {livery: "charcoal", name: "Reference"}
+export function ratingLane(traces, settles, {traceSeed, livery, name})   // the entry's bout lane; the Reference wears "classic" when the entry wears "charcoal"
 export function tugDucks(entry)                     // a tug lane -> [{trace, lead, livery, name}], a settle led in
 export function tugEnds(event, frames)              // MJCF [a, b]: the two ducks' string ends
 export function tugSpan(frames)
