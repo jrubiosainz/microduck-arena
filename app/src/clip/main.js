@@ -9,7 +9,7 @@ import { formatScore, isStage, isTug } from "../format.js";
 import { lanesFor } from "../lanes.js";
 import { CTRL_DT, frameCount, leadIn, standing } from "../replay.js";
 import { createViewer } from "../viewer.js";
-import { actAt, clipPlan, stepAt, travelAt } from "./plan.js";
+import { actAt, clipPlan, stampAt, stepAt, travelAt } from "./plan.js";
 import { stadiumDirection } from "./direction.js";
 import { clipScore, clipVerdict } from "./score.js";
 import { renderSoundtrack } from "./soundtrack.js";
@@ -127,12 +127,15 @@ async function main() {
     document.documentElement.dataset.act = act;
     $("intro").hidden = act !== "intro";
     $("stamp").hidden = act !== "outro";
+    $("sheet").hidden = !(act === "outro" || layout === "vertical");
     if (act === "outro") {
-      // Reversed for the viewer, the author's lane is its last.
-      const { x, y } = viewer.spot(lanes.length - 1);
+      // Reversed for the viewer, the author's lane is its last. The stamp lands
+      // on it, kept whole inside the screen and clear of the figures band.
+      const screen = $("stamp").parentElement.getBoundingClientRect();
+      const floor = $("sheet").getBoundingClientRect().top - screen.top;
+      const { x, y } = stampAt(viewer.spot(lanes.length - 1), $("stamp").getBoundingClientRect(), screen, floor);
       Object.assign($("stamp").style, { left: `${100 * x}%`, top: `${100 * y}%` });
     }
-    $("sheet").hidden = !(act === "outro" || layout === "vertical");
     return step;
   }
 
