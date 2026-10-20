@@ -130,14 +130,16 @@ def _cmd_board(args) -> int:
         return 0
 
     rating = higher_wins(manifest.id)
+    # A tug's fixed command walks backwards, no speed it was scored at: no cmd column.
+    cmd = "" if rating else f"{'cmd':>10}"
     print(f"{manifest.title}\n")
-    print(f"{'#':<4}{'who':<16}{'policy':<20}{'rating' if rating else 'time':>10}{'seeds':>8}{'cmd':>10}")
+    print(f"{'#':<4}{'who':<16}{'policy':<20}{'rating' if rating else 'time':>10}{'seeds':>8}{cmd}")
     for row in rows:
         r = row.record
         score = f"{r.score:>8.2f} N" if rating else f"{r.score:>9.3f}s"
+        speed = "" if rating else f"{r.command_vx:>8.2f}m/s"
         print(f"{row.rank:<4}{r.user:<16}{r.policy_name:<20}"
-              f"{score}{r.seeds_finished:>5}/{len(r.per_seed)}"
-              f"{r.command_vx:>8.2f}m/s")
+              f"{score}{r.seeds_finished:>5}/{len(r.per_seed)}{speed}")
     return 0
 
 

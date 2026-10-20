@@ -39,6 +39,7 @@ def test_score_records_a_run_and_board_shows_it(tmp_path, capsys):
     assert "walker" in out
     assert seconds.group(1) in out, "board score differs from the score just run"
     assert re.search(r"^\s*1\s+alice\b", out, re.MULTILINE), f"alice not at rank 1: {out!r}"
+    assert "cmd" in out and "m/s" in out
 
 
 def test_board_on_an_empty_store_says_so(tmp_path, capsys):
@@ -284,4 +285,5 @@ def test_score_rates_a_tug_entry_and_the_board_says_rating(tmp_path, capsys):
     assert len(re.findall(r"^seed [1-5]: (pit|held) +\d+\.\d\d N( at \d+\.\d\d s)?$", out, re.MULTILINE)) == 5
     assert re.search(r"^rating: \d+\.\d\d N · replay from seed [1-5]$", out, re.MULTILINE)
     assert main(["board", "--event", "tug-of-war", "--store", str(tmp_path)]) == 0
-    assert "rating" in capsys.readouterr().out
+    board = capsys.readouterr().out
+    assert "rating" in board and "cmd" not in board and "m/s" not in board  # the tug's command is no speed
