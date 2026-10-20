@@ -67,7 +67,7 @@ export function flipScore(run, { veiled = false } = {}) {
 }
 
 /** How a bench seed ended, when it did not go into the pit as most do. */
-const BENCH_ENDS = { held: " · held on", fall: " · knocked down" };
+const BENCH_ENDS = { held: " · held on" };
 
 /** One seed's line: on the bench the winch's pull when it ended, and how; in a race its time, or how
  * it ended. */

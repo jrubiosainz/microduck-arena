@@ -77,8 +77,8 @@ ACT_TAGS = {"first_event": "first-run", "own_best": "pb", "podium": "podium"}
 
 def _bench_result(record: RunRecord, manifest: Manifest) -> Fact:
     top = manifest.bench.top_n
-    text = (f"The rating is {record.score:.2f} N: how hard the winch was pulling when the duck fell or "
-            f"went into the pit, averaged over {len(record.per_seed)} seeds")
+    text = (f"The rating is {record.score:.2f} N: how hard the winch was pulling when the duck went "
+            f"into the pit, averaged over {len(record.per_seed)} seeds")
     held = sum(1 for s in record.per_seed if s.status == "held")
     if held:
         text += f"; the duck held on to the end of {held} of them, which counts the winch's top pull of {top:g} N"

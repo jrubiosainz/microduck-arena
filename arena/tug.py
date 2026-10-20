@@ -4,13 +4,13 @@ another duck (a bout).
 The string is a tendon (`arena.course.compile_tug`). Between two ducks it is limited to its
 length: a string, it pulls only when taut, goes slack and never pushes. On the bench it runs to
 a winch whose pull rises with time, shaken by a few sines; how hard it pulls when the duck goes
-out is the duck's score, and a duck that never goes out scores the top.
+into the pit is the duck's score, and a duck that never goes in scores the top.
 
-The judge, after every control step: a duck is out when its trunk is in the pit or it has
-fallen by the Arena's own fall rule (a fall loses as the pit does). The first duck out loses
-the bout; when both go out on one step, or nobody is out at the time limit, the marker (the
-middle of the two string ends) decides: pulled to the west, east loses; to the east, west
-loses; exactly on the centre line, a draw.
+The judge, after every control step: only the pit decides. A duck is out when its trunk is in
+the pit; knocked over, sitting or lying on the platform, it stays in play and can still be
+dragged in. The first duck in the pit loses the bout; when both go in on one step, or nobody is
+in at the time limit, the marker (the middle of the two string ends) decides: pulled to the
+west, east loses; to the east, west loses; exactly on the centre line, a draw.
 
 A trace frame is a runner frame: trunk position (0:3), trunk quaternion w, x, y, z (3:7), then
 the joint angles.
@@ -24,9 +24,8 @@ import numpy as np
 
 from .constants import CTRL_DT, TRACE_WIDTH
 from .course import WINCH, compile_tug, string_offset
-from .manifest import Bench, Manifest, Termination
+from .manifest import Bench, Manifest
 from .runner import _reset_by_mujoco, _start
-from .stage import fell_at
 
 PIT_DROP_M = 0.05  # a trunk below z = -PIT_DROP_M is in the pit
 
@@ -73,27 +72,15 @@ def bench_force(profile: dict, t_s: float) -> float:
     return min(profile["top_n"], max(0.0, pull))
 
 
-def _out(duck: np.ndarray, termination: Termination) -> str | None:
-    """How a duck's (frames, 21) trace so far has it out at its last frame: "pit", "fall" or None.
-
-    The fall is the Arena's own rule, `stage.fell_at`, reused and never copied: over a window of
-    exactly the hold it holds only when every frame of it is tipped, so it is timed at the step
-    that completes the hold, as `runner.run_once` times it.
-    """
-    if in_pit(duck[-1]):
-        return "pit"
-    hold = round(termination.fall_hold_s / CTRL_DT)
-    if fell_at(duck[-hold:], termination) is not None:
-        return "fall"
-    return None
+def _out(duck: np.ndarray) -> str | None:
+    """How a duck's (frames, 21) trace so far has it out at its last frame: "pit" or None."""
+    return "pit" if in_pit(duck[-1]) else None
 
 
-def _verdict(
-    trace: np.ndarray, offset, termination: Termination, final: bool
-) -> tuple[int | None, str] | None:
+def _verdict(trace: np.ndarray, offset, final: bool) -> tuple[int | None, str] | None:
     """The bout's verdict after the last frame of `trace`, (2, frames, 21): (loser, how), or None
     while it goes on."""
-    outs = [_out(trace[k], termination) for k in (0, 1)]
+    outs = [_out(trace[k]) for k in (0, 1)]
     if outs.count(None) == 1:
         loser = 0 if outs[0] else 1
         return loser, outs[loser]
@@ -106,10 +93,10 @@ def _verdict(
 @dataclass(frozen=True)
 class BenchOutcome:
     seed: int
-    status: str  # "pit" | "fall" | "held"
-    force_n: float  # bench_force at the step it went out; top_n if it held to the end
-    time_s: float | None  # when it went out (a fall: the step completing its hold); None if held
-    trace: np.ndarray  # (1, frames, 21); stops at the step it went out
+    status: str  # "pit" | "held"
+    force_n: float  # bench_force at the step it went into the pit; top_n if it held to the end
+    time_s: float | None  # when it went into the pit; None if held
+    trace: np.ndarray  # (1, frames, 21); stops at the step it went into the pit
     settle: np.ndarray  # (1, settle + 1, 21)
     profile: dict
 
@@ -117,8 +104,8 @@ class BenchOutcome:
 def run_bench(manifest: Manifest, policy, seed: int, model=None) -> BenchOutcome:
     """One duck against the winch for the event's timed length, after the runner's own opening.
     The winch is still through the settle; its pull is set before every timed control step.
-    A step MuJoCo had to reset is a fall at that step's pull, its frame left out: a solver
-    explosion is not a result, and the reset pose stands the duck over the pit."""
+    A step MuJoCo had to reset counts as the pit at that step's pull, its frame left out: a solver
+    explosion is not a hold, and the reset pose stands the duck over the pit."""
     model = model if model is not None else compile_tug(manifest, 1)
     command = np.asarray(manifest.command, dtype=np.float64)
     profile = bench_profile(manifest.bench, manifest.id, seed)
@@ -132,10 +119,10 @@ def run_bench(manifest: Manifest, policy, seed: int, model=None) -> BenchOutcome
         sim.step([command])
         if _reset_by_mujoco(sim.data):
             return BenchOutcome(
-                seed, "fall", force, (step + 1) * CTRL_DT, frames[:, :step].copy(), settle, profile
+                seed, "pit", force, (step + 1) * CTRL_DT, frames[:, :step].copy(), settle, profile
             )
         sim.record(frames[:, step])
-        how = _out(frames[0, : step + 1], manifest.termination)
+        how = _out(frames[0, : step + 1])
         if how is not None:
             return BenchOutcome(
                 seed,
@@ -153,8 +140,8 @@ def run_bench(manifest: Manifest, policy, seed: int, model=None) -> BenchOutcome
 class BoutOutcome:
     seed: int
     loser: int | None  # 0 west, 1 east, None undecided by the physics
-    how: str  # "pit" | "fall" (the first duck out, how it went out),
-    # "marker" (both out on one control step, or the time limit),
+    how: str  # "pit" (the first duck in the pit),
+    # "marker" (both in on one control step, or the time limit),
     # "draw" (marker exactly 0, or a step MuJoCo had to reset)
     time_s: float  # when it was decided
     trace: np.ndarray  # (2, frames, 21), west first; stops at the deciding step
@@ -179,9 +166,7 @@ def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutco
                 seed, None, "draw", (step + 1) * CTRL_DT, frames[:, :step].copy(), settle
             )
         sim.record(frames[:, step])
-        verdict = _verdict(
-            frames[:, : step + 1], offset, manifest.termination, final=step == steps - 1
-        )
+        verdict = _verdict(frames[:, : step + 1], offset, final=step == steps - 1)
         if verdict is not None:
             loser, how = verdict
             return BoutOutcome(

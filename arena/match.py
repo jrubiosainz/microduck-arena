@@ -23,7 +23,7 @@ class BoutResult:
     seed: int
     a_side: str  # "west" in bouts 0, 2, 4; "east" in 1, 3
     winner: str | None  # "a" | "b" | None (a draw counts for nobody)
-    how: str  # BoutOutcome.how: "pit" | "fall" | "marker" | "draw"
+    how: str  # BoutOutcome.how: "pit" | "marker" | "draw"
     time_s: float
 
     def to_dict(self) -> dict:

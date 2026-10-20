@@ -281,7 +281,7 @@ def test_score_rates_a_tug_entry_and_the_board_says_rating(tmp_path, capsys):
     """The format Plan B's ledger reads: five seed lines, then the rating."""
     assert main(["score", REFERENCE, "--event", "tug-of-war", "--store", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    assert len(re.findall(r"^seed [1-5]: (pit|fall|held) +\d+\.\d\d N( at \d+\.\d\d s)?$", out, re.MULTILINE)) == 5
+    assert len(re.findall(r"^seed [1-5]: (pit|held) +\d+\.\d\d N( at \d+\.\d\d s)?$", out, re.MULTILINE)) == 5
     assert re.search(r"^rating: \d+\.\d\d N · replay from seed [1-5]$", out, re.MULTILINE)
     assert main(["board", "--event", "tug-of-war", "--store", str(tmp_path)]) == 0
     assert "rating" in capsys.readouterr().out

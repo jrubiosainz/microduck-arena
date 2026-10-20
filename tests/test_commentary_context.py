@@ -1,5 +1,7 @@
 """Facts are sentences with references; nothing invented, nothing technical."""
 
+import dataclasses
+
 import pytest
 
 from arena.commentary.context import label, nature, result_facts, technical_text
@@ -228,7 +230,10 @@ def test_a_bench_run_states_its_rating_and_its_gap_in_newtons():
                                         "string against a winch that pulls harder and harder, across a pit.")
     assert facts["run#/participant"].text == "The participant is @alice, pulling with a policy named alice-v1."
     assert facts["run#/result"].text == (
-        "The rating is 4.20 N: how hard the winch was pulling when the duck fell or went into the pit, averaged "
+        "The rating is 4.20 N: how hard the winch was pulling when the duck went into the pit, averaged "
         "over 5 seeds; the duck held on to the end of 1 of them, which counts the winch's top pull of 7 N.")
+    assert facts["run#/result"].tags == ("held",)   # the traced seed's end
+    pulled_in = dataclasses.replace(mine, trace_seed=2)
+    assert {f.ref: f for f in result_facts(pulled_in, manifest, [leader, pulled_in], [])}["run#/result"].tags == ("pit",)
     assert facts["run#/board"].text == "On the Tug of War board this run ranks 2 of 2, 0.80 N behind the leader, @carol."
     assert nature(manifest)[1] == ("tug",)

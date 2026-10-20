@@ -42,7 +42,7 @@ const SOURCES = {
 };
 
 /** How a bench run's replayed seed ended, as its stamp says it. */
-const BENCH_STAMPS = { held: "HELD ON", pit: "PULLED IN", fall: "KNOCKED DOWN" };
+const BENCH_STAMPS = { held: "HELD ON", pit: "PULLED IN" };
 
 /**
  * The stamp the clip lands, and whether it lands as a pass: a race won or a DNF, a performance

@@ -273,3 +273,4 @@ def test_a_second_transport_error_is_not_retried_again(monkeypatch):
 
 def test_the_booth_is_taught_what_the_tug_is():
     assert "In the tug of war a duck pulls backwards on a string against a winch" in BOOTH_CONTEXT
+    assert "when the duck went into the pit" in BOOTH_CONTEXT and "fell or went" not in BOOTH_CONTEXT

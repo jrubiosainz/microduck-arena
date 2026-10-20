@@ -374,4 +374,4 @@ def test_a_tug_takes_no_cast_and_rates_a_walker():
 def test_a_seed_row_adds_a_force_only_on_the_bench():
     assert seed_row(SeedResult(1, "finish", 12.5)) == {"seed": 1, "status": "finish", "time_s": 12.5}
     assert seed_row(SeedResult(2, "held", None, 7.0)) == {"seed": 2, "status": "held", "time_s": None, "force_n": 7.0}
-    assert seed_row(SeedResult(3, "fall", 1.02, 0.62)) == {"seed": 3, "status": "fall", "time_s": 1.02, "force_n": 0.62}
+    assert seed_row(SeedResult(3, "pit", 21.7, 4.77)) == {"seed": 3, "status": "pit", "time_s": 21.7, "force_n": 4.77}

@@ -82,7 +82,6 @@ describe("a seed's line", () => {
   it("says what the bench's winch was pulling, and how the seed ended when it did not go into the pit", () => {
     expect(seedText({ seed: 3, status: "held", time_s: null, force_n: 7 })).toBe("7.00 N · held on");
     expect(seedText({ seed: 3, status: "pit", time_s: 21.7, force_n: 4.77 })).toBe("4.77 N");
-    expect(seedText({ seed: 3, status: "fall", time_s: 1.02, force_n: 0.62 })).toBe("0.62 N · knocked down");
   });
   it("keeps a race's time, or how it ended", () => {
     expect(seedText({ seed: 1, status: "finish", time_s: 12.3456 })).toBe("12.346s");

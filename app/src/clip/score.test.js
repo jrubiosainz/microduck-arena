@@ -14,13 +14,12 @@ const tugRun = {
   trace_seed: 3, rank: 2, on_board: true, withdrawn: false, receipts: [{ act: "run", points: 10 }],
   per_seed: [{ seed: 3, status: "held", time_s: null, force_n: 7 }], cast: [{ policy: "self" }],
 };
-const traced = (status) => ({ ...tugRun, per_seed: [{ seed: 1, status: "fall", time_s: 0.8, force_n: 0.2 }, { seed: 3, status, time_s: 4.8, force_n: 1.2 }] });
+const traced = (status) => ({ ...tugRun, per_seed: [{ seed: 1, status: "pit", time_s: 21.7, force_n: 4.77 }, { seed: 3, status, time_s: 4.8, force_n: 1.2 }] });
 
 describe("clipVerdict", () => {
   it("stamps a bench run with how its replayed seed ended, each a pass", () => {
     expect(clipVerdict(tugRun)).toEqual({ stamp: "HELD ON", pass: true });
     expect(clipVerdict(traced("pit"))).toEqual({ stamp: "PULLED IN", pass: true });
-    expect(clipVerdict(traced("fall"))).toEqual({ stamp: "KNOCKED DOWN", pass: true });
   });
   it("stamps a race and a performance as it always has", () => {
     const race = { event, seeds_finished: 5 };

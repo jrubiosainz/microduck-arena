@@ -29,10 +29,10 @@ duration played, and only informs: a stage's board ranks on votes.
 A tug's bench is neither: the entry pulls alone against the winch (arena/tug.py),
 on the event's own command, once per seed. Nothing is swept: every duck walks
 backwards at the same command, and what is measured is how hard the winch was
-pulling when the duck went out, in the pit or by a fall, or the top for a duck
-that held to the end. The rating is the mean of those forces over every seed,
-and a higher one is better. The replay is the lower-median seed by force, and
-the run keeps that seed's winch profile, so the page can turn its dial.
+pulling when the duck went into the pit, or the top for a duck that held to the
+end. The rating is the mean of those forces over every seed, and a higher one
+is better. The replay is the lower-median seed by force, and the run keeps that
+seed's winch profile, so the page can turn its dial.
 """
 
 import statistics

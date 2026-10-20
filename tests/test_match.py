@@ -52,5 +52,5 @@ def test_a_real_match_plays_the_same_twice():
     quick = dataclasses.replace(TUG, bout=BoutRules(1.0, 2, 5))
     one, two = (play_match(quick, _ZeroPolicy(), _ZeroPolicy(), SEEDS, (1.0, 2.0)) for _ in range(2))
     assert one.bouts == two.bouts and 2 <= len(one.bouts) <= 5
-    assert one.traces[0][0].shape[0] == 2 and one.traces[0][0].shape[1] <= 50   # a duck may fall before the 1 s limit
+    assert one.traces[0][0].shape[0] == 2 and one.traces[0][0].shape[1] <= 50   # the 1 s limit at the latest
     np.testing.assert_array_equal(one.traces[-1][0], two.traces[-1][0])
