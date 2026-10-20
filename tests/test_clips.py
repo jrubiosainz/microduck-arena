@@ -338,14 +338,14 @@ def test_a_performance_is_described_as_one():
 
 
 
-def test_a_bench_run_is_described_by_its_rating():
+def test_a_rated_run_is_described_by_its_rating():
     from arena.index import Standing
     from arena.manifest import load_event
     from arena.web.routes_unfurl import describe
 
-    record = make_record(user="eve", event_id="tug-of-war", score=4.213)
+    record = make_record(user="eve", event_id="tug-of-war", score=4.2)
     assert describe(record, Standing(2, True, []), load_event("tug-of-war")) == (
-        "@eve's duck holds a 4.21 N rating on the Tug of War, #2 on the board.")
+        "@eve's duck holds a 4.2 cm rating on the Tug of War, #2 on the board.")
 
 
 def test_the_jobs_say_where_a_clip_stands(tmp_path):

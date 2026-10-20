@@ -26,7 +26,7 @@ def describe(record, place, event) -> str:
             return f"@{record.user}'s duck performed on {event.title}; the performance was cut short."
         return f"@{record.user}'s duck gave a {record.score:.2f} s performance on {event.title}."
     if higher_wins(event.id):
-        said = f"@{record.user}'s duck holds a {record.score:.2f} N rating on the {event.title}"
+        said = f"@{record.user}'s duck holds a {record.score:.1f} cm rating on the {event.title}"
         return f"{said}, #{place.rank} on the board." if place.on_board else f"{said}."
     seeds = len(record.per_seed)
     if record.seeds_finished == 0:

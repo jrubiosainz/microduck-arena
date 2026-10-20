@@ -217,23 +217,24 @@ def test_one_duck_is_told_as_it_always_was():
     assert "run#/troupe" not in facts_of(stage_run())
 
 
-def bench_seeds(*forces):
-    return tuple(SeedResult(i + 1, "held" if f == 7.0 else "pit", None if f == 7.0 else 20.0, f) for i, f in enumerate(forces))
+RATED = (SeedResult(1, "won", 45.0, 12.0), SeedResult(2, "won", 45.0, 8.0), SeedResult(3, "lost", 45.0, -4.0),
+         SeedResult(4, "pit_won", 30.0, 130.0), SeedResult(5, "pit_lost", 4.5, -140.0))
 
 
-def test_a_bench_run_states_its_rating_and_its_gap_in_newtons():
+def test_a_rated_run_states_its_ground_its_wins_and_its_gap_in_centimetres():
     manifest = load_event("tug-of-war")
-    leader = run("carol", 5.0, "2026-09-10T10:00:00Z", event="tug-of-war", run_id="R0", per_seed=bench_seeds(5, 5, 5, 5, 5))
-    mine = run("alice", 4.2, "2026-09-11T10:00:00Z", event="tug-of-war", run_id="R1", per_seed=bench_seeds(7.0, 3.0, 4.0, 3.5, 3.5))
+    leader = run("carol", 5.0, "2026-09-10T10:00:00Z", event="tug-of-war", run_id="R0", per_seed=RATED)
+    mine = run("alice", 1.2, "2026-09-11T10:00:00Z", event="tug-of-war", run_id="R1", per_seed=RATED)
     facts = {f.ref: f for f in result_facts(mine, manifest, [leader, mine], [])}
-    assert facts["run#/event"].text == ("The event is the Tug of War, a pulling bench: the duck pulls backwards on a "
-                                        "string against a winch that pulls harder and harder, across a pit.")
+    assert facts["run#/event"].text == ("The event is the Tug of War, a pulling contest against the Arena's reference duck: "
+                                        "the two are tied by a string across a pit and each pulls by walking backwards.")
     assert facts["run#/participant"].text == "The participant is @alice, pulling with a policy named alice-v1."
     assert facts["run#/result"].text == (
-        "The rating is 4.20 N: how hard the winch was pulling when the duck went into the pit, averaged "
-        "over 5 seeds; the duck held on to the end of 1 of them, which counts the winch's top pull of 7 N.")
-    assert facts["run#/result"].tags == ("held",)   # the traced seed's end
-    pulled_in = dataclasses.replace(mine, trace_seed=2)
-    assert {f.ref: f for f in result_facts(pulled_in, manifest, [leader, pulled_in], [])}["run#/result"].tags == ("pit",)
-    assert facts["run#/board"].text == "On the Tug of War board this run ranks 2 of 2, 0.80 N behind the leader, @carol."
+        "The rating is 1.2 cm: the ground the duck won from the reference duck in 5 bouts, on average, 100 cm more "
+        "for dragging it into the pit and 100 cm less for being dragged in; it won 3 of them.")
+    assert facts["run#/result"].tags == ("won",)   # the traced seed, 1
+    dragged = dataclasses.replace(mine, trace_seed=5)
+    assert {f.ref: f for f in result_facts(dragged, manifest, [leader, dragged], [])}["run#/result"].tags == ("pit_lost",)
+    assert facts["run#/board"].text == "On the Tug of War board this run ranks 2 of 2, 3.80 cm behind the leader, @carol."
+    assert "close" in facts["run#/board"].tags
     assert nature(manifest)[1] == ("tug",)

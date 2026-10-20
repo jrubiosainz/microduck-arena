@@ -126,7 +126,7 @@ def personal_best(s: Situation) -> list[Fact]:
     margin = abs(best.score - r.score)
     if best.seeds_finished == 0 or sort_key(r) >= sort_key(best) or margin < 0.005:
         return []
-    big = margin >= 0.1 * best.score
+    big = margin >= 0.1 * abs(best.score)
     return [Fact("notable#/personal-best",
                  f"@{s.user} beats their previous best on the {s.manifest.title}, {best.score:.2f} {unit}, "
                  f"by {margin:.2f} {unit}.", "notable", ("pb", "big-margin") if big else ("pb",),

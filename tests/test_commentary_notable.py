@@ -133,15 +133,22 @@ def test_profiles_give_the_season_of_the_author_and_of_who_the_board_measures_th
     assert [f.ref for f in profiles_for(carol)] == ["notable#/profile"]
 
 
-def test_a_bench_run_has_no_time_milestone_and_beats_its_best_by_pulling_harder():
+def test_a_rated_run_has_no_time_milestone_and_beats_its_best_by_winning_more_ground():
     first = run("alice", 3.0, "2026-09-10T10:00:00Z", event="tug-of-war")
     facts = facts_for(run("alice", 4.2, "2026-09-11T10:00:00Z", event="tug-of-war"), first)
     assert "notable#/milestone" not in facts and "notable#/record" not in facts
-    assert facts["notable#/personal-best"].text == "@alice beats their previous best on the Tug of War, 3.00 N, by 1.20 N."
+    assert facts["notable#/personal-best"].text == "@alice beats their previous best on the Tug of War, 3.00 cm, by 1.20 cm."
 
 
-def test_a_displaced_bench_rival_is_quoted_in_newtons():
+def test_a_tug_best_beaten_by_a_little_below_zero_is_no_big_margin():
+    first = run("alice", -20.0, "2026-09-10T10:00:00Z", event="tug-of-war")
+    facts = facts_for(run("alice", -19.9, "2026-09-11T10:00:00Z", event="tug-of-war"), first)
+    assert facts["notable#/personal-best"].text == "@alice beats their previous best on the Tug of War, -20.00 cm, by 0.10 cm."
+    assert facts["notable#/personal-best"].tags == ("pb",)
+
+
+def test_a_displaced_rated_rival_is_quoted_in_centimetres():
     bob = run("bob", 3.0, "2026-09-01T10:00:00Z", event="tug-of-war")
     facts = facts_for(run("alice", 4.0, "2026-09-11T10:00:00Z", event="tug-of-war"), bob)
     assert facts["notable#/opponent/bob"].text == ("@bob drops from rank 1 to rank 2 on the Tug of War; their best "
-                                                   "rating there, 3.00 N, was published 10 days ago.")
+                                                   "rating there, 3.00 cm, was published 10 days ago.")
