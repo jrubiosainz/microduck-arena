@@ -15,6 +15,7 @@ owes a clip to every run that predates clips.
 
 import itertools
 import json
+import math
 import queue
 import re
 import threading
@@ -26,7 +27,7 @@ from pathlib import Path
 
 from .cup import is_match_id
 from .manifest import all_events
-from .recorder import SIZES, RenderedRun, ffmpeg_available, find_chrome, record_run
+from .recorder import SIZES, RenderedRun, budget_for, ffmpeg_available, find_chrome, record_run
 
 # Written into every clip.json. Bumping it does not re-render older clips.
 CLIP_VERSION = 1
@@ -39,6 +40,13 @@ RENDER_BUDGET_S = 900.0
 JOB_FLAVOR = "t4-small"
 # Past this a job is stuck rather than slow, and HF ends it: what one may cost.
 JOB_TIMEOUT = "30m"
+# The longest match's clip in frames: five full 45 s bouts with their settles, between the title
+# and the outro (app/src/clip/match.js matchPlan, whose test pins its 233.12 s).
+MATCH_FRAMES = 5828
+# A match's job outlives the render's own budget for the longest match by the quarter of an hour a
+# run's job has over a race's: the render's deadline comes first and writes why it failed. A job HF
+# ends writes nothing, and a match's would be launched again at once, every time.
+MATCH_JOB_TIMEOUT = f"{math.ceil((budget_for(RENDER_BUDGET_S, MATCH_FRAMES) + 15 * 60) / 60)}m"
 # How often the Space looks at its jobs and at the list.
 POLL_S = 10.0
 # A launch the Jobs API refused is tried again this long after, the run still owed.
@@ -289,7 +297,9 @@ class ClipJobs:
                     env={"ARENA_DATASET": self.dataset, "ARENA_COMMENTARY": "0",
                          "ARENA_CLIP_GPU": "0" if self.flavor.startswith("cpu") else "1"},
                     secrets={"HF_TOKEN": self.token},
-                    flavor=self.flavor, timeout=JOB_TIMEOUT, labels={**JOB_LABEL, "run": run_id},
+                    flavor=self.flavor,
+                    timeout=MATCH_JOB_TIMEOUT if is_match_id(run_id) else JOB_TIMEOUT,
+                    labels={**JOB_LABEL, "run": run_id},
                     namespace=self.namespace,
                 )
             except Exception as exc:  # noqa: BLE001 — the run stays on the list

@@ -15,7 +15,9 @@ from fastapi.testclient import TestClient
 from arena import recorder
 from arena.clips import (
     CLIP_VERSION,
+    JOB_TIMEOUT,
     JOB_TRIES,
+    MATCH_JOB_TIMEOUT,
     RETRY_S,
     ClipJobs,
     ClipRenderer,
@@ -726,6 +728,20 @@ def test_a_job_that_ended_without_a_clip_is_launched_again_then_failed(tmp_path)
     assert failed["reason"] == f"job J{JOB_TRIES} ended ERROR: image pull failed"
     assert landed == ["R1"] * JOB_TRIES
     assert jobs.progress("R1") is None
+
+
+def test_a_match_clip_job_outlasts_the_longest_matchs_render_budget(tmp_path):
+    """A job HF ends writes no file, and a match's is launched again at once: its render's own
+    deadline must come first, so that it fails with a reason the cup worker relaunches spaced."""
+    api = FakeJobs()
+    jobs = jobs_for(LocalStore(tmp_path), api)
+    jobs.enqueue("R1")
+    jobs.enqueue("tug-of-war-0001-000")
+    jobs.tick()
+    assert [job["timeout"] for job in api.launched] == [JOB_TIMEOUT, MATCH_JOB_TIMEOUT]
+    # Five full 45 s bouts are 5828 frames: budget_for gives them 11 630 s, and the job a run's
+    # quarter of an hour more, rounded up to the minute.
+    assert MATCH_JOB_TIMEOUT == "209m"
 
 
 def test_a_match_clip_job_is_launched_again_however_often_the_machine_ends_it(tmp_path):

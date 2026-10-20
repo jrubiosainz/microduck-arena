@@ -28,4 +28,9 @@ describe("matchPlan", () => {
       a: { name: "Tank" }, b: { name: "Lean" }, winner: "a", wins: [2, 1] };
     expect(matchWords(match)).toEqual({ title: "Tug of War · Cup #3", line: "Final · Tank vs Lean", outro: "Tank wins 2–1" });
   });
+  it("says a tie went to the rating, not a score nobody won by", () => {
+    const match = { cup: 3, title: "Group A · Tank vs Lean", event: { title: "Tug of War" },
+      a: { name: "Tank" }, b: { name: "Lean" }, winner: "b", wins: [1, 1], decided_by: "rating" };
+    expect(matchWords(match).outro).toBe("Lean wins on rating");
+  });
 });

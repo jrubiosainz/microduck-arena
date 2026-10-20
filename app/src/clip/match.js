@@ -56,12 +56,14 @@ export function scoreAt(plan, match, i) {
   return ["a", "b"].map((side) => winners.filter((winner) => winner === side).length);
 }
 
-/** The words on a match's clip: the cup, who meets whom, and who won by how much. */
+/** The words on a match's clip: the cup, who meets whom, and who won by how much, or, on a tie, by
+ * the higher rating. */
 export function matchWords(match) {
   const [won, lost] = match.winner === "a" ? match.wins : [...match.wins].reverse();
+  const winner = match[match.winner].name;
   return {
     title: `${match.event.title} · Cup #${match.cup}`,
     line: match.title,
-    outro: `${match[match.winner].name} wins ${won}–${lost}`,
+    outro: match.decided_by === "rating" ? `${winner} wins on rating` : `${winner} wins ${won}–${lost}`,
   };
 }
