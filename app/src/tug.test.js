@@ -1,10 +1,11 @@
-import { Raycaster, Vector3 } from "three";
+import { PerspectiveCamera, Raycaster, Vector3 } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { OVERRUN } from "./course.js";
 import { buildGym } from "./gym.js";
 import { TRACE_WIDTH } from "./replay.js";
 import {
-  benchForce, buildString, buildTugCourse, buildWinch, cutPit, floorUnder, forceAt, markerX, stringEnd, toThree, tugDucks, tugEnds,
+  benchForce, buildString, buildTugCourse, buildWinch, cutPit, floorUnder, forceAt, markerX, stringEnd, toThree, tugDistance, tugDucks,
+  tugEnds, tugPose, tugSpan,
 } from "./tug.js";
 
 const TUG = {
@@ -95,5 +96,38 @@ describe("the tug drawn", () => {
     [after.uv.x, after.uv.y].forEach((v, i) => expect(v).toBeCloseTo(boards[0].toArray()[i], 6)); // float32 coordinates
     expect(down(0.2, 0)).toHaveLength(1);
     expect(down(0, 1.2)).toHaveLength(2); // the court's centre line still runs beside the track
+  });
+});
+
+describe("the tug filmed", () => {
+  // The chase's own direction, from what it looks at to the camera: behind, above and trackside (cameraPose).
+  const TOWARD = new Vector3(-0.35, 0.22, 1.324).normalize().toArray();
+  // Where a point `x` along the lane from what the camera looks at lands across the frame, -1 to 1.
+  const across = (distance, aspect, x) => {
+    const camera = new PerspectiveCamera(42, aspect, 0.02, 100);
+    camera.position.set(...TOWARD.map((v) => v * distance));
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    return new Vector3(x, 0, 0).project(camera).x;
+  };
+  it("stands back until the span fills nine tenths of the frame's width, its nearer end at the edge", () => {
+    for (const aspect of [16 / 9, 1080 / 1233, 1.1]) {
+      const distance = tugDistance(1.3, aspect, 42, TOWARD);
+      expect(across(distance, aspect, -0.65)).toBeCloseTo(-0.9, 9);
+      expect(Math.abs(across(distance, aspect, 0.65))).toBeLessThan(0.9);
+    }
+    expect(tugDistance(1.3, 1080 / 1233, 42, TOWARD)).toBeGreaterThan(tugDistance(1.3, 16 / 9, 42, TOWARD));
+  });
+  it("holds a bench from its duck to the dial's far edge, a bout from duck to duck, room kept round each duck", () => {
+    [A[0] - 0.15, TUG.winch[0] + 0.146].forEach((v, i) => expect(tugSpan(TUG, [A])[i]).toBeCloseTo(v, 9));
+    [A[0] - 0.15, B[0] + 0.15].forEach((v, i) => expect(tugSpan(TUG, [B, A])[i]).toBeCloseTo(v, 9));
+  });
+  it("moves a chase out along its own direction to that distance, looking where it looked", () => {
+    const pose = { position: [-0.35, 0.34, 1.324], target: [0, 0.12, 0] };
+    const fitted = tugPose(pose, 1.3, 16 / 9, 42);
+    expect(fitted.target).toEqual(pose.target);
+    const away = new Vector3(...fitted.position).sub(new Vector3(...pose.target));
+    expect(away.length()).toBeCloseTo(tugDistance(1.3, 16 / 9, 42, TOWARD), 9);
+    away.normalize().toArray().forEach((v, i) => expect(v).toBeCloseTo(TOWARD[i], 9));
   });
 });

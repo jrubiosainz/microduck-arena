@@ -17,7 +17,8 @@ import { renderSoundtrack } from "./soundtrack.js";
 /** How far the chase camera stands per layout, as a factor on the viewer's
  * offsets. Measured on a three-lane sprint: 1.0 left the ducks small in a
  * 1080p frame, 0.55 crushed the far lane behind the near one; the portrait
- * frame wants a little more room than the landscape. */
+ * frame wants a little more room than the landscape. A tug's chase takes none:
+ * the viewer fits its span to the frame (tug.js tugPose). */
 const DISTANCE = { landscape: 0.7, vertical: 0.8 };
 
 const $ = (id) => document.getElementById(id);
@@ -88,7 +89,7 @@ async function main() {
     ? stageDucks(lanes[0].cast, traces[0], settles[0], { livery: lanes[0].livery, eventRig: run.event.rig, lead: settle })
     : [];
   const config = run.event.clip;
-  const camera = { ...config.camera, distance: DISTANCE[layout] };
+  const camera = tug ? config.camera : { ...config.camera, distance: DISTANCE[layout] };
   const viewer = await createViewer($("stage"), { rig: run.event.rig, manual: true, camera });
   viewer.setLanes(
     lanes

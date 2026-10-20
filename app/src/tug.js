@@ -145,6 +145,8 @@ export function buildString() {
 
 const DRUM = 0.03; // the drum's radius: the string leaves it at its top, the winch's point
 const DIAL = 0.08; // the dial's radius
+const RIM = DIAL + 0.006; // its steel rim's
+const CENTRE = new Vector3(0.06, 0.17, 0); // the dial's centre from the winch's point, three.js axes
 const SWEEP = (3 * Math.PI) / 4; // the needle's travel, from nothing to the winch's top
 const DIAL_PX = 256;
 
@@ -169,9 +171,9 @@ export function buildWinch({ winch, bench: { top_n } }) {
   const cheek = 0.02 - DRUM - floor;
   for (const z of [-0.056, 0.056]) add(new BoxGeometry(0.09, cheek, 0.012), steel, 0, floor + cheek / 2, z);
   add(new BoxGeometry(0.2, 0.012, 0.14), steel, 0.04, floor + 0.006, 0);
-  const centre = new Vector3(0.06, 0.17, 0);
+  const centre = CENTRE;
   add(new BoxGeometry(0.014, centre.y - floor, 0.014), steel, centre.x, (centre.y + floor) / 2, -0.012);
-  add(new CylinderGeometry(DIAL + 0.006, DIAL + 0.006, 0.01, 40), steel, centre.x, centre.y, 0).rotation.x = Math.PI / 2;
+  add(new CylinderGeometry(RIM, RIM, 0.01, 40), steel, centre.x, centre.y, 0).rotation.x = Math.PI / 2;
 
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = DIAL_PX;
@@ -213,4 +215,35 @@ export function buildWinch({ winch, bench: { top_n } }) {
       needle.rotation.z = -(newtons / top_n) * SWEEP;
     },
   };
+}
+
+// How far past a duck's trunk the picture keeps room for the rest of it, lying back included.
+const DUCK_REACH = 0.15;
+// How much of the frame's width a tug's span may fill.
+const FILL = 0.9;
+
+/** What a tug's camera holds along the lane at one frame, MJCF x from west to east: from the west duck,
+ * room kept round it, to the dial's far edge on the bench, or to the east duck on a bout. */
+export function tugSpan(event, frames) {
+  const xs = frames.map((frame) => frame[0]);
+  const east = frames.length > 1 ? Math.max(...xs) + DUCK_REACH : event.winch[0] + CENTRE.x + RIM;
+  return [Math.min(...xs) - DUCK_REACH, east];
+}
+
+/**
+ * How far from what it looks at a camera stands for `span` metres along the lane, centred there, to
+ * fill at most FILL of a frame `aspect` wide whose vertical field is `fov` degrees, seen from `toward`
+ * (the unit vector from what it looks at to the camera). Looked at from behind, the span's nearer end
+ * is the one at the frame's edge.
+ */
+export function tugDistance(span, aspect, fov, [x, , z]) {
+  const across = FILL * Math.tan((fov * Math.PI) / 360) * aspect;
+  return (span / 2) * (z / Math.hypot(x, z) / across + Math.abs(x));
+}
+
+/** A chase `pose` moved out or in along its own direction until `span` metres fit its frame (tugDistance). */
+export function tugPose({ position, target }, span, aspect, fov) {
+  const away = new Vector3(...position).sub(new Vector3(...target)).normalize();
+  const distance = tugDistance(span, aspect, fov, away.toArray());
+  return { position: away.multiplyScalar(distance).add(new Vector3(...target)).toArray(), target };
 }

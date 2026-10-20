@@ -52,7 +52,9 @@ import { buildRollerHall } from "./roller-hall.js";
 import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
-import { buildString, buildTugCourse, buildWinch, cutPit, floorUnder, forceAt, tugDucks, tugEnds } from "./tug.js";
+import {
+  buildString, buildTugCourse, buildWinch, cutPit, floorUnder, forceAt, tugDucks, tugEnds, tugPose, tugSpan,
+} from "./tug.js";
 import { SWEEP_TURN, sweepAt } from "./sweep.js";
 
 // The sun supplies shape and the shadows; the room only soft reflections. Much
@@ -445,6 +447,13 @@ export async function createViewer(
     }
   }
 
+  // The chase over `lead`; on a tug, moved out or in until the `span` it must hold fits the frame as
+  // it is now (tug.js tugPose), so a resized page or a portrait clip keeps both ends in.
+  function chasePose(lead, rise, span) {
+    const pose = cameraPose(spec ?? gym?.camera, lead, sideOffset, rise);
+    return span ? tugPose(pose, span, camera.aspect, camera.fov) : pose;
+  }
+
   function setLanes(entries, event, playerOptions = {}) {
     clearScene();
     const talent = isStage(event);
@@ -475,8 +484,10 @@ export async function createViewer(
         : attachCourse(scene, event, Math.max(1, laneCount), entries.map((entry) => entry.colour));
       if (tugged) scene.add(course);
       // The near stand starts a stride beyond where the chase camera stands,
-      // clip travel included, so the lens is never inside it.
-      const chase = cameraPose(spec, 0, sideOffset, 0).position[2];
+      // clip travel included, so the lens is never inside it: on a tug, where
+      // its fit stands over the ducks' first frame.
+      const start = tugged && entries.length ? tugSpan(event, entries.map((entry) => frameAt(entry.trace, 0))) : null;
+      const chase = (start ? chasePose((start[0] + start[1]) / 2, 0, start[1] - start[0]) : chasePose(0, 0, null)).position[2];
       const clearance = chase * TRAVEL_REACH + STAND_CLEARANCE;
       const ground = course.getObjectByName("ground");
       const { width, height } = ground.geometry.parameters;
@@ -649,13 +660,17 @@ export async function createViewer(
         lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);
       }
     });
-    // The chase and the screens follow the leader; on a tug, the string's middle.
+    // The chase and the screens follow the leader; on a tug, the middle of
+    // what the chase must hold, from the west duck to the dial or the east duck.
     let lead = lanes.length ? Math.max(...frames.map((frame) => frame[0])) : middle;
+    let span = null;
     if (tug) {
       const [a, b] = tugEnds(tug.event, frames);
       tug.rope.update(a, b);
       tug.winch?.setForce(forceAt(tug.profile, indices[0], lanes[0].lead));
-      lead = (a[0] + b[0]) / 2;
+      const [west, east] = tugSpan(tug.event, frames);
+      lead = (west + east) / 2;
+      span = east - west;
     }
     audience?.pose(seconds, mood);
     gym?.pose?.(seconds, mood);
@@ -671,7 +686,7 @@ export async function createViewer(
       const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
       const pose = dragPose(stage
         ? broadcast(manual ? seconds : player.time, player.time, camera.aspect, camera.fov)
-        : travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel),
+        : travelPose(chasePose(lead, rise, span), travel),
       SWEEP_TURN * sweepAt((performance.now() - swept) / 1000));
       camera.position.set(...pose.position);
       _target.set(...pose.target);
