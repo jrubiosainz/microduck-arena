@@ -15,7 +15,7 @@ from ..index import Row, by_user, leaderboard, sort_key
 from ..manifest import Manifest
 from ..points import Receipt, counting, standings
 from ..store import RunRecord
-from .context import BIG_GAP_CM, Fact, measure
+from .context import NOTABLE_GAP_CM, Fact, measure
 
 THRESHOLDS_S = (5, 6, 8, 10, 12, 15, 20, 25, 30, 40)
 
@@ -126,7 +126,7 @@ def personal_best(s: Situation) -> list[Fact]:
     margin = abs(best.score - r.score)
     if best.seeds_finished == 0 or sort_key(r) >= sort_key(best) or margin < 0.005:
         return []
-    big = margin >= (BIG_GAP_CM if unit == "cm" else 0.1 * abs(best.score))
+    big = margin >= (NOTABLE_GAP_CM if unit == "cm" else 0.1 * abs(best.score))
     return [Fact("notable#/personal-best",
                  f"@{s.user} beats their previous best on the {s.manifest.title}, {best.score:.2f} {unit}, "
                  f"by {margin:.2f} {unit}.", "notable", ("pb", "big-margin") if big else ("pb",),
