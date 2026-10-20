@@ -15,7 +15,7 @@ from ..index import Row, by_user, leaderboard, sort_key
 from ..manifest import Manifest
 from ..points import Receipt, counting, standings
 from ..store import RunRecord
-from .context import Fact
+from .context import Fact, measure
 
 THRESHOLDS_S = (5, 6, 8, 10, 12, 15, 20, 25, 30, 40)
 
@@ -97,7 +97,7 @@ def busy_day(s: Situation) -> list[Fact]:
 
 def milestone(s: Situation) -> list[Fact]:
     r = s.record
-    if not s.timed or not _clean(r):
+    if s.manifest.metric != "mean_finish_time" or not _clean(r):
         return []
     limit = next((t for t in THRESHOLDS_S if r.score < t), None)
     if limit is None:
@@ -122,13 +122,14 @@ def personal_best(s: Situation) -> list[Fact]:
     if not earlier:
         return []
     best = min(earlier, key=sort_key)
-    margin = best.score - r.score
+    unit = measure(s.manifest)[1]
+    margin = abs(best.score - r.score)
     if best.seeds_finished == 0 or sort_key(r) >= sort_key(best) or margin < 0.005:
         return []
     big = margin >= 0.1 * best.score
     return [Fact("notable#/personal-best",
-                 f"@{s.user} beats their previous best on the {s.manifest.title}, {best.score:.2f} s, "
-                 f"by {margin:.2f} s.", "notable", ("pb", "big-margin") if big else ("pb",),
+                 f"@{s.user} beats their previous best on the {s.manifest.title}, {best.score:.2f} {unit}, "
+                 f"by {margin:.2f} {unit}.", "notable", ("pb", "big-margin") if big else ("pb",),
                  score=0.8 if big else 0.6)]
 
 
@@ -230,6 +231,7 @@ def opponents(s: Situation) -> list[Fact]:
     me = next((i for i, row in enumerate(after) if row.record.user == s.user), None)
     if me is None:
         return []
+    word, unit = measure(s.manifest)
     out = []
     for row in after[me + 1 : me + 4]:
         user = row.record.user
@@ -240,7 +242,7 @@ def opponents(s: Situation) -> list[Fact]:
         out.append(Fact(
             f"notable#/opponent/{user}",
             f"@{user} drops from rank {held.rank} to rank {row.rank} on the {s.manifest.title}; "
-            f"their best time there, {held.record.score:.2f} s, was published {ago}.",
+            f"their best {word} there, {held.record.score:.2f} {unit}, was published {ago}.",
             "notable", ("rivalry", "displaced"), score=min(0.8, 0.4 + days / 60),
         ))
     return out

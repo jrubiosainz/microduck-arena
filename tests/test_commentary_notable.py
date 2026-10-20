@@ -131,3 +131,17 @@ def test_profiles_give_the_season_of_the_author_and_of_who_the_board_measures_th
     _, behind = profiles_for(back, carol, hill, mine)
     assert behind.text.startswith("@alice, next on this board, has 620 points")
     assert [f.ref for f in profiles_for(carol)] == ["notable#/profile"]
+
+
+def test_a_bench_run_has_no_time_milestone_and_beats_its_best_by_pulling_harder():
+    first = run("alice", 3.0, "2026-09-10T10:00:00Z", event="tug-of-war")
+    facts = facts_for(run("alice", 4.2, "2026-09-11T10:00:00Z", event="tug-of-war"), first)
+    assert "notable#/milestone" not in facts and "notable#/record" not in facts
+    assert facts["notable#/personal-best"].text == "@alice beats their previous best on the Tug of War, 3.00 N, by 1.20 N."
+
+
+def test_a_displaced_bench_rival_is_quoted_in_newtons():
+    bob = run("bob", 3.0, "2026-09-01T10:00:00Z", event="tug-of-war")
+    facts = facts_for(run("alice", 4.0, "2026-09-11T10:00:00Z", event="tug-of-war"), bob)
+    assert facts["notable#/opponent/bob"].text == ("@bob drops from rank 1 to rank 2 on the Tug of War; their best "
+                                                   "rating there, 3.00 N, was published 10 days ago.")

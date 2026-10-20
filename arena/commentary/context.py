@@ -11,7 +11,7 @@ import unicodedata
 from dataclasses import dataclass
 
 from ..index import by_user, leaderboard, sort_key, standing
-from ..manifest import Manifest
+from ..manifest import Manifest, higher_wins
 from ..points import Receipt
 from ..store import RunRecord
 
@@ -45,10 +45,19 @@ def label(value, limit: int = 80) -> bool:
             and not technical_text(value))
 
 
+def measure(manifest: Manifest) -> tuple[str, str]:
+    """What the board's score is called and counted in: a rating in newtons where higher wins,
+    else a time in seconds."""
+    return ("rating", "N") if higher_wins(manifest.id) else ("time", "s")
+
+
 def nature(manifest: Manifest) -> tuple[str, tuple[str, ...]]:
     """What kind of contest this is, in words and in tags the bible matches on."""
     if manifest.course.kind == "stage":
         return "a performance on a stage decided by the public's votes", ("vote",)
+    if manifest.course.kind == "tug":
+        return ("a pulling bench: the duck pulls backwards on a string against a winch that pulls "
+                "harder and harder, across a pit"), ("tug",)
     length = f"{manifest.course.length_m:g} m"
     if manifest.course.slope_deg > 0:
         return f"a {length} climb up an {manifest.course.slope_deg:g} degree slope", ("hill",)
@@ -66,6 +75,17 @@ ACTS = {
 ACT_TAGS = {"first_event": "first-run", "own_best": "pb", "podium": "podium"}
 
 
+def _bench_result(record: RunRecord, manifest: Manifest) -> Fact:
+    top = manifest.bench.top_n
+    text = (f"The rating is {record.score:.2f} N: how hard the winch was pulling when the duck fell or "
+            f"went into the pit, averaged over {len(record.per_seed)} seeds")
+    held = sum(1 for s in record.per_seed if s.status == "held")
+    if held:
+        text += f"; the duck held on to the end of {held} of them, which counts the winch's top pull of {top:g} N"
+    traced = next(s.status for s in record.per_seed if s.seed == record.trace_seed)
+    return Fact("run#/result", text + ".", "result", (traced,))
+
+
 def _result(record: RunRecord, manifest: Manifest) -> Fact:
     if manifest.course.kind == "stage":
         # A performance is not a race: its length is the only time it has, and
@@ -73,6 +93,8 @@ def _result(record: RunRecord, manifest: Manifest) -> Fact:
         text = (f"The performance lasts {record.score:.2f} s." if record.seeds_finished
                 else "The performance was cut short.")
         return Fact("run#/result", text, "result", ("performance",))
+    if manifest.course.kind == "tug":
+        return _bench_result(record, manifest)
     who = f"@{record.user}"
     total = len(record.per_seed)
     falls = sum(1 for s in record.per_seed if s.status == "fall")
@@ -105,9 +127,10 @@ def _board(record: RunRecord, manifest: Manifest, event_runs) -> Fact:
     text = f"On the {manifest.title} board this run ranks {rank} of {size}"
     tags = ["podium"] if rank <= 3 else []
     if record.seeds_finished:
-        gap = record.score - leader.score
-        text += f", {gap:.2f} s behind the leader, @{leader.user}."
-        if gap < 0.5:
+        unit = measure(manifest)[1]
+        gap = abs(record.score - leader.score)
+        text += f", {gap:.2f} {unit} behind the leader, @{leader.user}."
+        if gap < (0.25 if unit == "N" else 0.5):
             tags.append("close")
         return Fact("run#/board", text, "result", tuple(tags))
     return Fact("run#/board", text + ".", "result", tuple(tags))
@@ -184,7 +207,7 @@ def result_facts(record: RunRecord, manifest: Manifest, event_runs, receipts) ->
     who = f"@{record.user}"
     policy = record.policy_name if label(record.policy_name) else None
     note = _note(record)
-    doing = "performing" if manifest.course.kind == "stage" else "racing"
+    doing = {"stage": "performing", "tug": "pulling with"}.get(manifest.course.kind, "racing")
     facts = [
         Fact("run#/event", f"The event is the {manifest.title}, {what}.", "result", tags),
         Fact("run#/participant",

@@ -213,3 +213,22 @@ def test_a_name_that_is_not_a_label_is_left_out_of_the_troupe():
 
 def test_one_duck_is_told_as_it_always_was():
     assert "run#/troupe" not in facts_of(stage_run())
+
+
+def bench_seeds(*forces):
+    return tuple(SeedResult(i + 1, "held" if f == 7.0 else "pit", None if f == 7.0 else 20.0, f) for i, f in enumerate(forces))
+
+
+def test_a_bench_run_states_its_rating_and_its_gap_in_newtons():
+    manifest = load_event("tug-of-war")
+    leader = run("carol", 5.0, "2026-09-10T10:00:00Z", event="tug-of-war", run_id="R0", per_seed=bench_seeds(5, 5, 5, 5, 5))
+    mine = run("alice", 4.2, "2026-09-11T10:00:00Z", event="tug-of-war", run_id="R1", per_seed=bench_seeds(7.0, 3.0, 4.0, 3.5, 3.5))
+    facts = {f.ref: f for f in result_facts(mine, manifest, [leader, mine], [])}
+    assert facts["run#/event"].text == ("The event is the Tug of War, a pulling bench: the duck pulls backwards on a "
+                                        "string against a winch that pulls harder and harder, across a pit.")
+    assert facts["run#/participant"].text == "The participant is @alice, pulling with a policy named alice-v1."
+    assert facts["run#/result"].text == (
+        "The rating is 4.20 N: how hard the winch was pulling when the duck fell or went into the pit, averaged "
+        "over 5 seeds; the duck held on to the end of 1 of them, which counts the winch's top pull of 7 N.")
+    assert facts["run#/board"].text == "On the Tug of War board this run ranks 2 of 2, 0.80 N behind the leader, @carol."
+    assert nature(manifest)[1] == ("tug",)
