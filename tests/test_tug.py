@@ -12,7 +12,6 @@ from arena.course import compile_tug, string_offset
 from arena.manifest import BoutRules, load_event
 from arena.policy import load_policy
 from arena.runner import _Addresses, _record
-from tests.test_assets import REFERENCE_SHA256
 from arena.tug import (
     SIDES,
     BoutOutcome,
@@ -29,6 +28,7 @@ from arena.tug import (
     run_bout,
     string_ends,
 )
+from tests.test_assets import REFERENCE_SHA256
 
 TUG, OFFSET = load_event("tug-of-war"), string_offset("legs")
 SHORT = dataclasses.replace(TUG, bout=BoutRules(4.0, 2, 5))

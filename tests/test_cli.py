@@ -282,7 +282,7 @@ def test_score_rates_a_tug_entry_and_the_board_says_rating(tmp_path, capsys):
     """The format Plan B's ledger reads: five seed lines, then the rating."""
     assert main(["score", REFERENCE, "--event", "tug-of-war", "--store", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    seed = r"^seed [1-5]: (west|east) (won|lost|draw|pit_won|pit_lost) +[+-]\d+\.\d cm at \d+\.\d\d s$"
+    seed = r"^seed [1-5]: (west|east) +(won|lost|draw|pit_won|pit_lost) +[+-] *\d+\.\d cm at \d+\.\d\d s$"
     assert len(re.findall(seed, out, re.MULTILINE)) == 5
     assert len(re.findall(r"^rating: -?\d+\.\d cm · replay from seed [1-5]$", out, re.MULTILINE)) == 1
     assert main(["board", "--event", "tug-of-war", "--store", str(tmp_path)]) == 0

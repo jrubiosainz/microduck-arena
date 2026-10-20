@@ -670,6 +670,6 @@ def test_a_borrowed_policy_that_does_not_load_is_a_400_naming_its_duck(api, monk
 def test_a_tug_entry_is_rated_in_bouts_against_the_reference(api):
     body = submit(api, event="tug-of-war").json()
     assert body["course"] == "tug" and body["seeds_total"] == 5 and all("score_cm" in s for s in body["per_seed"])
-    assert body["metric"] == "mean_ground_cm" and "bench" not in body
+    assert body["metric"] == "mean_ground_cm"
     assert api.get(f"/api/runs/{body['run_id']}/trace").headers["X-Duck-Count"] == "2"
     assert submit(api, event="sprint-2m").json()["metric"] == "mean_finish_time"

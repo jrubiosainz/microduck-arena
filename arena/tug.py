@@ -22,9 +22,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .assets import ASSET_ROOT
 from .constants import CTRL_DT, TRACE_WIDTH
 from .course import WINCH, compile_tug, string_offset
-from .assets import ASSET_ROOT
 from .manifest import Bench, Manifest
 from .policy import load_policy
 from .runner import _reset_by_mujoco, _start
@@ -190,7 +190,8 @@ def bout_status(outcome: BoutOutcome, entry: int) -> str:
 
 def bout_score_cm(outcome: BoutOutcome, entry: int, pit_bonus_cm: float, offset) -> float:
     """The entry's score for a bout: the centimetres of ground it won, the marker's distance from
-    the centre line towards its opponent's side, plus the pit bonus when only the opponent is in."""
+    the centre line towards its opponent's side, plus the pit bonus when only the opponent is in the pit, minus it when only the entry is
+    (nothing when both are)."""
     if outcome.how == "draw":  # the centre line exactly, or a step MuJoCo reset: nobody's ground
         return 0.0
     x = float(marker_x(outcome.trace[:, -1:], offset)[0])

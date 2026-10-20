@@ -491,6 +491,7 @@ def load_manifest(path: Path) -> Manifest:
             else f"{path}: [cup] is for a versus event"
         )
 
+    time_limit_s = float(_require(raw, "time_limit_s", str(path)))
     bench = rating = bout = None
     if kind == "tug":
         if rig != "legs":
@@ -503,10 +504,9 @@ def load_manifest(path: Path) -> Manifest:
                 raise ManifestError(f"{path}: a tug needs [{section}]")
         course, sweep = _tug(course_raw), None
         bench, rating, bout = _bench(raw["bench"]), _rating(raw["rating"], path), _bout(raw["bout"], path)
-        if bout.time_limit_s != float(_require(raw, "time_limit_s", str(path))):
+        if bout.time_limit_s != time_limit_s:
             raise ManifestError(
-                f"{path}: a tug's time_limit_s is its bouts': "
-                f"{raw['time_limit_s']} against [bout]'s {bout.time_limit_s}"
+                f"{path}: a tug's time_limit_s is its bouts': {time_limit_s} against [bout]'s {bout.time_limit_s}"
             )
     elif kind == "stage":
         _refuse_unknown(course_raw, {"kind", "size_m", "max_ducks"}, "[course]")
@@ -560,7 +560,7 @@ def load_manifest(path: Path) -> Manifest:
         category=category,
         kind=policy_kind,
         order=order,
-        time_limit_s=float(_require(raw, "time_limit_s", str(path))),
+        time_limit_s=time_limit_s,
         metric=metric,
         seeds=seeds,
         course=course,

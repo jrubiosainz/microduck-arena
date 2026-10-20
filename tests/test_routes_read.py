@@ -41,7 +41,7 @@ def test_a_tug_serves_its_course_bench_and_bouts(client):
 PROFILE = {"ramp_n_per_s": 0.25, "top_n": 7.0, "jerks": [[0.4, 0.7, 2.8], [0.4, 1.9, 2.1]]}
 
 
-def test_a_bench_run_serves_its_profile_its_forces_and_a_board_strongest_first(client):
+def test_a_bench_run_serves_its_profile_its_centimetres_and_a_board_strongest_first(client):
     api, app = client
     record_run(app, event_id="tug-of-war", user="bob", score=3.0, bench=PROFILE, per_seed=(SeedResult(1, "lost", 45.0, 3.0),))
     mine = record_run(app, event_id="tug-of-war", user="alice", score=4.2, bench=PROFILE, per_seed=(SeedResult(1, "won", 45.0, 7.0),))

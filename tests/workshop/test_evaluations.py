@@ -162,4 +162,4 @@ def test_a_tug_checkpoint_is_rated_against_the_reference(checkout, fakes, hub):
     assert body["seeds_total"] == 5
     assert all("score_cm" in seed for seed in body["per_seed"])
     assert "bench" not in body
-    assert body["ducks"] == 2  # the fake export hands over the walker
+    assert body["ducks"] == 2  # the entry's duck and the reference

@@ -523,6 +523,7 @@ def test_the_tug_of_war_loads(tmp_path):
     ({"sweep": BENCH + "[bout]" + TUG["sweep"].split("[bout]")[1]}, r"needs \[rating\]"),
     ({"sweep": RATING + "[bout]" + TUG["sweep"].split("[bout]")[1]}, r"needs \[bench\]"),
     ({"sweep": TUG["sweep"].replace("t7-250", "t9")}, r"\[rating\] reference"),
+    ({"sweep": TUG["sweep"].replace('"tug-', '"../policies/tug-')}, r"\[rating\] reference"),
     ({"sweep": TUG["sweep"].replace("pit_bonus_cm=100.0", "pit_bonus_cm=0.0")}, r"\[rating\] pit_bonus_cm"),
     ({"sweep": TUG["sweep"].replace("pit_bonus_cm=100.0", "pit_bonus_cm=100.0\nopponent=1")}, "unknown keys"),
     ({"sweep": TUG["sweep"].replace("time_limit_s=10.0\nbouts", "time_limit_s=12.0\nbouts")}, "time_limit_s is its bouts'"),

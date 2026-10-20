@@ -343,7 +343,9 @@ def test_a_tug_is_rated_by_one_bout_a_seed_against_the_reference(monkeypatch):
     def fake(manifest, west, east, seed, model=None):
         played.append((seed, west is entry, {id(west), id(east)} == {id(entry), id(reference)}))
         loser, how, x, pit = bouts[seed]
-        return BoutOutcome(seed, loser, how, 45.0, bout_trace(x, pit), np.zeros((2, 26, 21)))
+        trace = bout_trace(x, pit)
+        trace[:, :, 10] = seed   # a joint column marks the bout a trace comes from
+        return BoutOutcome(seed, loser, how, 45.0, trace, np.zeros((2, 26, 21)))
     monkeypatch.setattr("arena.evaluate.reference_duck", lambda manifest: reference)
     monkeypatch.setattr("arena.evaluate.compile_tug", lambda *args: "model")
     monkeypatch.setattr("arena.evaluate.run_bout", fake)
@@ -353,6 +355,7 @@ def test_a_tug_is_rated_by_one_bout_a_seed_against_the_reference(monkeypatch):
     assert [s.score_cm for s in result.per_seed] == pytest.approx([10.0, -20.0, 130.0, 2.0, -5.0])
     assert (result.score, result.trace_seed, result.seeds_finished) == (pytest.approx(23.4), 4, 5)
     assert (result.command_vx, result.scan, result.trace.shape, result.settle.shape) == (-0.3, (), (2, 1, 21), (2, 26, 21))
+    assert (result.trace[:, :, 10] == 4).all()
 
 
 def test_the_reference_against_itself_wins_no_ground_to_speak_of():
