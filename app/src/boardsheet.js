@@ -44,7 +44,7 @@ export function wireBoardsheet(
 ) {
   const sheet = root.querySelector(".boardsheet");
   const board = sheet.querySelector("#board");
-  // A stage plays one performance, the bench one duck against the winch.
+  // A stage plays one performance, a rated run plays alone against the reference.
   const solo = isStage(event) || isTug(event);
   sheet.querySelector(".pickall").hidden = solo;
   // Two narrowings rather than three modes: Mine and Top each turn on and off

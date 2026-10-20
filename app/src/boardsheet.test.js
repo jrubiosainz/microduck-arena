@@ -38,8 +38,8 @@ describe("the board sheet", () => {
     expect([...wired.selection]).toEqual(["r3"]);
     expect(onRace).toHaveBeenLastCalledWith(["r3"], expect.any(Map));
   });
-  it("puts one bench run on the stage at a time, with no box to put them all", async () => {
-    const TUG = { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_hold_force" };
+  it("puts one rated run on the stage at a time, with no box to put them all", async () => {
+    const TUG = { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_ground_cm" };
     const { root, board } = await sheet({ event: TUG });
     expect(root.querySelector(".pickall").hidden).toBe(true);
     expect(ticked(board)).toEqual(["r2"]);

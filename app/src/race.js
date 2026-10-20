@@ -60,7 +60,7 @@ export function renderEventFacts(root, event) {
     ? "Performances play on this stage, with this friction and this physics build. A " +
       "policy tuned elsewhere can perform differently here."
     : isTug(event)
-      ? "Ratings are measured on this bench, with this friction and this physics build. A " +
+      ? "Ratings are measured in bouts against the reference duck, with this friction and this physics build. A " +
         "policy tuned elsewhere can pull less here without being weaker."
       : "Times are measured on this course, with this friction and this " +
         "physics build. A policy tuned elsewhere can do worse here without " +
@@ -221,7 +221,7 @@ export async function renderRace(root, { event, state }) {
   const liveries = new Map(); // run id -> the colourway it raced in
   const names = new Map(); // run id -> whose run it is, for the plate over its duck
   const casts = new Map(); // run id -> every duck it put on the stage (cast.js)
-  const benches = new Map(); // run id -> the winch a bench run pulled against, which its dial reads
+  const seeds = new Map(); // run id -> the seed its bout replays, which says the entry's end of the string
 
   async function traceFor(runId) {
     if (!traces.has(runId)) traces.set(runId, await getTrace(runId));
@@ -237,9 +237,9 @@ export async function renderRace(root, { event, state }) {
       livery: liveries.get(runId) ?? "classic",
       // The plate over the duck: the viewer builds one for a lane with a name.
       name: names.get(runId),
-      bench: benches.get(runId),
+      traceSeed: seeds.get(runId),
     }));
-    // A performance plays alone on the stage, a bench run alone against the winch.
+    // A performance plays alone on the stage, a rated run alone against the reference duck.
     const solo = isStage(event) || isTug(event);
     viewer.setLanes(arrangeLanes(board, solo ? lanes.slice(0, 1) : lanes), event);
   }
@@ -254,7 +254,7 @@ export async function renderRace(root, { event, state }) {
         liveries.set(row.run_id, row.livery ?? "classic");
         names.set(row.run_id, row.user);
         casts.set(row.run_id, row.cast);
-        benches.set(row.run_id, row.bench);
+        seeds.set(row.run_id, row.trace_seed);
       }
       return rows;
     },

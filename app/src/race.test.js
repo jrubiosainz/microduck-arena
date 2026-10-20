@@ -54,12 +54,12 @@ describe("renderEventFacts: the caveat under the facts", () => {
     expect(caveat.textContent).toContain("Performances play on this stage");
   });
 
-  it("a bench's caveat speaks of ratings", () => {
-    const TUG = { id: "tug-of-war", course: "tug", rig: "legs", length_m: 4, pit_m: 0.3, bench: { ramp_n_per_s: 0.25, top_n: 7 } };
+  it("a tug's caveat speaks of ratings", () => {
+    const TUG = { id: "tug-of-war", course: "tug", rig: "legs", length_m: 4, pit_m: 0.3, bout: { time_limit_s: 45 } };
     const root = document.createElement("div");
     root.innerHTML = '<dl id="facts"></dl>';
     expect(renderEventFacts(root, TUG).textContent).toBe(
-      "Ratings are measured on this bench, with this friction and this physics build. A policy tuned elsewhere can " +
+      "Ratings are measured in bouts against the reference duck, with this friction and this physics build. A policy tuned elsewhere can " +
       "pull less here without being weaker.",
     );
   });

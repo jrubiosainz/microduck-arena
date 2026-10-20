@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { featuring, flipScore, receiptCard, replayLine, runHall, seedText, verdict } from "./run.js";
 
 const STAGE = { title: "MicroDuck Got a Talent", course: "stage", metric: "votes" };
-const TUG = { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_hold_force" };
+const TUG = { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_ground_cm", bout: { time_limit_s: 45 } };
 const tugRun = {
-  run_id: "R1", user: "nico", policy_name: "puller", event: TUG, score: 4.2134, seeds_finished: 5, seeds_total: 5,
+  run_id: "R1", user: "nico", policy_name: "puller", event: TUG, score: 12.34, seeds_finished: 5, seeds_total: 5,
   trace_seed: 3, rank: 2, on_board: true, withdrawn: false, receipts: [{ act: "run", points: 10 }],
-  per_seed: [{ seed: 3, status: "held", time_s: null, force_n: 7 }], cast: [{ policy: "self" }],
+  per_seed: [{ seed: 3, status: "won", time_s: 45, score_cm: 10.1 }], cast: [{ policy: "self" }],
 };
 
 describe("a receipt", () => {
@@ -55,21 +55,21 @@ describe("a performance's scoreboard", () => {
   });
 });
 
-describe("a bench run's scoreboard", () => {
-  it("is rated in newtons and stamped rated", () => {
-    expect(verdict(tugRun)).toEqual({ label: "rating · N", stamp: "RATED" });
+describe("a rated tug run's scoreboard", () => {
+  it("is rated in centimetres and stamped rated", () => {
+    expect(verdict(tugRun)).toEqual({ label: "rating · cm", stamp: "RATED" });
   });
-  it("replays the median pull", () => {
-    expect(replayLine(tugRun)).toBe("replay: seed 3, the median pull");
+  it("replays the median bout", () => {
+    expect(replayLine(tugRun)).toBe("replay: seed 3, the median bout");
   });
 });
 
 describe("the number the scoreboard flips", () => {
   const race = { event: { course: "lane", metric: "mean_finish_time" }, score: 12.3456, seeds_finished: 5 };
 
-  it("rolls a rating to the hundredth of a newton, from zeros of its own shape", () => {
-    expect(flipScore(tugRun)).toBe("4.21");
-    expect(flipScore(tugRun, { veiled: true })).toBe("0.00");
+  it("rolls a rating to the tenth of a centimetre, from zeros of its own shape", () => {
+    expect(flipScore(tugRun)).toBe("12.3");
+    expect(flipScore(tugRun, { veiled: true })).toBe("00.0");
   });
   it("keeps a race's time to the millisecond, from the same zeros as ever, and a DNF", () => {
     expect(flipScore(race)).toBe("12.346");
@@ -79,9 +79,9 @@ describe("the number the scoreboard flips", () => {
 });
 
 describe("a seed's line", () => {
-  it("says what the bench's winch was pulling, and how the seed ended when it did not go into the pit", () => {
-    expect(seedText({ seed: 3, status: "held", time_s: null, force_n: 7 })).toBe("7.00 N · held on");
-    expect(seedText({ seed: 3, status: "pit", time_s: 21.7, force_n: 4.77 })).toBe("4.77 N");
+  it("says the ground a bout won in centimetres, the entry's side and how it ended", () => {
+    expect(seedText({ seed: 3, status: "won", time_s: 45, score_cm: 10.14 })).toBe("+10.1 cm · west · won the pull");
+    expect(seedText({ seed: 2, status: "pit_lost", time_s: 4.5, score_cm: -143.42 })).toBe("-143.4 cm · east · dragged in");
   });
   it("keeps a race's time, or how it ended", () => {
     expect(seedText({ seed: 1, status: "finish", time_s: 12.3456 })).toBe("12.346s");

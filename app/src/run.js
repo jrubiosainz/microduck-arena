@@ -16,6 +16,7 @@ import { dress, guideHref, playerHref, raceHref } from "./router.js";
 import { shareStrip, wireShare } from "./share.js";
 import { footer, signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
+import { BOUT_WORDS, SIDES, entrySide } from "./tug.js";
 import { createViewer } from "./viewer.js";
 
 // The colour each kind of receipt wears on its edge.
@@ -33,11 +34,11 @@ function el(tag, className, text) {
   return node;
 }
 
-/** Which seed the stored replay is, and why that one; a performance is played once, a bench run
- * replays the seed whose pull is its median. */
+/** Which seed the stored replay is, and why that one; a performance is played once, a rated
+ * tug run replays the bout whose ground is its median. */
 export function replayLine(run) {
   if (isStage(run.event)) return "replay: the whole performance";
-  if (isTug(run.event)) return `replay: seed ${run.trace_seed}, the median pull`;
+  if (isTug(run.event)) return `replay: seed ${run.trace_seed}, the median bout`;
   const finishers = run.per_seed.filter((s) => s.status === "finish").length;
   const which =
     finishers > 1 ? "median finisher" : finishers === 1 ? "the one finisher" : "first seed";
@@ -45,34 +46,33 @@ export function replayLine(run) {
 }
 
 /** What the scoreboard says over its number, and the stamp it lands. A stage has no time and no
- * finish: its number is the performance's length, and it was performed or cut short. A bench run
- * always ends, dragged into the pit or holding on: its number is its rating, in newtons. */
+ * finish: its number is the performance's length, and it was performed or cut short. A tug run's
+ * number is its rating, in centimetres won from the reference duck. */
 export function verdict(run) {
   const dnf = run.seeds_finished === 0;
   if (isStage(run.event)) return { label: "length", stamp: dnf ? "CUT SHORT" : "PERFORMED" };
-  if (isTug(run.event)) return { label: "rating · N", stamp: "RATED" };
+  if (isTug(run.event)) return { label: "rating · cm", stamp: "RATED" };
   return { label: "time", stamp: dnf ? "DNF" : `FINISHED ${run.seeds_finished}/${run.seeds_total}` };
 }
 
 /**
- * The number the scoreboard flips: a bench's rating to the hundredth of a newton (the label says
+ * The number the scoreboard flips: a tug's rating to the tenth of a centimetre (the label says
  * the unit), a time to the millisecond, or DNF. Veiled, zeros of the number's own shape whatever
  * the run did: a DNF's three tiles beside a time's six would give the verdict away before the stamp.
  */
 export function flipScore(run, { veiled = false } = {}) {
   const tug = isTug(run.event);
-  if (veiled) return tug ? "0.00" : "00.000";
+  if (veiled) return tug ? "00.0" : "00.000";
   if (run.seeds_finished === 0) return "DNF";
-  return run.score.toFixed(tug ? 2 : 3);
+  return run.score.toFixed(tug ? 1 : 3);
 }
 
-/** How a bench seed ended, when it did not go into the pit as most do. */
-const BENCH_ENDS = { held: " · held on" };
-
-/** One seed's line: on the bench the winch's pull when it ended, and how; in a race its time, or how
- * it ended. */
+/** One seed's line: in a tug the ground the bout won, the entry's side and how it ended; in a race
+ * its time, or how it ended. */
 export function seedText(seed) {
-  if (seed.force_n != null) return `${seed.force_n.toFixed(2)} N${BENCH_ENDS[seed.status] ?? ""}`;
+  if (seed.score_cm != null) {
+    return `${seed.score_cm >= 0 ? "+" : ""}${seed.score_cm.toFixed(1)} cm · ${SIDES[entrySide(seed.seed)]} · ${BOUT_WORDS[seed.status]}`;
+  }
   return seed.time_s == null ? seed.status : `${seed.time_s.toFixed(3)}s`;
 }
 
@@ -310,8 +310,8 @@ export async function renderRun(root, runId, state) {
       livery: byId.get(id).livery,
       // The plate over the duck.
       name: byId.get(id).user,
-      // The winch a bench run pulled against, which its dial reads.
-      bench: byId.get(id).bench,
+      // The seed its bout replays, which says which end of the string the entry holds.
+      traceSeed: byId.get(id).trace_seed,
     }));
     viewer.setLanes(colourLanes($("board"), lanes), run.event);
   }

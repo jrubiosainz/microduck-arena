@@ -507,15 +507,15 @@ describe("buildRows: who is on the stage", () => {
   });
 });
 
-describe("the tug's board rates in newtons: no speed, no seeds", () => {
-  it("heads the column rating and reads the force", () => {
+describe("the tug's board rates in centimetres: no speed, no seeds", () => {
+  it("heads the column rating and reads the ground", () => {
     const container = document.createElement("div");
     renderBoard(container, {
-      event: { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_hold_force" },
-      rows: [row({ score: 4.2134 })],
+      event: { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_ground_cm" },
+      rows: [row({ score: 12.34 })],
     });
     expect(container.querySelector("th.time").textContent).toBe("rating");
-    expect(container.querySelector("td.time").textContent).toBe("4.21 N");
+    expect(container.querySelector("td.time").textContent).toBe("12.3 cm");
     expect(container.querySelector("th.speed")).toBeNull();
     expect(container.querySelector("th.seeds")).toBeNull();
   });

@@ -68,17 +68,17 @@ describe("postText for a performance", () => {
   });
 });
 
-describe("postText for a bench run", () => {
-  const TUG = { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_hold_force" };
+describe("postText for a rated tug run", () => {
+  const TUG = { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_ground_cm" };
   const tugRun = {
-    run_id: "R1", user: "nico", policy_name: "puller", event: TUG, score: 4.2134, seeds_finished: 5, seeds_total: 5,
+    run_id: "R1", user: "nico", policy_name: "puller", event: TUG, score: 12.34, seeds_finished: 5, seeds_total: 5,
     trace_seed: 3, rank: 2, on_board: true, withdrawn: false, receipts: [{ act: "run", points: 10 }],
-    per_seed: [{ seed: 3, status: "held", time_s: null, force_n: 7 }], cast: [{ policy: "self" }],
+    per_seed: [{ seed: 3, status: "won", time_s: 45, score_cm: 10.1 }], cast: [{ policy: "self" }],
   };
 
-  it("shares its rating in newtons and dares the next one to beat it", () => {
+  it("shares its rating in centimetres and dares the next one to beat it", () => {
     expect(postText(tugRun, { origin: "https://x", network: "bluesky" }).split("\n").slice(0, 2)).toEqual([
-      "I coded a robot duck to pull. On Tug of War its rating is 4.21 N, #2 on the board (+10 pts).",
+      "I coded a robot duck to pull. On Tug of War its rating is 12.3 cm against the reference duck, #2 on the board (+10 pts).",
       "Beat it: https://x/r/R1",
     ]);
   });

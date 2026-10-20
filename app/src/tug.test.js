@@ -5,7 +5,7 @@ import { PALETTE, colour } from "./palette.js";
 import { buildGym } from "./gym.js";
 import { TRACE_WIDTH } from "./replay.js";
 import {
-  BOUT_WORDS, buildString, buildTugCourse, cutPit, disposeTugCourse, entrySide, floorUnder, ratingLane, stringEnd, toThree, tugDistance,
+  BOUT_WORDS, SIDES, buildString, buildTugCourse, cutPit, disposeTugCourse, entrySide, floorUnder, ratingLane, stringEnd, toThree, tugDistance,
   tugDucks, tugEnds, tugPose, tugSpan,
 } from "./tug.js";
 
@@ -136,5 +136,11 @@ describe("the tug filmed", () => {
     const away = new Vector3(...fitted.position).sub(new Vector3(...pose.target));
     expect(away.length()).toBeCloseTo(tugDistance(1.3, 16 / 9, 42, TOWARD), 9);
     away.normalize().toArray().forEach((v, i) => expect(v).toBeCloseTo(TOWARD[i], 9));
+  });
+});
+
+describe("SIDES", () => {
+  it("names the entry's two ends of the string, as arena/tug.py does", () => {
+    expect(SIDES).toEqual(["west", "east"]);
   });
 });

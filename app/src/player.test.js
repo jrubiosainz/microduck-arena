@@ -237,17 +237,17 @@ describe("the way out of a player's own page", () => {
 });
 
 describe("the tug's best row", () => {
-  it("says the rating in newtons", () => {
+  it("says the rating in centimetres", () => {
     const player = {
       user: "ann",
       points: 100,
       rank: 1,
       publications: [
-        { event_id: "tug-of-war", event_title: "Tug of War", rank: 1, score: 4.2134, seeds_finished: 5,
+        { event_id: "tug-of-war", event_title: "Tug of War", rank: 1, score: 12.34, seeds_finished: 5,
           seeds_total: 5, policy_name: "puller", run_id: "r9", submitted_at: "2026-10-20T10:00:00Z",
-          votes: null, metric: "mean_hold_force" },
+          votes: null, metric: "mean_ground_cm" },
       ],
     };
-    expect(profile(player).querySelector(".profile-results a").textContent).toContain("#1 · 4.21 N");
+    expect(profile(player).querySelector(".profile-results a").textContent).toContain("#1 · 12.3 cm");
   });
 });

@@ -24,6 +24,9 @@ export function stringEnd(frame, offset) {
   ];
 }
 
+/** The two ends of the string, by `entrySide`'s index (arena/tug.py's SIDES). */
+export const SIDES = ["west", "east"];
+
 /** Which end of the string, 0 west and 1 east, the entry holds on a bout's seed: west on an odd one. */
 export const entrySide = (seed) => 1 - (seed % 2);
 

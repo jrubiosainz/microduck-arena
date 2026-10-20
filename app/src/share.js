@@ -42,7 +42,7 @@ export function postText(run, { origin, network }) {
       ? `${troupe ? "Their" : "Its"} performance on ${run.event.title} was cut short.`
       : `On ${run.event.title} ${troupe ? "they" : "it"} gave a ${run.score.toFixed(2)} s performance${points}.`;
   } else if (tug) {
-    result = `On ${run.event.title} its rating is ${run.score.toFixed(2)} N${place}${points}.`;
+    result = `On ${run.event.title} its rating is ${run.score.toFixed(1)} cm against the reference duck${place}${points}.`;
   } else if (run.seeds_finished === 0) {
     const fell = run.per_seed.some((s) => s.status === "fall");
     result = `On ${run.event.title} it finished 0/${total} seeds on its feet — ${fell ? "it ate the floor" : "it ran out of time"}.`;

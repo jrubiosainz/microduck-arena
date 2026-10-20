@@ -118,7 +118,7 @@ export function renderBoard(
   // column reads "rating" and shows the rate -- a finish time would be the
   // wrong fact about it, and does not appear on this board at all.
   const voted = event.metric === "votes";
-  // A performance has no speed and is played once, and a tug is rated on one bench: on either,
+  // A performance has no speed and is played once, and a tug is rated by its bouts against the reference: on either,
   // neither column means anything.
   const stage = isStage(event) || isTug(event);
   const rated = isTug(event);

@@ -55,7 +55,7 @@ function stats(event, rows) {
   }
   const rig = event.rig === "rollers" ? stat("roller_skating", "Rollers") : stat("directions_walk", "Legs");
   if (isTug(event)) {
-    box.append(stat("straighten", `${event.pit_m} m pit`), stat("bar_chart", `${event.bench.top_n} N winch`), rig);
+    box.append(stat("straighten", `${event.pit_m} m pit`), stat("sports_score", `${event.bout.time_limit_s} s bouts`), rig);
     return box;
   }
   box.append(
