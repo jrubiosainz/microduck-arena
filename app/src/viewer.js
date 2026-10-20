@@ -495,7 +495,7 @@ export async function createViewer(
       if (roller) {
         gym = buildRollerHall(courseLength, height, branding, spectators);
       } else {
-        audience = attachStadium(course, spectators, clearance);
+        audience = attachStadium(course, spectators, clearance, tugged ? event.pit_m : 0);
         course.updateMatrixWorld(true);
         const stadiumBounds = new Box3().setFromObject(course);
         gym = buildGym(courseLength, stadiumBounds.min.z, stadiumBounds.max.z, branding, height);

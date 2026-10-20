@@ -106,6 +106,15 @@ describe("buildRail", () => {
     expect(Math.min(...xs)).toBeLessThan(0);
     expect(Math.max(...xs)).toBeGreaterThan(LENGTH);
   });
+
+  it("stands no post over a pit across the track's middle: the one there is left out, the bar runs on", () => {
+    const [bar, ...posts] = buildRail(LENGTH, SPAN / 2, -1, 0.3).children;
+    expect(posts).toHaveLength(8);
+    for (const post of posts) {
+      expect(Math.abs(post.position.x - LENGTH / 2)).toBeGreaterThanOrEqual(0.15 + post.geometry.parameters.width / 2);
+    }
+    expect(bar.geometry.parameters.width).toBeGreaterThan(LENGTH);
+  });
 });
 
 describe("buildCones", () => {
@@ -402,6 +411,13 @@ describe("attachStadium", () => {
       expect(cone.position.z).toBeGreaterThan(2.0 - GAP);
       expect(cone.position.z).toBeLessThan(2.0);
     }
+  });
+
+  it("hands a pit across the track's middle to both rails", () => {
+    const course = buildCourse({ length_m: LENGTH }, 1);
+    attachStadium(course, spectators(), 0, 0.3);
+    const rails = course.getObjectByName("stadium").children.filter((child) => child.name === "rail");
+    expect(rails.map((rail) => rail.children.length - 1)).toEqual([8, 8]);
   });
 
   it("keeps the stands and crowd level while the course slopes", () => {
