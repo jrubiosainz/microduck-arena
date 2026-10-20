@@ -875,8 +875,10 @@ class HubStore:
     def put_cup_files(self, event_id: str, number: int, files: dict[str, bytes]) -> None:
         from huggingface_hub import CommitOperationAdd
 
-        folder = self.snapshot(fresh=True)._cup_dir(event_id, number)
-        taken = [name for name in files if (folder / name).exists()]
+        folder = f"cups/{event_id}/{number:04d}"
+        # Asked of the Hub itself, a round trip per name: a snapshot keeps its last folder when the Hub is slow, and
+        # a stale one would let a second draw.json (a new secret over computed matches) or order.json land.
+        taken = [name for name in files if self.api.file_exists(self.repo_id, f"{folder}/{name}", repo_type="dataset")]
         if taken:
             raise FileExistsError(f"cup {event_id} {number} already has {taken} in {self.repo_id}")
         self.api.create_commit(
@@ -884,8 +886,7 @@ class HubStore:
             repo_type="dataset",
             commit_message=f"{event_id} cup {number}",
             operations=[
-                CommitOperationAdd(path_in_repo=f"cups/{event_id}/{number:04d}/{name}", path_or_fileobj=blob)
-                for name, blob in files.items()
+                CommitOperationAdd(path_in_repo=f"{folder}/{name}", path_or_fileobj=blob) for name, blob in files.items()
             ],
         )
         self.refresh()

@@ -58,6 +58,9 @@ class FakeHub:
         out.write_bytes(self.trees[revision][filename])
         return str(out)
 
+    def file_exists(self, repo_id, filename, repo_type):
+        return filename in self.files
+
     def create_commit(self, repo_id, repo_type, commit_message, operations):
         for op in operations:
             self.put(op.path_in_repo, op.path_or_fileobj)
@@ -228,3 +231,17 @@ def test_cup_files_are_one_commit_and_never_written_twice(tmp_path):
     with pytest.raises(FileExistsError):
         store.put_cup_files("tug-of-war", 1, {"draw.json": b"{}"})
     assert hub.head == 1
+
+
+def test_a_stale_snapshot_never_lets_a_cup_file_be_written_twice(tmp_path):
+    """A slow Hub keeps the last snapshot; the write-once check asks the Hub itself, so a second draw.json (a new
+    secret over computed matches) never lands."""
+    hub = FakeHub(tmp_path)
+    store = HubStore("org/runs", api=hub, snapshot_ttl_s=60)
+    store.snapshot()
+    hub.put("cups/tug-of-war/0001/draw.json", b"first")
+    hub.commit()
+    hub.down = True
+    with pytest.raises(FileExistsError):
+        store.put_cup_files("tug-of-war", 1, {"draw.json": b"second"})
+    assert hub.files["cups/tug-of-war/0001/draw.json"] == b"first" and hub.head == 1
