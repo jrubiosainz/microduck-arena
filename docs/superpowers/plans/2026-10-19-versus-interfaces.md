@@ -1,0 +1,645 @@
+# Versus — shared interfaces and constraints for the four plans
+
+**Spec:** `docs/superpowers/specs/2026-10-19-versus-tug-of-war-design.md` (approved by the owner
+2026-10-19). Four plans implement it and all build against the names below:
+
+| Plan | File | What it builds | Repo / branch |
+|---|---|---|---|
+| A | `2026-10-19-versus-a-tug-and-bench.md` | the tug course, string, winch, bench event, bout and match physics, ranking direction, bench pages and clips | arena, branch `versus` |
+| B | `2026-10-19-versus-b-tug-recipe.md` | the `tug_of_war` training recipe, the trainings, the first candidate, the publish CLI's line for a tug entry | microduck-challenges, branch `tug-of-war`; microduck_rl, branch `tug-publish-line` |
+| C | `2026-10-19-versus-c-weekly-cup.md` | calendar, entrants, secret, draw, groups, knockout, cup records, secrecy, match clips, cup and match pages, points, premiere on the live | arena, branch `versus` |
+| D | `2026-10-19-versus-d-cup-show.md` | the show: running order with the desk, play-by-play, tournament-aware writer, desk screen | arena, branch `versus` |
+
+A section's names are owned by the plan that introduces them; a later plan uses them as written
+here. If a plan must change a name, it changes this file in the same commit.
+
+## Global constraints (every task of every plan)
+
+- **Commits, PRs, GitHub:** English only, never signed: no `Co-Authored-By`, no "Generated with
+  Claude Code". Commit subjects read like the repo's (a sentence saying what changes for a person).
+- **English only** in code, comments, UI, docs, clips and commentary. A stage run is a
+  "performance"; the cup's broadcast is the "show".
+- **Nothing leaves this Mac without the owner's yes**: no push, no wheel upload, no Space dataset
+  write, no Hub publish. Exception granted by the owner on 2026-10-19: **HF Jobs trainings for
+  Plan B under the owner's account (Nico-robot) have no budget limit.** Everything is pushed
+  together at the end (Plan D's last task lists the release steps; each needs the owner's yes).
+- **Order of execution:** A, then C, then D on one branch `versus` in one worktree. B starts once
+  Plan A's Task 3 is committed (it names the commit B needs) and runs alongside, in the challenges
+  repo; B's steps that run `arena score` on a tug wait for A's Task 5. B's Task 13 changes the
+  publish CLI in microduck_rl (worktree branch `tug-publish-line` from `challenge-recipe-publishing`);
+  D's release pushes it before the challenges relock. Stages 2–3 never wait for a good policy: tests
+  use the vendored walker and fakes, the local rehearsals use B's intermediate checkpoints.
+- **Settled by the owner (2026-10-20), no question to ask:** a fall loses (it loses a bout and ends
+  a bench run); HF Jobs trainings stay on l4x1; the first candidate's repo is
+  `Nico-robot/microduck-tug-of-war` unless the owner names another at publish time; cup #1's Friday
+  is set at release (D's release step asks); about 150 LLM router calls per cup are acceptable; on
+  air a duck is named by its on-air `name` (Plan C's `Entrant.name`: the policy's name, plus
+  ` (@<user>)` when another entrant of the cup has the same policy name) (match titles, clip cards,
+  the match page's stamp, the cup screen, the desk and the call lines), the cup page shows the
+  policy's name and the player's handle; A's stamp words
+  `RATED` / `HELD ON` / `PULLED IN` / `KNOCKED DOWN`, the lime round card with `Pull!` and its
+  placeholder art, a bench clip of about 35 s.
+- **Worktree (arena):** `~/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus`, branch
+  `versus` from local `main` at `abcbb9e` or later. From the main checkout:
+  - `/usr/bin/git worktree add .claude/worktrees/versus -b versus main`
+  - `cd .claude/worktrees/versus && uv sync --no-config --frozen --extra dev && (cd app && npm ci)`
+- **Local main carries someone else's uncommitted edits** (`app/public/race.css`,
+  `app/src/{main,router,router.test,share,share.test}.js`). Never stash, reset, commit or overwrite
+  them; the worktree starts from the committed `main` and does not see them. The one exception is
+  Plan D's release step 1, on the owner's yes: it holds them aside for the fast-forward and puts
+  them back, checked hunk by hunk.
+- **git:** always `/usr/bin/git` (the RTK hook's `git` rewrite is refused inside a worktree).
+- **uv:** always `uv run --no-config --frozen …`. If `uv.lock` changes by accident:
+  `/usr/bin/git checkout -- uv.lock`.
+- **Shell inside the worktree:** no globs and no shell variables inside git, uv and npm commands;
+  write paths out in full.
+- **Tests run in the FOREGROUND**, one Bash call with `timeout: 600000`; never in the background,
+  never "waiting for" a run. Python suite, two calls:
+  1. `uv run --no-config --frozen --extra dev pytest -q -m "not network" -p no:cacheprovider tests/workshop`
+  2. `uv run --no-config --frozen --extra dev pytest -q -m "not network" -p no:cacheprovider tests --ignore=tests/workshop`
+  Front end: `cd app && npm test`; the only accepted failures are the 4 known ones in
+  `src/brightness.test.js`. One file: `cd app && npx vitest run src/<file>.test.js`. The rtk filter
+  hides vitest's unhandled-rejection report: use `rtk proxy npx vitest run` when counting.
+- **Untouched:** the golden run (`arena/golden.py`), `RUNNER_VERSION` (stays 4), the 61-D
+  observation and 13-number command, every existing event's physics and stored runs. A lone duck,
+  a lane and a stage compile and run bit-identically (the existing tests in `test_course.py`,
+  `test_run_stage.py`, `test_evaluate.py` stay green unchanged).
+- **No dead code, no just-in-case generality** (owner's standing rule). Versus machinery that the
+  tug of war does not use is not written.
+- **x86 is the truth:** official ratings and cups are computed on the Space. Never compare a Mac
+  run to a Space run; tests pin behaviour, not Space numbers.
+- **Booth text** is never filtered by a script; fix bad lines in the prompt. Jokes must land for
+  newcomers (no private running gags).
+- **New pages** look like the Arena's own pages: few buttons, only what is needed when it is needed.
+
+## Codebase facts the plans rely on
+
+- Physics: `TIMESTEP=0.005`, `DECIMATION=4`, `CTRL_DT=0.02` (50 Hz), `TRACE_WIDTH=21`
+  (`frame[0:3]` trunk position, `[3:7]` quaternion w,x,y,z, `[7:21]` the 14 joints in
+  `JOINT_NAMES`). `arena/course.py`: `_inject_course` (one static `course` body: an infinite
+  `floor` plane, plus `wall_boxes` for a lane), `_robot(rig)`, `build_course_xml`, `_motorized`,
+  `_compiled`, `compile_course`, `duck_prefix(k)` (`""` / `"duck{k}/"`), `compile_stage(manifest,
+  layout)` (duck 0 from `build_course_xml`, others attached on a frame, keyframe patched after
+  compile). `arena/runner.py`: `_Addresses.of`, `_streams(event_id, seed, k)`, `_start(manifest,
+  model, policies, yaws_deg, seed, commands) -> (_Sim, settle)`, `_Sim.step/record`, `run_once`,
+  `run_stage`; `run_once` stops on the fall rule (trunk gravity z above `fall_gravity_z` for
+  `fall_hold_s`), and `arena/stage.py fell_at(trace, termination)` reads the same rule off a
+  `(frames, 21)` trace. The legs robot's `neck` body sits in `trunk_base` at `pos="0.026 0.0145 0.0324215"`
+  (`arena/assets/robot/legs/robot_allcollisions.xml:181`); there is no site there today.
+- Evaluation and records: `arena/evaluate.py` (`SeedResult`, `Evaluation`, `METRICS`,
+  `evaluate`, `pick_trace_seed`); `arena/store.py` (`RunRecord`, `Store` protocol, `LocalStore`,
+  `HubStore` with one `create_commit` per write and a tree-diff snapshot that excludes `*.mp4`,
+  `*.png`, `votes/`); `arena/trace.py` (`encode(trace, settle)` float16 npz, `decode` →
+  `(ducks, frames, 21)`).
+- Ranking: `arena/index.py` `sort_key` (lower is better), `leaderboard`, `standing`;
+  `arena/points.py` (`SCHEDULE`, `Receipt`, `receipts(…, now)` folds acts; podium points are held,
+  recomputed per request); `routes_read.py:183` keeps votes on a separate path.
+- Server: `arena/web/app.py create_app` (routers read, submit, auth, vote, unfurl, live, launcher;
+  daemon threads `arena-clips`, `arena-commentary`, `arena-recover`, `arena-votes`);
+  `ArenaConfig.from_env`. No wall-clock scheduler exists; clocks are injected (`now`) in pure
+  modules, patched in route tests.
+- Clips: `arena/clips.py` (`ClipRenderer.render_one(id)`, `ClipJobs` with `JOB_TRIES=3`, pending
+  markers under `clips/<id>/`), `arena/recorder.py record_run(origin, run_id, …)` opens
+  `clip.html?run=<id>&layout=<l>&frame=0`; front `app/src/clip/{main,plan,score,direction}.js`.
+- Live: `arena/live.py` (`pool`, `cycle`, `slots_for`, `Programme(source, now_ms, book)` with
+  slot kinds `shutter`, `replay`, `booth`; every slot length a multiple of 40 ms);
+  `arena/broadcasts.py BroadcastBook`; `arena/commentary/` (`Fact`, `result_facts`, `notable`,
+  `lore`, `generator.write(facts, drawn, …)` → 3–6 alternating turns, `stock.CommentaryStock`,
+  `tab.PlanTab.prepare(dialogue)` → `window.plan` in `plan.html` → `live/score.js prepare`).
+  Front `app/src/live/` (`channel.js` conductor, `replay.js`, `interlude.js` = booth segment,
+  `booth.js`, `set.js` with the "pegboard" meshes, `captions.js`, `voice.js`, `score.js`).
+  Nothing is said during a replay today.
+- Front: hash router `app/src/router.js` (`parseRoute`, `*Href`, `themeFor`, `dress`),
+  `main.js show()`, `api.js` (fetch wrappers; traces are float32 with `X-Duck-Count`),
+  `format.js` (`formatScore(seconds, {finished})`, `isStage`), `course.js` (`buildCourse`; the
+  served `walls` are not drawn today), `viewer.js createViewer(...).setLanes(entries, event, opts)`,
+  `replay.js applyFrame`, `rig.js`, `run.js`, `race.js`, `home.js` + `roundcard.js
+  roundCard(event, rows, {number, corner})`, `player.js`. vitest + jsdom, no WebGL in tests.
+- Tests: `tests/test_store.py make_record(**overrides)`; `test_routes_read.py client(tmp_path)` →
+  `(TestClient, app)` from `ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")`;
+  `test_hub_store.py FakeHub`; the walker `arena/assets/policies/BEST_alpha_walking.onnx` via
+  `load_policy`; `_ZeroPolicy` style fakes (`act(obs) -> np.zeros(14, float32)`).
+
+## Plan A — names
+
+```python
+# arena/manifest.py
+CATEGORIES = {"race", "showcase", "versus"}
+METRICS = ("mean_finish_time", "votes", "mean_hold_force")
+COURSE_KINDS = ("lane", "stage", "tug")
+HIGHER_WINS = frozenset({"mean_hold_force"})     # every other metric: lower is better
+
+@dataclass(frozen=True)
+class Tug:
+    length_m: float       # the walled length, centred on the pit: walls span x in [-length/2, length/2]
+    width_m: float
+    wall_height_m: float
+    pit_m: float          # the pit's width along x, centred on x = 0, across the whole lane
+    pit_depth_m: float
+    string_m: float       # neck base to neck base, taut at the start
+    kind: str = "tug"
+
+@dataclass(frozen=True)
+class Bench:
+    ramp_n_per_s: float
+    top_n: float
+    jerk_n: float                 # amplitude of each jerk sine
+    jerk_hz: tuple[float, ...]    # one sine per frequency
+
+@dataclass(frozen=True)
+class BoutRules:
+    time_limit_s: float
+    bouts_to_win: int
+    max_bouts: int
+
+# Manifest gains: bench: Bench | None = None, bout: BoutRules | None = None
+def higher_wins(event_id: str) -> bool   # cached; True iff the event's TOML exists and its metric is in HIGHER_WINS
+```
+
+Validation: `course.kind == "tug"` ⇔ `category == "versus"` ⇔ `metric == "mean_hold_force"`; a tug
+requires `[bench]` and `[bout]`, refuses `[sweep]` and `[vote]`, requires `rig = "legs"`, refuses
+unknown keys in its `[course]`, `[bench]`, `[bout]`; any other event refuses `[bench]` and `[bout]`.
+
+`arena/events/tug-of-war.toml` (Plan A creates it; Plan C adds `[cup]`; Plan B may retune
+`[command]` and `[bench]`, the parity test keeps both repos equal):
+
+```toml
+id           = "tug-of-war"
+order        = 40
+title        = "Tug of War"
+category     = "versus"
+kind         = "perpetual"
+rig          = "legs"
+time_limit_s = 30.0          # the bench's timed length, after the settle
+metric       = "mean_hold_force"
+seeds        = [1, 2, 3, 4, 5]
+
+[course]
+kind          = "tug"
+length_m      = 4.0
+width_m       = 0.8
+wall_height_m = 0.15
+pit_m         = 0.30
+pit_depth_m   = 0.30
+string_m      = 1.00
+
+[command]                     # every duck, every bout and bench run: walk backwards
+vel  = [-0.30, 0.0, 0.0]
+head = [0.0, 0.0, 0.0, 0.0]
+body = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+[start]
+keyframe = "STAND"
+settle_s = 0.5
+
+[start.perturbation]
+joint_rad = 0.01
+yaw_deg   = 2.0
+
+[termination]                 # a fall loses a bout and ends a bench run
+fall_gravity_z = -0.5
+fall_hold_s    = 0.3
+
+[bench]
+ramp_n_per_s = 0.25
+top_n        = 7.0
+jerk_n       = 0.4
+jerk_hz      = [0.7, 1.9]
+
+[bout]
+time_limit_s = 20.0
+bouts_to_win = 2
+max_bouts    = 5
+
+[clip]
+tape_max_s = 30.0
+sounds     = ["crowd", "verdict"]
+```
+
+```python
+# arena/course.py
+STRING_SITE = "string_end"   # on each duck's trunk_base (prefixed for duck 1), at the neck's base
+STRING = "string"            # the spatial tendon
+WINCH_SITE = "winch_drum"    # on the world body, the bench only
+WINCH = "winch"              # a motor on the STRING tendon; ctrl = the pull in newtons, towards the drum
+PLATFORM_OVERRUN_M = 20.0    # the platforms run this far past the walls: nobody walks off the world
+
+def string_offset(rig: str = "legs") -> tuple[float, float, float]   # the `neck` body's pos in `trunk_base`, read from the rig's MJCF
+def tug_walls(course: Tug) -> list[tuple[str, tuple, tuple]]          # ("wall_left"|"wall_right", pos, half), x in [-length/2, length/2]
+def pit_boxes(course: Tug) -> list[tuple[str, tuple, tuple]]          # "platform_west", "platform_east" (top face z = 0), "pit_floor" (top face z = -pit_depth_m)
+def tug_layout(course: Tug, ducks: int, rig: str = "legs") -> list[Start]  # [west yaw 0, east yaw 180] or [west]; both string ends on y = 0, string_m apart, centred on x = 0
+def winch_position(course: Tug, rig: str = "legs") -> tuple[float, float, float]  # (string_m / 2, 0, SPAWN_HEIGHT_M + string_offset[2])
+def compile_tug(manifest: Manifest, ducks: int) -> mujoco.MjModel
+# ducks=2: a bout; STRING between "string_end" and "duck1/string_end", limited, range (0, string_m)
+# ducks=1: the bench; STRING from "string_end" to WINCH_SITE, unlimited, WINCH motor on it
+#   (gear -1: a positive ctrl pulls towards the drum), after the 14 servos; its STAND keyframe
+#   has one ctrl per actuator, the winch's 0.0 last
+# _inject_course gets a "tug" branch: no infinite plane, pit_boxes + tug_walls instead.
+# compile_stage is split into helpers it shares with compile_tug; compile_stage stays bit-identical.
+```
+
+```python
+# arena/tug.py — new
+PIT_DROP_M = 0.05      # a trunk below z = -PIT_DROP_M is in the pit
+
+def string_ends(trace: np.ndarray, offset) -> np.ndarray   # (ducks, frames, 21) -> (ducks, frames, 3), from trunk pos + quat
+def marker_x(trace: np.ndarray, offset) -> np.ndarray     # (2, frames, 21) -> (frames,), midpoint x of the two string ends
+def in_pit(frame: np.ndarray) -> bool                       # frame (21,): trunk z < -PIT_DROP_M
+def bench_profile(bench: Bench, event_id: str, seed: int) -> dict
+#   {"ramp_n_per_s", "top_n", "jerks": [[amp_n, hz, phase_rad], …]}   (Plan B mirrors this shape)
+#   phases: np.random.default_rng([zlib.crc32(event_id.encode()), seed, 4]).uniform(0, 2π, len(jerk_hz))
+def bench_force(profile: dict, t_s: float) -> float
+#   min(top_n, max(0.0, ramp_n_per_s * t_s + Σ amp * sin(2π hz t_s + phase))); never asked during the settle
+#   (clamped to the top: a duck dragged in at the top never outscores one that held)
+
+# A duck is OUT (owner, 2026-10-20: a fall loses) when, after a control step, its trunk is in the
+# pit (in_pit of its last frame) or it has fallen by the Arena's own rule: gravity z of the trunk
+# ((Rᵀ·down)[2], as runner.run_once reads it) above manifest.termination.fall_gravity_z for
+# round(fall_hold_s / CTRL_DT) straight control steps — stage.fell_at over the duck's last that
+# many frames, reused, never re-written. The pit is checked first.
+
+@dataclass(frozen=True)
+class BenchOutcome:
+    seed: int
+    status: str            # "pit" | "fall" | "held"
+    force_n: float         # bench_force at the step it went out; top_n if it held to the end
+    time_s: float | None   # when it went out (the step that completes a fall's hold); None if it held
+    trace: np.ndarray      # (1, frames, 21); stops at the step it went out
+    settle: np.ndarray     # (1, settle + 1, 21)
+    profile: dict
+
+def run_bench(manifest: Manifest, policy, seed: int, model=None) -> BenchOutcome
+# timed length manifest.time_limit_s; the winch's ctrl is set before every control step
+
+@dataclass(frozen=True)
+class BoutOutcome:
+    seed: int
+    loser: int | None      # 0 west, 1 east, None undecided by the physics
+    how: str               # "pit" | "fall" (the first duck out, how it went out),
+                           # "marker" (both out on one control step, or the time limit), "draw" (marker exactly 0)
+    time_s: float          # when it was decided
+    trace: np.ndarray      # (2, frames, 21), west first; stops at the deciding step
+    settle: np.ndarray     # (2, settle + 1, 21)
+
+def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutcome
+# the first duck out loses; marker rule: marker_x < 0 (pulled to the west) -> east loses; > 0 -> west loses; == 0 -> draw
+```
+
+```python
+# arena/match.py — new
+def bout_seed(secret: str, match_id: str, k: int) -> int
+#   int.from_bytes(hashlib.sha256(f"{secret}:{match_id}:{k}".encode()).digest()[:4], "big")
+
+@dataclass(frozen=True)
+class BoutResult:
+    k: int
+    seed: int
+    a_side: str            # "west" in bouts 0, 2, 4; "east" in 1, 3
+    winner: str | None     # "a" | "b" | None (a draw counts for nobody)
+    how: str               # BoutOutcome.how: "pit" | "fall" | "marker" | "draw"
+    time_s: float
+    def to_dict(self) -> dict; @classmethod def from_dict(cls, raw) -> "BoutResult"
+
+@dataclass(frozen=True)
+class MatchOutcome:
+    bouts: tuple[BoutResult, ...]
+    traces: tuple[tuple[np.ndarray, np.ndarray], ...]   # (trace, settle) per bout, west first
+    wins: tuple[int, int]                               # (a, b)
+    winner: str                                         # "a" | "b"
+    decided_by: str                                     # "bouts" | "rating"
+
+def play_match(manifest: Manifest, a, b, seeds: Sequence[int], ratings: tuple[float, float], model=None) -> MatchOutcome
+# len(seeds) == bout.max_bouts; stops when one side reaches bouts_to_win; after max_bouts without
+# a winner: more wins, then higher rating, then "a". It calls run_bout through the module global
+# (tests swap arena.match.run_bout).
+```
+
+```python
+# arena/evaluate.py
+SeedResult(seed, status, time_s, force_n: float | None = None)     # a bench seed's status: "pit" | "fall" | "held"
+def mean_hold_force(per_seed, time_limit_s) -> float      # METRICS["mean_hold_force"]
+def seed_row(result: SeedResult) -> dict                  # seed, status, time_s, plus force_n only when set; every writer of a seed uses it
+# Evaluation gains bench: dict | None = None (the traced seed's profile)
+# evaluate(manifest, policy) on a tug -> _evaluate_bench: run_bench on every seed;
+#   seeds_finished = len(seeds); trace seed = lower median by (force_n, seed);
+#   command_vx = manifest.command[0]; scan = ()
+
+# arena/store.py: RunRecord gains bench: dict | None = None. to_dict writes `bench` and a seed's
+# `force_n` only when set, so every stored race and performance serialises as today.
+
+# arena/index.py
+def sort_key(record) -> tuple   # (-score if higher_wins(record.event_id) else score, -seeds_finished, submitted_at)
+
+# arena/recover.py: a Hub manifest that names no event is never recovered onto the tug (entering a
+# versus enters its cup: it takes a policy entered on purpose).
+```
+
+`arena score` on a tug (Plan A pins it, Plan B reads it): one line per seed,
+`seed 1: pit      4.77 N at 21.76 s`, `seed 2: held     7.00 N`, `seed 3: fall     0.62 N at 1.02 s`,
+then `rating: 4.21 N · replay from seed 3`.
+
+API (Plan A): `event_summary` of a tug adds `course: "tug"`, `length_m`, `width_m`, `string_m`,
+`pit_m`, `pit_depth_m`, `walls: [{name, pos, half}]`, `pit: [{name, pos, half}]`,
+`string_offset: [x, y, z]`, `winch: [x, y, z]`, `bench: {ramp_n_per_s, top_n}`,
+`bout: {time_limit_s, bouts_to_win, max_bouts}`. `GET /api/runs/{id}` adds `bench` (the profile)
+on a tug run; `per_seed` items carry `force_n`. A tug's board rows carry `bench`; a player's
+publications carry `metric`. `POST /api/events/{id}/submit` answers with the event's `metric` (every
+event; the publish CLI reads it, Plan B's Task 13).
+
+```js
+// app/src/format.js
+export const isTug = (event) => event?.course === "tug";
+export function formatScore(value, { finished, metric } = {})   // "4.21 N" for "mean_hold_force"; seconds otherwise, as today
+// app/src/tug.js — new (mirrors arena/tug.py; MJCF coordinates in, three.js out)
+export function toThree([x, y, z])                  // [x, z, -y]
+export function stringEnd(frame, offset)            // [x, y, z]
+export function markerX(westFrame, eastFrame, offset)
+export function benchForce(profile, t)              // equal to arena.tug.bench_force to 1e-9
+export function forceAt(profile, index, lead)       // 0 while index < lead, else benchForce(profile, (index - lead) * CTRL_DT)
+export function tugDucks(entry)                     // a tug lane -> [{trace, lead, livery, name}], a settle led in
+export function tugEnds(event, frames)              // MJCF [a, b]: duck 0's string end; duck 1's, or event.winch
+export function buildTugCourse(event)               // Group "course": platforms, pit, the served walls, the centre line
+export function buildString()                       // { group, update(endA, endB) }: the string and its red marker
+export function buildWinch(event)                   // { group, setForce(newtons) }: drum, cable anchor, a dial in N
+// app/src/clip/score.js
+export function clipVerdict(run)                    // {stamp, pass}: a tug's traced seed HELD ON | PULLED IN | KNOCKED DOWN
+```
+
+A tug lane handed to `viewer.setLanes` (one per call) is `{tug: "bench", trace, settle?, bench: profile, livery, name}`
+or `{tug: "bout", ducks: [{trace, settle?, livery, name}, {…}]}` (west first; a duck's trace is in
+world coordinates, so it needs no start; an optional `settle` plays before `trace`).
+
+## Plan B — cross-repo names
+
+Plan B copies these Arena names into `microduck-challenges` (its job cannot import the Arena) and
+pins each one with a parity test; the Arena must not change them without Plan B's copy:
+`platform_west`, `platform_east`, `pit_floor`, `wall_left`, `wall_right` (geom names),
+`STRING_SITE`, `STRING`, `WINCH_SITE`, `WINCH`, `SPAWN_HEIGHT_M`, `WALL_THICKNESS_M`,
+`PLATFORM_OVERRUN_M`, `string_offset("legs")`, `PIT_DROP_M`, `tug_layout`'s west start,
+`winch_position`, the gear sign (a positive winch ctrl pulls towards the drum), the bench keyframe's
+one ctrl per actuator, `bench_profile`'s shape and `bench_force`, `manifest.termination` (the fall
+rule its training terminates on), the tug's `[course]`, `[command]`, `[start]` and `[bench]`.
+
+A retune of `[bench]` or `[command]` by Plan B is, in one sitting: a commit on the arena `versus`
+branch (`arena/events/tug-of-war.toml`, its two Python suite calls green), the challenges'
+constants, and both repos' parity tests green; C and D read the toml.
+
+microduck_rl (Plan B's Task 13): `publish --enter` says a tug entry as
+`[publish] entered on tug-of-war: a 4.21 N rating → <page url>` (it reads the submit answer's
+`score` and `metric`).
+
+## Plan C — names
+
+```python
+# arena/manifest.py
+@dataclass(frozen=True)
+class CupRules:
+    first: date            # cup #1's premiere day (local date in `timezone`)
+    premiere: time         # local wall-clock time of every premiere
+    timezone: str          # IANA, "Europe/Paris"
+    close_before_h: float
+    min_entrants: int
+# Manifest gains cup: CupRules | None = None; [cup] required on a versus event, refused elsewhere.
+# tug-of-war.toml: [cup] first = "2026-10-30"  premiere = "18:00"  timezone = "Europe/Paris"
+#                  close_before_h = 2.0  min_entrants = 4     (the owner sets `first` at release)
+```
+
+```python
+# arena/cup.py — new, pure (no I/O, no clock)
+@dataclass(frozen=True)
+class Entrant:
+    user: str
+    run_id: str
+    policy_name: str
+    livery: str
+    rating: float
+    model_sha256: str
+    source: dict          # RunRecord.source: where the policy is fetched from
+    name: str             # the duck's on-air name in this cup, set once by entrants_at: policy_name, or
+                          # f"{policy_name} (@{user})" when another entrant of the cup has the same
+                          # policy_name (exact match). view() and to_dict() carry it; draw.json stores it
+
+@dataclass(frozen=True)
+class MatchRecord:
+    match_id: str
+    index: int            # position in playing order
+    round: str            # "group" | "round of 16" | "quarter-final" | "semi-final" | "final" | "round of 2n"
+    group: str | None     # "A", "B", … on a group match
+    a: int
+    b: int                # entrant indices
+    bouts: tuple[BoutResult, ...]
+    wins: tuple[int, int]
+    winner: int           # entrant index
+    decided_by: str
+
+@dataclass(frozen=True)
+class Cup:
+    event_id: str
+    number: int
+    close_at: str         # ISO "…Z"
+    premiere_at: str      # the scheduled premiere, ISO "…Z"
+    secret: str           # 32 hex chars, drawn at close
+    entrants: tuple[Entrant, ...]
+    groups: tuple[tuple[int, ...], ...]     # () when skipped
+    skipped: bool = False                   # fewer than min_entrants
+    matches: tuple[MatchRecord, ...] = ()   # group rounds, then the knockout, in playing order
+    order: dict | None = None               # {"starts_at": ISO, "segments": [...]}, once fixed
+
+def match_id(event_id: str, number: int, index: int) -> str   # f"{event_id}-{number:04d}-{index:03d}"
+def is_match_id(clip_id: str) -> bool                         # a run id never contains "-"
+def cup_times(rules: CupRules, number: int) -> tuple[datetime, datetime]   # (close_at, premiere_at), aware UTC
+def closed_cups(rules: CupRules, now: datetime) -> int        # cups whose close_at <= now
+def group_count(entrants: int) -> int                         # largest power of two G >= 1 with entrants // G >= 3
+def draw_groups(entrants: Sequence[Entrant], secret: str) -> list[list[int]]
+#   pots of G by rating (desc, ties by user); each pot shuffled by random.Random(secret + pot index);
+#   pot p's i-th entrant goes to group i
+def group_fixtures(group: Sequence[int]) -> list[tuple[int, int]]   # circle-method round robin, rounds in order
+def group_table(group: Sequence[int], matches: Sequence[MatchRecord], ratings: Sequence[float]) -> list[int]
+#   matches won, then bouts won minus lost, then head-to-head, then rating, then draw order
+def first_knockout(tables: Sequence[Sequence[int]]) -> list[tuple[int, int]]
+#   G = 1: (1st, 2nd) is the final; G = 2: A1–B2, B1–A2 are the semi-finals; else, groups paired
+#   (A,B), (C,D)…, the bracket's two halves: A1–B2, C1–D2, E1–F2, G1–H2, then B1–A2, D1–C2, F1–E2,
+#   H1–G2 (winners paired in order each round): group-mates cannot meet before the final
+def round_name(matches_in_round: int) -> str
+def cup_view(cup: Cup, now: datetime) -> dict    # what is public at `now` (see Secrecy)
+def airs_at(cup: Cup, match_id: str) -> datetime | None      # starts_at + its match segment's at_ms
+def revealed_at(cup: Cup, match_id: str) -> datetime | None  # airs_at + its duration_ms: its clip has finished airing
+PREFETCH = timedelta(seconds=30)   # a match's clip and its call are served from airs_at - PREFETCH;
+                                   # a desk segment from revealed_at(its `after` match) - PREFETCH
+# Plan C's other names: iso, parse_iso, parse_match_id, match_title (stage · A's name vs B's),
+# match_label (the stage alone, no duck: "Group C", "Quarter-final 2", "Final"), reached, ends_at,
+# cup_state(cup, now) -> str, GROUP_NAMES; Entrant.view/to_dict/from_dict; Cup.draw_json,
+# Cup.matches_json, Cup.from_json
+```
+
+Secrecy (`cup_view`): before `order.starts_at` (or with no order): number, times, state, entrants
+ranked by rating — no groups, no matches, no secret. From `starts_at`: groups and fixtures; each
+match's result, bouts and its effect on the tables and the bracket only from its reveal
+(`revealed_at`: the moment its clip has finished airing); the champion and the `secret` only from
+the final's reveal. Its clip media and its call come `PREFETCH` before it airs, and a desk segment
+`PREFETCH` before the reveal it may mention (Plan D), so the live can buffer them; nothing else is
+early. Tests pin cup #1 to 2026-10-30 themselves (the owner sets the shipped `first` at release).
+States: `"open"` (before close), `"drawn"` (closed, not ready),
+`"ready"` (order fixed, before the start), `"airing"`, `"aired"`, `"skipped"`.
+
+Store (Plan C), dataset layout `cups/{event_id}/{number:04d}/`: `draw.json` (everything but
+`matches` and `order`; written first, so a restart recomputes the same cup from its secret),
+`matches.json`, `bouts/{match_id}-{k}.npz` (`trace.encode`), `order.json`, and Plan D's
+`show.json`.
+
+```python
+# Store protocol, LocalStore, HubStore
+def put_cup_files(self, event_id: str, number: int, files: dict[str, bytes]) -> None  # one commit; refuses a name that exists
+def cup_file(self, event_id: str, number: int, name: str) -> bytes | None
+def cup_numbers(self, event_id: str) -> list[int]
+```
+
+```python
+# arena/cupworker.py — new
+def entrants_at(records, withdrawn: frozenset[str], close_at: datetime, runner_version: int = RUNNER_VERSION) -> list[Entrant]
+#   each user's latest run submitted at or before close_at, not withdrawn, on runner_version;
+#   sets each entrant's on-air `name` (two entrants with one policy_name air under their handles)
+def compute_matches(manifest: Manifest, cup: Cup, load: Callable[[Entrant], object]) -> tuple[Cup, dict[str, bytes]]
+#   plays every match (groups, then each knockout round from the last), returns the cup with
+#   `matches` and the bout trace files
+def running_order(cup: Cup, clips: Mapping[str, float], starts_at: datetime, show: dict | None = None) -> dict
+#   clips: match_id -> its landscape clip's seconds; Plan C ignores `show`, Plan D fills it
+def load_cup(store, event_id: str, number: int) -> Cup | None
+def all_cups(store) -> list[Cup]                       # every event with a [cup], each cup in number order
+def load_entrant(store, entrant: Entrant) -> Policy    # from the Hub at its revision, or the store's copy
+class CupWorker:
+    def __init__(self, store, clips, *, events, load, now=lambda: datetime.now(UTC), log=print,
+                 show: Callable[[Cup, dict], dict] | None = None): ...
+    # show(cup, partial) writes the show (Plan D), filling `partial` as it goes, resumed next tick
+    def tick(self) -> None    # close → draw.json → matches → owe clips → (D: write the show) → fix the order
+    def start(self) -> None   # daemon thread "arena-cups", tick every 30 s
+    def stop(self) -> None
+```
+
+The worker fixes the order only when every match clip is ready (and, from Plan D, the show is
+written: it is written once every match clip is ready), with `starts_at = max(premiere_at, now + 10
+min)`; a cup never gets an order while the previous cup of the event has not finished airing.
+
+Running order segments (times relative to `starts_at`, every length a multiple of 40 ms). The
+grid is served 5 minutes ahead, so a shutter's `next` names the stage, never a duck; a match
+segment carries no clip version (the live adds `clip` from `clip_state` when it lays the slot):
+
+```json
+{"kind": "shutter", "at_ms": 0, "duration_ms": 1600, "next": {"match_id": "…", "title": "Group C"}}
+{"kind": "match", "at_ms": 1600, "duration_ms": 41240, "match_id": "…"}
+```
+
+Clips of matches: the clip id is the match id. `mark_clip_pending(match_id, "arena", event_id,
+queued_at)`. `record_run(origin, clip_id, …)` opens `clip.html?match=<id>` when
+`is_match_id(clip_id)`. `ClipJobs` never gives up on a match id (`JOB_TRIES` is for runs).
+`ArenaConfig.reveal_all` (set by `arena clip`, never on the Space) lets the job's loopback app read
+unrevealed matches. A match clip's `clip.json` layout `timing` carries
+`bouts: [{"k", "tape_start_s", "tape_end_s"}]` (where each bout's timed trace sits in the mp4).
+
+API (Plan C, `arena/web/routes_cups.py`, `now()` read per request, patched by tests):
+- `GET /api/events/{id}/cups` → `{"next": {"number", "close_at", "premiere_at", "entrants": [...]}, "cups": [{"number", "premiere_at", "starts_at", "state", "champion"}]}`
+- `GET /api/events/{id}/cups/{number}` → `{"event", "open", "min_entrants", **cup_view(cup, now)}`
+- `GET /api/matches/{match_id}` → the match once revealed (404 before): `{match_id, event, cup, round, group, title, a, b, bouts, wins, winner, decided_by, clip}` (`a`/`b` are `Entrant.view()`, `winner` `"a"`/`"b"`)
+- `GET /api/matches/{match_id}/bouts/{k}/trace`, `…/settle` (float32, `X-Duck-Count: 2`) — 404 before the reveal.
+- `GET /api/matches/{match_id}/clip`, `…/clip/{name}` — 404 before `airs_at − PREFETCH`.
+
+Live (Plan C): `pool(store, now)` (`now` required: the programme and the commentary stock pass it)
+adds the matches of every cup that has finished airing, until the event's next cup starts; a match
+entry (`Entry.title` set) is announced by `{"match_id", "title"}`, plays its match clip and gets no
+booth broadcast, and `CommentaryStock` skips every `is_match_id` entry. `shows(store, now) ->
+list[Show]` gives every cup with an order that has not ended (`Show(starts_ms, ends_ms, slots,
+standby)`). `Programme(source, now_ms, book, cups=...)` lays a cup's segments at their absolute
+times; the cycle before it ends with a `standby` slot that fills to `starts_at`:
+`{"kind": "standby", "at_ms", "duration_ms", "cup": {"event", "number", "title", "starts_at_ms"}}`.
+A match segment is served as `{"kind": "replay", …, "run_id": <match id>, "clip", "media": "match"}`.
+
+Points: `receipts(…, cups: Sequence[Cup] = (), now)`; acts `cup_champion` 250, `cup_final` 150,
+`cup_semi` 100, counted from the final's reveal; `source_id` = the deciding match id.
+`GET /api/players/{user}` adds `cups: [{event_id, event_title, number, starts_at, reached}]`
+(`reached`: `"champion"`, `"final"`, a round name, or `"group"`), each cup from its final's reveal.
+
+```js
+// app/src/router.js: #/c/<event>/<number> -> {view: "cup", eventId, number}; #/m/<matchId> -> {view: "match", matchId}
+export function cupHref(eventId, number); export function matchHref(matchId)
+// app/src/api.js
+export function getCups(eventId); export function getCup(eventId, number); export function getMatch(matchId)
+export function getBoutTrace(matchId, k); export function getBoutSettle(matchId, k)
+export function getMatchClip(matchId); export function matchClipUrl(matchId, name, version)
+// app/src/bouts.js
+export function boutLane(match, k, traces, settles)   // {tug: "bout", ducks: [west, east]}, each {trace, settle, livery, name} (the entrant's on-air name), a/b placed by bouts[k].a_side
+// app/src/clip/match.js: matchPlan(bouts), boutAt(plan, i), scoreAt(plan, match, i), matchWords(match)
+// app/src/format.js: countdown(ms); app/src/cup.js: cupPage, renderCup, cupCorner(eventId, cups, nowMs)
+// app/src/live/standby.js: createStandby(stage)
+// app/src/live/channel.js
+export const PREFETCH_MS = 25_000   // a match slot (and, from Plan D, any slot) is prepared from 25 s
+                                    // before it starts: inside the server's 30 s PREFETCH, 5 s for a screen's clock
+```
+
+## Plan D — names
+
+```python
+# arena/moments.py — new
+LEAD_M = 0.02      # the marker must be this far past the centre line to change the lead
+EDGE_M = 0.08      # a trunk this close to its pit edge is "at the edge"
+SLIP_DEG = 35.0    # a trunk tilting past this has slipped
+
+@dataclass(frozen=True)
+class Moment:
+    at_s: float          # seconds into the bout's timed trace
+    kind: str            # "start" | "lead" | "edge" | "slip" | "pit" | "fall" | "time"
+    side: str | None     # "west" | "east"
+
+def moments(trace: np.ndarray, course: Tug, termination: Termination, offset) -> list[Moment]
+#   "fall": at stage.fell_at(trace[d], termination), the Arena's rule; "time" only when nobody went out
+```
+
+```python
+# arena/commentary/cup.py — new
+def cup_facts(cup: Cup, before: int, history: Sequence[Cup], manifest: Manifest) -> list[Fact]
+#   what is true before match index `before` airs; never anything later (no spoilers); a duck of
+#   this cup is named "<policy name> (@<user>)" (for a duck whose policy name another entrant has,
+#   that is its on-air `name`: the handle never shows twice), a player across cups "@<user>"
+def screen_view(cup: Cup, before: int, manifest: Manifest) -> dict    # the desk screen's view, stored as a desk segment's `screen`
+#   {"title", "stage", "groups": [{"name", "rows": [{"name", "won", "played"}]}],
+#    "knockout": [{"round", "matches": [{"a": name | None, "b": name | None, "winner": "a" | "b" | None, "next": bool}]}],
+#    "next": {"a", "b", "group", "round"} | None, "champion": name | None}      (ducks by their on-air `name`)
+# arena/commentary/show.py — new
+def show_outline(cup: Cup) -> list[dict]
+#   [{"id": "opening", "kind": "opening", "after": -1},
+#    {"id": "intro-<match_id>", "kind": "intro", "match_id", "after": i - 1},
+#    {"id": "recap-<group round>", "kind": "recap", "after": i}, {"id": "ceremony", …}, {"id": "close", …}]
+def write_show(cup: Cup, *, manifest, history, lore, provider, model, tab, rng,
+               profiles: Mapping[str, Fact], footage: Mapping[str, dict], done: dict | None = None) -> dict
+#   footage[match_id] = {"duration_ms", "bouts": [{"k", "tape_start_s", "tape_end_s", "seconds", "moments": [Moment]}]}
+#   returns, filling `done` in place as it goes (a run cut off resumes from it):
+#   {"desk": {id: {"kind", "after", "dialogue": {"turns", "brief"}, "plan", "screen"}},
+#    "calls": {match_id: {"lines": [{"at_ms", "speaker", "text"}], "plan"}}}
+#   one LLM call per desk segment and one per bout (the play-by-play); call lines name ducks by their on-air `name`
+# PlanTab gains prepare_call(call: dict) -> dict  (window.planCall in plan.html)
+```
+
+Running order with the show (`running_order(…, show=…)`): an `opening` desk segment first; per
+match: its `intro` desk segment, Plan C's `shutter` (naming the stage only), the `match` segment
+with `"call": true`; after the last match of each group round a `shutter` with `"next": null` and
+its `recap`; after the final a `shutter` with `"next": null`, the `ceremony`, the `close`. Desk
+segment: `{"kind": "desk", "at_ms", "duration_ms", "segment": "<id>", "after": i}`.
+
+Live API (Plan D): `GET /api/live/show/{event_id}/{number}/{segment_id}` → `{dialogue, plan,
+screen}`, served from `revealed_at(matches[after]) − PREFETCH` (the opening: from `starts_at −
+PREFETCH`); `GET /api/live/call/{match_id}` → `{lines, plan}`, served from `airs_at(match) −
+PREFETCH`; 404 before, and for anything the show does not hold. Slots:
+`{"kind": "desk", …, "show": {"event", "number", "segment"}}`; a match replay slot carries
+`"call": true`.
+
+```js
+// app/src/live/score.js
+export function prepareCall({ id, lines, duration_ms })   // a plan whose captions start at each line's at_ms
+// app/src/live/desk.js — new: the desk segment (interlude + the cup screen)
+// app/src/live/call.js — new: a replay segment that voices and captions its call plan
+export const DUCKED = 10 ** (-10 / 20)        // the clip's own sound while a call line is voiced (−10 dB)
+export function clipGain(plan, offsetMs)      // DUCKED inside a caption of the call's plan, else 1
+// app/src/live/replay.js: volume(gain) sets the playing clip's volume
+// app/src/live/screen.js — new
+export function drawCupScreen(canvas, view)   // groups, then the bracket, next match highlighted, ducks by their on-air name
+// app/src/live/set.js: booth({ screen }) swaps the pegboard for the cup screen
+```

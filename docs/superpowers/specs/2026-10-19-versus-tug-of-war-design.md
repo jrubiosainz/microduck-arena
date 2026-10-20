@@ -103,13 +103,18 @@ sweep in a versus.
 
 **Judge** (my call on the details):
 
-- The first duck whose trunk goes below the floor level over the pit loses the bout.
+- The first duck out loses the bout: a duck is out when its trunk goes below the floor level over
+  the pit, or when it falls by the Arena's own rule (trunk tilted past 60° for 0.3 s). **A fall
+  loses** (owner, 2026-10-20): measured on a prototype, a limp duck lying on the floor held the
+  winch to 5–6 N on body friction alone, more than a standing duck pulling at the neck can hold
+  before tipping; without the rule, the best strategy would be to throw oneself down.
 - At the bout time limit (20 s to start with), if nobody is in the pit, the duck the marker moved
   away from loses: as in a real tug of war, the winner pulls the marker to their side of the pit's
   centre line.
-- A duck knocked over but not in the pit stays in play: it can still be dragged.
-- Both in the pit on the same frame, or a marker exactly back at the centre at the time limit:
-  the marker's side decides, then the higher rating. (A rule that never needs a replay.)
+- Both out on the same control step: the marker's side decides. A marker exactly back at the
+  centre makes a drawn bout, which counts for nobody; the match goes on (at most five bouts), and a
+  match still undecided after them goes to more bouts won, then the higher rating. (A rule that
+  never needs a replay.)
 
 **Match** (my call): first to two bouts, sides swapped after each bout. Each bout's seed derives
 from the cup's secret (section 4), the match and the bout, so a whole cup replays identically on
@@ -123,8 +128,9 @@ unchanged: entry, five seeds, board, points, clip, live rotation, commentary.
 - **Setting**: the tug course, one duck, the string crossing the pit to a **winch**: an anchor on
   a slide past the far edge, driven by a force that ramps up, with small seeded jerks so it pulls
   like an opponent rather than a machine.
-- **Score per seed**: the string force the duck was holding when it entered the pit. A duck still
-  out of the pit at the end of the ramp scores the ramp's top.
+- **Score per seed**: the string force the duck was holding when it fell or entered the pit. A duck
+  still standing and out of the pit at the end of the ramp scores the ramp's top. The force never
+  exceeds the top (the jerks are clamped), so being dragged in is never worth more than holding.
 - **Rating**: the mean over five seeds, in newtons; higher is better (a new metric, the first one
   where higher wins — every sort that assumes "lower is better" must learn the direction).
 - **Clip**: the duck against the winch, with a dial showing the newtons rising. Landscape and
@@ -184,13 +190,13 @@ result (every seed and the draw derive from the stored secret).
 
 **The running order** (my call): once everything is ready, the cup gets a running order: every
 segment of the show in sequence with its start time, each match's reveal time being the moment its
-clip starts airing. In stage 2 the running order is just the match clips back to back from the
+clip has finished airing (its clip may be loaded from 30 s before it starts). In stage 2 the running order is just the match clips back to back from the
 premiere; stage 3 inserts the desk segments into the same running order, it does not replace it.
 
 **Revealed match by match, as it airs** (my call, from the owner's "like a real sports live"):
 before the premiere, no API answer, board, profile, clip URL or live slot reveals a match result, a
 trace or a clip. During the show, a match becomes public — on the cup page, its match page, the
-players' profiles — at its reveal time, so a viewer who opens the cup page mid-show sees the cup as
+players' profiles — at its reveal time, the moment its clip has finished airing, so a viewer who opens the cup page mid-show sees the cup as
 far as it has aired, never the champion before the final. The cup's points land when the final
 airs. The dataset is private; the Space serves the cup's state as of "now".
 
@@ -280,11 +286,15 @@ relock as usual, then the owner publishes the first candidate.
   the first candidate.
 - No limit on paid trainings; the three stages are built in parallel (stand-in checkpoints) and
   pushed together at the end.
+- A fall loses, on the bench and in a bout (2026-10-20).
 - A drawn cup is frozen: withdrawals after close change nothing in it.
 
 ## My calls (the owner may object)
 
 - String ≈ 1 m taut, pit 0.3 m, bout limit 20 s, the marker rule, tie-breaks.
+- A match's result is revealed when its clip has finished airing (its clip may load 30 s before it
+  starts); the knockout bracket keeps group-mates apart until the final; on air, ducks are named by
+  their policy names (with the player's handle when two entrants of a cup share one).
 - Matches first to two bouts, sides swapped; seeds from cup/match/bout.
 - Legs only; a fixed command; no sweep.
 - Friday 18:00 Europe/Paris premiere, 16:00 close; no cup under 4 entrants.
