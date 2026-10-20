@@ -52,7 +52,7 @@ import { buildRollerHall } from "./roller-hall.js";
 import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
-import { buildString, buildTugCourse, buildWinch, cutPit, forceAt, tugDucks, tugEnds } from "./tug.js";
+import { buildString, buildTugCourse, buildWinch, cutPit, floorUnder, forceAt, tugDucks, tugEnds } from "./tug.js";
 import { SWEEP_TURN, sweepAt } from "./sweep.js";
 
 // The sun supplies shape and the shadows; the room only soft reflections. Much
@@ -140,12 +140,13 @@ export function stageCamera(lanes, layout, lag) {
     aspect, fov, layout.depth, layout.width, placesAt);
 }
 
-// Project the midpoint of the feet vertically onto the course. Parenting the
-// ring to the course also aligns its plane with the ramp.
-export function placeMarker(marker, ground, feet, slopeDeg) {
+// Project the midpoint of the feet vertically onto the course, or onto the
+// `floor` under them when it lies lower (a tug's pit). Parenting the ring to
+// the course also aligns its plane with the ramp.
+export function placeMarker(marker, ground, feet, slopeDeg, floor = 0) {
   if (marker.parent !== ground) ground.add(marker);
   const angle = slopeDeg * Math.PI / 180;
-  marker.position.set((feet.x + 0.004 * Math.sin(angle)) / Math.cos(angle), 0.004, feet.z);
+  marker.position.set((feet.x + 0.004 * Math.sin(angle)) / Math.cos(angle), floor + 0.004, feet.z);
 }
 
 const leftFoot = new Vector3();
@@ -639,7 +640,10 @@ export async function createViewer(
       applyFrame(lane.rig, frames[i]);
       if (lane.jaw) lane.jaw.rotation.y = lane.mouth[indices[i]] * MOUTH_TRAVEL;
       // Follow both feet, including sideways drift and the lane offset.
-      if (lane.marker) placeMarker(lane.marker, course ?? scene, feetPosition(lane.rig, _feet), slopeDeg);
+      if (lane.marker) {
+        feetPosition(lane.rig, _feet);
+        placeMarker(lane.marker, course ?? scene, _feet, slopeDeg, tug ? floorUnder(tug.event, _feet.x) : 0);
+      }
       if (lane.plate) {
         lane.rig.bodies.get("trunk_base").getWorldPosition(_trunk);
         lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);

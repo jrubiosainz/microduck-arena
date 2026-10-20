@@ -4,7 +4,7 @@ import { OVERRUN } from "./course.js";
 import { buildGym } from "./gym.js";
 import { TRACE_WIDTH } from "./replay.js";
 import {
-  benchForce, buildString, buildTugCourse, buildWinch, cutPit, forceAt, markerX, stringEnd, toThree, tugDucks, tugEnds,
+  benchForce, buildString, buildTugCourse, buildWinch, cutPit, floorUnder, forceAt, markerX, stringEnd, toThree, tugDucks, tugEnds,
 } from "./tug.js";
 
 const TUG = {
@@ -56,6 +56,9 @@ describe("the tug drawn", () => {
     expect([ground.position.y, ground.geometry.parameters.width]).toEqual([-0.3, 4 + OVERRUN * 2]);
     expect(course.getObjectByName("wall_left").position.toArray()).toEqual(toThree([0, 0.425, 0.075]));
     expect(course.getObjectByName("centre_line").position.x).toBe(0);
+  });
+  it("the floor under the feet is the pit's own over the pit, the platforms' either side of it", () => {
+    expect([-0.5, -0.149, 0, 0.149, 0.151].map((x) => floorUnder(TUG, x))).toEqual([0, -0.3, -0.3, -0.3, 0]);
   });
   it("stretches the string between its ends and hangs the marker in the middle", () => {
     const string = buildString();

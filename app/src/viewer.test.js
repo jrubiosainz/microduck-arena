@@ -1,7 +1,18 @@
 import { Object3D, Spherical, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { CTRL_DT, TRACE_WIDTH } from "./replay.js";
-import { cameraPose, dragPose, stageCamera, stageLanes, travelPose } from "./viewer.js";
+import { cameraPose, dragPose, placeMarker, stageCamera, stageLanes, travelPose } from "./viewer.js";
+
+describe("placeMarker", () => {
+  it("lays the contact shadow just over the floor under the feet: the course's own unless told lower", () => {
+    const [ground, marker] = [new Object3D(), new Object3D()];
+    placeMarker(marker, ground, new Vector3(0.05, 0.02, 0.01), 0);
+    expect(marker.parent).toBe(ground);
+    expect(marker.position.toArray()).toEqual([0.05, 0.004, 0.01]);
+    placeMarker(marker, ground, new Vector3(0.05, -0.25, 0.01), 0, -0.3);
+    [0.05, -0.296, 0.01].forEach((v, i) => expect(marker.position.toArray()[i]).toBeCloseTo(v, 9));
+  });
+});
 
 describe("cameraPose", () => {
   it("chases the leader from behind and trackside by default, at the original close distance", () => {

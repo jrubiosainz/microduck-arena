@@ -53,6 +53,9 @@ export function tugDucks(entry) {
   }));
 }
 
+/** The floor under a point `x` along the lane: the pit's, deep, over the pit; the platforms' either side. */
+export const floorUnder = ({ pit_m, pit_depth_m }, x) => (Math.abs(x) < pit_m / 2 ? -pit_depth_m : 0);
+
 /** Both string ends, MJCF, of one frame per duck: the second is the duck's, or the winch on the bench. */
 export const tugEnds = (event, frames) => [
   stringEnd(frames[0], event.string_offset),
