@@ -217,3 +217,14 @@ def test_a_hub_down_at_the_first_read_is_an_error(tmp_path):
     hub.down = True
     with pytest.raises(ConnectionError):
         HubStore("org/runs", api=hub).snapshot()
+
+
+def test_cup_files_are_one_commit_and_never_written_twice(tmp_path):
+    hub = FakeHub(tmp_path)
+    store = HubStore("org/runs", api=hub, snapshot_ttl_s=60)
+    store.put_cup_files("tug-of-war", 1, {"draw.json": b"{}", "bouts/m-0.npz": b"z"})
+    assert hub.head == 1
+    assert store.cup_file("tug-of-war", 1, "bouts/m-0.npz") == b"z" and store.cup_numbers("tug-of-war") == [1]
+    with pytest.raises(FileExistsError):
+        store.put_cup_files("tug-of-war", 1, {"draw.json": b"{}"})
+    assert hub.head == 1

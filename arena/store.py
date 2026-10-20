@@ -373,6 +373,9 @@ class Store(Protocol):
     def clip_file(self, run_id: str, name: str) -> Path: ...
     def pending_clips(self) -> list[str]: ...
     def failed_clips(self) -> list[str]: ...
+    def put_cup_files(self, event_id: str, number: int, files: dict[str, bytes]) -> None: ...
+    def cup_file(self, event_id: str, number: int, name: str) -> bytes | None: ...
+    def cup_numbers(self, event_id: str) -> list[int]: ...
     def refresh(self) -> None: ...
 
 
@@ -557,6 +560,31 @@ class LocalStore:
             folder.name for folder in directory.iterdir()
             if folder.is_dir() and self.clip_state(folder.name)[0] == "failed"
         )
+
+    def _cup_dir(self, event_id: str, number: int) -> Path:
+        return self.root / "cups" / event_id / f"{number:04d}"
+
+    def put_cup_files(self, event_id: str, number: int, files: dict[str, bytes]) -> None:
+        folder = self._cup_dir(event_id, number)
+        taken = [name for name in files if (folder / name).exists()]
+        if taken:
+            raise FileExistsError(f"cup {event_id} {number} already has {taken}")
+        # The .json files last: a cup is read off its draw.json, so a write that
+        # dies part-way leaves no readable state.
+        for name in sorted(files, key=lambda name: name.endswith(".json")):
+            path = folder / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(files[name])
+
+    def cup_file(self, event_id: str, number: int, name: str) -> bytes | None:
+        path = self._cup_dir(event_id, number) / name
+        return path.read_bytes() if path.is_file() else None
+
+    def cup_numbers(self, event_id: str) -> list[int]:
+        directory = self.root / "cups" / event_id
+        if not directory.is_dir():
+            return []
+        return sorted(int(folder.name) for folder in directory.iterdir() if (folder / "draw.json").is_file())
 
     def refresh(self) -> None:
         """Nothing to do: a directory is read fresh every time."""
@@ -843,6 +871,30 @@ class HubStore:
 
     def failed_clips(self) -> list[str]:
         return self.snapshot().failed_clips()
+
+    def put_cup_files(self, event_id: str, number: int, files: dict[str, bytes]) -> None:
+        from huggingface_hub import CommitOperationAdd
+
+        folder = self.snapshot(fresh=True)._cup_dir(event_id, number)
+        taken = [name for name in files if (folder / name).exists()]
+        if taken:
+            raise FileExistsError(f"cup {event_id} {number} already has {taken} in {self.repo_id}")
+        self.api.create_commit(
+            repo_id=self.repo_id,
+            repo_type="dataset",
+            commit_message=f"{event_id} cup {number}",
+            operations=[
+                CommitOperationAdd(path_in_repo=f"cups/{event_id}/{number:04d}/{name}", path_or_fileobj=blob)
+                for name, blob in files.items()
+            ],
+        )
+        self.refresh()
+
+    def cup_file(self, event_id: str, number: int, name: str) -> bytes | None:
+        return self.snapshot().cup_file(event_id, number, name)
+
+    def cup_numbers(self, event_id: str) -> list[int]:
+        return self.snapshot().cup_numbers(event_id)
 
     def refresh(self) -> None:
         """The next read asks the Hub again: what another process wrote — a clip

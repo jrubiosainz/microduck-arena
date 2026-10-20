@@ -273,3 +273,15 @@ def test_a_bench_run_keeps_its_profile_and_its_forces():
     record = make_record(event_id="tug-of-war", bench=profile, per_seed=(SeedResult(1, "pit", 21.7, 4.0),))
     raw = record.to_dict()
     assert (raw["bench"], raw["per_seed"][0]["force_n"]) == (profile, 4.0) and RunRecord.from_dict(raw) == record
+
+
+def test_a_cup_is_written_once_and_read_back(tmp_path):
+    store = LocalStore(tmp_path)
+    store.put_cup_files("tug-of-war", 2, {"bouts/x-0.npz": b"z", "draw.json": b"{}"})
+    assert store.cup_file("tug-of-war", 2, "draw.json") == b"{}"
+    assert store.cup_file("tug-of-war", 2, "bouts/x-0.npz") == b"z"
+    assert store.cup_file("tug-of-war", 2, "order.json") is None
+    assert store.cup_numbers("tug-of-war") == [2] and store.cup_numbers("sprint-2m") == []
+    with pytest.raises(FileExistsError):
+        store.put_cup_files("tug-of-war", 2, {"order.json": b"{}", "draw.json": b"{}"})
+    assert store.cup_file("tug-of-war", 2, "order.json") is None   # nothing of a refused write lands
