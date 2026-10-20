@@ -1,8 +1,8 @@
 """A match between two entries: first to `bouts_to_win` bouts, sides swapped after each bout."""
 
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 
@@ -50,7 +50,7 @@ def play_match(manifest: Manifest, a, b, seeds: Sequence[int], ratings: tuple[fl
     rules = manifest.bout
     if len(seeds) != rules.max_bouts:
         raise ValueError(f"a match takes one seed per possible bout: {rules.max_bouts} (max_bouts), got {len(seeds)}")
-    model = model or compile_tug(manifest, 2)
+    model = model if model is not None else compile_tug(manifest, 2)
     bouts, traces, wins = [], [], [0, 0]
     for k, seed in enumerate(seeds):
         a_west = k % 2 == 0
