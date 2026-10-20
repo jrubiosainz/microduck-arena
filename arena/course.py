@@ -10,10 +10,13 @@ torque motors `arena.actuator` drives, so the built XML and the compiled
 model disagree on purpose.
 
 A stage holds a troupe (`compile_stage`): one robot per duck in one model, so
-they share one physics and can push each other.
+they share one physics and can push each other. A tug of war (`compile_tug`) is
+a troupe on a lane cut by a pit, tied by a string at the neck: to the other
+duck in a bout, to a winch on the bench.
 """
 
 import dataclasses
+import functools
 import math
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
@@ -36,6 +39,12 @@ RIG_XML = {
 
 WALL_THICKNESS_M = 0.05
 
+STRING_SITE = "string_end"  # on each duck's trunk_base (prefixed for duck 1), at the neck's base
+STRING = "string"  # the spatial tendon
+WINCH_SITE = "winch_drum"  # on the world body, the bench only
+WINCH = "winch"  # a motor on the STRING tendon; ctrl = the pull in newtons, towards the drum
+PLATFORM_OVERRUN_M = 20.0  # the platforms run this far past the walls: nobody walks off the world
+
 
 def wall_boxes(course) -> list[tuple[str, tuple[float, float, float], tuple[float, float, float]]]:
     """The lane walls, as `(name, pos, half_extents)` in MJCF coordinates.
@@ -54,6 +63,68 @@ def wall_boxes(course) -> list[tuple[str, tuple[float, float, float], tuple[floa
         (name, (half_len - 0.5, y, half_h), (half_len, half_t, half_h))
         for name, y in (("wall_left", y_off), ("wall_right", -y_off))
     ]
+
+
+@functools.cache
+def string_offset(rig: str = "legs") -> tuple[float, float, float]:
+    """Where the string is tied, in the trunk's frame: the base of the neck, the `neck` body's
+    pos in the rig's MJCF. The neck's hinge turns about that point, so it never moves on the
+    trunk."""
+    rig_dir, xml_name = RIG_XML[rig]
+    root = ET.parse(ASSET_ROOT / "robot" / rig_dir / xml_name).getroot()
+    x, y, z = (float(v) for v in root.find(".//body[@name='neck']").get("pos").split())
+    return x, y, z
+
+
+def tug_walls(course) -> list[tuple[str, tuple[float, float, float], tuple[float, float, float]]]:
+    """A tug's two side walls, `(name, pos, half_extents)` as `wall_boxes`: centred on the pit,
+    spanning x in [-length/2, length/2]."""
+    half_t = WALL_THICKNESS_M / 2
+    half_h = course.wall_height_m / 2
+    y_off = course.width_m / 2 + half_t
+    return [
+        (name, (0.0, y, half_h), (course.length_m / 2, half_t, half_h))
+        for name, y in (("wall_left", y_off), ("wall_right", -y_off))
+    ]
+
+
+def pit_boxes(course) -> list[tuple[str, tuple[float, float, float], tuple[float, float, float]]]:
+    """The ground of a tug, `(name, pos, half_extents)`: a platform either side of the pit, top
+    face at z = 0, and the pit's floor, top face at z = -pit_depth_m.
+
+    No infinite plane: the pit must be a hole. The platforms run PLATFORM_OVERRUN_M past the
+    walls on every side, so a duck that climbs out of the lane still stands on something.
+    """
+    half_y = course.width_m / 2 + WALL_THICKNESS_M + PLATFORM_OVERRUN_M
+    x_out = course.length_m / 2 + PLATFORM_OVERRUN_M
+    half_pit = course.pit_m / 2
+    slab = course.pit_depth_m + WALL_THICKNESS_M
+    platform = ((x_out - half_pit) / 2, half_y, slab / 2)
+    centre = (x_out + half_pit) / 2
+    return [
+        ("platform_west", (-centre, 0.0, -slab / 2), platform),
+        ("platform_east", (centre, 0.0, -slab / 2), platform),
+        (
+            "pit_floor",
+            (0.0, 0.0, -course.pit_depth_m - WALL_THICKNESS_M / 2),
+            (half_pit, half_y, WALL_THICKNESS_M / 2),
+        ),
+    ]
+
+
+def tug_layout(course, ducks: int, rig: str = "legs") -> list[Start]:
+    """Where the ducks start: west facing east, east facing west, each placed so its string
+    end sits on y = 0, the two string_m apart and centred on the pit. The bench is the west
+    duck alone."""
+    ox, oy, _ = string_offset(rig)
+    half = course.string_m / 2
+    return [Start(-half - ox, -oy, 0.0), Start(half + ox, oy, 180.0)][:ducks]
+
+
+def winch_position(course, rig: str = "legs") -> tuple[float, float, float]:
+    """The bench's drum: where the east duck's string end would stand, so the string starts
+    taut at its length."""
+    return (course.string_m / 2, 0.0, SPAWN_HEIGHT_M + string_offset(rig)[2])
 
 
 def ramp_dir(slope_deg: float) -> np.ndarray:
@@ -94,8 +165,20 @@ def _strip_visuals(root: ET.Element) -> None:
 
 
 def _slope_deg(course) -> float:
-    """A lane tilts by what it declares; a stage is flat."""
+    """A lane tilts by what it declares; a stage and a tug are flat."""
     return course.slope_deg if course.kind == "lane" else 0.0
+
+
+def _boxes(body: ET.Element, boxes) -> None:
+    for name, pos, size in boxes:
+        _sub(
+            body,
+            "geom",
+            name=name,
+            type="box",
+            pos=" ".join(str(v) for v in pos),
+            size=" ".join(str(v) for v in size),
+        )
 
 
 def _inject_course(root: ET.Element, manifest: Manifest) -> None:
@@ -105,7 +188,9 @@ def _inject_course(root: ET.Element, manifest: Manifest) -> None:
     a hill climb costs nothing in the keyframe. The walls are the referee: with wz
     pinned to zero, a policy that pulls to one side scrubs speed against them, so
     straightness is part of the time rather than a separate rule. A stage is the
-    same floor with nothing else: an open space to perform in.
+    same floor with nothing else: an open space to perform in. A tug has no
+    plane at all, since its pit must be a hole: its ground is `pit_boxes`, walled
+    by `tug_walls`.
     """
     course = manifest.course
     worldbody = root.find("worldbody")
@@ -115,20 +200,15 @@ def _inject_course(root: ET.Element, manifest: Manifest) -> None:
     # and is completely wrong.
     pitch = -math.radians(_slope_deg(course))
     body = _sub(worldbody, "body", name="course", euler=f"0 {pitch} 0")
+    if course.kind == "tug":
+        _boxes(body, pit_boxes(course) + tug_walls(course))
+        return
 
     _sub(body, "geom", name="floor", type="plane", size="0 0 0.05", pos="0 0 0")
     if course.kind == "stage":
         return
 
-    for name, pos, size in wall_boxes(course):
-        _sub(
-            body,
-            "geom",
-            name=name,
-            type="box",
-            pos=" ".join(str(v) for v in pos),
-            size=" ".join(str(v) for v in size),
-        )
+    _boxes(body, wall_boxes(course))
 
 
 def _inject_keyframe(root: ET.Element, manifest: Manifest) -> None:
@@ -248,14 +328,34 @@ def compile_stage(manifest: Manifest, layout: Sequence[tuple[str, Start]]) -> mu
     spawn included), turned by its yaw; attaching left the new ducks' part of it
     at the origin.
     """
+    return _posed(_compiled(_troupe(manifest, layout)), manifest, layout)
+
+
+def _troupe(
+    manifest: Manifest, layout: Sequence[tuple[str, Start]], string_end=None
+) -> mujoco.MjSpec:
+    """The troupe's spec: duck 0 from the event's XML, every other duck attached on its frame
+    under its prefix. With `string_end`, each duck's trunk_base carries a STRING_SITE there."""
+
+    def tied(robot: mujoco.MjSpec) -> mujoco.MjSpec:
+        if string_end is not None:
+            robot.body("trunk_base").add_site(name=STRING_SITE, pos=list(string_end))
+        return robot
+
     (rig, _), others = layout[0], layout[1:]
-    spec = _motorized(*build_course_xml(dataclasses.replace(manifest, rig=rig)))
+    spec = tied(_motorized(*build_course_xml(dataclasses.replace(manifest, rig=rig))))
     for k, (rig, start) in enumerate(others, start=1):
         root, assets = _robot(rig)
-        robot = _motorized(ET.tostring(root, encoding="unicode"), assets)
+        robot = tied(_motorized(ET.tostring(root, encoding="unicode"), assets))
         frame = spec.worldbody.add_frame(pos=[start.x, start.y, 0.0], quat=_yaw_quat(start.yaw_deg))
         spec.attach(robot, prefix=duck_prefix(k), frame=frame)
-    model = _compiled(spec)
+    return spec
+
+
+def _posed(
+    model: mujoco.MjModel, manifest: Manifest, layout: Sequence[tuple[str, Start]]
+) -> mujoco.MjModel:
+    """The keyframe holds every duck of `layout` at its start, standing in DEFAULT_POSE."""
     pose = model.key_qpos[model.key(manifest.start.keyframe).id]
     for k, (_, start) in enumerate(layout):
         prefix = duck_prefix(k)
@@ -265,3 +365,30 @@ def compile_stage(manifest: Manifest, layout: Sequence[tuple[str, Start]]) -> mu
         for name, angle in zip(JOINT_NAMES, DEFAULT_POSE):
             pose[model.joint(prefix + name).qposadr[0]] = angle
     return model
+
+
+def compile_tug(manifest: Manifest, ducks: int) -> mujoco.MjModel:
+    """A tug's model: the troupe of `tug_layout`, tied at the neck by STRING.
+
+    Two ducks are a bout: the string runs neck to neck and goes slack but never stretches past
+    string_m. One duck is the bench: the string runs to WINCH_SITE, where the WINCH motor pulls
+    it in with its ctrl in newtons (gear -1: a positive ctrl shortens the string). The winch
+    comes after the 14 servos, so no duck's addresses move; the keyframe pads its ctrl with the
+    winch's 0.0.
+    """
+    layout = [(manifest.rig, start) for start in tug_layout(manifest.course, ducks, manifest.rig)]
+    spec = _troupe(manifest, layout, string_offset(manifest.rig))
+    string = spec.add_tendon(name=STRING)
+    string.wrap_site(STRING_SITE)
+    if ducks == 2:
+        string.limited = True
+        string.range = [0.0, manifest.course.string_m]
+        string.wrap_site(duck_prefix(1) + STRING_SITE)
+    else:
+        drum = winch_position(manifest.course, manifest.rig)
+        spec.worldbody.add_site(name=WINCH_SITE, pos=list(drum))
+        string.wrap_site(WINCH_SITE)
+        winch = spec.add_actuator(name=WINCH, target=STRING, trntype=mujoco.mjtTrn.mjTRN_TENDON)
+        winch.set_to_motor()
+        winch.gear = [-1.0, 0, 0, 0, 0, 0]
+    return _posed(_compiled(spec), manifest, layout)

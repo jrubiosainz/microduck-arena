@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
 from .. import votes
-from ..course import wall_boxes
+from ..course import pit_boxes, string_offset, tug_walls, wall_boxes, winch_position
 from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, standings
@@ -23,6 +23,10 @@ from ..timeline import EDGE_MARGIN_M, MIN_SPACING_M
 from ..trace import decode, decode_settle
 
 router = APIRouter(prefix="/api")
+
+
+def _boxes(boxes) -> list[dict]:
+    return [{"name": name, "pos": list(pos), "half": list(half)} for name, pos, half in boxes]
 
 
 def event_summary(manifest: Manifest) -> dict:
@@ -64,10 +68,7 @@ def event_summary(manifest: Manifest) -> dict:
             # The lane walls the PHYSICS uses, in MJCF coordinates, so the viewer can
             # draw exactly what the robot can hit rather than recomputing where the
             # walls ought to be. They are invisible unless you ask for them.
-            "walls": [
-                {"name": name, "pos": list(pos), "half": list(half)}
-                for name, pos, half in wall_boxes(manifest.course)
-            ],
+            "walls": _boxes(wall_boxes(manifest.course)),
             # The sweep, not a single command: the event no longer pins a speed,
             # it declares the range every entry is tried over.
             "sweep_lo": manifest.sweep.lo,
@@ -93,6 +94,12 @@ def event_summary(manifest: Manifest) -> dict:
             "string_m": manifest.course.string_m,
             "pit_m": manifest.course.pit_m,
             "pit_depth_m": manifest.course.pit_depth_m,
+            # The boxes the physics compiles and the string's ends, as for a lane's walls: the
+            # page draws what the ducks stand on and pull, never a second arithmetic of it.
+            "walls": _boxes(tug_walls(manifest.course)),
+            "pit": _boxes(pit_boxes(manifest.course)),
+            "string_offset": list(string_offset(manifest.rig)),
+            "winch": list(winch_position(manifest.course, manifest.rig)),
             "bench": {"ramp_n_per_s": manifest.bench.ramp_n_per_s, "top_n": manifest.bench.top_n},
             "bout": {
                 "time_limit_s": manifest.bout.time_limit_s,

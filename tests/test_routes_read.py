@@ -30,6 +30,10 @@ def test_a_tug_serves_its_course_bench_and_bouts(client):
     assert [tug[k] for k in ("length_m", "width_m", "string_m", "pit_m", "pit_depth_m")] == [4.0, 0.8, 1.0, 0.3, 0.3]
     assert tug["bench"] == {"ramp_n_per_s": 0.25, "top_n": 7.0}
     assert tug["bout"] == {"time_limit_s": 20.0, "bouts_to_win": 2, "max_bouts": 5}
+    assert [w["name"] for w in tug["walls"]] == ["wall_left", "wall_right"]
+    assert [p["name"] for p in tug["pit"]] == ["platform_west", "platform_east", "pit_floor"]
+    assert tug["string_offset"] == [0.026, 0.0145, 0.0324215]
+    assert tug["winch"] == pytest.approx([0.5, 0.0, 0.1524215])
     assert "sweep_lo" not in tug and "size_m" not in tug
 
 

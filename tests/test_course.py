@@ -12,11 +12,18 @@ from arena.course import (
     build_course_xml,
     compile_course,
     compile_stage,
+    compile_tug,
     duck_prefix,
+    pit_boxes,
     ramp_dir,
     ramp_normal,
+    string_offset,
+    tug_layout,
+    tug_walls,
+    winch_position,
 )
 from arena.manifest import load_event
+from arena.runner import _Addresses
 from arena.timeline import Start
 
 
@@ -308,3 +315,68 @@ def test_every_ducks_servos_are_torque_motors_with_bams_parameters():
             assert model.dof_frictionloss[dof] == pytest.approx(0.0)
             assert model.dof_solref[dof] == pytest.approx(SOLREF_FRICTION)
             assert model.dof_solimp[dof] == pytest.approx(SOLIMP_FRICTION)
+
+
+TUG = load_event("tug-of-war")
+names = lambda boxes: [n for n, _, _ in boxes]
+numbers = lambda boxes: [v for _, pos, half in boxes for v in (*pos, *half)]
+
+
+def _standing(model):
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("STAND").id)
+    mujoco.mj_forward(model, data)
+    return data
+
+
+def test_the_course_geometry_of_the_tug():
+    assert string_offset("legs") == (0.026, 0.0145, 0.0324215)
+    assert names(tug_walls(TUG.course)) == ["wall_left", "wall_right"]
+    assert numbers(tug_walls(TUG.course)) == pytest.approx([0, 0.425, 0.075, 2.0, 0.025, 0.075, 0, -0.425, 0.075, 2.0, 0.025, 0.075])
+    assert names(pit_boxes(TUG.course)) == ["platform_west", "platform_east", "pit_floor"]
+    assert numbers(pit_boxes(TUG.course)) == pytest.approx([-11.075, 0, -0.175, 10.925, 20.45, 0.175,
+                                                            11.075, 0, -0.175, 10.925, 20.45, 0.175, 0, 0, -0.325, 0.15, 20.45, 0.025])
+    west, east = tug_layout(TUG.course, 2)
+    assert (west.x, west.y, west.yaw_deg, east.x, east.y, east.yaw_deg) == pytest.approx((-0.526, -0.0145, 0, 0.526, 0.0145, 180))
+    assert tug_layout(TUG.course, 1) == [west]
+    assert winch_position(TUG.course) == pytest.approx((0.5, 0.0, 0.1524215))
+
+
+def test_a_tug_has_platforms_a_pit_and_walls_but_no_floor_plane():
+    model = compile_course(TUG)
+    with pytest.raises(KeyError):
+        model.geom("floor")
+    top = lambda name: model.geom(name).pos[2] + model.geom(name).size[2]
+    assert [top(n) for n in ("platform_west", "platform_east", "pit_floor")] == pytest.approx([0.0, 0.0, -0.3])
+    assert model.geom("wall_left").id >= 0
+
+
+def test_a_bout_ties_neck_to_neck_with_a_string_of_its_length():
+    model = compile_tug(TUG, 2)
+    string = model.tendon("string").id
+    assert model.nu == 28 and model.tendon_limited[string] and list(model.tendon_range[string]) == [0.0, 1.0]
+    data = _standing(model)
+    np.testing.assert_allclose(data.site_xpos[model.site("string_end").id], [-0.5, 0, 0.1524215], atol=1e-9)
+    np.testing.assert_allclose(data.site_xpos[model.site("duck1/string_end").id], [0.5, 0, 0.1524215], atol=1e-9)
+    assert data.ten_length[string] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_the_bench_runs_the_string_to_a_winch_that_pulls_towards_its_drum():
+    model = compile_tug(TUG, 1)
+    winch, string = model.actuator("winch").id, model.tendon("string").id
+    assert model.nu == 15 and not model.tendon_limited[string] and model.actuator_gear[winch, 0] == -1.0
+    assert model.actuator_trntype[winch] == mujoco.mjtTrn.mjTRN_TENDON and model.actuator_trnid[winch, 0] == string
+    assert len(model.key("STAND").ctrl) == 15 and model.key("STAND").ctrl[winch] == 0.0  # one ctrl per actuator
+    np.testing.assert_allclose(model.site("winch_drum").pos, winch_position(TUG.course), atol=1e-12)
+    data = _standing(model)
+    assert data.ten_length[string] == pytest.approx(1.0, abs=1e-9)
+    data.ctrl[winch] = 5.0
+    mujoco.mj_forward(model, data)
+    assert data.qfrc_actuator[0] > 4.0  # the trunk's free x: towards the drum
+
+
+def test_the_string_and_the_winch_leave_every_ducks_addresses_alone():
+    same = lambda a, b: all(np.array_equal(getattr(a, f), getattr(b, f)) for f in ("qpos", "dof", "act", "gyro", "trunk", "free"))
+    assert same(_Addresses.of(compile_tug(TUG, 1), "STAND", ""), _Addresses.of(compile_course(TUG), "STAND", ""))
+    stage = compile_stage(TUG, [("legs", s) for s in tug_layout(TUG.course, 2)])
+    assert all(same(_Addresses.of(compile_tug(TUG, 2), "STAND", p), _Addresses.of(stage, "STAND", p)) for p in ("", "duck1/"))
