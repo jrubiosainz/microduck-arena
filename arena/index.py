@@ -15,6 +15,7 @@ unless a caller deliberately asks otherwise.
 from dataclasses import dataclass
 
 from .constants import RUNNER_VERSION
+from .manifest import higher_wins
 from .store import RunRecord
 
 
@@ -25,8 +26,10 @@ class Row:
 
 
 def sort_key(record: RunRecord) -> tuple:
-    """Lower is better: score, then more seeds finished, then who got there first."""
-    return (record.score, -record.seeds_finished, record.submitted_at)
+    """Lower is better: the better score (the higher where the event's metric says a higher
+    score wins, the lower elsewhere), then more seeds finished, then who got there first."""
+    score = -record.score if higher_wins(record.event_id) else record.score
+    return (score, -record.seeds_finished, record.submitted_at)
 
 
 def by_user(record: RunRecord) -> str:

@@ -323,3 +323,11 @@ def test_two_votable_events_each_pay_on_their_own_window_not_the_widest():
         "ballot",
     )
     assert {r.user for r in paid} == {"bob"}
+
+
+def test_a_stronger_tug_rating_is_a_personal_best_and_the_podium_pays_the_strongest():
+    first, better, weaker = (make_record(user="alice", event_id="tug-of-war", score=s, submitted_at=f"2026-09-03T{h}:00:00Z")
+                             for s, h in ((3.0, "09"), (4.0, "10"), (2.0, "11")))
+    assert [r.source_id for r in acts(receipts([first, better, weaker], frozenset()), "own_best")] == [better.run_id]
+    runs = [make_record(user=u, event_id="tug-of-war", score=s) for u, s in (("a", 2.0), ("b", 5.0), ("c", 3.0))]
+    assert [(r.user, r.points) for r in acts(receipts(runs, frozenset()), "podium")] == [("b", 250), ("c", 150), ("a", 100)]

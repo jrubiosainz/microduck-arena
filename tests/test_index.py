@@ -155,3 +155,20 @@ def test_standing_of_a_run_beaten_by_your_own_better_one():
     s = standing(runs, "WORSE")
     assert (s.rank, s.on_board) == (2, False)
     assert [row.record.run_id for row in s.board] == ["B", "WORSE"]
+
+
+def tug(user, score, **more):
+    return make_record(event_id="tug-of-war", user=user, score=score, **more)
+
+
+def test_a_tug_board_ranks_the_strongest_first_and_keeps_each_ones_strongest():
+    rows = leaderboard([tug("weak", 2.0), tug("strong", 4.0), tug("mid", 3.0), tug("strong", 5.0)])
+    assert [(r.record.user, r.record.score) for r in rows] == [("strong", 5.0), ("mid", 3.0), ("weak", 2.0)]
+    mine = tug("me", 4.0)
+    assert standing([tug("a", 5.0), tug("b", 3.0), mine], mine.run_id).rank == 2
+
+
+def test_a_tie_on_the_tug_goes_to_who_got_there_first():
+    rows = leaderboard([tug("later", 7.0, submitted_at="2026-09-03T12:00:00Z"),
+                        tug("earlier", 7.0, submitted_at="2026-09-03T09:00:00Z")])
+    assert [r.record.user for r in rows] == ["earlier", "later"]

@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from arena.evaluate import SeedResult
 from arena.timeline import EDGE_MARGIN_M, MIN_SPACING_M
 from arena.trace import encode
 from arena.web.app import create_app
@@ -35,6 +36,26 @@ def test_a_tug_serves_its_course_bench_and_bouts(client):
     assert tug["string_offset"] == [0.026, 0.0145, 0.0324215]
     assert tug["winch"] == pytest.approx([0.5, 0.0, 0.1524215])
     assert "sweep_lo" not in tug and "size_m" not in tug
+
+
+PROFILE = {"ramp_n_per_s": 0.25, "top_n": 7.0, "jerks": [[0.4, 0.7, 2.8], [0.4, 1.9, 2.1]]}
+
+
+def test_a_bench_run_serves_its_profile_its_forces_and_a_board_strongest_first(client):
+    api, app = client
+    record_run(app, event_id="tug-of-war", user="bob", score=3.0, bench=PROFILE, per_seed=(SeedResult(1, "pit", 21.7, 3.0),))
+    mine = record_run(app, event_id="tug-of-war", user="alice", score=4.2, bench=PROFILE, per_seed=(SeedResult(1, "held", None, 7.0),))
+    body = api.get(f"/api/runs/{mine.run_id}").json()
+    assert body["bench"] == PROFILE and body["per_seed"] == [{"seed": 1, "status": "held", "time_s": None, "force_n": 7.0}]
+    assert (body["rank"], [r["user"] for r in body["board"]], body["board"][0]["bench"]) == (1, ["alice", "bob"], PROFILE)
+    assert [r["user"] for r in api.get("/api/events/tug-of-war/leaderboard").json()["rows"]] == ["alice", "bob"]
+    assert api.get("/api/players/alice").json()["publications"][0]["metric"] == "mean_hold_force"
+
+
+def test_a_race_answer_carries_nothing_of_the_bench(client):
+    api, app = client
+    body = api.get(f"/api/runs/{record_run(app).run_id}").json()
+    assert "bench" not in body and "force_n" not in body["per_seed"][0] and "bench" not in body["board"][0]
 
 
 def test_events_lists_the_whole_programme(client):

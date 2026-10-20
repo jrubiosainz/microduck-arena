@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 
 from .. import votes
 from ..course import pit_boxes, string_offset, tug_walls, wall_boxes, winch_position
+from ..evaluate import seed_row
 from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, standings
@@ -189,6 +190,7 @@ def _board_row(row) -> dict:
         # duck's place, its rig, what the replay sings and opens its beak from, and whose policy it
         # plays. A race's row is one duck of the event's rig.
         "cast": record.cast,
+        **({"bench": record.bench} if record.bench else {}),
     }
 
 
@@ -201,9 +203,8 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
     records = store.runs(manifest.id)
 
     if manifest.metric == "votes":
-        # A separate function, not a parameterised leaderboard: index.sort_key
-        # means "lower is better" and is correct for five live timed events.
-        # Teaching it a second direction would put all of them at risk.
+        # Votes are not a score but a count in a window (arena/votes.py), hence their own
+        # function; index.sort_key ranks every scored event in its metric's direction.
         kept = _event_ballots(request, manifest, datetime.now(UTC))
         rows = votes.standings(votes.pool(records, withdrawn), kept)
         out = [_board_row(row) for row in rows]
@@ -269,6 +270,7 @@ def player_page(user: str, request: Request) -> dict:
             "run_id": run.run_id,
             "event_id": run.event_id,
             "event_title": events[run.event_id].title,
+            "metric": events[run.event_id].metric,
             "policy_name": run.policy_name,
             "score": run.score,
             "seeds_finished": run.seeds_finished,
@@ -340,9 +342,8 @@ def run_detail(run_id: str, request: Request) -> dict:
         "command_vx": record.command_vx,
         "seeds_finished": record.seeds_finished,
         "seeds_total": len(record.per_seed),
-        "per_seed": [
-            {"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in record.per_seed
-        ],
+        "per_seed": [seed_row(s) for s in record.per_seed],
+        **({"bench": record.bench} if record.bench else {}),
         "trace_seed": record.trace_seed,
         "submitted_at": record.submitted_at,
         "runner_version": record.runner_version,
