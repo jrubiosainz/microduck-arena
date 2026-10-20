@@ -220,3 +220,102 @@ def reached(cup: Cup) -> list[str]:
         if match.round == "final":
             out[match.winner] = "champion"
     return out
+
+
+# A match's clip media are served from airs_at - PREFETCH, so the live can buffer it before its slot.
+PREFETCH = timedelta(seconds=30)
+
+
+def _on_air(cup: Cup, match_id: str) -> tuple[datetime, datetime] | None:
+    """When the match's clip starts airing, and when it has finished."""
+    if cup.order is None:
+        return None
+    for segment in cup.order["segments"]:
+        if segment["kind"] == "match" and segment["match_id"] == match_id:
+            airs = parse_iso(cup.order["starts_at"]) + timedelta(milliseconds=segment["at_ms"])
+            return airs, airs + timedelta(milliseconds=segment["duration_ms"])
+    return None
+
+
+def airs_at(cup: Cup, match_id: str) -> datetime | None:
+    span = _on_air(cup, match_id)
+    return None if span is None else span[0]
+
+
+def revealed_at(cup: Cup, match_id: str) -> datetime | None:
+    """The match's result is public once its clip has finished airing, not while it airs."""
+    span = _on_air(cup, match_id)
+    return None if span is None else span[1]
+
+
+def ends_at(cup: Cup) -> datetime | None:
+    if cup.order is None:
+        return None
+    last = cup.order["segments"][-1]
+    return parse_iso(cup.order["starts_at"]) + timedelta(milliseconds=last["at_ms"] + last["duration_ms"])
+
+
+def cup_state(cup: Cup, now: datetime) -> str:
+    if cup.skipped:
+        return "skipped"
+    if now < parse_iso(cup.close_at):
+        return "open"
+    if cup.order is None:
+        return "drawn"
+    if now < parse_iso(cup.order["starts_at"]):
+        return "ready"
+    return "airing" if now < ends_at(cup) else "aired"
+
+
+def _row(entrant: int, matches: Sequence[MatchRecord]) -> dict:
+    mine = [m for m in matches if entrant in (m.a, m.b)]
+    bouts = [m.wins if m.a == entrant else m.wins[::-1] for m in mine]
+    won = sum(m.winner == entrant for m in mine)
+    return {"entrant": entrant, "played": len(mine), "won": won, "lost": len(mine) - won,
+            "bouts_for": sum(f for f, _ in bouts), "bouts_against": sum(a for _, a in bouts)}
+
+
+def cup_view(cup: Cup, now: datetime) -> dict:
+    """What is public at `now`: every API, page and the live ask here, so nothing is told before it has aired.
+
+    Before the start, the field alone. From the start, the groups and their pairs; a knockout pair once the round before
+    it is revealed; each result, and its weight in the tables, from its reveal; the champion and the secret from the
+    final's.
+    """
+    state = cup_state(cup, now)
+    view = {"event_id": cup.event_id, "number": cup.number, "state": state, "close_at": cup.close_at,
+            "premiere_at": cup.premiere_at, "starts_at": None if cup.order is None else cup.order["starts_at"],
+            "entrants": [entrant.view() for entrant in cup.entrants]}
+    if state not in ("airing", "aired"):
+        return view
+    reveals = {m.match_id: revealed_at(cup, m.match_id) for m in cup.matches}
+    shown = {mid for mid, at in reveals.items() if at <= now}
+    ratings = [entrant.rating for entrant in cup.entrants]
+
+    def paired(match: MatchRecord) -> bool:
+        if match.group:
+            return True
+        first = next(m for m in cup.matches if m.round == match.round)
+        return cup.matches[first.index - 1].match_id in shown
+
+    def public(match: MatchRecord) -> dict:
+        out = {"match_id": match.match_id, "index": match.index, "round": match.round, "group": match.group,
+               "reveal_at": iso(reveals[match.match_id]), "a": None, "b": None, "title": match_label(cup, match)}
+        if paired(match):
+            out.update(a=match.a, b=match.b, title=match_title(cup, match))
+        if match.match_id in shown:
+            out.update(bouts=[bout.to_dict() for bout in match.bouts], wins=list(match.wins), winner=match.winner,
+                       decided_by=match.decided_by)
+        return out
+
+    groups = []
+    for name, group in zip(GROUP_NAMES, cup.groups):
+        # By its name, not its members: a knockout rematch of two group-mates is not the group's.
+        played = [m for m in cup.matches if m.group == name and m.match_id in shown]
+        groups.append({"name": name, "table": [_row(i, played) for i in group_table(group, played, ratings)]})
+    final = cup.matches[-1]
+    view.update(groups=groups, matches=[public(m) for m in cup.matches],
+                champion=final.winner if final.match_id in shown else None)
+    if final.match_id in shown:
+        view["secret"] = cup.secret
+    return view

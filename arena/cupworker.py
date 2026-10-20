@@ -1,8 +1,9 @@
 import tempfile
 from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import replace
 from datetime import datetime
+from itertools import accumulate
 from pathlib import Path
 
 from .constants import RUNNER_VERSION
@@ -17,9 +18,11 @@ from .cup import (
     group_table,
     iso,
     match_id,
+    match_label,
     round_name,
 )
 from .hub_fetch import fetch_policy
+from .live import SHUTTER_MS
 from .manifest import Manifest, all_events
 from .match import bout_seed, play_match
 from .policy import Policy, load_policy
@@ -93,3 +96,19 @@ def compute_matches(manifest: Manifest, cup: Cup, load: Callable[[Entrant], obje
         winners = [play(a, b, round_name(len(pairs)), None) for a, b in pairs]
         pairs = list(zip(winners[::2], winners[1::2]))
     return replace(cup, matches=tuple(matches)), files
+
+
+def running_order(cup: Cup, clips: Mapping[str, float], starts_at: datetime, show: dict | None = None) -> dict:
+    """Every match after the shutter that cuts into it, from `starts_at`; `clips` gives each match clip's seconds.
+
+    The live serves its grid five minutes ahead, so a shutter names the stage, never a duck: who plays a knockout match
+    would tell who qualified. `show` is Plan D's.
+    """
+    laid = []
+    for match in cup.matches:
+        laid += [{"kind": "shutter", "duration_ms": SHUTTER_MS,
+                  "next": {"match_id": match.match_id, "title": match_label(cup, match)}},
+                 {"kind": "match", "duration_ms": round(clips[match.match_id] * 1000), "match_id": match.match_id}]
+    starts = accumulate((segment["duration_ms"] for segment in laid), initial=0)
+    return {"starts_at": iso(starts_at),
+            "segments": [{"kind": segment["kind"], "at_ms": at, **segment} for segment, at in zip(laid, starts)]}

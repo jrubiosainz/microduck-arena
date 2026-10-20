@@ -10,8 +10,15 @@ import numpy as np
 import arena
 from arena import cupworker
 from arena.constants import RUNNER_VERSION
-from arena.cup import Cup, cup_times, draw_groups, iso
-from arena.cupworker import all_cups, compute_matches, entrants_at, load_cup, load_entrant
+from arena.cup import Cup, cup_times, draw_groups, iso, parse_iso
+from arena.cupworker import (
+    all_cups,
+    compute_matches,
+    entrants_at,
+    load_cup,
+    load_entrant,
+    running_order,
+)
 from arena.manifest import BoutRules, load_event
 from arena.match import BoutResult, MatchOutcome, bout_seed
 from arena.policy import load_policy
@@ -40,9 +47,13 @@ def drawn_cup(n, number=1, secret="ab" * 16):
                tuple(tuple(g) for g in draw_groups(ducks, secret)))
 
 
-def played_cup(n, number=1):
+def played_cup(n, number=1, starts_at=None, seconds=10.0):
+    """With `starts_at`, the cup's order is fixed from then, every match clip `seconds` long."""
     with patch("arena.cupworker.play_match", fake_play), patch("arena.cupworker.compile_tug", lambda *_: None):
-        return compute_matches(TUG, drawn_cup(n, number), lambda e: e.user)[0]
+        cup = compute_matches(TUG, drawn_cup(n, number), lambda e: e.user)[0]
+    if starts_at is None:
+        return cup
+    return replace(cup, order=running_order(cup, {m.match_id: seconds for m in cup.matches}, parse_iso(starts_at)))
 
 
 def test_a_cup_is_read_back_from_its_files(tmp_path):
