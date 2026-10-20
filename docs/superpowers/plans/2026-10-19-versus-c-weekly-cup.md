@@ -965,16 +965,16 @@ def test_arena_clip_serves_its_page_every_match(tmp_path, monkeypatch):
 
 ```js
 // app/src/clip/match.test.js
-const twenty = { settle: 26, steps: 1000 };
-it("chains three 20 s bouts between the title and the outro: a 67 s clip", () => {
-  const plan = matchPlan([0, 1, 2].map((k) => ({ k, ...twenty })));
-  expect(plan.frames).toBe(1677);
-  expect(plan.seconds).toBeCloseTo(67.08);
-  expect(plan.bouts).toEqual([{ k: 0, tape_start_s: 3.52, tape_end_s: 23.52 },
-    { k: 1, tape_start_s: 24.04, tape_end_s: 44.04 }, { k: 2, tape_start_s: 44.56, tape_end_s: 64.56 }]);
+const full = { settle: 26, steps: 2250 };
+it("chains three 45 s bouts between the title and the outro: a 142 s clip", () => {
+  const plan = matchPlan([0, 1, 2].map((k) => ({ k, ...full })));
+  expect(plan.frames).toBe(3552);
+  expect(plan.seconds).toBeCloseTo(142.08);
+  expect(plan.bouts).toEqual([{ k: 0, tape_start_s: 3.52, tape_end_s: 48.52 },
+    { k: 1, tape_start_s: 49.04, tape_end_s: 94.04 }, { k: 2, tape_start_s: 94.56, tape_end_s: 139.56 }]);
 });
-it("keeps the longest match, five full bouts, under two minutes", () => {
-  expect(matchPlan([0, 1, 2, 3, 4].map((k) => ({ k, ...twenty }))).seconds).toBeCloseTo(108.12);
+it("keeps the longest match, five full bouts, under four minutes", () => {
+  expect(matchPlan([0, 1, 2, 3, 4].map((k) => ({ k, ...full }))).seconds).toBeCloseTo(233.12);
 });
 const small = () => matchPlan([{ k: 0, settle: 2, steps: 4 }, { k: 1, settle: 2, steps: 6 }]);   // tape frames 75-77, then 78-81
 it("finds the bout and its step for every frame", () => {
@@ -1048,7 +1048,7 @@ it("reads a bout as two ducks and versions a match clip's files", async () => {
     - builds the viewer as `main()` does, with `match.event`'s rig and camera;
     - `draw(i)`:
       - calls `viewer.setLanes([boutLane(match, k, traces, settles)], match.event, { loop: false })` whenever `boutAt` changes bout;
-      - calls `viewer.frame(step * CTRL_DT, travelAt(plan, i), i / plan.fps, crowdDirection)`, the step counted from the settle's first frame as Plan A's bench clip counts its `{tug: "bench", trace, settle}` lane;
+      - calls `viewer.frame(step * CTRL_DT, travelAt(plan, i), i / plan.fps, crowdDirection)`, the step counted from the settle's first frame as a rated run's clip counts its `{tug: "bout", ducks}` lane (Plan E);
       - sets the clock to `clock(max(0, step - span.settle))`;
       - shows `#osd-bug` outside the intro as `` `${A} <b>${a}–${b}</b> ${B}` ``, `A` and `B` the sides' `name`s;
       - shows the stamp `matchWords(match).outro` centred (`left: 50%; top: 45%`) at the outro;
@@ -1488,7 +1488,7 @@ def _stand_by(self, show):
 - [ ] **Step 1: Write the failing tests** (`cup.test.js`, and `router.test.js` for the routes):
 
 ```js
-const event = { id: "tug-of-war", title: "Tug of War", metric: "mean_hold_force" };
+const event = { id: "tug-of-war", title: "Tug of War", metric: "mean_ground_cm" };
 const four = ["Tank", "Lean", "Grip", "Sway"].map((name, i) => ({ user: `p${i}`, policy_name: name, livery: "classic", rating: 5 - i, run_id: `R${i}` }));
 const open = { event, number: 1, open: 1, min_entrants: 4, state: "open", close_at: "2026-10-30T15:00:00Z",
   premiere_at: "2026-10-30T17:00:00Z", starts_at: null, entrants: four };
@@ -1620,8 +1620,8 @@ const match = { match_id: "tug-of-war-0001-008", cup: 1, round: "final", group: 
   event: { id: "tug-of-war", title: "Tug of War", rig: "legs" }, a: { user: "ann", policy_name: "Tank", name: "Tank", livery: "blue" },
   b: { user: "bob", policy_name: "Lean", name: "Lean", livery: "classic" }, wins: [2, 1], winner: "a", decided_by: "bouts", clip: "v1",
   bouts: [
-    { k: 0, a_side: "west", winner: "a", how: "pit", time_s: 8.42 }, { k: 1, a_side: "east", winner: "b", how: "marker", time_s: 20 },
-    { k: 2, a_side: "west", winner: null, how: "draw", time_s: 20 }, { k: 3, a_side: "east", winner: "a", how: "pit", time_s: 3.1 }] };
+    { k: 0, a_side: "west", winner: "a", how: "pit", time_s: 8.42 }, { k: 1, a_side: "east", winner: "b", how: "marker", time_s: 45 },
+    { k: 2, a_side: "west", winner: null, how: "draw", time_s: 45 }, { k: 3, a_side: "east", winner: "a", how: "pit", time_s: 3.1 }] };
 it("names the cup, the round and both sides, gives the score, the bouts and the clip", () => {
   const page = matchHall(match);
   expect(page.querySelector("#title").getAttribute("href")).toBe("#/c/tug-of-war/1");
@@ -1630,8 +1630,8 @@ it("names the cup, the round and both sides, gives the score, the bouts and the 
   expect(page.querySelector(".match-score").textContent).toBe("2–1");
   expect(page.querySelector(".stamp").textContent).toBe("Tank wins");
   expect([...page.querySelectorAll(".match-bout")].map((b) => b.textContent)).toEqual([
-    "Bout 1 · Tank wins · Lean in the pit · 8.42 s", "Bout 2 · Lean wins · the marker on their side · 20.00 s",
-    "Bout 3 · a draw · 20.00 s", "Bout 4 · Tank wins · Lean in the pit · 3.10 s"]);
+    "Bout 1 · Tank wins · Lean in the pit · 8.42 s", "Bout 2 · Lean wins · the marker on their side · 45.00 s",
+    "Bout 3 · a draw · 45.00 s", "Bout 4 · Tank wins · Lean in the pit · 3.10 s"]);
   expect(page.querySelector(".match-clip video").getAttribute("src")).toBe("/api/matches/tug-of-war-0001-008/clip/landscape.mp4?v=v1");
 });
 // player.test.js
@@ -1704,7 +1704,7 @@ it("lists the cups a player played and how far they went, each the way to its pa
 
     `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus && uv run --no-config --frozen arena score <onnx> --event tug-of-war --user <user> --name <name> --livery <livery> --store <scratch>/cup-store`
 
-    Expected: a bench rating, then `recorded <run id>`.
+    Expected: five `seed n:` bout lines, `rating: X.X cm · replay from seed n`, then `recorded <run id>`.
   - **Dates.** The runs are dated today, before cup 1's close (2026-10-30T15:00Z). If today is past that, use the first cup closing after today in every time below.
 
 - [ ] **Step 4: Run the worker with a fake clock.** Write `<scratch>/rehearse.py`:
@@ -1725,11 +1725,11 @@ print(len(cup.matches), cup.order and cup.order["starts_at"])
 ```
 
   - Run `cd …/versus && uv run --no-config --frozen python <scratch>/rehearse.py <scratch>/cup-store 2026-10-30T15:01:00+00:00`.
-  - Expected: seven `owed tug-of-war-0001-00N` lines (`000`–`005` the group, `006` the final), then `7 None`. Note the wall time of the real physics.
+  - Expected: seven `owed tug-of-war-0001-00N` lines (`000`–`005` the group, `006` the final), then `7 None`. Note the wall time of the real physics: a 45 s bout takes about 2 s here.
 
 - [ ] **Step 5: Render two match clips on this Mac, and stand in for the other five.** Two renders show all a render can get wrong; more would only cost hours.
   - **Render** `tug-of-war-0001-002` (the third match: Plan D's show rehearsal airs it) and the final `tug-of-war-0001-006` (its match page plays it). **The controller renders, not a subagent** (no subagent waits on a background run): `cd …/versus && uv run --no-config --frozen arena clip <id> --store <scratch>/cup-store`, both with `run_in_background` at once, each awaited by a Monitor until-loop on its `clip.json` (Plan A measured ~1.6 s a frame here).
-  - **Expected output:** `landscape: <s> s, …`. A match of three full bouts gives 67.08 s, one won in the pit gives less.
+  - **Expected output:** `landscape: <s> s, …`. A three-bout match gives 142.08 s (3552 frames: about an hour and a half here), one won in the pit gives less.
   - **Frames to look at.** Pull them with `ffmpeg -ss <t> -i <scratch>/cup-store/clips/<id>/landscape.mp4 -frames:v 1 <scratch>/<id>-<t>.png` at the intro (1 s), mid-bout and the outro, and look at them. Check for:
     - the title card "Tug of War · Cup #1" over "<stage> · A vs B";
     - the score bug changing after each bout;
@@ -1748,7 +1748,7 @@ print(len(cup.matches), cup.order and cup.order["starts_at"])
     - stop the server.
   - **Times:**
     - `2026-10-30T16:59:00+00:00`: the `ready` countdown, the four entrants by rating, no groups;
-    - `2026-10-30T17:01:30+00:00`: airing, the first group match(es) with results and tables counting only them, the knockout "To be decided", a "Watch it live" link;
+    - `2026-10-30T17:03:00+00:00`: airing, the first group match with results and tables counting only them, the knockout "To be decided", a "Watch it live" link;
     - `2026-10-30T18:30:00+00:00`: the champion, the table, the final, seven match links;
     - at the same time, `#/m/tug-of-war-0001-006`: the final's page with the stadium, the bouts and the clip;
     - at the same time, `#/p/nico`: the cup line;

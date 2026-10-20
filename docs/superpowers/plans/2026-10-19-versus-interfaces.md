@@ -562,12 +562,13 @@ export const PREFETCH_MS = 25_000   // a match slot (and, from Plan D, any slot)
 # arena/moments.py — new
 LEAD_M = 0.02      # the marker must be this far past the centre line to change the lead
 EDGE_M = 0.08      # a trunk this close to its pit edge is "at the edge"
+GROUND_M = 0.10    # the marker this far on one side of the centre line is ground won by that side
 SLIP_DEG = 35.0    # a trunk tilting past this has slipped
 
 @dataclass(frozen=True)
 class Moment:
     at_s: float          # seconds into the bout's timed trace
-    kind: str            # "start" | "lead" | "edge" | "slip" | "pit" | "time"
+    kind: str            # "start" | "lead" | "ground" | "edge" | "slip" | "pit" | "time"
     side: str | None     # "west" | "east"
 
 def moments(trace: np.ndarray, course: Tug, offset) -> list[Moment]
