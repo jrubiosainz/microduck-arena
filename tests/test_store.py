@@ -268,11 +268,10 @@ def test_a_stored_race_reads_and_writes_back_to_the_same_json():
     assert RunRecord.from_dict(json.loads(json.dumps(RACE))).to_dict() == RACE
 
 
-def test_a_bench_run_keeps_its_profile_and_its_centimetres():
-    profile = {"ramp_n_per_s": 0.25, "top_n": 7.0, "jerks": [[0.4, 0.7, 2.8]]}
-    record = make_record(event_id="tug-of-war", bench=profile, per_seed=(SeedResult(1, "won", 45.0, 12.5),))
+def test_a_rated_run_keeps_its_centimetres():
+    record = make_record(event_id="tug-of-war", per_seed=(SeedResult(1, "won", 45.0, 12.5),))
     raw = record.to_dict()
-    assert (raw["bench"], raw["per_seed"][0]["score_cm"]) == (profile, 12.5) and RunRecord.from_dict(raw) == record
+    assert raw["per_seed"][0]["score_cm"] == 12.5 and RunRecord.from_dict(raw) == record
 
 
 def test_a_cup_is_written_once_and_read_back(tmp_path):

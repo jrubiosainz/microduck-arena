@@ -127,8 +127,6 @@ class RunRecord:
     # or a borrowed repo, credited), its rig, where it started on the stage, and how it is heard
     # (arena.timeline.sound_of). Never simulated again: the replay draws, sings and credits from it.
     cast: tuple[dict, ...] = field(default_factory=lone_cast)
-    # The winch's profile on the replayed seed, for the page's dial; None off the bench.
-    bench: dict | None = None
 
     @property
     def offers_download(self) -> bool:
@@ -162,8 +160,6 @@ class RunRecord:
             "description": self.description,
             "timeline_sha256": self.timeline_sha256,
             "cast": list(self.cast),
-            # Only on the bench: every stored race and performance writes back as it was read.
-            **({"bench": self.bench} if self.bench is not None else {}),
         }
 
     @classmethod
@@ -202,7 +198,6 @@ class RunRecord:
             cast=tuple(raw["cast"]) if raw.get("cast") else lone_cast(
                 raw.get("sound") or ({"triggers": raw["triggers"]} if raw.get("triggers") else None)
             ),
-            bench=raw.get("bench"),
         )
 
 

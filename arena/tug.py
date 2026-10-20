@@ -1,10 +1,8 @@
-"""A tug of war: a duck pulls on a string, against a winch (the pulling bench) or against
-another duck (a bout).
+"""A tug of war: a duck pulls on a string against another duck, the reference duck on a rating
+seed (a bout).
 
-The string is a tendon (`arena.course.compile_tug`). Between two ducks it is limited to its
-length: a string, it pulls only when taut, goes slack and never pushes. On the bench it runs to
-a winch whose pull rises with time, shaken by a few sines; how hard it pulls when the duck goes
-into the pit is the duck's score, and a duck that never goes in scores the top.
+The string is a tendon (`arena.course.compile_tug`), limited to its length: a string, it pulls
+only when taut, goes slack and never pushes.
 
 The judge, after every control step: only the pit decides. A duck is out when its trunk is in
 the pit; knocked over, sitting or lying on the platform, it stays in play and can still be
@@ -16,16 +14,14 @@ A trace frame is a runner frame: trunk position (0:3), trunk quaternion w, x, y,
 the joint angles.
 """
 
-import math
-import zlib
 from dataclasses import dataclass
 
 import numpy as np
 
 from .assets import ASSET_ROOT
 from .constants import CTRL_DT, TRACE_WIDTH
-from .course import WINCH, compile_tug, string_offset
-from .manifest import Bench, Manifest
+from .course import compile_tug, string_offset
+from .manifest import Manifest
 from .policy import load_policy
 from .runner import _reset_by_mujoco, _start
 
@@ -53,28 +49,6 @@ def in_pit(frame: np.ndarray) -> bool:
     return bool(frame[2] < -PIT_DROP_M)
 
 
-def bench_profile(bench: Bench, event_id: str, seed: int) -> dict:
-    """The winch's pull for one seed: the event's ramp and top, and each jerk's sine with its
-    own phase, drawn from a stream that is the same in every process."""
-    phases = np.random.default_rng([zlib.crc32(event_id.encode()), seed, 4]).uniform(
-        0, 2 * np.pi, len(bench.jerk_hz)
-    )
-    return {
-        "ramp_n_per_s": bench.ramp_n_per_s,
-        "top_n": bench.top_n,
-        "jerks": [[bench.jerk_n, hz, float(phase)] for hz, phase in zip(bench.jerk_hz, phases)],
-    }
-
-
-def bench_force(profile: dict, t_s: float) -> float:
-    """The winch's pull in newtons at `t_s` into the timed run, never below 0, never above the
-    top: a duck dragged in at the top never outscores one that held."""
-    pull = profile["ramp_n_per_s"] * t_s + sum(
-        amp * math.sin(2 * math.pi * hz * t_s + phase) for amp, hz, phase in profile["jerks"]
-    )
-    return min(profile["top_n"], max(0.0, pull))
-
-
 def _verdict(trace: np.ndarray, offset, final: bool) -> tuple[int | None, str] | None:
     """The bout's verdict after the last frame of `trace`, (2, frames, 21): (loser, how), or None
     while it goes on."""
@@ -85,51 +59,6 @@ def _verdict(trace: np.ndarray, offset, final: bool) -> tuple[int | None, str] |
         x = marker_x(trace[:, -1:], offset)[0]
         return (1, "marker") if x < 0 else (0, "marker") if x > 0 else (None, "draw")
     return None
-
-
-@dataclass(frozen=True)
-class BenchOutcome:
-    seed: int
-    status: str  # "pit" | "held"
-    force_n: float  # bench_force at the step it went into the pit; top_n if it held to the end
-    time_s: float | None  # when it went into the pit; None if held
-    trace: np.ndarray  # (1, frames, 21); stops at the step it went into the pit
-    settle: np.ndarray  # (1, settle + 1, 21)
-    profile: dict
-
-
-def run_bench(manifest: Manifest, policy, seed: int, model=None) -> BenchOutcome:
-    """One duck against the winch for the event's timed length, after the runner's own opening.
-    The winch is still through the settle; its pull is set before every timed control step.
-    A step MuJoCo had to reset counts as the pit at that step's pull, its frame left out: a solver
-    explosion is not a hold, and the reset pose stands the duck over the pit."""
-    model = model if model is not None else compile_tug(manifest, 1)
-    command = np.asarray(manifest.command, dtype=np.float64)
-    profile = bench_profile(manifest.bench, manifest.id, seed)
-    winch = model.actuator(WINCH).id
-    sim, settle = _start(manifest, model, [policy], [0.0], seed, [command])
-    steps = round(manifest.time_limit_s / CTRL_DT)
-    frames = np.empty((1, steps, TRACE_WIDTH), dtype=np.float32)
-    for step in range(steps):
-        force = bench_force(profile, step * CTRL_DT)
-        sim.data.ctrl[winch] = force
-        sim.step([command])
-        if _reset_by_mujoco(sim.data):
-            return BenchOutcome(
-                seed, "pit", force, (step + 1) * CTRL_DT, frames[:, :step].copy(), settle, profile
-            )
-        sim.record(frames[:, step])
-        if in_pit(frames[0, step]):
-            return BenchOutcome(
-                seed,
-                "pit",
-                force,
-                (step + 1) * CTRL_DT,
-                frames[:, : step + 1].copy(),
-                settle,
-                profile,
-            )
-    return BenchOutcome(seed, "held", profile["top_n"], None, frames, settle, profile)
 
 
 @dataclass(frozen=True)
@@ -149,7 +78,7 @@ def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutco
     command, until the judge's first verdict: at the latest the bout's time limit, where the
     marker always gives one. A step MuJoCo had to reset ends the bout drawn, its frame left out:
     a solver explosion is not a result, and the reset pose stands the west duck over the pit."""
-    model = model if model is not None else compile_tug(manifest, 2)
+    model = model if model is not None else compile_tug(manifest)
     command = np.asarray(manifest.command, dtype=np.float64)
     offset = string_offset(manifest.rig)
     sim, settle = _start(manifest, model, [west, east], [0.0, 180.0], seed, [command, command])

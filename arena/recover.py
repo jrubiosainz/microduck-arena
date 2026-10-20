@@ -244,7 +244,6 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
                 livery="classic",
                 timeline_sha256=fetched.timeline_sha256,
                 cast=cast.record if cast else lone_cast(),
-                bench=result.bench,
             )
             store.append(record, trace_codec.encode(result.trace, result.settle))
             restored.append(record)

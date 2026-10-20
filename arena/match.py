@@ -50,7 +50,7 @@ def play_match(manifest: Manifest, a, b, seeds: Sequence[int], ratings: tuple[fl
     rules = manifest.bout
     if len(seeds) != rules.max_bouts:
         raise ValueError(f"a match takes one seed per possible bout: {rules.max_bouts} (max_bouts), got {len(seeds)}")
-    model = model if model is not None else compile_tug(manifest, 2)
+    model = model if model is not None else compile_tug(manifest)
     bouts, traces, wins = [], [], [0, 0]
     for k, seed in enumerate(seeds):
         a_west = k % 2 == 0

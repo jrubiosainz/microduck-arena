@@ -112,7 +112,7 @@ def test_groups_play_round_by_round_then_each_knockout_round(monkeypatch):
     calls = []
     monkeypatch.setattr(cupworker, "play_match", lambda m, a, b, seeds, ratings, model=None:
                         calls.append((a, b, seeds, model)) or fake_play(m, a, b, seeds, ratings))
-    monkeypatch.setattr(cupworker, "compile_tug", lambda manifest, ducks: "model")
+    monkeypatch.setattr(cupworker, "compile_tug", lambda manifest: "model")
     cup = replace(drawn_cup(6), groups=((0, 2, 4), (1, 3, 5)))
     played, files = compute_matches(TUG, cup, lambda e: e.user)
     assert [(m.a, m.b, m.round, m.group) for m in played.matches] == [

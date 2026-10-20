@@ -133,7 +133,6 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
         "runner_version": result.runner_version,
         "format": FORMAT,
         "timeline": key,
-        **({"bench": result.bench} if result.bench else {}),
     }
 
 

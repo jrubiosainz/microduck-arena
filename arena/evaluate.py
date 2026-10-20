@@ -58,8 +58,8 @@ class SeedResult:
 
 
 def seed_row(result: SeedResult) -> dict:
-    """A seed as the log and the API write it: a race's and a performance's exactly as before
-    the bench, a tug seed's with the centimetres it won."""
+    """A seed as the log and the API write it: a race's and a performance's with no centimetres,
+    a tug seed's with the centimetres it won."""
     row = {"seed": result.seed, "status": result.status, "time_s": result.time_s}
     if result.score_cm is not None:
         row["score_cm"] = result.score_cm
@@ -92,8 +92,6 @@ class Evaluation:
     settle: np.ndarray
     trace_seed: int
     runner_version: int
-    # The winch's profile on the replayed seed (arena.tug.bench_profile); None off the bench.
-    bench: dict | None = None
 
 
 def mean_finish_time(per_seed: tuple[SeedResult, ...], time_limit_s: float) -> float:
@@ -285,7 +283,7 @@ def evaluate(manifest: Manifest, policy, cast: tuple[Performer, ...] | None = No
 def _evaluate_rating(manifest: Manifest, policy) -> Evaluation:
     """The entry in one bout a seed against the reference duck, west on odd seeds. A bout always
     ends with a score, so every seed counts as finished."""
-    model, reference, offset = compile_tug(manifest, 2), reference_duck(manifest), string_offset(manifest.rig)
+    model, reference, offset = compile_tug(manifest), reference_duck(manifest), string_offset(manifest.rig)
     outcomes, per_seed = {}, []
     for seed in manifest.seeds:
         entry = entry_side(seed)

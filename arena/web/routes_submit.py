@@ -230,7 +230,7 @@ def _answer(record: RunRecord, manifest, page_url: str, already: bool) -> dict:
         "page_url": page_url,
         "already_entered": already,
         "course": manifest.course.kind,
-        # Every event's: the publish CLI says a rating in newtons from it; an older CLI ignores it.
+        # Every event's: the publish CLI says a rating in centimetres from it; an older CLI ignores it.
         "metric": manifest.metric,
     }
 
@@ -349,7 +349,6 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         description=_description(fetched),
         timeline_sha256=fetched.timeline_sha256,
         cast=cast.record if cast else lone_cast(),
-        bench=result.bench,
     )
     store.append(record, trace_codec.encode(result.trace, result.settle))
 

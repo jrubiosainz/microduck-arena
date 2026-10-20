@@ -17,7 +17,7 @@ pit_m         = 0.30
 pit_depth_m   = 0.30
 string_m      = 1.00
 
-[command]                     # every duck, every bout and bench run: walk backwards
+[command]                     # every duck, every bout: walk backwards
 vel  = [-0.30, 0.0, 0.0]
 head = [0.0, 0.0, 0.0, 0.0]
 body = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -30,19 +30,13 @@ settle_s = 0.5
 joint_rad = 0.01
 yaw_deg   = 2.0
 
-[termination]                 # summaries only: a fall never ends a bout or a bench run
+[termination]                 # summaries only: a fall never ends a bout
 fall_gravity_z = -0.5
 fall_hold_s    = 0.3
 
 [rating]                      # one bout a seed against the reference duck, the entry west on odd seeds
 reference    = "tug-reference-t7-250.onnx"   # in arena/assets/policies/
 pit_bonus_cm = 100.0          # a pit outweighs any marker margin: 65 cm at most
-
-[bench]
-ramp_n_per_s = 0.25
-top_n        = 7.0
-jerk_n       = 0.4
-jerk_hz      = [0.7, 1.9]
 
 [bout]
 time_limit_s = 45.0

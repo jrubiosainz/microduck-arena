@@ -86,7 +86,7 @@ def load_entrant(store: Store, entrant: Entrant) -> Policy:
 
 def compute_matches(manifest: Manifest, cup: Cup, load: Callable[[Entrant], object]) -> tuple[Cup, dict[str, bytes]]:
     """Every match of the cup in playing order: the groups round by round, then each knockout round from the last."""
-    model = compile_tug(manifest, 2)  # one model for every bout of the cup
+    model = compile_tug(manifest)  # one model for every bout of the cup
     ratings = [e.rating for e in cup.entrants]
     policies, matches, files = {}, [], {}
 

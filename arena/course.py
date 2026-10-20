@@ -12,7 +12,7 @@ model disagree on purpose.
 A stage holds a troupe (`compile_stage`): one robot per duck in one model, so
 they share one physics and can push each other. A tug of war (`compile_tug`) is
 a troupe on a lane cut by a pit, tied by a string at the neck: to the other
-duck in a bout, to a winch on the bench.
+duck in a bout.
 """
 
 import dataclasses
@@ -41,8 +41,6 @@ WALL_THICKNESS_M = 0.05
 
 STRING_SITE = "string_end"  # on each duck's trunk_base (prefixed for duck 1), at the neck's base
 STRING = "string"  # the spatial tendon
-WINCH_SITE = "winch_drum"  # on the world body, the bench only
-WINCH = "winch"  # a motor on the STRING tendon; ctrl = the pull in newtons, towards the drum
 PLATFORM_OVERRUN_M = 20.0  # the platforms run this far past the walls: nobody walks off the world
 
 
@@ -112,19 +110,12 @@ def pit_boxes(course) -> list[tuple[str, tuple[float, float, float], tuple[float
     ]
 
 
-def tug_layout(course, ducks: int, rig: str = "legs") -> list[Start]:
+def tug_layout(course, rig: str = "legs") -> list[Start]:
     """Where the ducks start: west facing east, east facing west, each placed so its string
-    end sits on y = 0, the two string_m apart and centred on the pit. The bench is the west
-    duck alone."""
+    end sits on y = 0, the two string_m apart and centred on the pit."""
     ox, oy, _ = string_offset(rig)
     half = course.string_m / 2
-    return [Start(-half - ox, -oy, 0.0), Start(half + ox, oy, 180.0)][:ducks]
-
-
-def winch_position(course, rig: str = "legs") -> tuple[float, float, float]:
-    """The bench's drum: where the east duck's string end would stand, so the string starts
-    taut at its length."""
-    return (course.string_m / 2, 0.0, SPAWN_HEIGHT_M + string_offset(rig)[2])
+    return [Start(-half - ox, -oy, 0.0), Start(half + ox, oy, 180.0)]
 
 
 def ramp_dir(slope_deg: float) -> np.ndarray:
@@ -367,28 +358,14 @@ def _posed(
     return model
 
 
-def compile_tug(manifest: Manifest, ducks: int) -> mujoco.MjModel:
-    """A tug's model: the troupe of `tug_layout`, tied at the neck by STRING.
-
-    Two ducks are a bout: the string runs neck to neck and goes slack but never stretches past
-    string_m. One duck is the bench: the string runs to WINCH_SITE, where the WINCH motor pulls
-    it in with its ctrl in newtons (gear -1: a positive ctrl shortens the string). The winch
-    comes after the 14 servos, so no duck's addresses move; the keyframe pads its ctrl with the
-    winch's 0.0.
-    """
-    layout = [(manifest.rig, start) for start in tug_layout(manifest.course, ducks, manifest.rig)]
+def compile_tug(manifest: Manifest) -> mujoco.MjModel:
+    """A tug's model: the two ducks of `tug_layout`, tied neck to neck by STRING, which goes slack
+    but never stretches past string_m."""
+    layout = [(manifest.rig, start) for start in tug_layout(manifest.course, manifest.rig)]
     spec = _troupe(manifest, layout, string_offset(manifest.rig))
     string = spec.add_tendon(name=STRING)
     string.wrap_site(STRING_SITE)
-    if ducks == 2:
-        string.limited = True
-        string.range = [0.0, manifest.course.string_m]
-        string.wrap_site(duck_prefix(1) + STRING_SITE)
-    else:
-        drum = winch_position(manifest.course, manifest.rig)
-        spec.worldbody.add_site(name=WINCH_SITE, pos=list(drum))
-        string.wrap_site(WINCH_SITE)
-        winch = spec.add_actuator(name=WINCH, target=STRING, trntype=mujoco.mjtTrn.mjTRN_TENDON)
-        winch.set_to_motor()
-        winch.gear = [-1.0, 0, 0, 0, 0, 0]
+    string.limited = True
+    string.range = [0.0, manifest.course.string_m]
+    string.wrap_site(duck_prefix(1) + STRING_SITE)
     return _posed(_compiled(spec), manifest, layout)

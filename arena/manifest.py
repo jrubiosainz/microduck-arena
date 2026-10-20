@@ -83,16 +83,6 @@ class Tug:
 
 
 @dataclass(frozen=True)
-class Bench:
-    """The pulling bench: a force that ramps up to `top_n`, shaken by one sine per jerk frequency."""
-
-    ramp_n_per_s: float
-    top_n: float
-    jerk_n: float  # amplitude of each jerk sine
-    jerk_hz: tuple[float, ...]
-
-
-@dataclass(frozen=True)
 class Rating:
     """How a tug rates a duck: one bout a seed against the reference duck, a pit worth `pit_bonus_cm`."""
 
@@ -258,8 +248,7 @@ class Manifest:
     # whether the VOTE badge and the vote button exist at all.
     vote: Vote | None = None
     clip: ClipConfig = ClipConfig()
-    # Only a tug has them: the bench, the rating's reference duck, the rules of its bouts.
-    bench: Bench | None = None
+    # Only a tug has them: the rating's reference duck, the rules of its bouts.
     rating: Rating | None = None
     bout: BoutRules | None = None
     # Only a versus event has one.
@@ -363,16 +352,6 @@ def _tug(raw: dict) -> Tug:
     _refuse_unknown(raw, {"kind", "length_m", "width_m", "wall_height_m", "pit_m", "pit_depth_m", "string_m"}, "[course]")
     return Tug(**{key: float(_require(raw, key, "[course]"))
                   for key in ("length_m", "width_m", "wall_height_m", "pit_m", "pit_depth_m", "string_m")})
-
-
-def _bench(raw: dict) -> Bench:
-    _refuse_unknown(raw, {"ramp_n_per_s", "top_n", "jerk_n", "jerk_hz"}, "[bench]")
-    return Bench(
-        ramp_n_per_s=float(_require(raw, "ramp_n_per_s", "[bench]")),
-        top_n=float(_require(raw, "top_n", "[bench]")),
-        jerk_n=float(_require(raw, "jerk_n", "[bench]")),
-        jerk_hz=tuple(float(f) for f in _require(raw, "jerk_hz", "[bench]")),
-    )
 
 
 def _rating(raw: dict, path: Path) -> Rating:
@@ -482,8 +461,8 @@ def load_manifest(path: Path) -> Manifest:
         raise ManifestError(
             f"{path}: [course] kind 'tug' goes with category 'versus' and metric 'mean_ground_cm'"
         )
-    if kind != "tug" and ("bench" in raw or "rating" in raw or "bout" in raw):
-        raise ManifestError(f"{path}: only a tug takes [bench], [rating] and [bout]")
+    if kind != "tug" and ("rating" in raw or "bout" in raw):
+        raise ManifestError(f"{path}: only a tug takes [rating] and [bout]")
 
     if (category == "versus") != ("cup" in raw):
         raise ManifestError(
@@ -492,18 +471,18 @@ def load_manifest(path: Path) -> Manifest:
         )
 
     time_limit_s = float(_require(raw, "time_limit_s", str(path)))
-    bench = rating = bout = None
+    rating = bout = None
     if kind == "tug":
         if rig != "legs":
             raise ManifestError(f"{path}: a tug is for rig 'legs'")
         for section in ("sweep", "vote"):
             if section in raw:
                 raise ManifestError(f"{path}: a tug takes no [{section}]")
-        for section in ("bench", "rating", "bout"):
+        for section in ("rating", "bout"):
             if section not in raw:
                 raise ManifestError(f"{path}: a tug needs [{section}]")
         course, sweep = _tug(course_raw), None
-        bench, rating, bout = _bench(raw["bench"]), _rating(raw["rating"], path), _bout(raw["bout"], path)
+        rating, bout = _rating(raw["rating"], path), _bout(raw["bout"], path)
         if bout.time_limit_s != time_limit_s:
             raise ManifestError(
                 f"{path}: a tug's time_limit_s is its bouts': {time_limit_s} against [bout]'s {bout.time_limit_s}"
@@ -578,7 +557,6 @@ def load_manifest(path: Path) -> Manifest:
         command=_command(_require(raw, "command", str(path))),
         vote=vote,
         clip=_clip(raw.get("clip"), "[clip]"),
-        bench=bench,
         rating=rating,
         bout=bout,
         cup=_cup(raw["cup"], path) if "cup" in raw else None,

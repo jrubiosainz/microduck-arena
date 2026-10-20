@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
 from .. import votes
-from ..course import pit_boxes, string_offset, tug_walls, wall_boxes, winch_position
+from ..course import pit_boxes, string_offset, tug_walls, wall_boxes
 from ..evaluate import seed_row
 from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
@@ -100,8 +100,6 @@ def event_summary(manifest: Manifest) -> dict:
             "walls": _boxes(tug_walls(manifest.course)),
             "pit": _boxes(pit_boxes(manifest.course)),
             "string_offset": list(string_offset(manifest.rig)),
-            "winch": list(winch_position(manifest.course, manifest.rig)),
-            "bench": {"ramp_n_per_s": manifest.bench.ramp_n_per_s, "top_n": manifest.bench.top_n},
             "bout": {
                 "time_limit_s": manifest.bout.time_limit_s,
                 "bouts_to_win": manifest.bout.bouts_to_win,
@@ -190,7 +188,7 @@ def _board_row(row) -> dict:
         # duck's place, its rig, what the replay sings and opens its beak from, and whose policy it
         # plays. A race's row is one duck of the event's rig.
         "cast": record.cast,
-        **({"bench": record.bench} if record.bench else {}),
+        "trace_seed": record.trace_seed,
     }
 
 
@@ -343,7 +341,6 @@ def run_detail(run_id: str, request: Request) -> dict:
         "seeds_finished": record.seeds_finished,
         "seeds_total": len(record.per_seed),
         "per_seed": [seed_row(s) for s in record.per_seed],
-        **({"bench": record.bench} if record.bench else {}),
         "trace_seed": record.trace_seed,
         "submitted_at": record.submitted_at,
         "runner_version": record.runner_version,

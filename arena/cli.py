@@ -111,7 +111,6 @@ def _cmd_score(args) -> int:
             runner_version=result.runner_version,
             livery=args.livery,
             cast=cast.record if cast else lone_cast(),
-            bench=result.bench,
         )
         LocalStore(Path(args.store)).append(
             record, trace_codec.encode(result.trace, result.settle), Path(args.onnx).read_bytes()

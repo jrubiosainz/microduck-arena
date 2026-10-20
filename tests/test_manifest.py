@@ -5,7 +5,7 @@ from datetime import date, time
 import pytest
 
 from arena.manifest import (
-    EVENTS_DIR, Bench, BoutRules, CupRules, ManifestError, Rating, Stage, Tug, all_events, higher_wins, load_event, load_manifest,
+    EVENTS_DIR, BoutRules, CupRules, ManifestError, Rating, Stage, Tug, all_events, higher_wins, load_event, load_manifest,
 )
 
 # A well-formed manifest, as TOML sections. Tests override one entry to build a
@@ -493,13 +493,12 @@ def test_a_missing_kind_is_refused(tmp_path):
 
 CUP = '[cup]\nfirst="2026-10-30"\npremiere="18:00"\ntimezone="Europe/Paris"\nclose_before_h=2.0\nmin_entrants=4\n'
 
-BENCH = '[bench]\nramp_n_per_s=0.25\ntop_n=7.0\njerk_n=0.4\njerk_hz=[0.7, 1.9]\n'
 RATING = '[rating]\nreference="tug-reference-t7-250.onnx"\npit_bonus_cm=100.0\n'
 
 TUG = {
     "root": GOOD["root"].replace('category="race"', 'category="versus"').replace('"mean_finish_time"', '"mean_ground_cm"'),
     "course": '[course]\nkind="tug"\nlength_m=4.0\nwidth_m=0.8\nwall_height_m=0.15\npit_m=0.3\npit_depth_m=0.3\nstring_m=1.0\n',
-    "sweep": BENCH + RATING + '[bout]\ntime_limit_s=10.0\nbouts_to_win=2\nmax_bouts=5\n',
+    "sweep": RATING + '[bout]\ntime_limit_s=10.0\nbouts_to_win=2\nmax_bouts=5\n',
     "clip": CUP,
 }
 
@@ -507,7 +506,6 @@ TUG = {
 def test_the_tug_of_war_loads(tmp_path):
     m = load_event("tug-of-war")
     assert m.course == Tug(4.0, 0.8, 0.15, 0.3, 0.3, 1.0)
-    assert m.bench == Bench(0.25, 7.0, 0.4, (0.7, 1.9))
     assert m.rating == Rating("tug-reference-t7-250.onnx", 100.0)
     assert m.bout == BoutRules(45.0, 2, 5)
     assert (m.category, m.metric, m.rig, m.time_limit_s, m.clip.tape_max_s) == ("versus", "mean_ground_cm", "legs", 45.0, 45.0)
@@ -520,8 +518,7 @@ def test_the_tug_of_war_loads(tmp_path):
     ({"root": TUG["root"].replace('"mean_ground_cm"', '"mean_finish_time"')}, "goes with"),
     ({"course": GOOD["course"], "sweep": GOOD["sweep"]}, "goes with"),
     ({"sweep": TUG["sweep"].split("[bout]")[0]}, r"needs \[bout\]"),
-    ({"sweep": BENCH + "[bout]" + TUG["sweep"].split("[bout]")[1]}, r"needs \[rating\]"),
-    ({"sweep": RATING + "[bout]" + TUG["sweep"].split("[bout]")[1]}, r"needs \[bench\]"),
+    ({"sweep": "[bout]" + TUG["sweep"].split("[bout]")[1]}, r"needs \[rating\]"),
     ({"sweep": TUG["sweep"].replace("t7-250", "t9")}, r"\[rating\] reference"),
     ({"sweep": TUG["sweep"].replace('"tug-', '"../policies/tug-')}, r"\[rating\] reference"),
     ({"sweep": TUG["sweep"].replace("pit_bonus_cm=100.0", "pit_bonus_cm=0.0")}, r"\[rating\] pit_bonus_cm"),
@@ -531,7 +528,6 @@ def test_the_tug_of_war_loads(tmp_path):
     ({"sweep": TUG["sweep"] + "[vote]\nballot_min=2\nballot_max=4\nwindow_days=7\nper_day=3\n"}, r"no \[vote\]"),
     ({"root": TUG["root"].replace('rig="legs"', 'rig="rollers"')}, "rig 'legs'"),
     ({"course": TUG["course"] + "slope_deg=0.0\n"}, "unknown keys"),
-    ({"sweep": TUG["sweep"].replace("jerk_n=0.4", "jerk_n=0.4\nspring=1")}, "unknown keys"),
     ({"sweep": TUG["sweep"] + "draws=1\n"}, "unknown keys"),
     ({"sweep": TUG["sweep"].replace("max_bouts=5", "max_bouts=2")}, r"probe\.toml: \[bout\] max_bouts"),
     ({"sweep": TUG["sweep"].replace("time_limit_s=10.0\nbouts", "time_limit_s=0.01\nbouts")}, r"probe\.toml: \[bout\] time_limit_s"),
@@ -542,8 +538,8 @@ def test_a_malformed_tug_is_refused(tmp_path, change, complaint):
         load_manifest(write_manifest(tmp_path, **(TUG | change)))
 
 
-@pytest.mark.parametrize("section", [BENCH, RATING, "[bout]\ntime_limit_s=10.0\nbouts_to_win=2\nmax_bouts=5\n"])
-def test_only_a_tug_takes_a_bench_a_rating_or_bouts(tmp_path, section):
+@pytest.mark.parametrize("section", [RATING, "[bout]\ntime_limit_s=10.0\nbouts_to_win=2\nmax_bouts=5\n"])
+def test_only_a_tug_takes_a_rating_or_bouts(tmp_path, section):
     with pytest.raises(ManifestError, match="only a tug"):
         load_manifest(write_manifest(tmp_path, sweep=GOOD["sweep"] + section))
 

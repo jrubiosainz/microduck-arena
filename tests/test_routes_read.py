@@ -24,38 +24,33 @@ def record_run(app, **overrides):
     return record
 
 
-def test_a_tug_serves_its_course_bench_and_bouts(client):
+def test_a_tug_serves_its_course_and_its_bouts(client):
     api, _ = client
     tug = next(e for e in api.get("/api/events").json()["events"] if e["id"] == "tug-of-war")
     assert (tug["course"], tug["category"], tug["metric"]) == ("tug", "versus", "mean_ground_cm")
     assert [tug[k] for k in ("length_m", "width_m", "string_m", "pit_m", "pit_depth_m")] == [4.0, 0.8, 1.0, 0.3, 0.3]
-    assert tug["bench"] == {"ramp_n_per_s": 0.25, "top_n": 7.0}
     assert tug["bout"] == {"time_limit_s": 45.0, "bouts_to_win": 2, "max_bouts": 5}
     assert [w["name"] for w in tug["walls"]] == ["wall_left", "wall_right"]
     assert [p["name"] for p in tug["pit"]] == ["platform_west", "platform_east", "pit_floor"]
     assert tug["string_offset"] == [0.026, 0.0145, 0.0324215]
-    assert tug["winch"] == pytest.approx([0.5, 0.0, 0.1524215])
-    assert "sweep_lo" not in tug and "size_m" not in tug
+    assert "sweep_lo" not in tug and "size_m" not in tug and "winch" not in tug and "bench" not in tug
 
 
-PROFILE = {"ramp_n_per_s": 0.25, "top_n": 7.0, "jerks": [[0.4, 0.7, 2.8], [0.4, 1.9, 2.1]]}
-
-
-def test_a_bench_run_serves_its_profile_its_centimetres_and_a_board_strongest_first(client):
+def test_a_rated_run_serves_its_bouts_and_a_board_strongest_first_each_row_with_its_seed(client):
     api, app = client
-    record_run(app, event_id="tug-of-war", user="bob", score=3.0, bench=PROFILE, per_seed=(SeedResult(1, "lost", 45.0, 3.0),))
-    mine = record_run(app, event_id="tug-of-war", user="alice", score=4.2, bench=PROFILE, per_seed=(SeedResult(1, "won", 45.0, 7.0),))
+    record_run(app, event_id="tug-of-war", user="bob", score=-15.2, trace_seed=2, per_seed=(SeedResult(2, "lost", 45.0, -15.2),))
+    mine = record_run(app, event_id="tug-of-war", user="alice", score=12.5, trace_seed=1, per_seed=(SeedResult(1, "won", 45.0, 12.5),))
     body = api.get(f"/api/runs/{mine.run_id}").json()
-    assert body["bench"] == PROFILE and body["per_seed"] == [{"seed": 1, "status": "won", "time_s": 45.0, "score_cm": 7.0}]
-    assert (body["rank"], [r["user"] for r in body["board"]], body["board"][0]["bench"]) == (1, ["alice", "bob"], PROFILE)
+    assert body["per_seed"] == [{"seed": 1, "status": "won", "time_s": 45.0, "score_cm": 12.5}] and "bench" not in body
+    assert [(r["user"], r["trace_seed"]) for r in body["board"]] == [("alice", 1), ("bob", 2)]
     assert [r["user"] for r in api.get("/api/events/tug-of-war/leaderboard").json()["rows"]] == ["alice", "bob"]
     assert api.get("/api/players/alice").json()["publications"][0]["metric"] == "mean_ground_cm"
 
 
-def test_a_race_answer_carries_nothing_of_the_bench(client):
+def test_a_race_answer_carries_no_centimetres(client):
     api, app = client
     body = api.get(f"/api/runs/{record_run(app).run_id}").json()
-    assert "bench" not in body and "score_cm" not in body["per_seed"][0] and "bench" not in body["board"][0]
+    assert "score_cm" not in body["per_seed"][0]
 
 
 def test_events_lists_the_whole_programme(client):
