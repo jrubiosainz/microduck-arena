@@ -4,7 +4,7 @@
 // the stage — and the lanes are picked, kept and raced by one rule.
 
 import { buildRows, renderBoard, setAllLanes, tiersByRunId } from "./board.js";
-import { isStage } from "./format.js";
+import { isStage, isTug } from "./format.js";
 import { modeIsUseful, visibleRows } from "./views.js";
 
 export const boardsheetMarkup = `
@@ -44,7 +44,8 @@ export function wireBoardsheet(
 ) {
   const sheet = root.querySelector(".boardsheet");
   const board = sheet.querySelector("#board");
-  const solo = isStage(event);
+  // A stage plays one performance, the bench one duck against the winch.
+  const solo = isStage(event) || isTug(event);
   sheet.querySelector(".pickall").hidden = solo;
   // Two narrowings rather than three modes: Mine and Top each turn on and off
   // on their own and compose, and All is the state where neither is on.

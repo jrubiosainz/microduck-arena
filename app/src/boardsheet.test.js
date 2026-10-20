@@ -38,6 +38,12 @@ describe("the board sheet", () => {
     expect([...wired.selection]).toEqual(["r3"]);
     expect(onRace).toHaveBeenLastCalledWith(["r3"], expect.any(Map));
   });
+  it("puts one bench run on the stage at a time, with no box to put them all", async () => {
+    const TUG = { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_hold_force" };
+    const { root, board } = await sheet({ event: TUG });
+    expect(root.querySelector(".pickall").hidden).toBe(true);
+    expect(ticked(board)).toEqual(["r2"]);
+  });
   it("is one piece of paper: the picks and the filters, then the table", () => {
     const root = document.createElement("div");
     root.innerHTML = boardsheetMarkup;

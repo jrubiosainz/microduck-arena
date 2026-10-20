@@ -9,7 +9,7 @@ import { flipTiles } from "./animation.js";
 import { boardsheetMarkup, wireBoardsheet } from "./boardsheet.js";
 import { featured, replayLane } from "./cast.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
-import { formatSpeed, isStage } from "./format.js";
+import { formatSpeed, isStage, isTug } from "./format.js";
 import { colourLanes, lanesFor } from "./lanes.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
 import { dress, guideHref, playerHref, raceHref } from "./router.js";
@@ -33,9 +33,11 @@ function el(tag, className, text) {
   return node;
 }
 
-/** Which seed the stored replay is, and why that one; a performance is played once. */
+/** Which seed the stored replay is, and why that one; a performance is played once, a bench run
+ * replays the seed whose pull is its median. */
 export function replayLine(run) {
   if (isStage(run.event)) return "replay: the whole performance";
+  if (isTug(run.event)) return `replay: seed ${run.trace_seed}, the median pull`;
   const finishers = run.per_seed.filter((s) => s.status === "finish").length;
   const which =
     finishers > 1 ? "median finisher" : finishers === 1 ? "the one finisher" : "first seed";
@@ -43,11 +45,35 @@ export function replayLine(run) {
 }
 
 /** What the scoreboard says over its number, and the stamp it lands. A stage has no time and no
- * finish: its number is the performance's length, and it was performed or cut short. */
+ * finish: its number is the performance's length, and it was performed or cut short. A bench run
+ * always ends, in the pit, on the floor or holding on: its number is its rating, in newtons. */
 export function verdict(run) {
   const dnf = run.seeds_finished === 0;
   if (isStage(run.event)) return { label: "length", stamp: dnf ? "CUT SHORT" : "PERFORMED" };
+  if (isTug(run.event)) return { label: "rating · N", stamp: "RATED" };
   return { label: "time", stamp: dnf ? "DNF" : `FINISHED ${run.seeds_finished}/${run.seeds_total}` };
+}
+
+/**
+ * The number the scoreboard flips: a bench's rating to the hundredth of a newton (the label says
+ * the unit), a time to the millisecond, or DNF. Veiled, zeros of the number's own shape whatever
+ * the run did: a DNF's three tiles beside a time's six would give the verdict away before the stamp.
+ */
+export function flipScore(run, { veiled = false } = {}) {
+  const tug = isTug(run.event);
+  if (veiled) return tug ? "0.00" : "00.000";
+  if (run.seeds_finished === 0) return "DNF";
+  return run.score.toFixed(tug ? 2 : 3);
+}
+
+/** How a bench seed ended, when it did not go into the pit as most do. */
+const BENCH_ENDS = { held: " · held on", fall: " · knocked down" };
+
+/** One seed's line: on the bench the winch's pull when it ended, and how; in a race its time, or how
+ * it ended. */
+export function seedText(seed) {
+  if (seed.force_n != null) return `${seed.force_n.toFixed(2)} N${BENCH_ENDS[seed.status] ?? ""}`;
+  return seed.time_s == null ? seed.status : `${seed.time_s.toFixed(3)}s`;
 }
 
 /**
@@ -178,12 +204,11 @@ export async function renderRun(root, runId, state) {
   }
 
   // `rollCounter` rolls each tile to the digit it already shows, so the number
-  // is in the DOM before any theatre. A reveal starts on a constant 00.000
-  // instead: a DNF's three tiles beside a time's six would give the verdict
-  // away before the stamp, and the time beat swaps the real number in. The
-  // tile count changes with it, but a width in this column costs no height.
-  const score = dnf ? "DNF" : run.score.toFixed(3);
-  $("flip").append(...flipTiles(revealing ? "00.000" : score));
+  // is in the DOM before any theatre. A reveal starts on constant zeros
+  // instead (flipScore), and the time beat swaps the real number in. The tile
+  // count changes with it, but a width in this column costs no height.
+  const score = flipScore(run);
+  $("flip").append(...flipTiles(flipScore(run, { veiled: revealing })));
   const said = verdict(run);
   $("score-label").textContent = said.label;
   const stamp = $("stamp");
@@ -227,9 +252,9 @@ export async function renderRun(root, runId, state) {
   }
   followClip();
 
-  // One line per seed: the time, or how it ended. Folded away by default —
-  // it is a detail you go and look up, not a step of the show. A performance
-  // is played once: there is no seed list to open.
+  // One line per seed: the time or the pull, or how it ended. Folded away by
+  // default — it is a detail you go and look up, not a step of the show. A
+  // performance is played once: there is no seed list to open.
   if (isStage(run.event)) {
     $("seedlist").remove();
   } else {
@@ -237,7 +262,7 @@ export async function renderRun(root, runId, state) {
       const row = el("li", s.seed === run.trace_seed ? "seed replayed" : "seed");
       row.append(
         el("span", "mono-label", `seed ${s.seed}`),
-        el("strong", null, s.time_s == null ? s.status : `${s.time_s.toFixed(3)}s`),
+        el("strong", null, seedText(s)),
       );
       $("seeds").append(row);
     }
@@ -285,6 +310,8 @@ export async function renderRun(root, runId, state) {
       livery: byId.get(id).livery,
       // The plate over the duck.
       name: byId.get(id).user,
+      // The winch a bench run pulled against, which its dial reads.
+      bench: byId.get(id).bench,
     }));
     viewer.setLanes(colourLanes($("board"), lanes), run.event);
   }

@@ -12,7 +12,7 @@ import { replayLane } from "./cast.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
-import { formatEventFacts, isStage } from "./format.js";
+import { formatEventFacts, isStage, isTug } from "./format.js";
 import { roundCard } from "./roundcard.js";
 import { dress, eventGuideHref, menuHref } from "./router.js";
 import { footer, settleIdentity, signage } from "./signage.js";
@@ -59,9 +59,12 @@ export function renderEventFacts(root, event) {
   caveat.textContent = isStage(event)
     ? "Performances play on this stage, with this friction and this physics build. A " +
       "policy tuned elsewhere can perform differently here."
-    : "Times are measured on this course, with this friction and this " +
-      "physics build. A policy tuned elsewhere can do worse here without " +
-      "being worse.";
+    : isTug(event)
+      ? "Ratings are measured on this bench, with this friction and this physics build. A " +
+        "policy tuned elsewhere can pull less here without being weaker."
+      : "Times are measured on this course, with this friction and this " +
+        "physics build. A policy tuned elsewhere can do worse here without " +
+        "being worse.";
   facts.after(caveat);
   return caveat;
 }
@@ -218,6 +221,7 @@ export async function renderRace(root, { event, state }) {
   const liveries = new Map(); // run id -> the colourway it raced in
   const names = new Map(); // run id -> whose run it is, for the plate over its duck
   const casts = new Map(); // run id -> every duck it put on the stage (cast.js)
+  const benches = new Map(); // run id -> the winch a bench run pulled against, which its dial reads
 
   async function traceFor(runId) {
     if (!traces.has(runId)) traces.set(runId, await getTrace(runId));
@@ -233,8 +237,11 @@ export async function renderRace(root, { event, state }) {
       livery: liveries.get(runId) ?? "classic",
       // The plate over the duck: the viewer builds one for a lane with a name.
       name: names.get(runId),
+      bench: benches.get(runId),
     }));
-    viewer.setLanes(arrangeLanes(board, isStage(event) ? lanes.slice(0, 1) : lanes), event);
+    // A performance plays alone on the stage, a bench run alone against the winch.
+    const solo = isStage(event) || isTug(event);
+    viewer.setLanes(arrangeLanes(board, solo ? lanes.slice(0, 1) : lanes), event);
   }
 
   // The sheet keeps the lanes and the filters; the page races what is ticked.
@@ -247,6 +254,7 @@ export async function renderRace(root, { event, state }) {
         liveries.set(row.run_id, row.livery ?? "classic");
         names.set(row.run_id, row.user);
         casts.set(row.run_id, row.cast);
+        benches.set(row.run_id, row.bench);
       }
       return rows;
     },

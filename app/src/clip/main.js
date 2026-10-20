@@ -5,13 +5,13 @@
 import { getRun, getSettle, getTrace } from "../api.js";
 import { credit, stageDucks } from "../cast.js";
 import { LANE_COLORS } from "../course.js";
-import { formatScore, isStage } from "../format.js";
+import { formatScore, isStage, isTug } from "../format.js";
 import { lanesFor } from "../lanes.js";
 import { CTRL_DT, frameCount, leadIn, standing } from "../replay.js";
 import { createViewer } from "../viewer.js";
 import { actAt, clipPlan, stepAt, travelAt } from "./plan.js";
 import { stadiumDirection } from "./direction.js";
-import { clipScore } from "./score.js";
+import { clipScore, clipVerdict } from "./score.js";
 import { renderSoundtrack } from "./soundtrack.js";
 
 /** How far the chase camera stands per layout, as a factor on the viewer's
@@ -38,24 +38,26 @@ function letter(run) {
   const stage = isStage(run.event);
   const who = `@${run.user} · ${run.policy_name}`;
   const earned = run.receipts.reduce((sum, r) => sum + r.points, 0);
-  const dnf = run.seeds_finished === 0;
   for (const id of ["top-title", "intro-title"]) $(id).textContent = run.event.title;
   // The captions credit a troupe whole; the recorder's tag keeps to its author.
   for (const id of ["top-participant", "intro-line"]) $(id).textContent = credit(run);
   $("osd-rec").textContent = `REC · ${who}`;
   $("osd-event").textContent = run.event.title.toUpperCase();
-  $("fig-time").textContent = formatScore(run.score, { finished: run.seeds_finished });
+  $("fig-time").textContent = formatScore(run.score, { finished: run.seeds_finished, metric: run.event.metric });
   // A performance's number is its length, and votes rank it: no place to give at publication.
   if (stage) {
     $("fig-time").nextElementSibling.textContent = "length";
     $("fig-place").parentElement.hidden = true;
   } else {
+    // A bench run's number is its rating, and it ranks the board.
+    if (isTug(run.event)) $("fig-time").nextElementSibling.textContent = "rating";
     $("fig-place").textContent = run.on_board && !run.withdrawn ? `#${run.rank}` : "—";
   }
   $("fig-points").textContent = earned > 0 ? `+${earned}` : "—";
   const stamp = $("stamp");
-  stamp.textContent = dnf ? (stage ? "CUT SHORT" : "DNF") : stage ? "WELL DONE" : "VICTORY";
-  stamp.classList.add(dnf ? "stamp-fail" : "stamp-pass");
+  const said = clipVerdict(run);
+  stamp.textContent = said.stamp;
+  stamp.classList.add(said.pass ? "stamp-pass" : "stamp-fail");
 }
 
 function base64(bytes) {
@@ -78,8 +80,10 @@ async function main() {
   const settle = Math.max(...settles.map(([first]) => frameCount(first)));
   const replays = lanes.map((_, i) => leadIn(settles[i][0], traces[i][0], settle));
   // A stage plays the author's performance alone: every duck of its troupe from its settle. Each
-  // beak moves on the stage; the clip's soundtrack plays the voices.
+  // beak moves on the stage; the clip's soundtrack plays the voices. A bench run plays its one duck
+  // against the winch, its settle handed over apart: the dial reads nothing until the settle ends.
   const stage = isStage(run.event);
+  const tug = isTug(run.event);
   const ducks = stage
     ? stageDucks(lanes[0].cast, traces[0], settles[0], { livery: lanes[0].livery, eventRig: run.event.rig, lead: settle })
     : [];
@@ -94,7 +98,11 @@ async function main() {
         colour: LANE_COLORS[i % LANE_COLORS.length],
         opacity: 1,
         name: `@${lane.user}`,
-        ...(stage ? { ducks } : { trace: replays[i] }),
+        ...(stage
+          ? { ducks }
+          : tug
+            ? { tug: "bench", trace: traces[i][0], settle: settles[i][0], bench: run.bench }
+            : { trace: replays[i] }),
       }))
       // The camera stands beyond the last lane: reversed, the author's duck is
       // the one in the foreground, still in the colour its page gives it.
