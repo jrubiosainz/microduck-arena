@@ -6,7 +6,13 @@ import {
   formatSeeds,
   formatSpeed,
   isStage,
+  isTug,
 } from "./format.js";
+
+const TUG = {
+  id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug", metric: "mean_hold_force", rig: "legs", vote: null,
+  length_m: 4, pit_m: 0.3, bench: { ramp_n_per_s: 0.25, top_n: 7 },
+};
 
 describe("formatScore", () => {
   it("shows three decimals and a unit", () => {
@@ -112,5 +118,22 @@ describe("a stage's facts", () => {
     expect(isStage(STAGE)).toBe(true);
     expect(isStage({ ...STAGE, course: "lane" })).toBe(false);
     expect(isStage(undefined)).toBe(false);
+  });
+});
+
+describe("the tug of war counts in newtons", () => {
+  it("prints the mean force held, two decimals and the unit", () => {
+    expect(formatScore(4.2134, { finished: 5, metric: "mean_hold_force" })).toBe("4.21 N");
+    expect(formatScore(12.3456, { finished: 5 })).toBe("12.346s");
+  });
+  it("knows a tug by its course", () => {
+    expect([isTug({ course: "tug" }), isTug({ course: "lane" }), isTug(undefined)]).toEqual([true, false, false]);
+  });
+  it("tells its course, its winch and its rig", () => {
+    expect(formatEventFacts(TUG)).toEqual([
+      { label: "course", value: "4 m lane, 0.3 m pit" },
+      { label: "winch", value: "up to 7 N" },
+      { label: "rig", value: "legs" },
+    ]);
   });
 });

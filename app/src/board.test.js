@@ -506,3 +506,17 @@ describe("buildRows: who is on the stage", () => {
     expect(buildRows(rows, { selected: new Set() }).some((row) => row.selected)).toBe(false);
   });
 });
+
+describe("the tug's board rates in newtons: no speed, no seeds", () => {
+  it("heads the column rating and reads the force", () => {
+    const container = document.createElement("div");
+    renderBoard(container, {
+      event: { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_hold_force" },
+      rows: [row({ score: 4.2134 })],
+    });
+    expect(container.querySelector("th.time").textContent).toBe("rating");
+    expect(container.querySelector("td.time").textContent).toBe("4.21 N");
+    expect(container.querySelector("th.speed")).toBeNull();
+    expect(container.querySelector("th.seeds")).toBeNull();
+  });
+});

@@ -7,7 +7,7 @@
 // importing a page to get at one component is how a view ends up dragging a
 // whole other view's imports behind it.
 
-import { formatRate, formatScore } from "./format.js";
+import { formatRate, formatScore, isTug } from "./format.js";
 import { raceHref, voteHref } from "./router.js";
 import { symbol } from "./symbols.js";
 
@@ -26,10 +26,11 @@ const CARDS = {
   "got-a-talent": { accent: "var(--lavender)", cta: "Vote", title: "Got a Talent" },
   "roller-sprint-2m": { accent: "var(--orange)", cta: "Let's roll!" },
   "hill-climb-1m5": { accent: "var(--cyan)", cta: "Climb!" },
+  "tug-of-war": { accent: "var(--lime)", cta: "Pull!" },
 };
 const PLAIN = { accent: "var(--paper)", cta: "Go!" };
 
-const CATEGORY_SYMBOLS = { race: "sports_score", showcase: "how_to_vote" };
+const CATEGORY_SYMBOLS = { race: "sports_score", showcase: "how_to_vote", versus: "emoji_events" };
 
 const compact = new Intl.NumberFormat("en", { notation: "compact" });
 
@@ -52,10 +53,15 @@ function stats(event, rows) {
     box.append(cell);
     return box;
   }
+  const rig = event.rig === "rollers" ? stat("roller_skating", "Rollers") : stat("directions_walk", "Legs");
+  if (isTug(event)) {
+    box.append(stat("straighten", `${event.pit_m} m pit`), stat("bar_chart", `${event.bench.top_n} N winch`), rig);
+    return box;
+  }
   box.append(
     stat("straighten", `${event.length_m} m`),
     event.slope_deg ? stat("signal_cellular_0_bar", `${event.slope_deg}°`) : stat("texture", "Flat"),
-    event.rig === "rollers" ? stat("roller_skating", "Rollers") : stat("directions_walk", "Legs"),
+    rig,
   );
   return box;
 }
@@ -73,7 +79,7 @@ function leaderLine(event, rows) {
   // the line says that rating. A time would be the wrong fact about it.
   const held = event.vote
     ? (leader.votes ? `rated ${formatRate(leader.rate)}` : "no votes yet")
-    : formatScore(leader.score, { finished: leader.seeds_finished });
+    : formatScore(leader.score, { finished: leader.seeds_finished, metric: event.metric });
   line.append(el("b", null, held), el("i", "round-card__holder", `@${leader.user}`));
   return line;
 }

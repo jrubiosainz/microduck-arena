@@ -1,11 +1,13 @@
 // Display helpers, kept pure and separate so they are unit-testable without a
 // DOM. Everything the page shows a human goes through here.
 
-export function formatScore(seconds, { finished } = {}) {
+export function formatScore(value, { finished, metric } = {}) {
   // A DNF is scored at the event's time limit. Printing that number would read
   // as an achieved time, so say what actually happened instead.
   if (finished === 0) return "DNF";
-  return `${seconds.toFixed(3)}s`;
+  // The bench's rating is the mean force it held, in newtons.
+  if (metric === "mean_hold_force") return `${value.toFixed(2)} N`;
+  return `${value.toFixed(3)}s`;
 }
 
 /** A voted entry's rating: its votes per ballot shown on, with the server's head start. */
@@ -33,6 +35,9 @@ export function formatSpeed(vx, { finished } = {}) {
  * no line and no speed. The event summary says so in `course`. */
 export const isStage = (event) => event?.course === "stage";
 
+/** Whether an event is the tug of war: a duck pulls on a string, rated in newtons on the bench. */
+export const isTug = (event) => event?.course === "tug";
+
 /**
  * The event's parameters as labelled pairs.
  *
@@ -51,6 +56,13 @@ export function formatEventFacts(event) {
     return [
       { label: "stage", value: "open floor" },
       { label: "performance", value: `up to ${event.time_limit_s} s` },
+      { label: "rig", value: event.rig },
+    ];
+  }
+  if (isTug(event)) {
+    return [
+      { label: "course", value: `${event.length_m} m lane, ${event.pit_m} m pit` },
+      { label: "winch", value: `up to ${event.bench.top_n} N` },
       { label: "rig", value: event.rig },
     ];
   }

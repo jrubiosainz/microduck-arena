@@ -139,7 +139,7 @@ function results(publications, player, me) {
     // when the finish time never ranked anything there.
     const earned = pub.votes != null
       ? (pub.votes ? `rated ${formatRate(pub.rate)}` : "no votes yet")
-      : formatScore(pub.score, { finished: pub.seeds_finished });
+      : formatScore(pub.score, { finished: pub.seeds_finished, metric: pub.metric });
     link.append(
       el("strong", null, `#${pub.rank ?? "—"} · ${earned}`),
       el("span", "mono-label", pub.withdrawn ? `${pub.policy_name} · withdrawn` : pub.policy_name),
