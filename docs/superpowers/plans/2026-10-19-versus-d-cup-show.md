@@ -16,9 +16,9 @@
 - In the steps **PYTEST** stands for `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus && uv run --no-config --frozen --extra dev pytest -q -m "not network" -p no:cacheprovider`, **VITEST** for `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus/app && npx vitest run`, **GIT** for `/usr/bin/git -C /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus`, **SCRATCH** for the session's scratchpad directory. Write them out in full in every Bash call. Commits add their files by name.
 - Booth text gets machine checks only (JSON, count, speakers, length). A bad line is fixed in `DESK_ANGLES`, `CALL_STYLE` or a fact's wording, never by a check on the prose. The show offers no lore memories and no "Earlier this season" callback.
 - On air a duck is named by its on-air `name` (Plan C's `Entrant.name`: the policy's name, plus ` (@<user>)` when another entrant of the cup has the same policy name): the cup screen and the call lines by `name` alone, the desk's facts as `duck(entrant)` = `"<policy name> (@<user>)"` so Peter and Ray can name the player once (for a duck whose policy name another entrant has, that is exactly its `name`: the handle never shows twice); a fact about a player across cups (defending, rematch, streak, profile) names `@<user>`.
-- A fall loses (owner, 2026-10-20): a bout's `how` is `"pit"`, `"fall"`, `"marker"` or `"draw"`, and a fall is a moment of its own.
+- Only the pit decides (owner, 2026-10-20 evening; "a fall loses" was removed): a bout's `how` is `"pit"`, `"marker"` or `"draw"`, a duck knocked down stays in play, and a fall is no moment (a tilt past `SLIP_DEG` is a `slip`).
 - Pinned values: `CALL_GAP_S = 4.0`, `LINE_CHARS = 80`, `CALL_LIMIT = 1200`, `TRIES = 3`, `FAVOURITE_N = 0.5`, `SCREEN_PX = [1280, 512]`, `DUCKED = 10 ** (-10 / 20)` (−10 dB). The serving lead is Plan C's `cup.PREFETCH` (30 s) and the channel's prepare lead Plan C's `PREFETCH_MS` (25 s): one constant each, no copy here.
-- This plan's contract additions (`write_show`'s `profiles`, `footage`, `done`; `CupWorker(show: Callable[[Cup, dict], dict] | None)`; `screen` in the show answer; `screen_view`; `moments`' `termination`; `clipGain`) are already in the contract (2026-10-20). A further change of a name changes the contract in the same commit.
+- This plan's contract additions (`write_show`'s `profiles`, `footage`, `done`; `CupWorker(show: Callable[[Cup, dict], dict] | None)`; `screen` in the show answer; `screen_view`; `clipGain`) are already in the contract (2026-10-20). A further change of a name changes the contract in the same commit.
 - The owner accepts about 150 LLM router calls per cup (2026-10-20): the show's one call per desk segment and one per bout need no further yes, nor do Task 10's rehearsal writes (about 37 calls each).
 - Python tests take the tug manifest as `MANIFEST = replace(load_event("tug-of-war"), cup=replace(load_event("tug-of-war").cup, first=date(2026, 10, 30)))`, so a release that moves cup #1 breaks no test.
 
@@ -38,14 +38,13 @@
 **Files:** Create `arena/moments.py`, `tests/test_moments.py`.
 
 **Interfaces:**
-- Consumes: `arena.tug.marker_x`, `arena.tug.in_pit` (Plan A); `arena.stage.fell_at` (the Arena's fall rule); `arena.manifest.Tug`, `Termination`; `arena.constants.CTRL_DT`.
-- Produces (contract): `LEAD_M = 0.02`, `EDGE_M = 0.08`, `SLIP_DEG = 35.0`, `Moment(at_s, kind, side)`, `moments(trace, course, termination, offset) -> list[Moment]`.
+- Consumes: `arena.tug.marker_x`, `arena.tug.in_pit` (Plan A); `arena.manifest.Tug`; `arena.constants.CTRL_DT`.
+- Produces (contract): `LEAD_M = 0.02`, `EDGE_M = 0.08`, `SLIP_DEG = 35.0`, `Moment(at_s, kind, side)`, `moments(trace, course, offset) -> list[Moment]`.
 
-- [ ] **Step 1: Write the failing tests** (every call is `moments(t, COURSE, FALL, ZERO)`):
+- [ ] **Step 1: Write the failing tests** (every call is `moments(t, COURSE, ZERO)`):
 
 ```python
 COURSE = Tug(length_m=4.0, width_m=0.8, wall_height_m=0.15, pit_m=0.30, pit_depth_m=0.30, string_m=1.0)
-FALL = Termination(fall_gravity_z=-0.5, fall_hold_s=0.3)   # the tug's [termination]: past 60° for 15 steps
 ZERO = (0.0, 0.0, 0.0)  # string ends on the trunks: the marker is their midpoint
 
 def bout(frames=500):
@@ -55,28 +54,27 @@ def bout(frames=500):
     trace[0, :, 0], trace[1, :, 0] = -0.5, 0.5
     return trace
 ```
-  - `test_a_bout_nobody_pulls_is_its_start_and_the_time`: `moments(bout(), COURSE, FALL, ZERO) == [Moment(0.0, "start", None), Moment(10.0, "time", None)]`.
+  - `test_a_bout_nobody_pulls_is_its_start_and_the_time`: `moments(bout(), COURSE, ZERO) == [Moment(0.0, "start", None), Moment(10.0, "time", None)]`.
   - `test_the_lead_changes_when_the_marker_crosses_lead_m`: `t[:, 100:300, 0] -= 0.05; t[:, 300:, 0] += 0.05` → `[start, Moment(2.02, "lead", "west"), Moment(6.02, "lead", "east"), Moment(10.0, "time", "east")]`.
   - `test_a_marker_wobbling_inside_lead_m_changes_nothing`: `t[:, :400, 0] += 0.015 * np.sin(np.arange(400) / 8.0)` → `[start, Moment(10.0, "time", None)]`.
   - `test_a_duck_dragged_to_its_edge_then_into_the_pit`: `t = bout(401); d = 0.4 * np.arange(401) / 399; t[0, :, 0] = -0.5 + d; t[1, :, 0] = 0.5 + d; t[0, 400, 2] = -0.1` → `[start, Moment(0.42, "lead", "east"), Moment(5.42, "edge", "west"), Moment(8.02, "pit", "west")]`.
-  - `test_a_tilt_past_slip_deg_is_one_slip`: `theta = np.radians(np.interp(np.arange(500), [100, 200, 300, 350, 400], [0, 48, 0, 0, 48])); t[1, :, 3] = np.cos(theta / 2); t[1, :, 4] = np.sin(theta / 2)` → `[start, Moment(3.48, "slip", "east"), Moment(10.0, "time", None)]` (past 35° at frame 173; 48° stays clear of the fall rule's 60°).
-  - `test_a_duck_tipped_past_the_fall_rule_is_out`: `t = bout(182); theta = np.radians(np.interp(np.arange(182), [100, 190], [0, 81])); t[1, :, 3] = np.cos(theta / 2); t[1, :, 4] = np.sin(theta / 2)` → `[start, Moment(2.8, "slip", "east"), Moment(3.64, "fall", "east")]` (past 35° at frame 139, past 60° from frame 167, the hold complete at frame 181; no `time`: a duck went out).
+  - `test_a_tilt_past_slip_deg_is_one_slip`: `theta = np.radians(np.interp(np.arange(500), [100, 200, 300, 350, 400], [0, 48, 0, 0, 48])); t[1, :, 3] = np.cos(theta / 2); t[1, :, 4] = np.sin(theta / 2)` → `[start, Moment(3.48, "slip", "east"), Moment(10.0, "time", None)]` (past 35° at frame 173).
+  - `test_a_duck_tipped_flat_slips_and_stays_in_play`: `theta = np.radians(np.interp(np.arange(500), [100, 190], [0, 81])); t[1, :, 3] = np.cos(theta / 2); t[1, :, 4] = np.sin(theta / 2)` → `[start, Moment(2.8, "slip", "east"), Moment(10.0, "time", None)]` (past 35° at frame 139; no fall moment, the duck is not out).
   - `test_both_ducks_in_the_pit_on_one_frame_are_two_drops`: `t = bout(300); t[:, 299, 2] = -0.1` → `[start, Moment(6.0, "pit", "west"), Moment(6.0, "pit", "east")]`.
 
 - [ ] **Step 2: Run** — `PYTEST tests/test_moments.py` → FAIL (no `arena.moments`).
 
-- [ ] **Step 3: Implement.** Frame `j` is at `round((j + 1) * CTRL_DT, 2)` s (the runner records after each step); `start` at `0.0`. Within a frame: lead, edge, slip, pit, fall, west before east.
+- [ ] **Step 3: Implement.** Frame `j` is at `round((j + 1) * CTRL_DT, 2)` s (the runner records after each step); `start` at `0.0`. Within a frame: lead, edge, slip, pit, west before east.
   - `lead`: with `m = marker_x(trace, offset)`, the leader becomes `"west"` when `m[j] < -LEAD_M`, `"east"` when `m[j] > LEAD_M`; one moment per change.
   - `edge`: once per duck, the first frame its trunk x is past `-(pit_m/2 + EDGE_M)` (west) or under `pit_m/2 + EDGE_M` (east).
   - `slip`: once per duck, the first frame `arccos(clip(1 - 2*(qx**2 + qy**2), -1, 1)) > radians(SLIP_DEG)`.
   - `pit`: once per duck, the first frame `in_pit(trace[d, j])`.
-  - `fall`: once per duck, at the frame `stage.fell_at(trace[d], termination)` times (the Arena's own rule, reused: the frame that completes the hold), unless that duck was in the pit first.
-  - `time`: only when nobody went out (no `pit`, no `fall`), at the last frame; side `"west"` if its marker < 0, `"east"` if > 0, else `None`.
-  - The docstring says what `side` is per kind (the new leader; the duck at its edge, slipping, dropping in, falling over; the duck the marker favours at the limit).
+  - `time`: only when nobody went into the pit (no `pit`), at the last frame; side `"west"` if its marker < 0, `"east"` if > 0, else `None`.
+  - The docstring says what `side` is per kind (the new leader; the duck at its edge, slipping, dropping in; the duck the marker favours at the limit).
 
 - [ ] **Step 4: Run** — `PYTEST tests/test_moments.py` → PASS.
 
-- [ ] **Step 5: Commit** — `GIT add arena/moments.py tests/test_moments.py`; `GIT commit -m "A bout's trace yields its moments: the start, a change of lead, a duck at its edge, a slip, a drop into the pit, a fall, the time limit"`.
+- [ ] **Step 5: Commit** — `GIT add arena/moments.py tests/test_moments.py`; `GIT commit -m "A bout's trace yields its moments: the start, a change of lead, a duck at its edge, a slip, a drop into the pit, the time limit"`.
 
 ### Task 2: The cup as of a match: stage, screen state, facts, profiles
 
@@ -104,7 +102,7 @@ def played_cup(entrants=6, number=1, groups=((0, 2, 4), (1, 3, 5)), upsets=froze
 
 - [ ] **Step 2: Write the failing tests** (`CUP = played_cup()`: Group A p0 p2 p4, Group B p1 p3 p5, groups 0–5, semis 6 p0–p3 and 7 p1–p2, final 8 p0–p1 won 2-0; `CUP2 = played_cup(number=2)`; entrant `k`'s duck is `puller k (@pk)`):
   - `test_a_match_s_stage_reads_like_a_broadcast`: `stage_of(CUP, 0) == "group round 1 of 3 in Group A"`, `stage_of(CUP, 1) == "group round 1 of 3 in Group B"`, `stage_of(CUP, 6) == "the semi-final (1 of 2)"`, `stage_of(CUP, 8) == "the final"`, `group_rounds(CUP) == 3`; `duck(CUP.entrants[0]) == "puller 0 (@p0)"`.
-  - `test_the_opening_knows_the_field_and_the_draw`: `cup_facts(CUP, 0, (), MANIFEST)` texts include `"This is the Tug of War Cup #1, 6 players: 2 groups where everyone meets everyone, then a knockout between the top two of each. A match is first to 2 bouts, the ducks swapping sides after each; a duck that drops into the pit or falls over loses the bout, and at the time limit the duck the marker moved away from loses."`, `"Group A: puller 0 (@p0), puller 2 (@p2) and puller 4 (@p4), no match played yet."`, `"Bench ratings at the top: puller 0 (@p0) 5.00 N, puller 1 (@p1) 4.50 N, puller 2 (@p2) 4.00 N; at the bottom: puller 5 (@p5) 2.50 N."`; no ref starts `cup#/last`. `played_cup(4, groups=((0, 1, 2, 3),))` reads `"…4 players: one group where everyone meets everyone, then a final between its top two. …"`.
+  - `test_the_opening_knows_the_field_and_the_draw`: `cup_facts(CUP, 0, (), MANIFEST)` texts include `"This is the Tug of War Cup #1, 6 players: 2 groups where everyone meets everyone, then a knockout between the top two of each. A match is first to 2 bouts, the ducks swapping sides after each; a duck that drops into the pit loses the bout, and at the time limit the duck the marker moved away from loses."`, `"Group A: puller 0 (@p0), puller 2 (@p2) and puller 4 (@p4), no match played yet."`, `"Bench ratings at the top: puller 0 (@p0) 5.00 N, puller 1 (@p1) 4.50 N, puller 2 (@p2) 4.00 N; at the bottom: puller 5 (@p5) 2.50 N."`; no ref starts `cup#/last`. `played_cup(4, groups=((0, 1, 2, 3),))` reads `"…4 players: one group where everyone meets everyone, then a final between its top two. …"`.
   - `test_the_knockout_s_eve_knows_who_went_through`: `cup_facts(CUP, 6, …)` includes `"Through to the semi-finals: Group A: puller 0 (@p0) and puller 2 (@p2); Group B: puller 1 (@p1) and puller 3 (@p3)."`, `"Next is match 7 of 9, the semi-final (1 of 2): puller 0 (@p0) against puller 3 (@p3)."`, `"On the pulling bench puller 0 (@p0) holds 5.00 N and puller 3 (@p3) 3.50 N: puller 0 (@p0) is the favourite by 1.50 N."`; `screen_view(CUP, 6, MANIFEST)["knockout"] == [{"round": "semi-final", "matches": [{"a": "puller 0", "b": "puller 3", "winner": None, "next": True}, {"a": "puller 1", "b": "puller 2", "winner": None, "next": False}]}, {"round": "final", "matches": [{"a": None, "b": None, "winner": None, "next": False}]}]`, stage `"Semi-final"`.
   - `test_after_the_final_the_champion_and_the_next_cup`: `cup_facts(CUP, 9, …)` includes `"puller 0 (@p0) wins the Tug of War Cup #1, beating puller 1 (@p1) 2-0 in the final."` and `"Cup #2 premieres on Friday 6 November at 18:00, Europe/Paris time."`; `screen_view(CUP, 9, MANIFEST)` has `champion "puller 0"`, stage `"Champion"`, `next None`.
   - `test_a_group_table_counts_only_what_has_aired`: `screen_view(CUP, 2, MANIFEST)`: stage `"Groups · round 2 of 3"`, Group A's `played` sum to 2, every knockout side `None`, `next["group"] == "A"`, Group A's rows name `puller 0`, `puller 2`, `puller 4`.
@@ -118,7 +116,7 @@ def played_cup(entrants=6, number=1, groups=((0, 2, 4), (1, 3, 5)), upsets=froze
   - `cup#/cup`, `cup#/ratings` (always; with 4 entrants or fewer `"Bench ratings: {d} 5.00 N, …."`).
   - `cup#/group/{G}` while `before <=` the first knockout index: `f"Group {G} after {p} match{'es' if p > 1 else ''}: {d} {w} win{'s' if w != 1 else ''}, …."` in `group_table` order, or the "no match played yet" text.
   - `cup#/next`, `cup#/bench` while `before < n`; under `FAVOURITE_N` the bench text ends `f": only {gap:.2f} N apart, too close to call."`.
-  - `cup#/last` when `before > 0`: `f"In the last match, {stage_of(cup, before - 1)}, {d_w} beat {d_l} {x}-{y}{how}."`, `how` = `", the last bout ending in the pit"` / `", the last bout ending in a fall"` / `", the last bout decided by the marker at the time limit"` / `f", on the bench rating after {len(bouts)} bouts without a winner"`.
+  - `cup#/last` when `before > 0`: `f"In the last match, {stage_of(cup, before - 1)}, {d_w} beat {d_l} {x}-{y}{how}."`, `how` = `", the last bout ending in the pit"` / `", the last bout decided by the marker at the time limit"` / `f", on the bench rating after {len(bouts)} bouts without a winner"`.
   - `cup#/round` when match `before - 1` closes group round r: `f"Group round {r} results: {d_w} beat {d_l} 2-0; …."`.
   - `cup#/through` when `before` is the first knockout index; `G == 1`: `"Through to the final: {d_a} and {d_b}."`.
   - `cup#/defending` when history's last cup has matches: `"@c won Cup #m and defends the title."` or `"Cup #m was won by @c, who is not in this cup."`.
@@ -154,7 +152,7 @@ CALL_CONTEXT = (
     "A live sports channel for microducks: small mechanical ducks, each steered by a brain its "
     "owner trained. This is a cup of tug of war: two ducks face each other across a pit, tied by "
     "a string with a red marker at its middle, and each pulls by walking backwards. A duck that "
-    "drops into the pit, or falls over, loses the bout; at the time limit, the duck the marker "
+    "drops into the pit loses the bout; at the time limit, the duck the marker "
     "moved away from loses. The ducks swap sides after each bout. They are earnest, top-heavy and easily "
     "toppled: that is the comedy and the charm. Peter and Ray are microducks themselves, calling "
     "the bout from their booth while it plays: relaxed, amused, kind. "
@@ -166,8 +164,8 @@ CALL_STYLE = (
     'Shape: [{"speaker":"peter","text":"..."},{"speaker":"ray","text":"..."}]. text: English, '
     "1-80 printable characters, no markup, no speaker prefix. Each line is said as its moment "
     "happens, in the present tense, about that moment: short and live, most lines four to eight "
-    "words. Say only what the moment and the facts say: a duck falls only when a moment says it "
-    "falls, drops or slips, and a number is spoken only as a fact or a moment prints it. Name a "
+    "words. Say only what the moment and the facts say: a duck drops or slips only when a moment "
+    "says so, and a number is spoken only as a fact or a moment prints it. Name a "
     "duck exactly as the moments print its name, and use they/their. Nothing after the "
     "last moment is known: never hint at how the bout or the match ends before a moment says it. "
     "Peter is the enthusiast and Ray the deadpan; a joke, at most one, plays on what the viewer "
@@ -246,7 +244,7 @@ def write_show(cup, *, manifest, history, lore, provider, model, tab, rng,
   - `thin`: keep `start`, `pit`, `time`; another moment only `CALL_GAP_S` or more after the last one kept.
   - Desk (outline ids not in `done["desk"]`, all before the calls): `before = after + 1`; facts = refs of `cup_facts(cup, before, history, manifest)` starting with `DESK_FACTS[kind]`, plus for an intro `f"cup#/group/{next.group}"`; then the profiles of the two highest ratings (opening), the next pair (intro), the champion (ceremony, close). Direction `{**direction(rng, recent, lore.scenes), "turns": rng.choice(DESK_TURNS[kind]), "angle": DESK_ANGLES[kind], "player": DESK_PLAYERS[kind], "callback": NO_CALLBACK}`, `recent` = the directions written so far in this show, newest first. `write(…)`; `Rejected` draws again, `TRIES` in all, then raises. `tab.prepare({"run_id": f"{event_id}-{number:04d}-{id}", "turns": turns})`. Stored at once: `{"kind", "after", "dialogue": {"turns", "brief": {"facts", "direction", "model"}}, "plan", "screen": screen_view(cup, before, manifest)}`.
   - Calls (matches not in `done["calls"]`): facts = refs `("cup#/cup", "cup#/next", "cup#/bench")` of `cup_facts(cup, match.index, …)` plus the pair's profiles. Per bout: `thin`, the `what`s below, `write_call(facts, moments, first, …)` (`TRIES`), `at_ms = round(1000 * (start + (end - start) * at_s / seconds))`, then `first` = the other speaker of the bout's last line. Then `tab.prepare_call({"id", "lines", "duration_ms"})`; stored `{"lines", "plan"}`.
-  - The `what`s (every duck by its `name`, as on air; west/east from the bout's `a_side`; scores a's then b's): `start` `f"Bout {k + 1} starts, {west} on the west side and {east} on the east; the score is {a} {wa}, {b} {wb}."`; `lead` `f"{u} pulls the marker over to their side of the pit."`; `edge` `f"{u} is at the edge of the pit."`; `slip` `f"{u} slips and leans hard."`; `pit` `f"{u} drops into the pit."`; `fall` `f"{u} falls over and is out."`; `time` `f"Time is up with the marker on {u}'s side."` or `"Time is up with the marker dead centre."`. The bout's last moment adds `f" {w} wins the bout; the score is {a} {wa}, {b} {wb}."` or `" Nobody wins the bout."`; the deciding bout's adds `f" {w} wins the match {x}-{y}."` or, `decided_by == "rating"`, `f" After {n} bouts without two wins, the match goes to {w} on the bench rating."`.
+  - The `what`s (every duck by its `name`, as on air; west/east from the bout's `a_side`; scores a's then b's): `start` `f"Bout {k + 1} starts, {west} on the west side and {east} on the east; the score is {a} {wa}, {b} {wb}."`; `lead` `f"{u} pulls the marker over to their side of the pit."`; `edge` `f"{u} is at the edge of the pit."`; `slip` `f"{u} slips and leans hard."`; `pit` `f"{u} drops into the pit."`; `time` `f"Time is up with the marker on {u}'s side."` or `"Time is up with the marker dead centre."`. The bout's last moment adds `f" {w} wins the bout; the score is {a} {wa}, {b} {wb}."` or `" Nobody wins the bout."`; the deciding bout's adds `f" {w} wins the match {x}-{y}."` or, `decided_by == "rating"`, `f" After {n} bouts without two wins, the match goes to {w} on the bench rating."`.
   - Exact copy:
 
 ```python
@@ -298,7 +296,7 @@ def compose_show(store, cup, *, lore, provider, model, tab, rng, done) -> dict
 Order with a show (contract): `desk opening`; per match `desk intro-<id>`, then Plan C's `shutter` (its `next` the stage alone) that cuts into the `match`, which carries `"call": True`; after the last match of group round r a `shutter` with `"next": None` and `desk recap-r`; after the final a `shutter` (`"next": None`), `desk ceremony`, `desk close`. A desk segment is `{"kind": "desk", "at_ms", "duration_ms": <its plan's>, "segment": id, "after": i}`, read from `show["desk"]` (`cupworker` imports nothing from `commentary`). A desk with `after = i` airs once match `i`'s clip has ended (`revealed_at`), so Task 7 serves it from 30 s before.
 
 - [ ] **Step 1: Write the failing tests.**
-  - `test_match_footage_reads_each_bout_and_where_its_clip_tapes_it` (`test_commentary_show.py`): a `LocalStore`; `put_cup_files("tug-of-war", 1, {f"bouts/{m0}-0.npz": encode(TRACE, SETTLE)})` with Task 1's dragged bout; `put_clip(m0, {"clip.json": …})` with `layouts.landscape.seconds` 30.0 and `timing.bouts [{"k": 0, "tape_start_s": 2.0, "tape_end_s": 10.02}]` → `{"duration_ms": 30000, "bouts": [{"k": 0, "tape_start_s": 2.0, "tape_end_s": 10.02, "seconds": 8.02, "moments": moments(<decoded>, MANIFEST.course, MANIFEST.termination, string_offset("legs"))}]}`; no clip → `LookupError`.
+  - `test_match_footage_reads_each_bout_and_where_its_clip_tapes_it` (`test_commentary_show.py`): a `LocalStore`; `put_cup_files("tug-of-war", 1, {f"bouts/{m0}-0.npz": encode(TRACE, SETTLE)})` with Task 1's dragged bout; `put_clip(m0, {"clip.json": …})` with `layouts.landscape.seconds` 30.0 and `timing.bouts [{"k": 0, "tape_start_s": 2.0, "tape_end_s": 10.02}]` → `{"duration_ms": 30000, "bouts": [{"k": 0, "tape_start_s": 2.0, "tape_end_s": 10.02, "seconds": 8.02, "moments": moments(<decoded>, MANIFEST.course, string_offset("legs"))}]}`; no clip → `LookupError`.
   - `test_with_a_show_the_order_puts_the_desk_around_every_match` (`test_cupworker.py`, where Plan C's `played_cup(n, …)` already lives: Task 2's helper comes in as `from tests.show_cups import played_cup as show_cup`): `cup = show_cup()`, clips `{id: 30.0}`, `show = {"desk": {s["id"]: {"kind": s["kind"], "after": s["after"], "plan": {"duration_ms": 12040}} for s in show_outline(cup)}, "calls": {}}` → kinds `["desk"] + Σ_i (["desk", "shutter", "match"] + (["shutter", "desk"] if i in (1, 3, 5) else [])) + ["shutter", "desk", "desk"]`; desk `segment`s in outline order with their `after`; every shutter before a match names the stage alone (`match_label`), the others `"next": None`; every match `"call": True`; desk `duration_ms` 12040; contiguous; multiples of 40.
   - From the state Plan C's `test_a_cup_goes_from_close_to_its_running_order` builds once every clip is ready (`enter`, a tick at `T1`, `render`; lift it into a module function `ready_cup(tmp_path)`): `test_the_worker_writes_the_show_once_then_fixes_the_order` (a writer stub called once over two ticks; `cup_file(…, "show.json")` holds its show; the order has desk segments); `test_an_unwritten_show_holds_the_order_and_resumes_on_the_next_tick` (the writer puts `"opening"` into the dict it gets and raises `RuntimeError("router down")` → no order, log `cups: the show of Tug of War Cup #1 waits (RuntimeError: router down)`; next tick it gets the same dict (`is`) still holding `"opening"`, returns a show → the order is fixed); `test_a_restarted_worker_reads_the_show_it_wrote` (show.json stored; a new worker whose writer raises fixes the order from it, writer never called).
   - `test_the_cup_worker_gets_the_show_writer_only_with_the_booth_on` (`test_live.py`, set up as `test_the_reserve_is_closed_when_the_app_stops`): the worker Plan C keeps on `app.state` has a `show`; with `ARENA_COMMENTARY=0` it has none.
@@ -306,7 +304,7 @@ Order with a show (contract): `desk opening`; per match `desk intro-<id>`, then 
 - [ ] **Step 2: Run** — `PYTEST tests/test_commentary_show.py tests/test_cupworker.py tests/test_live.py` → FAIL.
 
 - [ ] **Step 3: Implement.**
-  - `match_footage`: per match `clip_state(match_id)` must be `"ready"`; layout `landscape`; each bout's trace from `cup_file(event, number, f"bouts/{match_id}-{k}.npz")`; `seconds = frames * CTRL_DT`; `moments(trace, manifest.course, manifest.termination, string_offset(manifest.rig))`.
+  - `match_footage`: per match `clip_state(match_id)` must be `"ready"`; layout `landscape`; each bout's trace from `cup_file(event, number, f"bouts/{match_id}-{k}.npz")`; `seconds = frames * CTRL_DT`; `moments(trace, manifest.course, string_offset(manifest.rig))`.
   - `earlier_cups` with `load_cup` over `cup_numbers`; `compose_show` = `load_event`, `earlier_cups`, `player_profiles`, `match_footage`, `write_show(…, done=done)`.
   - `CupWorker._schedule`, once every match clip is ready (the calls are timed on their tapes) and `self.show` is set, before it fixes an order: read `show.json`; when missing, log `cups: writing the show of {title}` and call `self.show(cup, self._shows.setdefault((event_id, number), {"desk": {}, "calls": {}}))`; on any exception log `cups: the show of {title} waits ({Type}: {message})` and leave the order to the next tick; on success `put_cup_files(…, {"show.json": …})`, drop the partial, log `cups: the show of {title} is written`. Then `running_order(…, show=show)`. `title = f"{manifest.title} Cup #{number}"`.
   - `app.py`: with `tab` not None, `show=lambda cup, done: compose_show(app.state.store, cup, lore=lore, provider=provider, model=config.commentary_model, tab=tab, rng=show_rng, done=done)`, `show_rng = random.Random()`; else `show=None` (no booth: the cup airs as in stage 2). If Plan C builds the worker above the block that builds `tab`, move it below.
@@ -462,6 +460,6 @@ cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena
 ## Self-review
 
 - Spec §6: the programme (opening, every match, recaps, final, champion, close) → Tasks 5–7; the desk screen → Tasks 2, 8, 9; the play-by-play timed to moments, droid voices, captions, in the page not the mp4 → Tasks 1, 3, 4, 9; what the writer knows and no spoilers → Task 2's no-spoiler test, Task 5's per-bout calls; written ahead, never waiting on an LLM, nothing airing with a hole → Task 6 (the order waits for show.json). Anti-goals: leaks → Task 7's rule and Task 11's probes; no filter → Global Constraints and Task 10.
-- Contract: Plan D's names are used as written, its additions already in it (2026-10-20). Plans A and C's names are used as the contract writes them: `cup.PREFETCH`, `airs_at`, `revealed_at`, `parse_match_id`, `match_label`, channel `PREFETCH_MS`, `stage.fell_at`, `manifest.termination`.
+- Contract: Plan D's names are used as written, its additions already in it (2026-10-20). Plans A and C's names are used as the contract writes them: `cup.PREFETCH`, `airs_at`, `revealed_at`, `parse_match_id`, `match_label`, channel `PREFETCH_MS`.
 - Types: Task 6's `footage` is what Task 5 reads; Task 2's `screen_view` is the stored `screen`, served by Task 7, drawn by Task 8; Task 5 asks `prepare_call` with `prepareCall`'s input; Task 9's `clipGain` reads Task 4's captions.
-- Owner's calls of 2026-10-20: a fall loses (Tasks 1, 2, 3, 5), the reveal at the end of a match's clip (Tasks 6, 7), on air a duck by its on-air `name` (Tasks 2, 3, 5, 8), the clip's sound ducked under the call (Task 9), ~150 router calls a cup (Task 10), cup #1's Friday set at release (Task 12).
+- Owner's calls of 2026-10-20: only the pit decides (Tasks 1, 2, 3, 5), the reveal at the end of a match's clip (Tasks 6, 7), on air a duck by its on-air `name` (Tasks 2, 3, 5, 8), the clip's sound ducked under the call (Task 9), ~150 router calls a cup (Task 10), cup #1's Friday set at release (Task 12).

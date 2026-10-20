@@ -1621,7 +1621,7 @@ const match = { match_id: "tug-of-war-0001-008", cup: 1, round: "final", group: 
   b: { user: "bob", policy_name: "Lean", name: "Lean", livery: "classic" }, wins: [2, 1], winner: "a", decided_by: "bouts", clip: "v1",
   bouts: [
     { k: 0, a_side: "west", winner: "a", how: "pit", time_s: 8.42 }, { k: 1, a_side: "east", winner: "b", how: "marker", time_s: 20 },
-    { k: 2, a_side: "west", winner: null, how: "draw", time_s: 20 }, { k: 3, a_side: "east", winner: "a", how: "fall", time_s: 3.1 }] };
+    { k: 2, a_side: "west", winner: null, how: "draw", time_s: 20 }, { k: 3, a_side: "east", winner: "a", how: "pit", time_s: 3.1 }] };
 it("names the cup, the round and both sides, gives the score, the bouts and the clip", () => {
   const page = matchHall(match);
   expect(page.querySelector("#title").getAttribute("href")).toBe("#/c/tug-of-war/1");
@@ -1631,7 +1631,7 @@ it("names the cup, the round and both sides, gives the score, the bouts and the 
   expect(page.querySelector(".stamp").textContent).toBe("Tank wins");
   expect([...page.querySelectorAll(".match-bout")].map((b) => b.textContent)).toEqual([
     "Bout 1 · Tank wins · Lean in the pit · 8.42 s", "Bout 2 · Lean wins · the marker on their side · 20.00 s",
-    "Bout 3 · a draw · 20.00 s", "Bout 4 · Tank wins · Lean knocked down · 3.10 s"]);
+    "Bout 3 · a draw · 20.00 s", "Bout 4 · Tank wins · Lean in the pit · 3.10 s"]);
   expect(page.querySelector(".match-clip video").getAttribute("src")).toBe("/api/matches/tug-of-war-0001-008/clip/landscape.mp4?v=v1");
 });
 // player.test.js

@@ -29,15 +29,16 @@ here. If a plan must change a name, it changes this file in the same commit.
   publish CLI in microduck_rl (worktree branch `tug-publish-line` from `challenge-recipe-publishing`);
   D's release pushes it before the challenges relock. Stages 2–3 never wait for a good policy: tests
   use the vendored walker and fakes, the local rehearsals use B's intermediate checkpoints.
-- **Settled by the owner (2026-10-20), no question to ask:** a fall loses (it loses a bout and ends
-  a bench run); HF Jobs trainings stay on l4x1; the first candidate's repo is
+- **Settled by the owner (2026-10-20), no question to ask:** only the pit decides
+  (a fall no longer loses: the earlier "a fall loses" ruling of the same day was reversed that
+  evening, a downed duck stays in play and can be dragged in); HF Jobs trainings stay on l4x1; the first candidate's repo is
   `Nico-robot/microduck-tug-of-war` unless the owner names another at publish time; cup #1's Friday
   is set at release (D's release step asks); about 150 LLM router calls per cup are acceptable; on
   air a duck is named by its on-air `name` (Plan C's `Entrant.name`: the policy's name, plus
   ` (@<user>)` when another entrant of the cup has the same policy name) (match titles, clip cards,
   the match page's stamp, the cup screen, the desk and the call lines), the cup page shows the
   policy's name and the player's handle; A's stamp words
-  `RATED` / `HELD ON` / `PULLED IN` / `KNOCKED DOWN`, the lime round card with `Pull!` and its
+  `RATED` / `HELD ON` / `PULLED IN`, the lime round card with `Pull!` and its
   placeholder art, a bench clip of about 35 s.
 - **Worktree (arena):** `~/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus`, branch
   `versus` from local `main` at `abcbb9e` or later. From the main checkout:
@@ -196,7 +197,7 @@ settle_s = 0.5
 joint_rad = 0.01
 yaw_deg   = 2.0
 
-[termination]                 # a fall loses a bout and ends a bench run
+[termination]                 # summaries only: a fall never ends a bout or a bench run
 fall_gravity_z = -0.5
 fall_hold_s    = 0.3
 
@@ -252,18 +253,17 @@ def bench_force(profile: dict, t_s: float) -> float
 #   min(top_n, max(0.0, ramp_n_per_s * t_s + Σ amp * sin(2π hz t_s + phase))); never asked during the settle
 #   (clamped to the top: a duck dragged in at the top never outscores one that held)
 
-# A duck is OUT (owner, 2026-10-20: a fall loses) when, after a control step, its trunk is in the
-# pit (in_pit of its last frame) or it has fallen by the Arena's own rule: gravity z of the trunk
-# ((Rᵀ·down)[2], as runner.run_once reads it) above manifest.termination.fall_gravity_z for
-# round(fall_hold_s / CTRL_DT) straight control steps — stage.fell_at over the duck's last that
-# many frames, reused, never re-written. The pit is checked first.
+# Only the pit decides (owner, 2026-10-20 evening): a duck is OUT when, after a control step, its
+# trunk is in the pit (in_pit of its last frame, z < -PIT_DROP_M). A duck knocked over, sitting or
+# lying on the platform stays in play and can be dragged. A MuJoCo solver reset on the bench ends
+# the run as "pit" at that step's force; in a bout it stays a draw.
 
 @dataclass(frozen=True)
 class BenchOutcome:
     seed: int
-    status: str            # "pit" | "fall" | "held"
+    status: str            # "pit" | "held"
     force_n: float         # bench_force at the step it went out; top_n if it held to the end
-    time_s: float | None   # when it went out (the step that completes a fall's hold); None if it held
+    time_s: float | None   # when it entered the pit; None if it held
     trace: np.ndarray      # (1, frames, 21); stops at the step it went out
     settle: np.ndarray     # (1, settle + 1, 21)
     profile: dict
@@ -275,14 +275,14 @@ def run_bench(manifest: Manifest, policy, seed: int, model=None) -> BenchOutcome
 class BoutOutcome:
     seed: int
     loser: int | None      # 0 west, 1 east, None undecided by the physics
-    how: str               # "pit" | "fall" (the first duck out, how it went out),
-                           # "marker" (both out on one control step, or the time limit), "draw" (marker exactly 0)
+    how: str               # "pit" (the first duck in), "marker" (both in on one control step, or the time
+                           # limit), "draw" (marker exactly 0)
     time_s: float          # when it was decided
     trace: np.ndarray      # (2, frames, 21), west first; stops at the deciding step
     settle: np.ndarray     # (2, settle + 1, 21)
 
 def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutcome
-# the first duck out loses; marker rule: marker_x < 0 (pulled to the west) -> east loses; > 0 -> west loses; == 0 -> draw
+# the first duck in the pit loses; marker rule: marker_x < 0 (pulled to the west) -> east loses; > 0 -> west loses; == 0 -> draw
 ```
 
 ```python
@@ -296,7 +296,7 @@ class BoutResult:
     seed: int
     a_side: str            # "west" in bouts 0, 2, 4; "east" in 1, 3
     winner: str | None     # "a" | "b" | None (a draw counts for nobody)
-    how: str               # BoutOutcome.how: "pit" | "fall" | "marker" | "draw"
+    how: str               # BoutOutcome.how: "pit" | "marker" | "draw"
     time_s: float
     def to_dict(self) -> dict; @classmethod def from_dict(cls, raw) -> "BoutResult"
 
@@ -316,7 +316,7 @@ def play_match(manifest: Manifest, a, b, seeds: Sequence[int], ratings: tuple[fl
 
 ```python
 # arena/evaluate.py
-SeedResult(seed, status, time_s, force_n: float | None = None)     # a bench seed's status: "pit" | "fall" | "held"
+SeedResult(seed, status, time_s, force_n: float | None = None)     # a bench seed's status: "pit" | "held"
 def mean_hold_force(per_seed, time_limit_s) -> float      # METRICS["mean_hold_force"]
 def seed_row(result: SeedResult) -> dict                  # seed, status, time_s, plus force_n only when set; every writer of a seed uses it
 # Evaluation gains bench: dict | None = None (the traced seed's profile)
@@ -335,7 +335,7 @@ def sort_key(record) -> tuple   # (-score if higher_wins(record.event_id) else s
 ```
 
 `arena score` on a tug (Plan A pins it, Plan B reads it): one line per seed,
-`seed 1: pit      4.77 N at 21.76 s`, `seed 2: held     7.00 N`, `seed 3: fall     0.62 N at 1.02 s`,
+`seed 1: pit      4.77 N at 21.76 s`, `seed 2: held     7.00 N`, `seed 3: pit      0.62 N at 1.02 s`,
 then `rating: 4.21 N · replay from seed 3`.
 
 API (Plan A): `event_summary` of a tug adds `course: "tug"`, `length_m`, `width_m`, `string_m`,
@@ -362,7 +362,7 @@ export function buildTugCourse(event)               // Group "course": platforms
 export function buildString()                       // { group, update(endA, endB) }: the string and its red marker
 export function buildWinch(event)                   // { group, setForce(newtons) }: drum, cable anchor, a dial in N
 // app/src/clip/score.js
-export function clipVerdict(run)                    // {stamp, pass}: a tug's traced seed HELD ON | PULLED IN | KNOCKED DOWN
+export function clipVerdict(run)                    // {stamp, pass}: a tug's traced seed HELD ON | PULLED IN
 ```
 
 A tug lane handed to `viewer.setLanes` (one per call) is `{tug: "bench", trace, settle?, bench: profile, livery, name}`
@@ -377,8 +377,8 @@ pins each one with a parity test; the Arena must not change them without Plan B'
 `STRING_SITE`, `STRING`, `WINCH_SITE`, `WINCH`, `SPAWN_HEIGHT_M`, `WALL_THICKNESS_M`,
 `PLATFORM_OVERRUN_M`, `string_offset("legs")`, `PIT_DROP_M`, `tug_layout`'s west start,
 `winch_position`, the gear sign (a positive winch ctrl pulls towards the drum), the bench keyframe's
-one ctrl per actuator, `bench_profile`'s shape and `bench_force`, `manifest.termination` (the fall
-rule its training terminates on), the tug's `[course]`, `[command]`, `[start]` and `[bench]`.
+one ctrl per actuator, `bench_profile`'s shape and `bench_force`, `manifest.termination` (summaries only),
+the tug's `[course]`, `[command]`, `[start]` and `[bench]`.
 
 A retune of `[bench]` or `[command]` by Plan B is, in one sitting: a commit on the arena `versus`
 branch (`arena/events/tug-of-war.toml`, its two Python suite calls green), the challenges'
@@ -586,11 +586,11 @@ SLIP_DEG = 35.0    # a trunk tilting past this has slipped
 @dataclass(frozen=True)
 class Moment:
     at_s: float          # seconds into the bout's timed trace
-    kind: str            # "start" | "lead" | "edge" | "slip" | "pit" | "fall" | "time"
+    kind: str            # "start" | "lead" | "edge" | "slip" | "pit" | "time"
     side: str | None     # "west" | "east"
 
-def moments(trace: np.ndarray, course: Tug, termination: Termination, offset) -> list[Moment]
-#   "fall": at stage.fell_at(trace[d], termination), the Arena's rule; "time" only when nobody went out
+def moments(trace: np.ndarray, course: Tug, offset) -> list[Moment]
+#   "time" only when nobody went into the pit
 ```
 
 ```python
