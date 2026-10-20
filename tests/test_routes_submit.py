@@ -665,3 +665,12 @@ def test_a_borrowed_policy_that_does_not_load_is_a_400_naming_its_duck(api, monk
     assert response.status_code == 400
     assert response.json()["detail"].startswith("ducks[1]: pollen-robotics/microduck-sitter: not a loadable ONNX model")
     assert list(store_dir.rglob("*.json")) == []
+
+
+def test_a_tug_entry_is_rated_on_the_bench(api):
+    body = submit(api, event="tug-of-war").json()
+    assert body["course"] == "tug" and body["seeds_total"] == 5 and all("force_n" in s for s in body["per_seed"])
+    assert body["metric"] == "mean_hold_force"   # the publish CLI says "a 4.21 N rating" from it
+    assert _stored(api, "tug-of-war", body["run_id"]).bench["top_n"] == 7.0
+    assert api.get(f"/api/runs/{body['run_id']}/trace").headers["X-Duck-Count"] == "1"
+    assert submit(api, event="sprint-2m").json()["metric"] == "mean_finish_time"

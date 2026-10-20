@@ -1,4 +1,6 @@
 
+from types import SimpleNamespace
+
 from arena.constants import RUNNER_VERSION
 from arena.recover import (
     Candidate,
@@ -11,8 +13,9 @@ from tests.test_store import make_record
 
 
 class Event:
-    def __init__(self, id, rig):
+    def __init__(self, id, rig, kind="lane"):
         self.id, self.rig = id, rig
+        self.course = SimpleNamespace(kind=kind)
 
 
 SPRINT = Event("sprint-2m", "legs")
@@ -120,6 +123,15 @@ def test_without_a_recorded_event_every_rig_matching_event_is_used():
 
     roller = Candidate("a/c", "r", "a", "c", "rollers", event_id=None)
     assert [e.id for e in events_for(roller, EVENTS)] == ["roller-sprint-2m"]
+
+
+def test_a_policy_with_no_recorded_event_is_never_recovered_onto_the_tug():
+    """Entering a versus enters its cup: it takes a policy trained to pull, entered on purpose."""
+    events = [*EVENTS, Event("tug-of-war", "legs", "tug")]
+    legacy = Candidate("a/b", "r", "a", "b", "legs", event_id=None)
+    assert [e.id for e in events_for(legacy, events)] == ["sprint-2m", "hill-climb-1m5"]
+    tugger = Candidate("a/c", "r", "a", "c", "legs", event_id="tug-of-war")
+    assert [e.id for e in events_for(tugger, events)] == ["tug-of-war"]
 
 
 def test_an_unknown_event_name_in_a_manifest_yields_nothing_rather_than_everything():

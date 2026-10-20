@@ -18,7 +18,7 @@ from .constants import CTRL_DT
 from .evaluate import evaluate
 from .hub_fetch import FetchError, fetch_references
 from .index import ENTRANTS, leaderboard
-from .manifest import ManifestError, all_events, load_event
+from .manifest import ManifestError, all_events, higher_wins, load_event
 from .policy import PolicyError, load_policy
 from .store import LocalStore, RunRecord, lone_cast, new_id
 from .timeline import TimelineError, load_troupe
@@ -45,6 +45,14 @@ def _print_sweep(result) -> None:
         print(f"seed {seed_result.seed}: {seed_result.status:<8} {timing}")
     print(f"\nscore {result.score:.3f}s · {result.seeds_finished}/"
           f"{len(result.per_seed)} finished · replay from seed {result.trace_seed}")
+
+
+def _print_bench(result) -> None:
+    """The format Plan B's ledger reads: one line per seed, then the rating."""
+    for seed_result in result.per_seed:
+        went_out = f" at {seed_result.time_s:.2f} s" if seed_result.time_s is not None else ""
+        print(f"seed {seed_result.seed}: {seed_result.status:<8} {seed_result.force_n:.2f} N{went_out}")
+    print(f"rating: {result.score:.2f} N · replay from seed {result.trace_seed}")
 
 
 def _print_stage(manifest, result, troupe, name: str | None) -> None:
@@ -76,8 +84,11 @@ def _cmd_score(args) -> int:
         result = evaluate(manifest, policy, cast.performers)
         _print_stage(manifest, result, troupe, Path(args.timeline).name if args.timeline else None)
     elif args.timeline:
-        print(f"{manifest.id} is a race: --timeline is for stage events", file=sys.stderr)
+        print(f"{manifest.id} is not a stage: --timeline is for stage events", file=sys.stderr)
         return 1
+    elif manifest.course.kind == "tug":
+        result = evaluate(manifest, policy)
+        _print_bench(result)
     else:
         result = evaluate(manifest, policy)
         _print_sweep(result)
@@ -100,6 +111,7 @@ def _cmd_score(args) -> int:
             runner_version=result.runner_version,
             livery=args.livery,
             cast=cast.record if cast else lone_cast(),
+            bench=result.bench,
         )
         LocalStore(Path(args.store)).append(
             record, trace_codec.encode(result.trace, result.settle), Path(args.onnx).read_bytes()
@@ -117,12 +129,14 @@ def _cmd_board(args) -> int:
         print(f"no runs recorded for {manifest.id}")
         return 0
 
+    rating = higher_wins(manifest.id)
     print(f"{manifest.title}\n")
-    print(f"{'#':<4}{'who':<16}{'policy':<20}{'time':>10}{'seeds':>8}{'cmd':>10}")
+    print(f"{'#':<4}{'who':<16}{'policy':<20}{'rating' if rating else 'time':>10}{'seeds':>8}{'cmd':>10}")
     for row in rows:
         r = row.record
+        score = f"{r.score:>8.2f} N" if rating else f"{r.score:>9.3f}s"
         print(f"{row.rank:<4}{r.user:<16}{r.policy_name:<20}"
-              f"{r.score:>9.3f}s{r.seeds_finished:>5}/{len(r.per_seed)}"
+              f"{score}{r.seeds_finished:>5}/{len(r.per_seed)}"
               f"{r.command_vx:>8.2f}m/s")
     return 0
 

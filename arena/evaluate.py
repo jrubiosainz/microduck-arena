@@ -25,6 +25,14 @@ A stage is not a race and none of this applies to it: it plays the entry's
 cast once (every duck of its troupe, arena/cast.py), on one seed, and every
 performance that plays to the end goes to the voters. Its score is the
 duration played, and only informs: a stage's board ranks on votes.
+
+A tug's bench is neither: the entry pulls alone against the winch (arena/tug.py),
+on the event's own command, once per seed. Nothing is swept: every duck walks
+backwards at the same command, and what is measured is how hard the winch was
+pulling when the duck went out, in the pit or by a fall, or the top for a duck
+that held to the end. The rating is the mean of those forces over every seed,
+and a higher one is better. The replay is the lower-median seed by force, and
+the run keeps that seed's winch profile, so the page can turn its dial.
 """
 
 import statistics
@@ -33,10 +41,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from .constants import RUNNER_VERSION
-from .course import compile_course
+from .course import compile_course, compile_tug
 from .manifest import Manifest
 from .runner import Performer, run_once, run_stage
 from .timeline import Start, constant_timeline
+from .tug import run_bench
 
 
 @dataclass(frozen=True)
@@ -46,6 +55,15 @@ class SeedResult:
     time_s: float | None
     # The force a bench run held, in newtons; only a tug's seeds carry one.
     force_n: float | None = None
+
+
+def seed_row(result: SeedResult) -> dict:
+    """A seed as the log and the API write it: a race's and a performance's exactly as before
+    the bench, a bench seed's with the force it held."""
+    row = {"seed": result.seed, "status": result.status, "time_s": result.time_s}
+    if result.force_n is not None:
+        row["force_n"] = result.force_n
+    return row
 
 
 @dataclass(frozen=True)
@@ -74,6 +92,8 @@ class Evaluation:
     settle: np.ndarray
     trace_seed: int
     runner_version: int
+    # The winch's profile on the replayed seed (arena.tug.bench_profile); None off the bench.
+    bench: dict | None = None
 
 
 def mean_finish_time(per_seed: tuple[SeedResult, ...], time_limit_s: float) -> float:
@@ -196,6 +216,10 @@ def evaluate_at(manifest: Manifest, policy, command_vx: float) -> Evaluation:
 def evaluate(manifest: Manifest, policy, cast: tuple[Performer, ...] | None = None) -> Evaluation:
     if manifest.course.kind == "stage":
         return _evaluate_stage(manifest, policy, cast)
+    if manifest.course.kind == "tug":
+        if cast is not None:
+            raise ValueError(f"{manifest.id} rates the entry alone, on the bench")
+        return _evaluate_bench(manifest, policy)
     if cast is not None:
         raise ValueError(f"{manifest.id} is a race: it races the entry alone, on the event's command")
     model = compile_course(manifest)  # compiled once, reused for every run
@@ -255,6 +279,29 @@ def evaluate(manifest: Manifest, policy, cast: tuple[Performer, ...] | None = No
         settle=outcomes[(command_vx, trace_seed)].settle,
         trace_seed=trace_seed,
         runner_version=RUNNER_VERSION,
+    )
+
+
+def _evaluate_bench(manifest: Manifest, policy) -> Evaluation:
+    """The entry against the winch on every seed. A bench run always ends with a force, so every
+    seed counts as finished."""
+    model = compile_tug(manifest, 1)  # compiled once, reused for every seed
+    outcomes = {seed: run_bench(manifest, policy, seed, model=model) for seed in manifest.seeds}
+    per_seed = tuple(SeedResult(o.seed, o.status, o.time_s, o.force_n) for o in outcomes.values())
+    ranked = sorted(per_seed, key=lambda r: (r.force_n, r.seed))
+    traced = outcomes[ranked[(len(ranked) - 1) // 2].seed]
+    return Evaluation(
+        event_id=manifest.id,
+        score=METRICS[manifest.metric](per_seed, manifest.time_limit_s),
+        command_vx=manifest.command[0],
+        seeds_finished=len(per_seed),
+        per_seed=per_seed,
+        scan=(),
+        trace=traced.trace,
+        settle=traced.settle,
+        trace_seed=traced.seed,
+        runner_version=RUNNER_VERSION,
+        bench=traced.profile,
     )
 
 

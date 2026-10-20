@@ -18,7 +18,7 @@ from .. import trace as trace_codec
 from ..cast import cast_of, load_borrowed
 from ..constants import RUNNER_VERSION
 from ..envlink import EnvLinkError, normalise_env_url
-from ..evaluate import evaluate, evaluate_at
+from ..evaluate import evaluate, evaluate_at, seed_row
 from ..hub_fetch import FetchedPolicy, FetchError, fetch_policy, hub_name, parse_repo_ref
 from ..manifest import ManifestError, load_event
 from ..policy import PolicyError, load_policy
@@ -177,7 +177,7 @@ ENTER_A_REPO = "The Arena enters a Hugging Face repo: enter from the workshop, o
 
 
 def _seed_rows(per_seed) -> list[dict]:
-    return [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in per_seed]
+    return [seed_row(s) for s in per_seed]
 
 
 def _evaluate(manifest, policy, command_vx: float | None, cast):
@@ -212,7 +212,7 @@ def _already_entered(store, event_id: str, user: str, sha256: str, timeline_sha2
     )
 
 
-def _answer(record: RunRecord, course: str, page_url: str, already: bool) -> dict:
+def _answer(record: RunRecord, manifest, page_url: str, already: bool) -> dict:
     return {
         "run_id": record.run_id,
         "user": record.user,
@@ -229,7 +229,9 @@ def _answer(record: RunRecord, course: str, page_url: str, already: bool) -> dic
         "trace_seed": record.trace_seed,
         "page_url": page_url,
         "already_entered": already,
-        "course": course,
+        "course": manifest.course.kind,
+        # Every event's: the publish CLI says a rating in newtons from it; an older CLI ignores it.
+        "metric": manifest.metric,
     }
 
 
@@ -282,7 +284,7 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
     store = request.app.state.store
     kept = _already_entered(store, manifest.id, user, policy.sha256, fetched.timeline_sha256)
     if kept is not None:
-        return _answer(kept, manifest.course.kind, _page_url(request, kept.run_id), already=True)
+        return _answer(kept, manifest, _page_url(request, kept.run_id), already=True)
 
     cast = None
     if manifest.course.kind == "stage":
@@ -347,6 +349,7 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         description=_description(fetched),
         timeline_sha256=fetched.timeline_sha256,
         cast=cast.record if cast else lone_cast(),
+        bench=result.bench,
     )
     store.append(record, trace_codec.encode(result.trace, result.settle))
 
@@ -363,7 +366,7 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         except Exception as exc:  # noqa: BLE001 — see above
             print(f"clip: {record.run_id} not queued ({type(exc).__name__}: {exc})")
 
-    return _answer(record, manifest.course.kind, _page_url(request, record.run_id), already=False)
+    return _answer(record, manifest, _page_url(request, record.run_id), already=False)
 
 
 @router.post("/runs/{run_id}/withdraw")

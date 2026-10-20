@@ -13,11 +13,13 @@ from arena.evaluate import (
     mean_finish_time,
     mean_hold_force,
     pick_trace_seed,
+    seed_row,
 )
 from arena.golden import PLATFORM
 from arena.manifest import load_event
 from arena.policy import load_policy
 from arena.runner import run_once
+from arena.tug import BenchOutcome
 
 
 def _results(*pairs):
@@ -334,3 +336,42 @@ def test_an_unmeasured_platform_is_a_readable_refusal(monkeypatch):
 def test_a_bench_rating_is_the_mean_force_held_over_the_seeds():
     per_seed = (SeedResult(1, "pit", 21.7, 4.0), SeedResult(2, "held", None, 7.0))
     assert mean_hold_force(per_seed, 30.0) == 5.5
+
+
+TUG = load_event("tug-of-war")
+
+
+def fake_bench(forces):
+    def run(manifest, policy, seed, model=None):
+        held = forces[seed] == 7.0
+        return BenchOutcome(seed, "held" if held else "pit", forces[seed], None if held else 20.0,
+                            np.full((1, 3, 21), seed, np.float32), np.zeros((1, 26, 21), np.float32), {"seed": seed})
+    return run
+
+
+def test_a_bench_entry_is_rated_on_every_seed_and_replays_the_lower_median(monkeypatch):
+    monkeypatch.setattr("arena.evaluate.run_bench", fake_bench({1: 4.0, 2: 7.0, 3: 2.0, 4: 5.0, 5: 3.0}))
+    result = evaluate(TUG, object())
+    assert result.score == pytest.approx(4.2) and result.seeds_finished == 5 and result.scan == ()
+    assert [s.force_n for s in result.per_seed] == [4.0, 7.0, 2.0, 5.0, 3.0]
+    assert (result.trace_seed, result.bench, result.command_vx, result.trace[0, 0, 0]) == (1, {"seed": 1}, -0.3, 1.0)
+
+
+def test_a_duck_that_holds_every_seed_scores_the_top_and_replays_seed_3(monkeypatch):
+    monkeypatch.setattr("arena.evaluate.run_bench", fake_bench(dict.fromkeys(range(1, 6), 7.0)))
+    result = evaluate(TUG, object())
+    assert (result.score, result.trace_seed, {s.status for s in result.per_seed}) == (7.0, 3, {"held"})
+
+
+def test_a_tug_takes_no_cast_and_rates_a_walker():
+    with pytest.raises(ValueError):
+        evaluate(TUG, object(), cast=())
+    result = evaluate(TUG, load_policy(ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"))
+    assert 0.0 <= result.score <= 7.0 and len(result.per_seed) == 5 and result.trace.shape[0] == 1
+    assert result.bench["top_n"] == 7.0
+
+
+def test_a_seed_row_adds_a_force_only_on_the_bench():
+    assert seed_row(SeedResult(1, "finish", 12.5)) == {"seed": 1, "status": "finish", "time_s": 12.5}
+    assert seed_row(SeedResult(2, "held", None, 7.0)) == {"seed": 2, "status": "held", "time_s": None, "force_n": 7.0}
+    assert seed_row(SeedResult(3, "fall", 1.02, 0.62)) == {"seed": 3, "status": "fall", "time_s": 1.02, "force_n": 0.62}

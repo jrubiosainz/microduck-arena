@@ -21,7 +21,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
-from .evaluate import SeedResult
+from .evaluate import SeedResult, seed_row
 
 _BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford, ULID-style
 _TAIL_BITS = 60  # 12 base32 chars
@@ -127,6 +127,8 @@ class RunRecord:
     # or a borrowed repo, credited), its rig, where it started on the stage, and how it is heard
     # (arena.timeline.sound_of). Never simulated again: the replay draws, sings and credits from it.
     cast: tuple[dict, ...] = field(default_factory=lone_cast)
+    # The winch's profile on the replayed seed, for the page's dial; None off the bench.
+    bench: dict | None = None
 
     @property
     def offers_download(self) -> bool:
@@ -150,9 +152,7 @@ class RunRecord:
             "model_sha256": self.model_sha256,
             "score": self.score,
             "seeds_finished": self.seeds_finished,
-            "per_seed": [
-                {"seed": r.seed, "status": r.status, "time_s": r.time_s} for r in self.per_seed
-            ],
+            "per_seed": [seed_row(r) for r in self.per_seed],
             "trace_seed": self.trace_seed,
             "runner_version": self.runner_version,
             "command_vx": self.command_vx,
@@ -162,6 +162,8 @@ class RunRecord:
             "description": self.description,
             "timeline_sha256": self.timeline_sha256,
             "cast": list(self.cast),
+            # Only on the bench: every stored race and performance writes back as it was read.
+            **({"bench": self.bench} if self.bench is not None else {}),
         }
 
     @classmethod
@@ -177,7 +179,7 @@ class RunRecord:
             score=raw["score"],
             seeds_finished=raw["seeds_finished"],
             per_seed=tuple(
-                SeedResult(seed=r["seed"], status=r["status"], time_s=r["time_s"])
+                SeedResult(seed=r["seed"], status=r["status"], time_s=r["time_s"], force_n=r.get("force_n"))
                 for r in raw["per_seed"]
             ),
             trace_seed=raw["trace_seed"],
@@ -200,6 +202,7 @@ class RunRecord:
             cast=tuple(raw["cast"]) if raw.get("cast") else lone_cast(
                 raw.get("sound") or ({"triggers": raw["triggers"]} if raw.get("triggers") else None)
             ),
+            bench=raw.get("bench"),
         )
 
 
