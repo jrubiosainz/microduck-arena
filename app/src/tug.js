@@ -172,9 +172,8 @@ export function buildWinch({ winch, bench: { top_n } }) {
   const cheek = 0.02 - DRUM - floor;
   for (const z of [-0.056, 0.056]) add(new BoxGeometry(0.09, cheek, 0.012), steel, 0, floor + cheek / 2, z);
   add(new BoxGeometry(0.2, 0.012, 0.14), steel, 0.04, floor + 0.006, 0);
-  const centre = CENTRE;
-  add(new BoxGeometry(0.014, centre.y - floor, 0.014), steel, centre.x, (centre.y + floor) / 2, -0.012);
-  add(new CylinderGeometry(RIM, RIM, 0.01, 40), steel, centre.x, centre.y, 0).rotation.x = Math.PI / 2;
+  add(new BoxGeometry(0.014, CENTRE.y - floor, 0.014), steel, CENTRE.x, (CENTRE.y + floor) / 2, -0.012);
+  add(new CylinderGeometry(RIM, RIM, 0.01, 40), steel, CENTRE.x, CENTRE.y, 0).rotation.x = Math.PI / 2;
 
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = DIAL_PX;
@@ -182,14 +181,14 @@ export function buildWinch({ winch, bench: { top_n } }) {
   const map = new CanvasTexture(canvas);
   map.colorSpace = SRGBColorSpace;
   const face = new MeshBasicMaterial({ map, transparent: true, toneMapped: false });
-  add(new PlaneGeometry(DIAL * 2, DIAL * 2), face, centre.x, centre.y, 0.006);
+  add(new PlaneGeometry(DIAL * 2, DIAL * 2), face, CENTRE.x, CENTRE.y, 0.006);
   // At rest the needle leans as far left of upright as the top leans right of it.
   const blade = new BoxGeometry(0.004, DIAL * 0.8, 0.002);
   blade.translate(0, DIAL * 0.4, 0);
   blade.rotateZ(SWEEP / 2);
-  const needle = add(blade, flat(RED), centre.x, centre.y, 0.009);
+  const needle = add(blade, flat(RED), CENTRE.x, CENTRE.y, 0.009);
   needle.name = "needle";
-  add(new CylinderGeometry(0.007, 0.007, 0.004, 16), flat(PALETTE.dark), centre.x, centre.y, 0.01).rotation.x = Math.PI / 2;
+  add(new CylinderGeometry(0.007, 0.007, 0.004, 16), flat(PALETTE.dark), CENTRE.x, CENTRE.y, 0.01).rotation.x = Math.PI / 2;
 
   const mid = DIAL_PX / 2;
   return {
