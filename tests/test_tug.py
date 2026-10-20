@@ -92,9 +92,8 @@ def test_the_judge_reads_the_pit_then_the_marker():
     east_side = base.copy(); east_side[:, 0, 0] += 0.1
     assert _verdict(east_side, OFFSET, final=True) == (0, "marker")
     assert _verdict(base, (0.0, 0.0, 0.0), final=True) == (None, "draw")      # exactly on the centre line
-    hold = round(TUG.termination.fall_hold_s / CTRL_DT)                       # 15 control steps
-    tipped = np.repeat(base, hold, axis=1); tipped[0, :, 3:7] = ON_ITS_SIDE
-    assert _verdict(tipped, OFFSET, final=False) is None                      # on its side for the whole hold: still in play
+    tipped = np.repeat(base, 15, axis=1); tipped[0, :, 3:7] = ON_ITS_SIDE     # 15 frames: 0.3 s on its side
+    assert _verdict(tipped, OFFSET, final=False) is None                      # still in play
     tipped[1, -1, 2] = -0.1                                                   # the duck on its feet drops in
     assert _verdict(tipped, OFFSET, final=False) == (1, "pit")
 
