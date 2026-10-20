@@ -28,7 +28,7 @@ import time
 
 from ..cast import duck_record
 from ..constants import RUNNER_VERSION
-from ..evaluate import evaluate
+from ..evaluate import evaluate, seed_row
 from ..hub_fetch import FetchError
 from ..manifest import load_event
 from ..policy import load_policy
@@ -125,7 +125,7 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
         "command_vx": result.command_vx,
         "seeds_finished": result.seeds_finished,
         "seeds_total": len(result.per_seed),
-        "per_seed": [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in result.per_seed],
+        "per_seed": [seed_row(s) for s in result.per_seed],
         "trace_seed": result.trace_seed,
         # Duck-major, as the Arena serves a trace: the page cuts it into `ducks` traces.
         "ducks": len(as_ducks(result.trace)),
@@ -133,6 +133,7 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
         "runner_version": result.runner_version,
         "format": FORMAT,
         "timeline": key,
+        **({"bench": result.bench} if result.bench else {}),
     }
 
 

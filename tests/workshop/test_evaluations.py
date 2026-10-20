@@ -9,7 +9,8 @@ import time
 
 from arena.constants import TRACE_WIDTH
 from arena.workshop.evaluations import evaluate_next, next_checkpoint
-from tests.workshop.conftest import make_run, store_evaluation
+from tests.workshop.conftest import make_run, reopen, store_evaluation
+from tests.workshop.test_tickets import add_tug
 
 SPRINT_URL = "/api/workshop/challenges/sprint-2m"
 
@@ -150,3 +151,15 @@ def test_the_evaluator_and_its_threads_stop_with_the_app(checkout, fakes, hub):
     with TestClient(app, base_url=ADDRESS):
         assert "workshop-evaluator" in {t.name for t in threading.enumerate()}
     assert app.state.workshop.stopping.is_set()
+
+
+def test_a_tug_checkpoint_is_rated_on_the_bench(checkout, fakes, hub):
+    add_tug(checkout)
+    client = reopen(checkout, hub)
+    run = make_run(checkout, "first", checkpoints=(1,), task="Mjlab-TugOfWar-MicroDuck")
+    assert evaluate_next(state(client)) is True
+    body = client.get(f"/api/workshop/challenges/tug-of-war/jobs/{run.name}/checkpoints/1").json()
+    assert body["seeds_total"] == 5
+    assert all("force_n" in seed for seed in body["per_seed"])
+    assert body["bench"]["top_n"] == 7.0
+    assert body["ducks"] == 1  # the fake export hands over the walker

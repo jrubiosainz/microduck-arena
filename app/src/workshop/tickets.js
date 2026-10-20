@@ -13,17 +13,23 @@ const WHERE = { "hf-jobs": "HF Jobs · L4", local: "This machine" };
 
 export const seconds = (s) => `${s.toFixed(2)} s`;
 
-function describe(c) {
+// The tug's rating is a force: the higher, the stronger. Elsewhere the lower, the faster.
+const strongest = (metric) => metric === "mean_hold_force";
+
+/** A checkpoint's score in its event's unit: "4.21 N", or seconds. */
+export const measure = (value, metric) => (strongest(metric) ? `${value.toFixed(2)} N` : seconds(value));
+
+function describe(c, metric) {
   if (c.status === "queued") return `Checkpoint ${c.n}: not evaluated yet`;
   if (c.status === "failed") return `Checkpoint ${c.n}: could not be evaluated`;
   if (!c.seeds_finished) return `Checkpoint ${c.n}: no seed finishes`;
-  return `Checkpoint ${c.n}: ${seconds(c.score)}, ${c.seeds_finished}/${c.seeds_total} seeds`;
+  return `Checkpoint ${c.n}: ${measure(c.score, metric)}, ${c.seeds_finished}/${c.seeds_total} seeds`;
 }
 
-/** A bar per checkpoint, as tall as its speed against the fastest; `future` adds the empty slots still to come. */
-export function bars(checkpoints, best, { future = [], onPick = null } = {}) {
-  let fastest = Infinity;
-  for (const c of checkpoints) if (c.status === "evaluated" && c.seeds_finished > 0 && c.score < fastest) fastest = c.score;
+/** A bar per checkpoint, as tall as its score against the best one; `future` adds the empty slots still to come. */
+export function bars(checkpoints, best, { future = [], onPick = null, metric } = {}) {
+  const scores = checkpoints.filter((c) => c.status === "evaluated" && c.seeds_finished > 0).map((c) => c.score);
+  const top = strongest(metric) ? Math.max(...scores) : Math.min(...scores);
   const row = el("div", "bars");
   for (const c of checkpoints) {
     const bar = el("i");
@@ -31,10 +37,10 @@ export function bars(checkpoints, best, { future = [], onPick = null } = {}) {
     else if (c.status === "failed") bar.className = "failed";
     else if (!c.seeds_finished) bar.className = "dnf";
     else {
-      bar.style.height = `${Math.max(6, Math.round((fastest / c.score) * 100))}%`;
+      bar.style.height = `${Math.max(6, Math.round((strongest(metric) ? c.score / top : top / c.score) * 100))}%`;
       if (c.n === best) bar.className = "best";
     }
-    bar.title = describe(c);
+    bar.title = describe(c, metric);
     if (onPick && c.status !== "queued") {
       bar.tabIndex = 0;
       bar.setAttribute("role", "button");
@@ -57,12 +63,12 @@ export function bars(checkpoints, best, { future = [], onPick = null } = {}) {
 }
 
 /** The ticket's line about its checkpoints: its best, or what it is waiting for. */
-export function summary(ticket, voted) {
+export function summary(ticket, voted, metric) {
   const line = el("p", "ticket__line");
   const rows = ticket.checkpoints;
   const best = rows.find((c) => c.n === ticket.best);
   if (!voted && best) {
-    line.append(`Best: checkpoint ${best.n} · `, el("b", "", seconds(best.score)), ` · ${best.seeds_finished}/${best.seeds_total}`);
+    line.append(`Best: checkpoint ${best.n} · `, el("b", "", measure(best.score, metric)), ` · ${best.seeds_finished}/${best.seeds_total}`);
     return line;
   }
   line.classList.add("ticket__muted");
@@ -73,10 +79,10 @@ export function summary(ticket, voted) {
   return line;
 }
 
-/** "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s" → "4.89 s". */
+/** "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s" → "4.89 s"; "entered on tug-of-war: a 4.21 N rating" → "4.21 N". */
 export function officialTime(entered) {
-  const found = /: ([\d.]+) s/.exec(entered ?? "");
-  return found ? seconds(Number(found[1])) : entered;
+  const found = /: (?:a )?([\d.]+) (s|N)\b/.exec(entered ?? "");
+  return found ? measure(Number(found[1]), found[2] === "N" ? "mean_hold_force" : "time") : entered;
 }
 
 export function progress({ done, total }) {
@@ -122,7 +128,7 @@ function stopButton(current, onStop) {
  * A ticket's card, updated in place as its training moves: the card and its Stop are never replaced
  * nor moved (either would drop the focus, or a press under way); only what is drawn beside the Stop is.
  */
-export function ticketCard(first, { event, voted, onStop }) {
+export function ticketCard(first, { event, voted, metric, onStop }) {
   const card = el("a", "ticket");
   card.href = jobHref(event, first.id);
   const content = el("div", "ticket__content");
@@ -144,8 +150,8 @@ export function ticketCard(first, { event, voted, onStop }) {
     top.append(el("span", `sticker ${colour}`, word), el("span", "mono-label", WHERE[ticket.where] ?? "From a shell"));
     content.replaceChildren(top, el("h4", "ticket__name", ticket.name));
     if (running && ticket.progress) content.append(progress(ticket.progress));
-    if (ticket.checkpoints.length) content.append(bars(ticket.checkpoints, voted ? null : ticket.best));
-    content.append(summary(ticket, voted), ticket.published
+    if (ticket.checkpoints.length) content.append(bars(ticket.checkpoints, voted ? null : ticket.best, { metric }));
+    content.append(summary(ticket, voted, metric), ticket.published
       ? el("p", "ticket__pub ticket__pub--yes", voted ? "★ Published"
           : `★ Published · ${officialTime(ticket.published.entered)} on the Arena`)
       : el("p", "ticket__pub", "Not published"));

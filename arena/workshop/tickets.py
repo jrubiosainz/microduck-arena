@@ -7,7 +7,7 @@ shell has no record: its ticket is its directory alone, under the directory's na
 asks the network — what the Hub says of a job is in its record, written by the watcher.
 """
 
-from ..manifest import load_event
+from ..manifest import HIGHER_WINS, load_event
 from .code import code_url
 from .evaluations import summary
 from .jobs import recorded_jobs
@@ -69,12 +69,14 @@ def _progress(live, run, total, state) -> dict | None:
     return {"done": run.checkpoints[-1] if run and run.checkpoints else 0, "total": total}
 
 
-def _checkpoints(run, voted: bool, key: str | None) -> tuple[list[dict], int | None]:
+def _checkpoints(run, metric: str, key: str | None) -> tuple[list[dict], int | None]:
     done = summary(run, key) if run else {}
     rows = [{"n": n, **done.get(n, {"status": "queued"})} for n in (run.checkpoints if run else ())]
     finishers = [r for r in rows if r["status"] == "evaluated" and r["seeds_finished"] > 0]
-    # A voted event is not a clock: its best is the public's to say.
-    best = None if voted or not finishers else min(finishers, key=lambda r: (r["score"], r["n"]))["n"]
+    # A voted event is not a clock: its best is the public's to say. Elsewhere the best score wins, the
+    # earliest checkpoint on a tie.
+    sign = -1 if metric in HIGHER_WINS else 1
+    best = None if metric == "votes" or not finishers else min(finishers, key=lambda r: (sign * r["score"], r["n"]))["n"]
     return rows, best
 
 
@@ -106,11 +108,11 @@ def _sources(ws, challenge) -> list[tuple]:
     return sorted(found, key=lambda s: _started(s[2], s[3]), reverse=True)
 
 
-def _ticket(source_, voted: bool, key: str | None) -> dict:
+def _ticket(source_, metric: str, key: str | None) -> dict:
     ticket_id, live, record, run = source_
     total = _iterations(record, run)
     state = _state(live, record, run, total)
-    rows, best = _checkpoints(run, voted, key)
+    rows, best = _checkpoints(run, metric, key)
     return {
         "id": ticket_id,
         "name": record["name"] if record else run.name,
@@ -128,8 +130,8 @@ def _ticket(source_, voted: bool, key: str | None) -> dict:
     }
 
 
-def _voted(challenge) -> bool:
-    return load_event(challenge.event).metric == "votes"
+def _metric(challenge) -> str:
+    return load_event(challenge.event).metric
 
 
 def source(ws, challenge, ticket_id: str) -> tuple | None:
@@ -144,13 +146,13 @@ def ticket_state(source_) -> str:
 
 
 def tickets(ws, challenge) -> list[dict]:
-    voted, key = _voted(challenge), timeline_key(ws.root, challenge)
-    return [_ticket(s, voted, key) for s in _sources(ws, challenge)]
+    metric, key = _metric(challenge), timeline_key(ws.root, challenge)
+    return [_ticket(s, metric, key) for s in _sources(ws, challenge)]
 
 
 def ticket(ws, challenge, ticket_id: str) -> dict | None:
     found = source(ws, challenge, ticket_id)
-    return _ticket(found, _voted(challenge), timeline_key(ws.root, challenge)) if found else None
+    return _ticket(found, _metric(challenge), timeline_key(ws.root, challenge)) if found else None
 
 
 def ticket_detail(ws, challenge, ticket_id: str, since: int = 0) -> dict | None:
@@ -161,7 +163,7 @@ def ticket_detail(ws, challenge, ticket_id: str, since: int = 0) -> dict | None:
     _, live, record, run = found
     lines, following = live.log(since) if live is not None else ([], since)
     return {
-        **_ticket(found, _voted(challenge), timeline_key(ws.root, challenge)),
+        **_ticket(found, _metric(challenge), timeline_key(ws.root, challenge)),
         "log": lines, "next": following, "following": live is not None,
         "curve": curve(run) if run else [],
         "commit": run.provenance.get("commit") if run else None,

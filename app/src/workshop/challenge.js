@@ -120,7 +120,7 @@ export async function mountChallenge(root, { status, account, route }) {
   function drawWall(jobs) {
     const next = new Map();
     for (const ticket of jobs) {
-      const card = cards.get(ticket.id) ?? ticketCard(ticket, { event, voted, onStop });
+      const card = cards.get(ticket.id) ?? ticketCard(ticket, { event, voted, metric: challenge.event.metric, onStop });
       card.update(ticket);
       next.set(ticket.id, card);
     }
