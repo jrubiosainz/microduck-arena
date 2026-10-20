@@ -940,3 +940,28 @@ it("a tug's training rates its checkpoints in newtons and replays the bench", as
 - [ ] **Step 5: The card.** Screenshot `http://127.0.0.1:8011/clip.html?run=<run_id>&layout=landscape&frame=<window.clip.plan.poster>` at 1920×1080; `ffmpeg -i <S>/card.png -vf "crop=720:667:600:206" <S>/card-crop.png` (move the crop until duck, string and dial are in it; read it); `cwebp -q 82 <S>/card-crop.png -o <W>/app/public/cards/tug-of-war.webp`; reload the home wall and look. Stop the server.
 
 - [ ] **Step 6: Commit.** `add app/public/cards/tug-of-war.webp` · `"The Tug of War's card shows the bench: a still of the duck against the winch, until the owner draws one"`. Report Task 3's commit hash (Plan B's start), Task 5's (Plan B's scoring), the rehearsal's rating, the images read (paths) and what was fixed.
+
+---
+
+### Task 13: Only the pit decides (owner, 2026-10-20 evening)
+
+The owner removed "a fall loses": the first trained policies dived face-down just under the fall line and held by friction anyway, and the owner ruled that going down to hold is a viable strategy — the point of the game is to drag the opponent into the pit. Spec §1–2 updated. Races keep their own fall rule (`run_once`): nothing outside the tug changes.
+
+**Files:**
+- Modify: `arena/tug.py`, `arena/events/tug-of-war.toml` (the `[termination]` comment only), `arena/commentary/context.py`, `arena/commentary/generator.py` (the tug's `BOOTH_CONTEXT` sentence only), `app/src/run.js`, `app/src/clip/score.js`
+- Test: `tests/test_tug.py`, `tests/test_cli.py`, `tests/test_commentary_context.py`, `tests/test_commentary_generator.py`, `app/src/run.test.js`, `app/src/clip/score.test.js`
+
+**Interfaces:**
+- Produces: `BenchOutcome.status` ∈ {`"pit"`, `"held"`}; `BoutOutcome.how` ∈ {`"pit"`, `"marker"`, `"draw"`}; no `"fall"` on the tug anywhere. `_out(duck) -> "pit" | None` (the termination argument and the `stage.fell_at` reuse go). A MuJoCo reset on the bench is `"pit"` at that step's force, its frame left out (controller ruling: a solver explosion is not a hold); in a bout it stays a draw. `arena score`'s seed line regex becomes `^seed [1-5]: (pit|held) +\d+\.\d\d N( at \d+\.\d\d s)?$`.
+
+- [ ] **Step 1: Failing tests.**
+  - `tests/test_tug.py`: delete `NO_FALL`/`NO_FALL_SHORT` and use `TUG`/`SHORT` where they were (the physics without a fall rule IS the tug now); replace `test_a_duck_that_does_nothing_falls_and_is_out_at_a_small_force` with `test_a_duck_that_does_nothing_is_dragged_into_the_pit` (zero policy, seed 1: `status == "pit"`, `10.0 < time_s < 30.0`, `3.0 < force_n <= 7.0` — the prototype measured ~21.7 s / ~4.8 N —, the last frame in the pit and the one before not, `force_n == bench_force(profile, (frames - 1) * CTRL_DT)`); in `test_the_judge_reads_the_pit_a_fall_then_the_marker` (rename `…_the_pit_then_the_marker`) a duck tipped on its side for the whole hold is `None` (still in play), not `(0, "fall")`; `test_two_ducks_that_do_nothing…` asserts `out.how in ("pit", "marker", "draw")`; the bench reset test expects `"pit"`; every `fell_at` import and assertion goes.
+  - `tests/test_cli.py`: the seed-line regex above.
+  - `tests/test_commentary_context.py`: the bench result reads "how hard the winch was pulling when the duck went into the pit, averaged over 5 seeds; …"; its tag is the traced seed's status, `("held",)` or `("pit",)`.
+  - `tests/test_commentary_generator.py`: the tug sentence in `BOOTH_CONTEXT` says "when the duck went into the pit" and no longer "fell".
+  - `app/src/run.test.js`: `seedText` of a bench seed with status `"pit"` → `"4.77 N"`, `"held"` → `"7.00 N · held on"`; the bench `"fall"` case goes (a race's `"fall"` seed still reads `"fall"`).
+  - `app/src/clip/score.test.js`: `clipVerdict` on a tug: `"held"` → `HELD ON`, `"pit"` → `PULLED IN`; the `KNOCKED DOWN` case goes.
+- [ ] **Step 2: Run** those files. Expected: FAIL.
+- [ ] **Step 3: Implement.** `tug.py`: the module docstring and `_out`/`_verdict`/`run_bench`/`run_bout` follow the pit-only rule (`_verdict(trace, offset, final)`); the toml's `[termination]` comment becomes `# summaries only: a fall never ends a bout or a bench run`; `context.py`'s `_bench_result` and `generator.py`'s tug sentence say "went into the pit"; `run.js` `BENCH_ENDS` keeps `held` only; `clip/score.js` `BENCH_STAMPS` keeps `held` and `pit`. Grep the tug's code for any other `"fall"` and remove it (a race's `"fall"` stays).
+- [ ] **Step 4: Run** the files, then both Python suite calls and `cd app && npm test` (only the 4 brightness failures). Expected: PASS. Record in the report: the zero duck's bench outcome on seed 1 (status, time, force), the walker's on seed 2, and the t1 stand-in `/Users/nicolasrabault/Projects/HuggingFace/microduck-challenges/.claude/worktrees/tug-of-war/logs/tug_of_war/onnx/t1-2750.onnx` rated with `arena score … --event tug-of-war` (it is expected to change: those policies dive and now are only out when dragged in).
+- [ ] **Step 5: Commit.** `"Only the pit decides on the tug: a duck that falls stays in play and can still be dragged in"`

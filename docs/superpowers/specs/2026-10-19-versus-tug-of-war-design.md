@@ -103,15 +103,16 @@ sweep in a versus.
 
 **Judge** (my call on the details):
 
-- The first duck out loses the bout: a duck is out when its trunk goes below the floor level over
-  the pit, or when it falls by the Arena's own rule (trunk tilted past 60° for 0.3 s). **A fall
-  loses** (owner, 2026-10-20): measured on a prototype, a limp duck lying on the floor held the
-  winch to 5–6 N on body friction alone, more than a standing duck pulling at the neck can hold
-  before tipping; without the rule, the best strategy would be to throw oneself down.
+- The first duck in the pit loses the bout: a duck is in when its trunk goes below the floor level
+  over the pit. **Only the pit decides** (owner, 2026-10-20, evening): a duck knocked over, sitting
+  or lying on the platform stays in play and can still be dragged in. An earlier rule ("a fall
+  loses") was tried and removed the same day: the first trained policies then dived face-down just
+  under the fall line and held by friction anyway; the owner's ruling is that going down to hold
+  is a viable strategy, and the point of the game is to drag the opponent into the pit.
 - At the bout time limit (20 s to start with), if nobody is in the pit, the duck the marker moved
   away from loses: as in a real tug of war, the winner pulls the marker to their side of the pit's
   centre line.
-- Both out on the same control step: the marker's side decides. A marker exactly back at the
+- Both in the pit on the same control step: the marker's side decides. A marker exactly back at the
   centre makes a drawn bout, which counts for nobody; the match goes on (at most five bouts), and a
   match still undecided after them goes to more bouts won, then the higher rating. (A rule that
   never needs a replay.)
@@ -128,8 +129,8 @@ unchanged: entry, five seeds, board, points, clip, live rotation, commentary.
 - **Setting**: the tug course, one duck, the string crossing the pit to a **winch**: an anchor on
   a slide past the far edge, driven by a force that ramps up, with small seeded jerks so it pulls
   like an opponent rather than a machine.
-- **Score per seed**: the string force the duck was holding when it fell or entered the pit. A duck
-  still standing and out of the pit at the end of the ramp scores the ramp's top. The force never
+- **Score per seed**: the string force the duck was holding when it entered the pit. A duck still
+  out of the pit at the end of the ramp, standing or not, scores the ramp's top. The force never
   exceeds the top (the jerks are clamped), so being dragged in is never worth more than holding.
 - **Rating**: the mean over five seeds, in newtons; higher is better (a new metric, the first one
   where higher wins — every sort that assumes "lower is better" must learn the direction).
@@ -239,7 +240,7 @@ and in context for the stage the tournament is at." Wireframe accepted in sessio
   highlighted.
 - **The match**: its clip full screen with the bouts' score bug; Peter & Ray call it **while it
   plays**, their lines timed to moments found in the bouts' traces (the marker moving, a lead
-  changing hands, a slip, a duck at the edge, the fall), in their droid voices with captions as
+  changing hands, a slip, a duck at the edge, the drop into the pit), in their droid voices with captions as
   today. This play-by-play is new: today they only talk between clips. It belongs to the live
   page, not to the mp4 (my call: the match clip is a clean clip, like every clip).
 - **What the writer knows**: the stage of the cup, the group standings and the bracket, ratings
@@ -286,7 +287,10 @@ relock as usual, then the owner publishes the first candidate.
   the first candidate.
 - No limit on paid trainings; the three stages are built in parallel (stand-in checkpoints) and
   pushed together at the end.
-- A fall loses, on the bench and in a bout (2026-10-20).
+- Only the pit decides, on the bench and in a bout: a fall does not lose (2026-10-20, evening; it
+  reverses the "a fall loses" decision of the same morning).
+- The policies must really pull: the recipe is retrained so the ducks walk back and tighten the
+  string, judged by bouts that end in the pit, not by the marker's drift (2026-10-20, evening).
 - A drawn cup is frozen: withdrawals after close change nothing in it.
 
 ## My calls (the owner may object)
