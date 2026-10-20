@@ -23,6 +23,16 @@ def record_run(app, **overrides):
     return record
 
 
+def test_a_tug_serves_its_course_bench_and_bouts(client):
+    api, _ = client
+    tug = next(e for e in api.get("/api/events").json()["events"] if e["id"] == "tug-of-war")
+    assert (tug["course"], tug["category"], tug["metric"]) == ("tug", "versus", "mean_hold_force")
+    assert [tug[k] for k in ("length_m", "width_m", "string_m", "pit_m", "pit_depth_m")] == [4.0, 0.8, 1.0, 0.3, 0.3]
+    assert tug["bench"] == {"ramp_n_per_s": 0.25, "top_n": 7.0}
+    assert tug["bout"] == {"time_limit_s": 20.0, "bouts_to_win": 2, "max_bouts": 5}
+    assert "sweep_lo" not in tug and "size_m" not in tug
+
+
 def test_events_lists_the_whole_programme(client):
     api, _ = client
     assert {e["id"] for e in api.get("/api/events").json()["events"]} == {
@@ -30,6 +40,7 @@ def test_events_lists_the_whole_programme(client):
         "roller-sprint-2m",
         "hill-climb-1m5",
         "got-a-talent",
+        "tug-of-war",
     }
 
 
@@ -413,7 +424,7 @@ def test_every_event_says_what_kind_of_course_it_is(client):
     api, _ = client
     courses = {e["id"]: e["course"] for e in api.get("/api/events").json()["events"]}
     assert courses == {"sprint-2m": "lane", "roller-sprint-2m": "lane", "hill-climb-1m5": "lane",
-                       "got-a-talent": "stage"}
+                       "got-a-talent": "stage", "tug-of-war": "tug"}
 
 
 def test_a_voted_events_publication_stands_where_its_votes_put_it(client):

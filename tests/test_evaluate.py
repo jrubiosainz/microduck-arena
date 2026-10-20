@@ -11,6 +11,7 @@ from arena.evaluate import (
     evaluate,
     finalists,
     mean_finish_time,
+    mean_hold_force,
     pick_trace_seed,
 )
 from arena.golden import PLATFORM
@@ -328,3 +329,8 @@ def test_an_unmeasured_platform_is_a_readable_refusal(monkeypatch):
     message = str(caught.value)
     assert "'Plan9-mips'" in message
     assert "BASELINES" in message
+
+
+def test_a_bench_rating_is_the_mean_force_held_over_the_seeds():
+    per_seed = (SeedResult(1, "pit", 21.7, 4.0), SeedResult(2, "held", None, 7.0))
+    assert mean_hold_force(per_seed, 30.0) == 5.5

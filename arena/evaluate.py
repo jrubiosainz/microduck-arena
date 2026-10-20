@@ -44,6 +44,8 @@ class SeedResult:
     seed: int
     status: str
     time_s: float | None
+    # The force a bench run held, in newtons; only a tug's seeds carry one.
+    force_n: float | None = None
 
 
 @dataclass(frozen=True)
@@ -80,6 +82,10 @@ def mean_finish_time(per_seed: tuple[SeedResult, ...], time_limit_s: float) -> f
     )
 
 
+def mean_hold_force(per_seed: tuple[SeedResult, ...], time_limit_s: float) -> float:
+    return statistics.fmean(r.force_n for r in per_seed)
+
+
 METRICS = {
     "mean_finish_time": mean_finish_time,
     # A voted event is still SCORED on its finish time — `metric` says how the
@@ -88,6 +94,7 @@ METRICS = {
     # evaluate() ran, because manifest.py accepted "votes" as a metric NAME
     # while this registry had no function behind it.
     "votes": mean_finish_time,
+    "mean_hold_force": mean_hold_force,
 }
 
 

@@ -5,6 +5,7 @@ change. Validation is strict and loud: a broken manifest must fail at load, not
 halfway through someone's timed run.
 """
 
+import functools
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,9 +17,12 @@ EVENTS_DIR = Path(__file__).parent / "events"
 RIGS = ("legs", "rollers")
 
 # What KIND of event this is, for the front page's label. A race is timed over
-# a course, a showcase is judged by vote rather than measured at all.
-CATEGORIES = {"race", "showcase"}
-METRICS = ("mean_finish_time", "votes")
+# a course, a showcase is judged by vote rather than measured at all, a versus
+# event rates a duck by the force it holds against a pulling bench.
+CATEGORIES = {"race", "showcase", "versus"}
+METRICS = ("mean_finish_time", "votes", "mean_hold_force")
+# Every other metric is a time or a count of votes: lower, or the vote's own rule.
+HIGHER_WINS = frozenset({"mean_hold_force"})
 
 # What an entry must be, in the policy manifest's own words
 # (mjlab_microduck.publish.manifest.KINDS): `perpetual` runs until told
@@ -26,7 +30,7 @@ METRICS = ("mean_finish_time", "votes")
 # manifest.json names another kind than its event's (arena/hub_fetch.py).
 KINDS = ("episodic", "perpetual")
 
-COURSE_KINDS = ("lane", "stage")
+COURSE_KINDS = ("lane", "stage", "tug")
 
 # The voting page has exactly this many colours to hand a lane: LANE_CSS (and
 # its 3D twin LANE_COLORS) in app/src/course.js. This is a second source of
@@ -60,6 +64,36 @@ class Stage:
     size_m: tuple[float, float]
     max_ducks: int
     kind: str = "stage"
+
+
+@dataclass(frozen=True)
+class Tug:
+    """A lane cut by a pit, for a duck that pulls on a string."""
+
+    length_m: float  # the walled length, centred on the pit: walls span x in [-length/2, length/2]
+    width_m: float
+    wall_height_m: float
+    pit_m: float  # the pit's width along x, centred on x = 0, across the whole lane
+    pit_depth_m: float
+    string_m: float  # neck base to neck base, taut at the start
+    kind: str = "tug"
+
+
+@dataclass(frozen=True)
+class Bench:
+    """The pulling bench: a force that ramps up to `top_n`, shaken by one sine per jerk frequency."""
+
+    ramp_n_per_s: float
+    top_n: float
+    jerk_n: float  # amplitude of each jerk sine
+    jerk_hz: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class BoutRules:
+    time_limit_s: float
+    bouts_to_win: int
+    max_bouts: int
 
 
 @dataclass(frozen=True)
@@ -188,7 +222,7 @@ class Manifest:
     time_limit_s: float
     metric: str
     seeds: tuple[int, ...]
-    course: Course | Stage
+    course: Course | Stage | Tug
     start: Start
     termination: Termination
     # None on a stage, which plays the entry's timeline rather than a speed.
@@ -202,6 +236,9 @@ class Manifest:
     # whether the VOTE badge and the vote button exist at all.
     vote: Vote | None = None
     clip: ClipConfig = ClipConfig()
+    # Only a tug has them: the bench its rating is held against, the rules of its bouts.
+    bench: Bench | None = None
+    bout: BoutRules | None = None
 
     def command_at(self, vx: float) -> tuple[float, ...]:
         """This event's command, with the forward speed replaced.
@@ -297,6 +334,34 @@ def _stage(raw: dict) -> Stage:
     return Stage(size_m=(float(size[0]), float(size[1])), max_ducks=most)
 
 
+def _tug(raw: dict) -> Tug:
+    _refuse_unknown(raw, {"kind", "length_m", "width_m", "wall_height_m", "pit_m", "pit_depth_m", "string_m"}, "[course]")
+    return Tug(**{key: float(_require(raw, key, "[course]"))
+                  for key in ("length_m", "width_m", "wall_height_m", "pit_m", "pit_depth_m", "string_m")})
+
+
+def _bench(raw: dict) -> Bench:
+    _refuse_unknown(raw, {"ramp_n_per_s", "top_n", "jerk_n", "jerk_hz"}, "[bench]")
+    return Bench(
+        ramp_n_per_s=float(_require(raw, "ramp_n_per_s", "[bench]")),
+        top_n=float(_require(raw, "top_n", "[bench]")),
+        jerk_n=float(_require(raw, "jerk_n", "[bench]")),
+        jerk_hz=tuple(float(f) for f in _require(raw, "jerk_hz", "[bench]")),
+    )
+
+
+def _bout(raw: dict) -> BoutRules:
+    _refuse_unknown(raw, {"time_limit_s", "bouts_to_win", "max_bouts"}, "[bout]")
+    rules = BoutRules(
+        time_limit_s=float(_require(raw, "time_limit_s", "[bout]")),
+        bouts_to_win=int(_require(raw, "bouts_to_win", "[bout]")),
+        max_bouts=int(_require(raw, "max_bouts", "[bout]")),
+    )
+    if rules.max_bouts < 2 * rules.bouts_to_win - 1:
+        raise ManifestError("[bout] max_bouts must be at least 2 * bouts_to_win - 1")
+    return rules
+
+
 def _sweep(raw: dict, path: Path) -> Sweep:
     sweep = Sweep(
         lo=float(_require(raw, "lo", "[sweep]")),
@@ -349,7 +414,26 @@ def load_manifest(path: Path) -> Manifest:
     perturb = _require(start_raw, "perturbation", "[start]")
     term_raw = _require(raw, "termination", str(path))
 
-    if kind == "stage":
+    if (kind == "tug") != (category == "versus") or (kind == "tug") != (metric == "mean_hold_force"):
+        raise ManifestError(
+            f"{path}: [course] kind 'tug' goes with category 'versus' and metric 'mean_hold_force'"
+        )
+    if kind != "tug" and ("bench" in raw or "bout" in raw):
+        raise ManifestError(f"{path}: only a tug takes [bench] and [bout]")
+
+    bench = bout = None
+    if kind == "tug":
+        if rig != "legs":
+            raise ManifestError(f"{path}: a tug is for rig 'legs'")
+        for section in ("sweep", "vote"):
+            if section in raw:
+                raise ManifestError(f"{path}: a tug takes no [{section}]")
+        for section in ("bench", "bout"):
+            if section not in raw:
+                raise ManifestError(f"{path}: a tug needs [{section}]")
+        course, sweep = _tug(course_raw), None
+        bench, bout = _bench(raw["bench"]), _bout(raw["bout"])
+    elif kind == "stage":
         _refuse_unknown(course_raw, {"kind", "size_m", "max_ducks"}, "[course]")
         if len(seeds) != 1:
             raise ManifestError(f"{path}: a stage plays one performance, so it declares exactly one seed")
@@ -419,6 +503,8 @@ def load_manifest(path: Path) -> Manifest:
         command=_command(_require(raw, "command", str(path))),
         vote=vote,
         clip=_clip(raw.get("clip"), "[clip]"),
+        bench=bench,
+        bout=bout,
     )
 
 
@@ -434,3 +520,12 @@ def all_events() -> list[Manifest]:
         (load_manifest(p) for p in EVENTS_DIR.glob("*.toml")),
         key=lambda m: m.id,
     )
+
+
+@functools.cache
+def higher_wins(event_id: str) -> bool:
+    """True when the event's metric is one a higher score wins: the event exists and says so."""
+    try:
+        return load_event(event_id).metric in HIGHER_WINS
+    except ManifestError:
+        return False

@@ -34,7 +34,7 @@ def event_summary(manifest: Manifest) -> dict:
         # colour. The board and the race page do not read it.
         "category": manifest.category,
         "metric": manifest.metric,
-        # "lane" or "stage": what the page draws, and how it words a result. A stage has no
+        # "lane", "stage" or "tug": what the page draws, and how it words a result. A stage has no
         # lane, no line and no speed (the lane fields below are a lane's alone).
         "course": manifest.course.kind,
         # The whole vote configuration, or null. The page reads this to decide
@@ -75,7 +75,7 @@ def event_summary(manifest: Manifest) -> dict:
             "sweep_step": manifest.sweep.step,
             "sweep_count": len(manifest.sweep.speeds()),
         }
-    else:
+    elif manifest.course.kind == "stage":
         # The stage's floor and its cap, so the server's placement rules, the workshop's plan and
         # the drawn stage read the same numbers, as the walls are served for a lane.
         summary |= {
@@ -85,6 +85,20 @@ def event_summary(manifest: Manifest) -> dict:
             # turns a spot magenta with the loader's own numbers rather than copies of them.
             "edge_margin_m": EDGE_MARGIN_M,
             "min_spacing_m": MIN_SPACING_M,
+        }
+    else:
+        summary |= {
+            "length_m": manifest.course.length_m,
+            "width_m": manifest.course.width_m,
+            "string_m": manifest.course.string_m,
+            "pit_m": manifest.course.pit_m,
+            "pit_depth_m": manifest.course.pit_depth_m,
+            "bench": {"ramp_n_per_s": manifest.bench.ramp_n_per_s, "top_n": manifest.bench.top_n},
+            "bout": {
+                "time_limit_s": manifest.bout.time_limit_s,
+                "bouts_to_win": manifest.bout.bouts_to_win,
+                "max_bouts": manifest.bout.max_bouts,
+            },
         }
     return summary
 

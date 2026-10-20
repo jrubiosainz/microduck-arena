@@ -71,13 +71,14 @@ def test_a_dnf_after_clean_runs_and_a_dnf_streak():
 def test_leading_two_events_publishing_on_every_event_and_a_busy_day():
     hill = run("alice", 30.0, "2026-09-10T09:00:00Z", event="hill-climb-1m5")
     roller = run("alice", 9.0, "2026-09-10T09:30:00Z", event="roller-sprint-2m")
+    tug = run("alice", 4.0, "2026-09-10T09:15:00Z", event="tug-of-war")
     first = run("alice", 12.9, "2026-09-11T08:00:00Z")
     second = run("alice", 12.7, "2026-09-11T09:00:00Z")
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
-    facts = facts_for(mine, hill, roller, first, second)
+    facts = facts_for(mine, hill, roller, tug, first, second)
     # Titles come in `all_events()` order, which is by event id.
     assert facts["notable#/leads-events"].text == (
-        "@alice now leads 3 events at once: 1.5 m Hill Climb, 2 m Roller Sprint, 2 m Sprint.")
+        "@alice now leads 4 events at once: 1.5 m Hill Climb, 2 m Roller Sprint, 2 m Sprint, Tug of War.")
     assert facts["notable#/regular"].text == "@alice has published on every open event."
     assert facts["notable#/busy-day"].text == "This is @alice's publication number 3 today."
 

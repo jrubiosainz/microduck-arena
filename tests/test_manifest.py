@@ -3,7 +3,9 @@ import inspect
 
 import pytest
 
-from arena.manifest import EVENTS_DIR, ManifestError, Stage, all_events, load_event, load_manifest
+from arena.manifest import (
+    EVENTS_DIR, Bench, BoutRules, ManifestError, Stage, Tug, all_events, higher_wins, load_event, load_manifest,
+)
 
 # A well-formed manifest, as TOML sections. Tests override one entry to build a
 # specific malformation, so each test names only what it is breaking.
@@ -260,6 +262,7 @@ EXPECTED_CATEGORIES = {
     "roller-sprint-2m": "race",
     "hill-climb-1m5": "race",
     "got-a-talent": "showcase",
+    "tug-of-war": "versus",
 }
 
 
@@ -290,6 +293,7 @@ def test_the_programme_has_a_declared_order_with_the_sprint_first():
         "got-a-talent",
         "roller-sprint-2m",
         "hill-climb-1m5",
+        "tug-of-war",
     ]
 
 
@@ -484,3 +488,48 @@ def test_a_missing_kind_is_refused(tmp_path):
     admit or refuse the wrong policies without anyone having decided which."""
     with pytest.raises(ManifestError, match="missing 'kind'"):
         load_manifest(write_manifest(tmp_path, kind=""))
+
+
+TUG = {
+    "root": GOOD["root"].replace('category="race"', 'category="versus"').replace('"mean_finish_time"', '"mean_hold_force"'),
+    "course": '[course]\nkind="tug"\nlength_m=4.0\nwidth_m=0.8\nwall_height_m=0.15\npit_m=0.3\npit_depth_m=0.3\nstring_m=1.0\n',
+    "sweep": '[bench]\nramp_n_per_s=0.25\ntop_n=7.0\njerk_n=0.4\njerk_hz=[0.7, 1.9]\n'
+             '[bout]\ntime_limit_s=20.0\nbouts_to_win=2\nmax_bouts=5\n',
+}
+
+
+def test_the_tug_of_war_loads(tmp_path):
+    m = load_event("tug-of-war")
+    assert m.course == Tug(4.0, 0.8, 0.15, 0.3, 0.3, 1.0)
+    assert m.bench == Bench(0.25, 7.0, 0.4, (0.7, 1.9)) and m.bout == BoutRules(20.0, 2, 5)
+    assert (m.category, m.metric, m.rig, m.time_limit_s) == ("versus", "mean_hold_force", "legs", 30.0)
+    assert m.sweep is None and m.vote is None and m.command[:3] == (-0.3, 0.0, 0.0)
+    assert load_manifest(write_manifest(tmp_path, **TUG)).course.kind == "tug"
+
+
+@pytest.mark.parametrize("change, complaint", [
+    ({"root": TUG["root"].replace('"versus"', '"race"')}, "goes with"),
+    ({"root": TUG["root"].replace('"mean_hold_force"', '"mean_finish_time"')}, "goes with"),
+    ({"course": GOOD["course"], "sweep": GOOD["sweep"]}, "goes with"),
+    ({"sweep": TUG["sweep"].split("[bout]")[0]}, r"needs \[bout\]"),
+    ({"sweep": "[bout]" + TUG["sweep"].split("[bout]")[1]}, r"needs \[bench\]"),
+    ({"sweep": TUG["sweep"] + GOOD["sweep"]}, r"no \[sweep\]"),
+    ({"sweep": TUG["sweep"] + "[vote]\nballot_min=2\nballot_max=4\nwindow_days=7\nper_day=3\n"}, r"no \[vote\]"),
+    ({"root": TUG["root"].replace('rig="legs"', 'rig="rollers"')}, "rig 'legs'"),
+    ({"course": TUG["course"] + "slope_deg=0.0\n"}, "unknown keys"),
+    ({"sweep": TUG["sweep"].replace("jerk_n=0.4", "jerk_n=0.4\nspring=1")}, "unknown keys"),
+    ({"sweep": TUG["sweep"] + "draws=1\n"}, "unknown keys"),
+    ({"sweep": TUG["sweep"].replace("max_bouts=5", "max_bouts=2")}, "max_bouts"),
+])
+def test_a_malformed_tug_is_refused(tmp_path, change, complaint):
+    with pytest.raises(ManifestError, match=complaint):
+        load_manifest(write_manifest(tmp_path, **(TUG | change)))
+
+
+def test_only_a_tug_takes_a_bench_or_bouts(tmp_path):
+    with pytest.raises(ManifestError, match="only a tug"):
+        load_manifest(write_manifest(tmp_path, sweep=GOOD["sweep"] + TUG["sweep"]))
+
+
+def test_higher_wins_reads_the_events_metric():
+    assert higher_wins("tug-of-war") and not any(map(higher_wins, ("sprint-2m", "got-a-talent", "no-such-event")))

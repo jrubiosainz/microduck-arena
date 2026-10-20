@@ -1,0 +1,50 @@
+id           = "tug-of-war"
+order        = 40
+title        = "Tug of War"
+category     = "versus"
+kind         = "perpetual"
+rig          = "legs"
+time_limit_s = 30.0          # the bench's timed length, after the settle
+metric       = "mean_hold_force"
+seeds        = [1, 2, 3, 4, 5]
+
+[course]
+kind          = "tug"
+length_m      = 4.0
+width_m       = 0.8
+wall_height_m = 0.15
+pit_m         = 0.30
+pit_depth_m   = 0.30
+string_m      = 1.00
+
+[command]                     # every duck, every bout and bench run: walk backwards
+vel  = [-0.30, 0.0, 0.0]
+head = [0.0, 0.0, 0.0, 0.0]
+body = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+[start]
+keyframe = "STAND"
+settle_s = 0.5
+
+[start.perturbation]
+joint_rad = 0.01
+yaw_deg   = 2.0
+
+[termination]                 # a fall loses a bout and ends a bench run
+fall_gravity_z = -0.5
+fall_hold_s    = 0.3
+
+[bench]
+ramp_n_per_s = 0.25
+top_n        = 7.0
+jerk_n       = 0.4
+jerk_hz      = [0.7, 1.9]
+
+[bout]
+time_limit_s = 20.0
+bouts_to_win = 2
+max_bouts    = 5
+
+[clip]
+tape_max_s = 30.0
+sounds     = ["crowd", "verdict"]
