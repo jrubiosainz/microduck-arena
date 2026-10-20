@@ -8,7 +8,9 @@ halfway through someone's timed run.
 import functools
 import tomllib
 from dataclasses import dataclass
+from datetime import date, time
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .constants import CMD_SIZE, CTRL_DT
 
@@ -94,6 +96,17 @@ class BoutRules:
     time_limit_s: float
     bouts_to_win: int
     max_bouts: int
+
+
+@dataclass(frozen=True)
+class CupRules:
+    """A versus event's weekly cup: every premiere is `premiere` local time in `timezone`."""
+
+    first: date  # cup #1's premiere day, a local date in `timezone`
+    premiere: time
+    timezone: str  # IANA, "Europe/Paris"
+    close_before_h: float  # entries close this long before the premiere
+    min_entrants: int
 
 
 @dataclass(frozen=True)
@@ -239,6 +252,8 @@ class Manifest:
     # Only a tug has them: the bench its rating is held against, the rules of its bouts.
     bench: Bench | None = None
     bout: BoutRules | None = None
+    # Only a versus event has one.
+    cup: CupRules | None = None
 
     def command_at(self, vx: float) -> tuple[float, ...]:
         """This event's command, with the forward speed replaced.
@@ -366,6 +381,30 @@ def _bout(raw: dict, path: Path) -> BoutRules:
     return rules
 
 
+def _cup(raw: dict, path: Path) -> CupRules:
+    _refuse_unknown(raw, {"first", "premiere", "timezone", "close_before_h", "min_entrants"}, "[cup]")
+    try:
+        first = date.fromisoformat(str(_require(raw, "first", "[cup]")))
+    except ValueError:
+        raise ManifestError(f"{path}: [cup] first must be a date like 2026-10-30") from None
+    try:
+        premiere = time.fromisoformat(str(_require(raw, "premiere", "[cup]")))
+    except ValueError:
+        raise ManifestError(f"{path}: [cup] premiere must be a time like 18:00") from None
+    zone = _require(raw, "timezone", "[cup]")
+    try:
+        ZoneInfo(zone)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ManifestError(f"{path}: [cup] timezone {zone!r} is not an IANA time zone") from None
+    close = float(_require(raw, "close_before_h", "[cup]"))
+    if not 0 < close < 168:
+        raise ManifestError(f"{path}: [cup] close_before_h must be above 0 and below 168")
+    fewest = int(_require(raw, "min_entrants", "[cup]"))
+    if fewest < 3:
+        raise ManifestError(f"{path}: [cup] min_entrants must be at least 3, a group plays a round robin")
+    return CupRules(first, premiere, zone, close, fewest)
+
+
 def _sweep(raw: dict, path: Path) -> Sweep:
     sweep = Sweep(
         lo=float(_require(raw, "lo", "[sweep]")),
@@ -424,6 +463,12 @@ def load_manifest(path: Path) -> Manifest:
         )
     if kind != "tug" and ("bench" in raw or "bout" in raw):
         raise ManifestError(f"{path}: only a tug takes [bench] and [bout]")
+
+    if (category == "versus") != ("cup" in raw):
+        raise ManifestError(
+            f"{path}: a versus event needs a [cup] section" if category == "versus"
+            else f"{path}: [cup] is for a versus event"
+        )
 
     bench = bout = None
     if kind == "tug":
@@ -509,6 +554,7 @@ def load_manifest(path: Path) -> Manifest:
         clip=_clip(raw.get("clip"), "[clip]"),
         bench=bench,
         bout=bout,
+        cup=_cup(raw["cup"], path) if "cup" in raw else None,
     )
 
 

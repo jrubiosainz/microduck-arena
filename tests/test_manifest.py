@@ -1,10 +1,11 @@
 import dataclasses
 import inspect
+from datetime import date, time
 
 import pytest
 
 from arena.manifest import (
-    EVENTS_DIR, Bench, BoutRules, ManifestError, Stage, Tug, all_events, higher_wins, load_event, load_manifest,
+    EVENTS_DIR, Bench, BoutRules, CupRules, ManifestError, Stage, Tug, all_events, higher_wins, load_event, load_manifest,
 )
 
 # A well-formed manifest, as TOML sections. Tests override one entry to build a
@@ -490,11 +491,14 @@ def test_a_missing_kind_is_refused(tmp_path):
         load_manifest(write_manifest(tmp_path, kind=""))
 
 
+CUP = '[cup]\nfirst="2026-10-30"\npremiere="18:00"\ntimezone="Europe/Paris"\nclose_before_h=2.0\nmin_entrants=4\n'
+
 TUG = {
     "root": GOOD["root"].replace('category="race"', 'category="versus"').replace('"mean_finish_time"', '"mean_hold_force"'),
     "course": '[course]\nkind="tug"\nlength_m=4.0\nwidth_m=0.8\nwall_height_m=0.15\npit_m=0.3\npit_depth_m=0.3\nstring_m=1.0\n',
     "sweep": '[bench]\nramp_n_per_s=0.25\ntop_n=7.0\njerk_n=0.4\njerk_hz=[0.7, 1.9]\n'
              '[bout]\ntime_limit_s=20.0\nbouts_to_win=2\nmax_bouts=5\n',
+    "clip": CUP,
 }
 
 
@@ -535,3 +539,41 @@ def test_only_a_tug_takes_a_bench_or_bouts(tmp_path):
 
 def test_higher_wins_reads_the_events_metric():
     assert higher_wins("tug-of-war") and not any(map(higher_wins, ("sprint-2m", "got-a-talent", "no-such-event")))
+
+
+def tug(tmp_path, cup=CUP):
+    """The shipped tug of war with its [cup], its last section, replaced."""
+    path = tmp_path / "tug.toml"
+    path.write_text((EVENTS_DIR / "tug-of-war.toml").read_text().split("[cup]")[0] + cup)
+    return path
+
+
+def test_the_tug_of_war_holds_a_weekly_cup():
+    assert load_event("tug-of-war").cup == CupRules(date(2026, 10, 30), time(18, 0), "Europe/Paris", 2.0, 4)
+    assert load_event("sprint-2m").cup is None
+
+
+def test_a_versus_event_needs_a_cup(tmp_path):
+    with pytest.raises(ManifestError, match=r"\[cup\]"):
+        load_manifest(tug(tmp_path, cup=""))
+
+
+def test_only_a_versus_event_takes_a_cup(tmp_path):
+    with pytest.raises(ManifestError, match=r"\[cup\]"):
+        load_manifest(write_manifest(tmp_path, clip=CUP))
+
+
+@pytest.mark.parametrize("old, new, complaint", [
+    ('"Europe/Paris"', '"Mars/Olympus"', "timezone"), ('"2026-10-30"', '"2026-13-01"', "first"),
+    ('"18:00"', '"6pm"', "premiere"), ("close_before_h=2.0", "close_before_h=0", "close_before_h"),
+    ("min_entrants=4", "min_entrants=2", "min_entrants"),
+    ("min_entrants=4", "min_entrants=4\nseeded=true", "unknown keys"),
+])
+def test_a_malformed_cup_is_refused(tmp_path, old, new, complaint):
+    with pytest.raises(ManifestError, match=complaint):
+        load_manifest(tug(tmp_path, cup=CUP.replace(old, new)))
+
+
+def test_the_image_carries_the_time_zones():
+    dockerfile = (EVENTS_DIR.parents[1] / "Dockerfile").read_text()
+    assert "tzdata" in dockerfile and "ZoneInfo('Europe/Paris')" in dockerfile

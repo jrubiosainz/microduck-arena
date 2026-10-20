@@ -27,10 +27,14 @@ FROM python:3.12-slim
 # fallback face for glyphs Anton and DM Sans lack. The version check fails the
 # build on a broken apt layer, before a Space boots and renders nothing.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends chromium ffmpeg fonts-liberation libegl1 libgles2 \
+ && apt-get install -y --no-install-recommends chromium ffmpeg fonts-liberation libegl1 libgles2 tzdata \
  && rm -rf /var/lib/apt/lists/* \
  && chromium --version && ffmpeg -version
 ENV CHROME=/usr/bin/chromium
+
+# The weekly cup's calendar is Paris time, and a slim image does not promise
+# /usr/share/zoneinfo. The build fails here, not the Space at its first cup.
+RUN python -c "import zoneinfo; zoneinfo.ZoneInfo('Europe/Paris')"
 
 RUN useradd -m -u 1000 user
 USER user
