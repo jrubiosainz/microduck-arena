@@ -1,7 +1,9 @@
 """A weekly cup's records and calendar. Pure: no I/O, no clock."""
 
 import json
+import random
 import re
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -129,3 +131,92 @@ def closed_cups(rules: CupRules, now: datetime) -> int:
     while cup_times(rules, number + 1)[0] <= now:
         number += 1
     return number
+
+
+def group_count(entrants: int) -> int:
+    """The largest power of two G >= 1 that leaves at least three ducks a group."""
+    count = 1
+    while entrants // (count * 2) >= 3:
+        count *= 2
+    return count
+
+
+def draw_groups(entrants: Sequence[Entrant], secret: str) -> list[list[int]]:
+    """Pots of G by rating (best first, ties by user), each shuffled by the secret; pot p's i-th duck goes to group i."""
+    count = group_count(len(entrants))
+    ranked = sorted(range(len(entrants)), key=lambda i: (-entrants[i].rating, entrants[i].user))
+    groups: list[list[int]] = [[] for _ in range(count)]
+    for p, start in enumerate(range(0, len(ranked), count)):
+        pot = ranked[start:start + count]
+        random.Random(secret + str(p)).shuffle(pot)
+        for g, i in enumerate(pot):
+            groups[g].append(i)
+    return groups
+
+
+def group_fixtures(group: Sequence[int]) -> list[tuple[int, int]]:
+    """The circle method, rounds in order; a bye pads an odd group and plays nobody."""
+    ring = list(group) + ([None] if len(group) % 2 else [])
+    out = []
+    for _ in range(len(ring) - 1):
+        out += [(ring[i], ring[-1 - i]) for i in range(len(ring) // 2) if None not in (ring[i], ring[-1 - i])]
+        ring = [ring[0], ring[-1], *ring[1:-1]]
+    return out
+
+
+def group_table(group: Sequence[int], matches: Sequence[MatchRecord], ratings: Sequence[float]) -> list[int]:
+    """The group ranked on matches won, bouts won minus lost, head-to-head among the tied, rating, then draw order."""
+    played = [m for m in matches if m.a in group and m.b in group]
+    wins = {i: sum(m.winner == i for m in played) for i in group}
+    diff = {i: sum((m.wins[0] - m.wins[1]) * (1 if m.a == i else -1) for m in played if i in (m.a, m.b)) for i in group}
+
+    def head_to_head(i: int) -> int:
+        tied = {j for j in group if (wins[j], diff[j]) == (wins[i], diff[i])}
+        return sum(m.winner == i for m in played if {m.a, m.b} <= tied)
+
+    return sorted(group, key=lambda i: (-wins[i], -diff[i], -head_to_head(i), -ratings[i], list(group).index(i)))
+
+
+def first_knockout(tables: Sequence[Sequence[int]]) -> list[tuple[int, int]]:
+    """The first knockout round as the bracket's two halves (winners are paired in order each round).
+
+    Groups are paired (A, B), (C, D)...: every pair's X1-Y2 first, then every pair's Y1-X2, so a group's first and
+    second sit in different halves and group-mates meet at the earliest in the final.
+    """
+    if len(tables) == 1:
+        return [(tables[0][0], tables[0][1])]
+    pairs = range(len(tables) // 2)
+    return [(tables[2 * p][0], tables[2 * p + 1][1]) for p in pairs] + [(tables[2 * p + 1][0], tables[2 * p][1]) for p in pairs]
+
+
+def round_name(matches_in_round: int) -> str:
+    return {1: "final", 2: "semi-final", 4: "quarter-final"}.get(matches_in_round, f"round of {2 * matches_in_round}")
+
+
+def _stage(match: MatchRecord) -> str:
+    return f"Group {match.group}" if match.group else match.round.capitalize()
+
+
+def match_title(cup: Cup, match: MatchRecord) -> str:
+    return f"{_stage(match)} · {cup.entrants[match.a].name} vs {cup.entrants[match.b].name}"
+
+
+def match_label(cup: Cup, match: MatchRecord) -> str:
+    """The stage alone, naming no duck, numbered by its place when its round holds several matches."""
+    same = [m for m in cup.matches if m.round == match.round]
+    if match.group or len(same) == 1:
+        return _stage(match)
+    return f"{_stage(match)} {same.index(match) + 1}"
+
+
+def reached(cup: Cup) -> list[str]:
+    """Per entrant: "champion", "final", the knockout round it lost in, or "group"."""
+    out = ["group"] * len(cup.entrants)
+    for match in cup.matches:
+        if match.group:
+            continue
+        loser = match.b if match.winner == match.a else match.a
+        out[loser] = match.round
+        if match.round == "final":
+            out[match.winner] = "champion"
+    return out
