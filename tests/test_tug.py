@@ -5,6 +5,7 @@ import mujoco
 import numpy as np
 import pytest
 
+from arena import runner, tug
 from arena.assets import ASSET_ROOT
 from arena.constants import CTRL_DT
 from arena.course import compile_tug, string_offset
@@ -129,3 +130,25 @@ def test_the_string_never_stretches_past_its_length():
     ends = string_ends(run_bout(NO_FALL, walker, walker, 1).trace, OFFSET)
     length = np.linalg.norm(ends[0] - ends[1], axis=1)
     assert TUG.course.string_m - 0.01 <= length.max() <= TUG.course.string_m + 0.01   # taut, never longer
+
+def _explode_at(monkeypatch, bad_step):
+    """MuJoCo resets the simulation on timed step `bad_step`, as the runner's own check would say."""
+    calls = iter(range(1_000_000))
+    monkeypatch.setattr(tug, "_reset_by_mujoco", lambda data: next(calls) == bad_step)
+
+def test_a_solver_explosion_on_the_bench_is_a_fall_at_that_steps_pull_and_its_frame_is_left_out(monkeypatch):
+    assert tug._reset_by_mujoco is runner._reset_by_mujoco   # the runner's own check, reused
+    short = dataclasses.replace(NO_FALL, time_limit_s=2.0)
+    held = run_bench(short, _ZeroPolicy(), 1)
+    _explode_at(monkeypatch, 10)
+    out = run_bench(short, _ZeroPolicy(), 1)
+    assert (out.status, out.trace.shape) == ("fall", (1, 10, 21)) and out.time_s == pytest.approx(11 * CTRL_DT)
+    assert out.force_n == bench_force(out.profile, 10 * CTRL_DT)
+    np.testing.assert_array_equal(out.trace, held.trace[:, :10])
+
+def test_a_solver_explosion_in_a_bout_is_a_draw_and_its_frame_is_left_out(monkeypatch):
+    whole = run_bout(NO_FALL_SHORT, _ZeroPolicy(), _ZeroPolicy(), 1)
+    _explode_at(monkeypatch, 10)
+    out = run_bout(NO_FALL_SHORT, _ZeroPolicy(), _ZeroPolicy(), 1)
+    assert (out.loser, out.how, out.trace.shape) == (None, "draw", (2, 10, 21)) and out.time_s == pytest.approx(11 * CTRL_DT)
+    np.testing.assert_array_equal(out.trace, whole.trace[:, :10])

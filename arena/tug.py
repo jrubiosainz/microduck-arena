@@ -25,7 +25,7 @@ import numpy as np
 from .constants import CTRL_DT, TRACE_WIDTH
 from .course import WINCH, compile_tug, string_offset
 from .manifest import Bench, Manifest, Termination
-from .runner import _start
+from .runner import _reset_by_mujoco, _start
 from .stage import fell_at
 
 PIT_DROP_M = 0.05  # a trunk below z = -PIT_DROP_M is in the pit
@@ -116,7 +116,9 @@ class BenchOutcome:
 
 def run_bench(manifest: Manifest, policy, seed: int, model=None) -> BenchOutcome:
     """One duck against the winch for the event's timed length, after the runner's own opening.
-    The winch is still through the settle; its pull is set before every timed control step."""
+    The winch is still through the settle; its pull is set before every timed control step.
+    A step MuJoCo had to reset is a fall at that step's pull, its frame left out: a solver
+    explosion is not a result, and the reset pose stands the duck over the pit."""
     model = model if model is not None else compile_tug(manifest, 1)
     command = np.asarray(manifest.command, dtype=np.float64)
     profile = bench_profile(manifest.bench, manifest.id, seed)
@@ -128,6 +130,10 @@ def run_bench(manifest: Manifest, policy, seed: int, model=None) -> BenchOutcome
         force = bench_force(profile, step * CTRL_DT)
         sim.data.ctrl[winch] = force
         sim.step([command])
+        if _reset_by_mujoco(sim.data):
+            return BenchOutcome(
+                seed, "fall", force, (step + 1) * CTRL_DT, frames[:, :step].copy(), settle, profile
+            )
         sim.record(frames[:, step])
         how = _out(frames[0, : step + 1], manifest.termination)
         if how is not None:
@@ -148,7 +154,8 @@ class BoutOutcome:
     seed: int
     loser: int | None  # 0 west, 1 east, None undecided by the physics
     how: str  # "pit" | "fall" (the first duck out, how it went out),
-    # "marker" (both out on one control step, or the time limit), "draw" (marker exactly 0)
+    # "marker" (both out on one control step, or the time limit),
+    # "draw" (marker exactly 0, or a step MuJoCo had to reset)
     time_s: float  # when it was decided
     trace: np.ndarray  # (2, frames, 21), west first; stops at the deciding step
     settle: np.ndarray  # (2, settle + 1, 21)
@@ -157,7 +164,8 @@ class BoutOutcome:
 def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutcome:
     """Two ducks tied neck to neck, west facing east and east facing west, both on the event's
     command, until the judge's first verdict: at the latest the bout's time limit, where the
-    marker always gives one."""
+    marker always gives one. A step MuJoCo had to reset ends the bout drawn, its frame left out:
+    a solver explosion is not a result, and the reset pose stands the west duck over the pit."""
     model = model if model is not None else compile_tug(manifest, 2)
     command = np.asarray(manifest.command, dtype=np.float64)
     offset = string_offset(manifest.rig)
@@ -166,6 +174,10 @@ def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutco
     frames = np.empty((2, steps, TRACE_WIDTH), dtype=np.float32)
     for step in range(steps):
         sim.step([command, command])
+        if _reset_by_mujoco(sim.data):
+            return BoutOutcome(
+                seed, None, "draw", (step + 1) * CTRL_DT, frames[:, :step].copy(), settle
+            )
         sim.record(frames[:, step])
         verdict = _verdict(
             frames[:, : step + 1], offset, manifest.termination, final=step == steps - 1
