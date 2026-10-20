@@ -5,6 +5,7 @@
 import { choirOf, voiceEvents } from "../duck-voice.js";
 import { isStage, isTug } from "../format.js";
 import { CTRL_DT, frameAt } from "../replay.js";
+import { BOUT_WORDS } from "../tug.js";
 
 /** Cue gains, measured on a real render: the horn 5 dB over the crowd's surge,
  * the victory level with the crowd's cheer, and the fall — over a crowd gone
@@ -41,17 +42,14 @@ const SOURCES = {
   ],
 };
 
-/** How a bench run's replayed seed ended, as its stamp says it. */
-const BENCH_STAMPS = { held: "HELD ON", pit: "PULLED IN" };
-
 /**
  * The stamp the clip lands, and whether it lands as a pass: a race won or a DNF, a performance
- * given or cut short, and a bench run however its replayed seed ended, every one rated.
+ * given or cut short, and a rated tug run as its replayed bout ended: a pass for a win.
  */
 export function clipVerdict(run) {
   if (isTug(run.event)) {
     const { status } = run.per_seed.find((seed) => seed.seed === run.trace_seed);
-    return { stamp: BENCH_STAMPS[status], pass: true };
+    return { stamp: BOUT_WORDS[status].toUpperCase(), pass: status === "won" || status === "pit_won" };
   }
   const pass = run.seeds_finished > 0;
   if (isStage(run.event)) return { stamp: pass ? "WELL DONE" : "CUT SHORT", pass };
@@ -60,12 +58,12 @@ export function clipVerdict(run) {
 
 /**
  * `trace` is the author's lane, settle included; `ducks` the stage's troupe in duck order (cast.js
- * stageDucks), each with how it sounds, and none for a race or a bench.
+ * stageDucks), each with how it sounds, and none for a race or a tug.
  */
 export function clipScore({ run, plan, trace, ducks }) {
   const sounds = run.event.clip.sounds;
   const verdict = clipVerdict(run).pass ? "pass" : "fail";
-  // A stage and a bench have no course to go down: their crowd answers the verdict alone.
+  // A stage and a tug have no course to go down: their crowd answers the verdict alone.
   const still = isStage(run.event) || isTug(run.event);
   const start = plan.intro / plan.fps;
   const end = plan.tapeEnd / plan.fps;

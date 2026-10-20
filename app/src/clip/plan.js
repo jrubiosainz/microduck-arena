@@ -5,6 +5,7 @@
 
 import { isTug } from "../format.js";
 import { CTRL_DT } from "../replay.js";
+import { entrySide } from "../tug.js";
 
 export const FPS = 25;
 const INTRO_S = 3;
@@ -59,6 +60,10 @@ export function travelAt(plan, i) {
 export function actAt(plan, i) {
   return i < plan.intro ? "intro" : i < plan.tapeEnd ? "tape" : "outro";
 }
+
+/** The viewer lane the outro's stamp lands on: a tug's one lane holds both ducks, the entry's is on
+ * its side of the string; a race's is the author's, the last of the lanes. */
+export const stampLane = (run, laneCount) => (isTug(run.event) ? entrySide(run.trace_seed) : laneCount - 1);
 
 /** How far inside the screen's edges the outro's stamp keeps, in CSS pixels. */
 const STAMP_MARGIN = 36;

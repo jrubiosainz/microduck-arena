@@ -13,11 +13,11 @@ const WHERE = { "hf-jobs": "HF Jobs · L4", local: "This machine" };
 
 export const seconds = (s) => `${s.toFixed(2)} s`;
 
-// The tug's rating is a force: the higher, the stronger. Elsewhere the lower, the faster.
-const strongest = (metric) => metric === "mean_hold_force";
+// The tug's rating is centimetres of string won: the higher, the stronger. Elsewhere the lower, the faster.
+const strongest = (metric) => metric === "mean_ground_cm";
 
-/** A checkpoint's score in its event's unit: "4.21 N", or seconds. */
-export const measure = (value, metric) => (strongest(metric) ? `${value.toFixed(2)} N` : seconds(value));
+/** A checkpoint's score in its event's unit: "10.0 cm", or seconds. */
+export const measure = (value, metric) => (strongest(metric) ? `${value.toFixed(1)} cm` : seconds(value));
 
 function describe(c, metric) {
   if (c.status === "queued") return `Checkpoint ${c.n}: not evaluated yet`;
@@ -26,10 +26,11 @@ function describe(c, metric) {
   return `Checkpoint ${c.n}: ${measure(c.score, metric)}, ${c.seeds_finished}/${c.seeds_total} seeds`;
 }
 
-/** A bar per checkpoint, as tall as its score against the best one; `future` adds the empty slots still to come. */
+/** A bar per checkpoint, as tall as its score against the best one (a tug's, from its worst to its best); `future` adds the empty slots still to come. */
 export function bars(checkpoints, best, { future = [], onPick = null, metric } = {}) {
   const scores = checkpoints.filter((c) => c.status === "evaluated" && c.seeds_finished > 0).map((c) => c.score);
   const top = strongest(metric) ? Math.max(...scores) : Math.min(...scores);
+  const low = Math.min(...scores);
   const row = el("div", "bars");
   for (const c of checkpoints) {
     const bar = el("i");
@@ -37,7 +38,9 @@ export function bars(checkpoints, best, { future = [], onPick = null, metric } =
     else if (c.status === "failed") bar.className = "failed";
     else if (!c.seeds_finished) bar.className = "dnf";
     else {
-      bar.style.height = `${Math.max(6, Math.round((strongest(metric) ? c.score / top : top / c.score) * 100))}%`;
+      const height = !strongest(metric) ? Math.max(6, Math.round((top / c.score) * 100))
+        : top === low ? 100 : Math.round(6 + (94 * (c.score - low)) / (top - low));
+      bar.style.height = `${height}%`;
       if (c.n === best) bar.className = "best";
     }
     bar.title = describe(c, metric);
@@ -79,10 +82,10 @@ export function summary(ticket, voted, metric) {
   return line;
 }
 
-/** "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s" → "4.89 s"; "entered on tug-of-war: a 4.21 N rating" → "4.21 N". */
+/** "entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s" → "4.89 s"; "entered on tug-of-war: a -15.2 cm rating → …" → "-15.2 cm". */
 export function officialTime(entered) {
-  const found = /: (?:a )?([\d.]+) (s|N)\b/.exec(entered ?? "");
-  return found ? measure(Number(found[1]), found[2] === "N" ? "mean_hold_force" : "time") : entered;
+  const found = /: (?:a )?(-?[\d.]+) (s|cm)\b/.exec(entered ?? "");
+  return found ? measure(Number(found[1]), found[2] === "cm" ? "mean_ground_cm" : "time") : entered;
 }
 
 export function progress({ done, total }) {

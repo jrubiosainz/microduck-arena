@@ -50,7 +50,7 @@ function head(challenge, arena) {
     facts.append(pair);
   }
   const caveat = el("p", "racecaveat", event.metric === "votes" ? ""
-    : isTug(event) ? "The Arena rates your duck on the bench: five pulls against the winch, the mean force held, in newtons. "
+    : isTug(event) ? "The Arena rates your duck in five bouts against its reference duck: the centimetres of string it wins, a pit worth far more. "
     : "The Arena races your duck at every speed of the sweep and keeps its best. ");
   const board = el("a", "help-link", "See the board on the Arena ↗");
   Object.assign(board, { href: `${arena}/#/e/${event.id}`, target: "_blank", rel: "noopener" });

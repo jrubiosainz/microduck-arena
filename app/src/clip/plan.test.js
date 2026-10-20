@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actAt, clipPlan, stampAt, stepAt, travelAt } from "./plan.js";
+import { actAt, clipPlan, stampAt, stampLane, stepAt, travelAt } from "./plan.js";
 
 describe("clipPlan", () => {
   it("is three seconds of title, the settle and the tape at one clip frame per two trace frames, and a 2.5 s outro", () => {
@@ -54,5 +54,12 @@ describe("stampAt", () => {
       const spot = { x: 0.02, y: 0.95 };
       expect(stampAt({ course }, spot, STAMP, LANDSCAPE, 890)).toBe(spot);
     }
+  });
+});
+
+describe("stampLane", () => {
+  it("lands the stamp on the entry's duck, a race's on the author's lane", () => {
+    expect([2, 3].map((seed) => stampLane({ event: { course: "tug" }, trace_seed: seed }, 1))).toEqual([1, 0]);
+    expect(stampLane({ event: { course: "lane" }, trace_seed: 2 }, 4)).toBe(3);
   });
 });

@@ -20,7 +20,7 @@ const TALENT_CHALLENGE = { event: { id: "got-a-talent", title: "MicroDuck Got a 
   metric: "votes", rig: "legs", time_limit_s: 20, vote: { ballot_min: 2 } }, folder: "got_a_talent", task: "T",
   recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, knobs: [], running: 0 };
 const TUG_CHALLENGE = { event: { id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug",
-  metric: "mean_hold_force", rig: "legs", length_m: 4, pit_m: 0.3, bench: { top_n: 7 }, vote: null }, folder: "tug_of_war",
+  metric: "mean_ground_cm", rig: "legs", length_m: 4, pit_m: 0.3, bout: { time_limit_s: 45 }, vote: null }, folder: "tug_of_war",
   task: "W", recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, knobs: [], running: 0 };
 const account = { get: () => ({ phase: "in", user: "alice", canPay: true }), logIn: vi.fn(), check: vi.fn() };
 const TICKET = { id: "first", name: "first", where: "hf-jobs", state: "running", progress: null,
@@ -176,7 +176,7 @@ describe("a challenge's page", () => {
     expect(root.querySelector(".facts").textContent).toContain("open floor");
   });
 
-  it("says how the Arena scores a race, and how it rates a tug on the bench", async () => {
+  it("says how the Arena scores a race, and how it rates a tug against its reference duck", async () => {
     const caveat = async (challenge) => {
       const root = document.createElement("div");
       await mountChallenge(root, { status: { ...STATUS, challenges: [challenge] }, account,
@@ -185,7 +185,7 @@ describe("a challenge's page", () => {
     };
     expect(await caveat(STATUS.challenges[0])).toBe("The Arena races your duck at every speed of the sweep and keeps its best. ");
     expect(await caveat(TUG_CHALLENGE)).toBe(
-      "The Arena rates your duck on the bench: five pulls against the winch, the mean force held, in newtons. ");
+      "The Arena rates your duck in five bouts against its reference duck: the centimetres of string it wins, a pit worth far more. ");
   });
 
   it("says so for a challenge that is not open here", async () => {

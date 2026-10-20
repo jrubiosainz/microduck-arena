@@ -9,6 +9,7 @@ import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "../deck.js";
 import { isStage, isTug } from "../format.js";
 import { eventGuideHref } from "../router.js";
 import { footer } from "../signage.js";
+import { ratingLane } from "../tug.js";
 import { createViewer } from "../viewer.js";
 import * as api from "./api.js";
 import { renderCurve } from "./curve.js";
@@ -237,7 +238,7 @@ export async function mountJob(root, { status, account, route }) {
       seeds.textContent = "It could not be evaluated.";
     } else {
       value.textContent = row.seeds_finished ? measure(row.score, event.metric) : "No finish";
-      // The bench has no commanded speed: the winch pulls.
+      // A tug has no commanded speed: every duck walks back at the event's.
       const speed = row.seeds_finished && !tug ? ` · at ${row.command_vx.toFixed(2)} m/s` : "";
       seeds.textContent = `${row.seeds_finished}/${row.seeds_total} seeds${speed}`;
     }
@@ -278,10 +279,10 @@ export async function mountJob(root, { status, account, route }) {
     const name = `checkpoint ${body.checkpoint}`;
     // A stage's lane is its troupe, each duck where its trace puts it. The workshop keeps no settle,
     // so nothing leads in.
-    // A tug's lane is the bench: the duck against the winch's profile.
+    // A tug's lane is the checkpoint's bout against the reference duck.
     viewer.setLanes([stage
       ? { name, livery: "classic", ducks: stageDucks(body.cast, body.traces, null, { livery: "classic", eventRig: event.rig, lead: 0 }) }
-      : tug ? { tug: "bench", trace: body.traces[0], bench: body.bench, livery: "classic", name }
+      : tug ? ratingLane(body.traces, null, { traceSeed: body.trace_seed, livery: "classic", name })
       : { trace: body.traces[0], tier: "trial", livery: "classic", name }], event);
   }
 

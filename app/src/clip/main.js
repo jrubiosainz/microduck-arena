@@ -8,8 +8,9 @@ import { LANE_COLORS } from "../course.js";
 import { formatScore, isStage, isTug } from "../format.js";
 import { lanesFor } from "../lanes.js";
 import { CTRL_DT, frameCount, leadIn, standing } from "../replay.js";
+import { ratingLane } from "../tug.js";
 import { createViewer } from "../viewer.js";
-import { actAt, clipPlan, stampAt, stepAt, travelAt } from "./plan.js";
+import { actAt, clipPlan, stampAt, stampLane, stepAt, travelAt } from "./plan.js";
 import { stadiumDirection } from "./direction.js";
 import { clipScore, clipVerdict } from "./score.js";
 import { renderSoundtrack } from "./soundtrack.js";
@@ -50,7 +51,7 @@ function letter(run) {
     $("fig-time").nextElementSibling.textContent = "length";
     $("fig-place").parentElement.hidden = true;
   } else {
-    // A bench run's number is its rating, and it ranks the board.
+    // A rated run's number is its rating, and it ranks the board.
     if (isTug(run.event)) $("fig-time").nextElementSibling.textContent = "rating";
     $("fig-place").textContent = run.on_board && !run.withdrawn ? `#${run.rank}` : "—";
   }
@@ -81,8 +82,8 @@ async function main() {
   const settle = Math.max(...settles.map(([first]) => frameCount(first)));
   const replays = lanes.map((_, i) => leadIn(settles[i][0], traces[i][0], settle));
   // A stage plays the author's performance alone: every duck of its troupe from its settle. Each
-  // beak moves on the stage; the clip's soundtrack plays the voices. A bench run plays its one duck
-  // against the winch, its settle handed over apart: the dial reads nothing until the settle ends.
+  // beak moves on the stage; the clip's soundtrack plays the voices. A tug plays its bout
+  // against the reference duck, each settle handed over apart: the dial reads nothing until the settles end.
   const stage = isStage(run.event);
   const tug = isTug(run.event);
   const ducks = stage
@@ -102,7 +103,7 @@ async function main() {
         ...(stage
           ? { ducks }
           : tug
-            ? { tug: "bench", trace: traces[i][0], settle: settles[i][0], bench: run.bench }
+            ? ratingLane(traces[i], settles[i], { traceSeed: run.trace_seed, livery: lane.livery, name: `@${lane.user}` })
             : { trace: replays[i] }),
       }))
       // The camera stands beyond the last lane: reversed, the author's duck is
@@ -130,10 +131,10 @@ async function main() {
     $("sheet").hidden = !(act === "outro" || layout === "vertical");
     if (act === "outro") {
       // Reversed for the viewer, the author's lane is its last. The stamp lands
-      // on it; a tug's is kept whole inside the screen and clear of the figures.
+      // on it, a tug's on the entry's duck, kept whole inside the screen and clear of the figures.
       const screen = $("stamp").parentElement.getBoundingClientRect();
       const floor = $("sheet").getBoundingClientRect().top - screen.top;
-      const spot = viewer.spot(lanes.length - 1);
+      const spot = viewer.spot(stampLane(run, lanes.length));
       const { x, y } = stampAt(run.event, spot, $("stamp").getBoundingClientRect(), screen, floor);
       Object.assign($("stamp").style, { left: `${100 * x}%`, top: `${100 * y}%` });
     }

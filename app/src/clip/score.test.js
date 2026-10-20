@@ -6,20 +6,21 @@ const event = { id: "sprint-2m", length_m: 2, clip: { sounds: ["crowd", "horn", 
 const trace = new Float32Array(200 * 21);
 for (let i = 0; i < 200; i++) trace[i * 21] = i / 100; // x from 0 to 2 m
 const TUG = {
-  id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_hold_force", length_m: 4,
+  id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_ground_cm", length_m: 4,
   clip: { sounds: ["crowd", "verdict"], tape_max_s: 30 },
 };
 const tugRun = {
   run_id: "R1", user: "nico", policy_name: "puller", event: TUG, score: 4.2134, seeds_finished: 5, seeds_total: 5,
   trace_seed: 3, rank: 2, on_board: true, withdrawn: false, receipts: [{ act: "run", points: 10 }],
-  per_seed: [{ seed: 3, status: "held", time_s: null, force_n: 7 }], cast: [{ policy: "self" }],
+  per_seed: [{ seed: 3, status: "won", time_s: 45, score_cm: 1 }], cast: [{ policy: "self" }],
 };
-const traced = (status) => ({ ...tugRun, per_seed: [{ seed: 1, status: "pit", time_s: 21.7, force_n: 4.77 }, { seed: 3, status, time_s: 4.8, force_n: 1.2 }] });
+const traced = (status) => ({ ...tugRun, per_seed: [{ seed: 1, status: "lost", time_s: 45, score_cm: -3 }, { seed: 3, status, time_s: 45, score_cm: 1 }] });
 
 describe("clipVerdict", () => {
-  it("stamps a bench run with how its replayed seed ended, each a pass", () => {
-    expect(clipVerdict(tugRun)).toEqual({ stamp: "HELD ON", pass: true });
-    expect(clipVerdict(traced("pit"))).toEqual({ stamp: "PULLED IN", pass: true });
+  it("stamps a rated run with how its replayed bout ended, a pass for a win", () => {
+    expect(["won", "lost", "draw", "pit_won", "pit_lost"].map((s) => clipVerdict(traced(s)))).toEqual([
+      { stamp: "WON THE PULL", pass: true }, { stamp: "LOST THE PULL", pass: false }, { stamp: "DRAW", pass: false },
+      { stamp: "PULLED IT IN", pass: true }, { stamp: "DRAGGED IN", pass: false }]);
   });
   it("stamps a race and a performance as it always has", () => {
     const race = { event, seeds_finished: 5 };
@@ -67,7 +68,7 @@ describe("clipScore", () => {
     expect(score.cues.map((cue) => cue.file)).not.toContain("air-horn.mp3");
   });
 
-  it("a bench's crowd answers the verdict alone: a duck on the bench goes down no course", () => {
+  it("a tug's crowd answers the verdict alone: a bout goes down no course", () => {
     const score = clipScore({ run: tugRun, plan: clipPlan(100, 30, 26), trace, ducks: [] });
     expect(score.crowd.progress).toEqual([]);
     expect(score.crowd.verdict).toBe("pass");

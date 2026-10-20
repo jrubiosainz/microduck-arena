@@ -28,17 +28,20 @@ describe("a ticket", () => {
     expect(summary({ ...TICKET, checkpoints: [row(0, 50, 0)], best: null }, false).textContent).toBe("No checkpoint finishes yet.");
   });
 
-  it("a tug's bars and best go to the strongest, in newtons", () => {
-    const rows = [row(0, 2), row(1, 5.5), row(2, 4)];
-    const drawn = [...bars(rows, 1, { metric: "mean_hold_force" }).children];
-    expect(drawn.map((b) => b.style.height)).toEqual(["36%", "100%", "73%"]);
+  it("a tug's bars span its worst to its best, in centimetres", () => {
+    const rows = [row(0, -15), row(1, 10), row(2, 0)];
+    const drawn = [...bars(rows, 1, { metric: "mean_ground_cm" }).children];
+    expect(drawn.map((b) => b.style.height)).toEqual(["6%", "100%", "62%"]);
     expect(drawn[1].className).toBe("best");
-    expect(summary({ ...TICKET, checkpoints: rows, best: 1 }, false, "mean_hold_force").textContent).toBe("Best: checkpoint 1 · 5.50 N · 5/5");
+    expect(summary({ ...TICKET, checkpoints: rows, best: 1 }, false, "mean_ground_cm").textContent).toBe("Best: checkpoint 1 · 10.0 cm · 5/5");
   });
 
   it("reads the official time from the entry's line", () => {
     expect(officialTime("entered on sprint-2m: 4.892 s (5/5 seeds) at 0.55 m/s")).toBe("4.89 s");
-    expect(officialTime("entered on tug-of-war: a 4.21 N rating")).toBe("4.21 N");
+  });
+
+  it("reads a negative rating off the entry's line", () => {
+    expect(officialTime("entered on tug-of-war: a -15.2 cm rating → https://x/r/1")).toBe("-15.2 cm");
   });
 
   it("leads to its job page, says where it runs and how far it is, and stops after a confirm", () => {
