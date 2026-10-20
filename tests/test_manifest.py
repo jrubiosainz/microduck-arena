@@ -519,7 +519,9 @@ def test_the_tug_of_war_loads(tmp_path):
     ({"course": TUG["course"] + "slope_deg=0.0\n"}, "unknown keys"),
     ({"sweep": TUG["sweep"].replace("jerk_n=0.4", "jerk_n=0.4\nspring=1")}, "unknown keys"),
     ({"sweep": TUG["sweep"] + "draws=1\n"}, "unknown keys"),
-    ({"sweep": TUG["sweep"].replace("max_bouts=5", "max_bouts=2")}, "max_bouts"),
+    ({"sweep": TUG["sweep"].replace("max_bouts=5", "max_bouts=2")}, r"probe\.toml: \[bout\] max_bouts"),
+    ({"sweep": TUG["sweep"].replace("time_limit_s=20.0", "time_limit_s=0.01")}, r"probe\.toml: \[bout\] time_limit_s"),
+    ({"sweep": TUG["sweep"].replace("bouts_to_win=2", "bouts_to_win=0")}, r"probe\.toml: \[bout\] bouts_to_win"),
 ])
 def test_a_malformed_tug_is_refused(tmp_path, change, complaint):
     with pytest.raises(ManifestError, match=complaint):

@@ -10,7 +10,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from .constants import CMD_SIZE
+from .constants import CMD_SIZE, CTRL_DT
 
 EVENTS_DIR = Path(__file__).parent / "events"
 
@@ -350,15 +350,19 @@ def _bench(raw: dict) -> Bench:
     )
 
 
-def _bout(raw: dict) -> BoutRules:
+def _bout(raw: dict, path: Path) -> BoutRules:
     _refuse_unknown(raw, {"time_limit_s", "bouts_to_win", "max_bouts"}, "[bout]")
     rules = BoutRules(
         time_limit_s=float(_require(raw, "time_limit_s", "[bout]")),
         bouts_to_win=int(_require(raw, "bouts_to_win", "[bout]")),
         max_bouts=int(_require(raw, "max_bouts", "[bout]")),
     )
+    if rules.time_limit_s < CTRL_DT:
+        raise ManifestError(f"{path}: [bout] time_limit_s must be at least one control step")
+    if rules.bouts_to_win < 1:
+        raise ManifestError(f"{path}: [bout] bouts_to_win must be at least 1")
     if rules.max_bouts < 2 * rules.bouts_to_win - 1:
-        raise ManifestError("[bout] max_bouts must be at least 2 * bouts_to_win - 1")
+        raise ManifestError(f"{path}: [bout] max_bouts must be at least 2 * bouts_to_win - 1")
     return rules
 
 
@@ -432,7 +436,7 @@ def load_manifest(path: Path) -> Manifest:
             if section not in raw:
                 raise ManifestError(f"{path}: a tug needs [{section}]")
         course, sweep = _tug(course_raw), None
-        bench, bout = _bench(raw["bench"]), _bout(raw["bout"])
+        bench, bout = _bench(raw["bench"]), _bout(raw["bout"], path)
     elif kind == "stage":
         _refuse_unknown(course_raw, {"kind", "size_m", "max_ducks"}, "[course]")
         if len(seeds) != 1:
