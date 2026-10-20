@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { matchPlan } from "./match.js";
 import { clipPlan } from "./plan.js";
-import { clipScore, clipVerdict } from "./score.js";
+import { clipScore, clipVerdict, matchScore } from "./score.js";
 
 const event = { id: "sprint-2m", length_m: 2, clip: { sounds: ["crowd", "horn", "verdict"] } };
 const trace = new Float32Array(200 * 21);
@@ -127,5 +128,14 @@ describe("clipScore", () => {
     const run = { run_id: "r1", seeds_finished: 1, event };
     const cues = clipScore({ run, plan: clipPlan(250, 20, 26), trace: new Float32Array(21 * 276), ducks: [{ sound: null }, singer] }).cues;
     expect(cues.filter((cue) => cue.song).map((cue) => cue.song.part)).toEqual([{ choral: false, variant: 1 }]);
+  });
+});
+
+describe("matchScore", () => {
+  it("scores a match: the crowd answers the verdict and the stamp lands at the outro", () => {
+    const plan = matchPlan([{ k: 0, settle: 26, steps: 1000 }]);
+    const score = matchScore({ match: { match_id: "tug-of-war-0001-000", event: { clip: { sounds: ["crowd", "verdict"] } } }, plan });
+    expect(score.crowd).toEqual({ start: 3, end: plan.tapeEnd / 25, verdict: "pass", progress: [] });
+    expect(score.cues.map((cue) => cue.at)).toEqual([plan.tapeEnd / 25, plan.tapeEnd / 25 + 0.16]);
   });
 });

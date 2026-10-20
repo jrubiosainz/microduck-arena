@@ -125,3 +125,16 @@ export async function getBroadcast(id) {
 // `version` is the render the file belongs to (a slot's `clip`): the files are
 // cached for a year as immutable, so a clip rendered again is a new URL.
 export const clipUrl = (runId, name, version) => `/api/runs/${runId}/clip/${name}?v=${version}`;
+
+/** A cup's match: its two entrants, its bouts and how it ended. */
+export const getMatch = (matchId) => json(`/api/matches/${matchId}`);
+
+/** Bout `k` of a match, both ducks, west first; and the untimed settle before it. */
+export const getBoutTrace = (matchId, k) => frames(`/api/matches/${matchId}/bouts/${k}/trace`);
+export const getBoutSettle = (matchId, k) => frames(`/api/matches/${matchId}/bouts/${k}/settle`);
+
+/** Where a match's clip stands, as a run's does (getClip). */
+export const getMatchClip = (matchId) => json(`/api/matches/${matchId}/clip`);
+
+// Versioned by its render, as a run's clip files are (clipUrl).
+export const matchClipUrl = (matchId, name, version) => `/api/matches/${matchId}/clip/${name}?v=${version}`;

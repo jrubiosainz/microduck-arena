@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import time
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -164,6 +165,15 @@ def test_the_manifest_carries_the_live_contract_per_layout():
         "timing": {"total_wall_ms": 1},
     }
     assert manifest["layouts"]["vertical"]["width"] == 1080
+
+
+def test_a_match_clip_says_where_each_bout_sits():
+    run, bouts = rendered(), [{"k": 0, "tape_start_s": 3.52, "tape_end_s": 23.52}]
+    land = run.layouts["landscape"]
+    run.layouts["landscape"] = replace(land, plan={**land.plan, "bouts": bouts})
+    manifest = clip_manifest("tug-of-war-0001-000", run, "2026-10-30T15:20:00Z")
+    assert manifest["layouts"]["landscape"]["timing"] == {"total_wall_ms": 1, "bouts": bouts}
+    assert manifest["layouts"]["vertical"]["timing"] == {"total_wall_ms": 1}
 
 
 def test_a_clip_job_renders_its_run_and_records_a_failure(tmp_path):
@@ -616,6 +626,16 @@ def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
     assert steps[:2] == ["opening", "soundtrack"]
 
 
+def test_a_match_clip_opens_the_match_on_the_clip_page():
+    opened = []
+    tab = SimpleNamespace(navigate=opened.append, wait_ready=lambda: None)
+    chrome = SimpleNamespace(tab=lambda width, height: tab)
+    recorder._open(chrome, "http://o", "tug-of-war-0001-004", "landscape")
+    recorder._open(chrome, "http://o", "01M4Z4YCJ15T56BAXX1RPD", "vertical")
+    assert opened == ["http://o/clip.html?match=tug-of-war-0001-004&layout=landscape&frame=0",
+                      "http://o/clip.html?run=01M4Z4YCJ15T56BAXX1RPD&layout=vertical&frame=0"]
+
+
 def test_a_longer_clip_gets_as_much_time_per_frame_as_a_race():
     """The 900 s budget was sized on a race's longest clip, 451 frames. A 20 s performance on the
     stage has 651, and the first one on the Space failed at frame 649: it was slow at a race's
@@ -706,6 +726,19 @@ def test_a_job_that_ended_without_a_clip_is_launched_again_then_failed(tmp_path)
     assert failed["reason"] == f"job J{JOB_TRIES} ended ERROR: image pull failed"
     assert landed == ["R1"] * JOB_TRIES
     assert jobs.progress("R1") is None
+
+
+def test_a_match_clip_job_is_launched_again_however_often_the_machine_ends_it(tmp_path):
+    store, mid = LocalStore(tmp_path), "tug-of-war-0001-000"
+    store.mark_clip_pending(mid, "arena", "tug-of-war", "2026-10-30T15:01:00Z")
+    api = FakeJobs()
+    jobs = jobs_for(store, api)
+    jobs.enqueue(mid)
+    for attempt in range(1, JOB_TRIES + 3):
+        jobs.tick()
+        api.stage[f"J{attempt}"] = "ERROR"
+    jobs.tick()
+    assert len(api.launched) == JOB_TRIES + 3 and store.clip_state(mid) == ("pending", None)
 
 
 def test_a_boot_takes_over_the_jobs_a_previous_process_left_running(tmp_path):

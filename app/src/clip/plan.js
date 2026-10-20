@@ -8,10 +8,10 @@ import { CTRL_DT } from "../replay.js";
 import { entrySide } from "../tug.js";
 
 export const FPS = 25;
-const INTRO_S = 3;
+export const INTRO_S = 3;
 /** The camera's travel to the chase, inside the intro: it settles before the start. */
-const TRAVEL_S = 2.4;
-const OUTRO_S = 2.5;
+export const TRAVEL_S = 2.4;
+export const OUTRO_S = 2.5;
 /** Trace frames per clip frame: the trace is 50 Hz, the clip 25 fps. */
 export const STRIDE = Math.round(1 / FPS / CTRL_DT);
 

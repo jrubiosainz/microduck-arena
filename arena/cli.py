@@ -163,13 +163,13 @@ def _cmd_recover(args) -> int:
     return 0
 
 
-def _app_on_loopback(store_dir) -> tuple | None:
+def _app_on_loopback(store_dir, reveal_all: bool = False) -> tuple | None:
     """The app on a free loopback port, answering, launching no clip jobs.
 
     The recorder's Chrome needs the clip page and the API; this process is the
-    clip job, or a render by hand, and owes nothing itself. The config, the
-    app, the running server and its origin — or None, the failure already
-    reported.
+    clip job, or a render by hand, and owes nothing itself. With `reveal_all`
+    it serves a cup's matches before they air. The config, the app, the running
+    server and its origin — or None, the failure already reported.
     """
     import socket
     import threading
@@ -184,7 +184,8 @@ def _app_on_loopback(store_dir) -> tuple | None:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     origin = f"http://127.0.0.1:{port}"
-    config = ArenaConfig.from_env(store_dir=store_dir, origin=origin, clip_worker=False)
+    config = ArenaConfig.from_env(store_dir=store_dir, origin=origin, clip_worker=False,
+                                  reveal_all=reveal_all)
     app = create_app(config)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     threading.Thread(target=server.run, daemon=True).start()
@@ -203,10 +204,11 @@ def _app_on_loopback(store_dir) -> tuple | None:
 
 
 def _cmd_clip(args) -> int:
-    """Render one run's clips into the store: what a clip job runs, or by hand."""
+    """Render one run's clips, or a match's, into the store: what a clip job runs, or by hand."""
     from .clips import ClipRenderer
 
-    started = _app_on_loopback(args.store)
+    # A match's clip is rendered before its cup's show: this app reads it before it airs.
+    started = _app_on_loopback(args.store, reveal_all=True)
     if started is None:
         return 1
     config, app, server, origin = started

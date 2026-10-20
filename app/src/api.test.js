@@ -4,6 +4,7 @@ import {
   clipUrl,
   getBallot,
   getBallotTrace,
+  getBoutTrace,
   getBroadcast,
   getLeaderboard,
   getLive,
@@ -11,6 +12,7 @@ import {
   getStandings,
   getSettle,
   getTrace,
+  matchClipUrl,
 } from "./api.js";
 
 function respondWith({ ok = true, status = 200, statusText = "OK", body, bytes, headers = {} }) {
@@ -175,5 +177,15 @@ describe("the channel", () => {
     expect(clipUrl("01ABC", "clip.mp4", "20260922T151828Z")).toBe(
       "/api/runs/01ABC/clip/clip.mp4?v=20260922T151828Z",
     );
+  });
+});
+
+describe("a match", () => {
+  it("reads a bout as two ducks and versions a match clip's files", async () => {
+    respondWith({ bytes: new Float32Array(84).buffer, headers: { "X-Duck-Count": "2" } });
+    const ducks = await getBoutTrace("tug-of-war-0001-000", 1);
+    expect(fetch).toHaveBeenCalledWith("/api/matches/tug-of-war-0001-000/bouts/1/trace");
+    expect(ducks.map((d) => d.length)).toEqual([42, 42]);
+    expect(matchClipUrl("tug-of-war-0001-000", "landscape.mp4", "v1")).toBe("/api/matches/tug-of-war-0001-000/clip/landscape.mp4?v=v1");
   });
 });

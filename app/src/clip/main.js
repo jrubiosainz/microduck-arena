@@ -1,8 +1,10 @@
 // The clip: the page the recorder photographs one frame at a time. It draws
 // nothing on a clock of its own — the recorder asks for frame i, gets it, and
-// asks for the soundtrack once. ?run=<id>&layout=landscape|vertical&frame=N.
+// asks for the soundtrack once. ?run=<id>&layout=landscape|vertical&frame=N, or
+// ?match=<id> for a cup's match.
 
-import { getRun, getSettle, getTrace } from "../api.js";
+import { getBoutSettle, getBoutTrace, getMatch, getRun, getSettle, getTrace } from "../api.js";
+import { boutLane } from "../bouts.js";
 import { credit, stageDucks } from "../cast.js";
 import { LANE_COLORS } from "../course.js";
 import { formatScore, isStage, isTug } from "../format.js";
@@ -10,9 +12,10 @@ import { lanesFor } from "../lanes.js";
 import { CTRL_DT, frameCount, leadIn, standing } from "../replay.js";
 import { ratingLane } from "../tug.js";
 import { createViewer } from "../viewer.js";
+import { boutAt, matchPlan, matchWords, scoreAt } from "./match.js";
 import { actAt, clipPlan, stampAt, stampLane, stepAt, travelAt } from "./plan.js";
 import { stadiumDirection } from "./direction.js";
-import { clipScore, clipVerdict } from "./score.js";
+import { clipScore, clipVerdict, matchScore } from "./score.js";
 import { renderSoundtrack } from "./soundtrack.js";
 
 /** How far the chase camera stands per layout, as a factor on the viewer's
@@ -62,12 +65,49 @@ function letter(run) {
   stamp.classList.add(said.pass ? "stamp-pass" : "stamp-fail");
 }
 
+/** The words on a match's frame: the cup, who meets whom, and the winner on the stamp, centred. */
+function matchLetter(match) {
+  const words = matchWords(match);
+  for (const id of ["top-title", "intro-title"]) $(id).textContent = words.title;
+  for (const id of ["top-participant", "intro-line"]) $(id).textContent = words.line;
+  $("osd-rec").textContent = `REC · ${words.line}`;
+  $("osd-event").textContent = words.title.toUpperCase();
+  const stamp = $("stamp");
+  stamp.textContent = words.outro;
+  stamp.classList.add("stamp-pass");
+  Object.assign(stamp.style, { left: "50%", top: "45%" });
+}
+
 function base64(bytes) {
   return new Promise((done) => {
     const reader = new FileReader();
     reader.onload = () => done(reader.result.split(",")[1]);
     reader.readAsDataURL(new Blob([bytes]));
   });
+}
+
+/** What the recorder drives: the plan, the score, a frame at a time and the soundtrack; then the
+ * frame the page was asked for. */
+function expose(plan, score, draw) {
+  let pcm = null;
+  window.clip = {
+    plan,
+    score,
+    layout,
+    draw,
+    ready: true,
+    error: null,
+    /** Renders the whole soundtrack; resolves to its byte length. */
+    async soundtrack() {
+      pcm = new Uint8Array((await renderSoundtrack(score, plan.seconds)).buffer);
+      return pcm.byteLength;
+    },
+    /** One slice of it, base64, for a transfer in bounded pieces. */
+    chunk(offset, size) {
+      return base64(pcm.subarray(offset, Math.min(offset + size, pcm.byteLength)));
+    },
+  };
+  draw(Number(params.get("frame") ?? plan.poster));
 }
 
 async function main() {
@@ -141,28 +181,53 @@ async function main() {
     return step;
   }
 
-  let pcm = null;
-  window.clip = {
-    plan,
-    score,
-    layout,
-    draw,
-    ready: true,
-    error: null,
-    /** Renders the whole soundtrack; resolves to its byte length. */
-    async soundtrack() {
-      pcm = new Uint8Array((await renderSoundtrack(score, plan.seconds)).buffer);
-      return pcm.byteLength;
-    },
-    /** One slice of it, base64, for a transfer in bounded pieces. */
-    chunk(offset, size) {
-      return base64(pcm.subarray(offset, Math.min(offset + size, pcm.byteLength)));
-    },
-  };
-  draw(Number(params.get("frame") ?? plan.poster));
+  expose(plan, score, draw);
 }
 
-main().catch((jammed) => {
+/** A cup's match: its bouts one after the other on the tug, a score bug over them, the winner at the outro. */
+async function mainMatch() {
+  const id = params.get("match");
+  const match = await getMatch(id);
+  // Two traces and two settles per bout, west first, bout k at k.
+  const [traces, settles] = await Promise.all([
+    Promise.all(match.bouts.map(({ k }) => getBoutTrace(id, k))),
+    Promise.all(match.bouts.map(({ k }) => getBoutSettle(id, k).then(standing))),
+  ]);
+  const plan = matchPlan(
+    match.bouts.map(({ k }) => ({ k, settle: frameCount(settles[k][0]), steps: frameCount(traces[k][0]) })),
+  );
+  const score = matchScore({ match, plan });
+  const crowdDirection = stadiumDirection(score.crowd ?? {});
+  const viewer = await createViewer($("stage"), { rig: match.event.rig, manual: true, camera: match.event.clip.camera });
+  matchLetter(match);
+  const bold = (text) => Object.assign(document.createElement("b"), { textContent: text });
+  let playing = null;
+
+  /** Frame `i` of the plan. Returns the bout's step it drew. */
+  function draw(i) {
+    const act = actAt(plan, i);
+    const { bout, step } = boutAt(plan, i);
+    if (bout !== playing) {
+      viewer.setLanes([boutLane(match, bout, traces[bout], settles[bout])], match.event, { loop: false });
+      playing = bout;
+    }
+    // The bout's lane starts from its settle, as a rated run's does.
+    viewer.frame(step * CTRL_DT, travelAt(plan, i), i / plan.fps, crowdDirection);
+    // Each bout's clock starts after its settle.
+    $("osd-clock").textContent = clock(Math.max(0, step - plan.spans[bout].settle));
+    document.documentElement.dataset.act = act;
+    $("intro").hidden = act !== "intro";
+    $("stamp").hidden = act !== "outro";
+    const [a, b] = scoreAt(plan, match, i);
+    $("osd-bug").hidden = act === "intro";
+    $("osd-bug").replaceChildren(`${match.a.name} `, bold(`${a}–${b}`), ` ${match.b.name}`);
+    return step;
+  }
+
+  expose(plan, score, draw);
+}
+
+(params.has("match") ? mainMatch() : main()).catch((jammed) => {
   $("jam").hidden = false;
   $("jam-why").textContent = jammed.message;
   window.clip = { error: jammed.message, ready: true };

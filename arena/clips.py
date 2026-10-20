@@ -24,6 +24,7 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .cup import is_match_id
 from .manifest import all_events
 from .recorder import SIZES, RenderedRun, ffmpeg_available, find_chrome, record_run
 
@@ -76,7 +77,10 @@ def clip_manifest(run_id: str, rendered: RenderedRun, rendered_at: str) -> dict:
             "crowdDirection": (
                 {k: layout.crowd[k] for k in ("start", "end", "verdict")} if layout.crowd else None
             ),
-            "timing": layout.timing,
+            # A match's clip also says where each bout's tape starts and ends: the show times
+            # its calls by them.
+            "timing": ({**layout.timing, "bouts": layout.plan["bouts"]}
+                       if "bouts" in layout.plan else layout.timing),
         }
     return {"run_id": run_id, "version": CLIP_VERSION, "rendered_at": rendered_at,
             "poster": "poster.png", "layouts": layouts}
@@ -324,7 +328,9 @@ class ClipJobs:
             # Neither file: the machine ended the job, not the render.
             why = f"job {flight['job']} ended {stage}" + (f": {message}" if message else "")
             self._tries[run_id] += 1
-            if self._tries[run_id] < JOB_TRIES:
+            # A match's clip is never given up on: a cup cannot premiere with a hole, and the
+            # cup worker spaces the relaunches of failed renders.
+            if is_match_id(run_id) or self._tries[run_id] < JOB_TRIES:
                 self.log(f"clip: {run_id} owed again ({why})")
                 self.enqueue(run_id, flight["priority"])
             else:

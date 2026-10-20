@@ -233,3 +233,8 @@ def test_app_dist_is_the_fallback(tmp_path):
     package = tmp_path / "checkout" / "arena"
     package.mkdir(parents=True)
     assert default_frontend(package) == tmp_path / "checkout" / "app" / "dist"
+
+
+def test_only_a_clip_job_reads_unrevealed_matches(tmp_path):
+    assert ArenaConfig.from_env(store_dir=tmp_path).reveal_all is False
+    assert ArenaConfig.from_env(store_dir=tmp_path, reveal_all=True).reveal_all is True

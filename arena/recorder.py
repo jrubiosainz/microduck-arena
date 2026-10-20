@@ -20,6 +20,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
+from .cup import is_match_id
+
 CHROMES = (
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
@@ -258,7 +260,9 @@ class RenderedRun:
 def _open(chrome: Chrome, origin: str, run_id: str, layout: str) -> Tab:
     width, height = SIZES[layout]
     tab = chrome.tab(width, height)
-    tab.navigate(f"{origin}/clip.html?run={run_id}&layout={layout}&frame=0")
+    # A cup's match is filmed whole, its bouts one after the other (app/src/clip/match.js).
+    kind = "match" if is_match_id(run_id) else "run"
+    tab.navigate(f"{origin}/clip.html?{kind}={run_id}&layout={layout}&frame=0")
     tab.wait_ready()
     return tab
 

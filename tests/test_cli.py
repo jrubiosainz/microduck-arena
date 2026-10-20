@@ -1,6 +1,7 @@
 import json
 import re
 
+from arena import cli
 from arena.assets import ASSET_ROOT
 from arena.cli import main
 
@@ -288,3 +289,9 @@ def test_score_rates_a_tug_entry_and_the_board_says_rating(tmp_path, capsys):
     assert main(["board", "--event", "tug-of-war", "--store", str(tmp_path)]) == 0
     board = capsys.readouterr().out
     assert "rating" in board and " cm" in board and "cmd" not in board and "m/s" not in board  # the tug's command is no speed
+
+
+def test_arena_clip_serves_its_page_every_match(tmp_path, monkeypatch):
+    asked = []
+    monkeypatch.setattr(cli, "_app_on_loopback", lambda store_dir, reveal_all=False: asked.append(reveal_all))
+    assert cli.main(["clip", "tug-of-war-0001-000", "--store", str(tmp_path)]) == 1 and asked == [True]

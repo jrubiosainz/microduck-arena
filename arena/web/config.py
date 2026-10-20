@@ -129,6 +129,9 @@ class ArenaConfig:
     # twenty airings later, and on a Space every store write is a dataset
     # commit — far too many of those, far too briefly needed.
     broadcast_dir: Path = DEFAULT_BROADCAST_DIR
+    # Whether a cup's matches are served before they air. Only `arena clip` sets it: the clip
+    # job's loopback app must read a match to film it before the show. The Space never does.
+    reveal_all: bool = False
 
     @classmethod
     def from_env(
@@ -139,6 +142,7 @@ class ArenaConfig:
         rank_by: str | None = None,
         origin: str | None = None,
         clip_worker: bool = True,
+        reveal_all: bool = False,
     ) -> "ArenaConfig":
         store = Path(store_dir or os.environ.get("ARENA_STORE") or DEFAULT_STORE)
         user = dev_user or os.environ.get("ARENA_DEV_USER") or DEFAULT_USER
@@ -190,6 +194,7 @@ class ArenaConfig:
             commentary_model=(os.environ.get("ARENA_COMMENTARY_MODEL") or "").strip()
             or DEFAULT_COMMENTARY_MODEL,
             broadcast_dir=Path(os.environ.get("ARENA_BROADCASTS") or DEFAULT_BROADCAST_DIR),
+            reveal_all=reveal_all,
         )
 
     @property

@@ -87,3 +87,15 @@ export function clipScore({ run, plan, trace, ducks }) {
     cues: [...sounds.flatMap((name) => SOURCES[name]?.(context) ?? []), ...voice],
   };
 }
+
+/** A cup's match: someone always wins it, so its crowd cheers at the outro, where the stamp lands. No course to go
+ * down, no voices. */
+export function matchScore({ match, plan }) {
+  const sounds = match.event.clip.sounds;
+  const context = { start: plan.intro / plan.fps, end: plan.tapeEnd / plan.fps, verdict: "pass" };
+  return {
+    seed: fnv(match.match_id),
+    crowd: sounds.includes("crowd") ? { ...context, progress: [] } : null,
+    cues: sounds.flatMap((name) => SOURCES[name]?.(context) ?? []),
+  };
+}
