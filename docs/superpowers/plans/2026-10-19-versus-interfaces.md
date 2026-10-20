@@ -44,9 +44,9 @@ here. If a plan must change a name, it changes this file in the same commit.
   air a duck is named by its on-air `name` (Plan C's `Entrant.name`: the policy's name, plus
   ` (@<user>)` when another entrant of the cup has the same policy name) (match titles, clip cards,
   the match page's stamp, the cup screen, the desk and the call lines), the cup page shows the
-  policy's name and the player's handle; A's stamp words
-  `RATED` / `HELD ON` / `PULLED IN`, the lime round card with `Pull!` and its
-  placeholder art, a bench clip of about 35 s.
+  policy's name and the player's handle; the run page's stamp `RATED`, the lime round card with
+  `Pull!`; 45 s bouts, a rating of five bouts against a frozen reference duck in cm with a pit
+  bonus, no winch (2026-10-20 night).
 - **Worktree (arena):** `~/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus`, branch
   `versus` from local `main` at `abcbb9e` or later. From the main checkout:
   - `/usr/bin/git worktree add .claude/worktrees/versus -b versus main`
@@ -128,14 +128,14 @@ here. If a plan must change a name, it changes this file in the same commit.
   `test_hub_store.py FakeHub`; the walker `arena/assets/policies/BEST_alpha_walking.onnx` via
   `load_policy`; `_ZeroPolicy` style fakes (`act(obs) -> np.zeros(14, float32)`).
 
-## Plan A — names
+## Plan A — names (as Plan E leaves them)
 
 ```python
 # arena/manifest.py
 CATEGORIES = {"race", "showcase", "versus"}
-METRICS = ("mean_finish_time", "votes", "mean_hold_force")
+METRICS = ("mean_finish_time", "votes", "mean_ground_cm")
 COURSE_KINDS = ("lane", "stage", "tug")
-HIGHER_WINS = frozenset({"mean_hold_force"})     # every other metric: lower is better
+HIGHER_WINS = frozenset({"mean_ground_cm"})     # every other metric: lower is better
 
 @dataclass(frozen=True)
 class Tug:
@@ -148,11 +148,9 @@ class Tug:
     kind: str = "tug"
 
 @dataclass(frozen=True)
-class Bench:
-    ramp_n_per_s: float
-    top_n: float
-    jerk_n: float                 # amplitude of each jerk sine
-    jerk_hz: tuple[float, ...]    # one sine per frequency
+class Rating:
+    reference: str        # the reference duck: a file name in arena/assets/policies/
+    pit_bonus_cm: float   # added when the reference ends in the pit, taken off when the entry does
 
 @dataclass(frozen=True)
 class BoutRules:
@@ -160,16 +158,18 @@ class BoutRules:
     bouts_to_win: int
     max_bouts: int
 
-# Manifest gains: bench: Bench | None = None, bout: BoutRules | None = None
+# Manifest gains rating: Rating | None = None, bout: BoutRules | None = None. A tug: versus and mean_ground_cm, needs
+# [rating] and [bout], its time_limit_s equal to [bout]'s; others refuse both.
 def higher_wins(event_id: str) -> bool   # cached; True iff the event's TOML exists and its metric is in HIGHER_WINS
 ```
 
-Validation: `course.kind == "tug"` ⇔ `category == "versus"` ⇔ `metric == "mean_hold_force"`; a tug
-requires `[bench]` and `[bout]`, refuses `[sweep]` and `[vote]`, requires `rig = "legs"`, refuses
-unknown keys in its `[course]`, `[bench]`, `[bout]`; any other event refuses `[bench]` and `[bout]`.
+Validation: `course.kind == "tug"` ⇔ `category == "versus"` ⇔ `metric == "mean_ground_cm"`; a tug
+requires `[rating]` and `[bout]` (its `time_limit_s` equal to `[bout]`'s), refuses `[sweep]` and
+`[vote]`, requires `rig = "legs"`, refuses unknown keys in its `[course]`, `[rating]`, `[bout]`;
+any other event refuses `[rating]` and `[bout]`.
 
 `arena/events/tug-of-war.toml` (Plan A creates it; Plan C adds `[cup]`; Plan B may retune
-`[command]` and `[bench]`, the parity test keeps both repos equal):
+`[command]`, `[bout]` and `[rating]`, the parity test keeps both repos equal):
 
 ```toml
 id           = "tug-of-war"
@@ -178,8 +178,8 @@ title        = "Tug of War"
 category     = "versus"
 kind         = "perpetual"
 rig          = "legs"
-time_limit_s = 30.0          # the bench's timed length, after the settle
-metric       = "mean_hold_force"
+time_limit_s = 45.0
+metric       = "mean_ground_cm"
 seeds        = [1, 2, 3, 4, 5]
 
 [course]
@@ -191,7 +191,7 @@ pit_m         = 0.30
 pit_depth_m   = 0.30
 string_m      = 1.00
 
-[command]                     # every duck, every bout and bench run: walk backwards
+[command]                     # every duck, every bout: walk backwards
 vel  = [-0.30, 0.0, 0.0]
 head = [0.0, 0.0, 0.0, 0.0]
 body = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -204,23 +204,21 @@ settle_s = 0.5
 joint_rad = 0.01
 yaw_deg   = 2.0
 
-[termination]                 # summaries only: a fall never ends a bout or a bench run
+[termination]                 # summaries only: a fall never ends a bout
 fall_gravity_z = -0.5
 fall_hold_s    = 0.3
 
-[bench]
-ramp_n_per_s = 0.25
-top_n        = 7.0
-jerk_n       = 0.4
-jerk_hz      = [0.7, 1.9]
+[rating]
+reference    = "tug-reference-t7-250.onnx"
+pit_bonus_cm = 100.0
 
 [bout]
-time_limit_s = 20.0
+time_limit_s = 45.0
 bouts_to_win = 2
 max_bouts    = 5
 
 [clip]
-tape_max_s = 30.0
+tape_max_s = 45.0
 sounds     = ["crowd", "verdict"]
 ```
 
@@ -228,20 +226,14 @@ sounds     = ["crowd", "verdict"]
 # arena/course.py
 STRING_SITE = "string_end"   # on each duck's trunk_base (prefixed for duck 1), at the neck's base
 STRING = "string"            # the spatial tendon
-WINCH_SITE = "winch_drum"    # on the world body, the bench only
-WINCH = "winch"              # a motor on the STRING tendon; ctrl = the pull in newtons, towards the drum
 PLATFORM_OVERRUN_M = 20.0    # the platforms run this far past the walls: nobody walks off the world
 
 def string_offset(rig: str = "legs") -> tuple[float, float, float]   # the `neck` body's pos in `trunk_base`, read from the rig's MJCF
 def tug_walls(course: Tug) -> list[tuple[str, tuple, tuple]]          # ("wall_left"|"wall_right", pos, half), x in [-length/2, length/2]
 def pit_boxes(course: Tug) -> list[tuple[str, tuple, tuple]]          # "platform_west", "platform_east" (top face z = 0), "pit_floor" (top face z = -pit_depth_m)
-def tug_layout(course: Tug, ducks: int, rig: str = "legs") -> list[Start]  # [west yaw 0, east yaw 180] or [west]; both string ends on y = 0, string_m apart, centred on x = 0
-def winch_position(course: Tug, rig: str = "legs") -> tuple[float, float, float]  # (string_m / 2, 0, SPAWN_HEIGHT_M + string_offset[2])
-def compile_tug(manifest: Manifest, ducks: int) -> mujoco.MjModel
-# ducks=2: a bout; STRING between "string_end" and "duck1/string_end", limited, range (0, string_m)
-# ducks=1: the bench; STRING from "string_end" to WINCH_SITE, unlimited, WINCH motor on it
-#   (gear -1: a positive ctrl pulls towards the drum), after the 14 servos; its STAND keyframe
-#   has one ctrl per actuator, the winch's 0.0 last
+def tug_layout(course: Tug, rig: str = "legs") -> list[Start]  # [west yaw 0, east yaw 180]; both string ends on y = 0, string_m apart, centred on x = 0
+def compile_tug(manifest: Manifest) -> mujoco.MjModel
+# two ducks: STRING between "string_end" and "duck1/string_end", limited, range (0, string_m)
 # _inject_course gets a "tug" branch: no infinite plane, pit_boxes + tug_walls instead.
 # compile_stage is split into helpers it shares with compile_tug; compile_stage stays bit-identical.
 ```
@@ -253,30 +245,10 @@ PIT_DROP_M = 0.05      # a trunk below z = -PIT_DROP_M is in the pit
 def string_ends(trace: np.ndarray, offset) -> np.ndarray   # (ducks, frames, 21) -> (ducks, frames, 3), from trunk pos + quat
 def marker_x(trace: np.ndarray, offset) -> np.ndarray     # (2, frames, 21) -> (frames,), midpoint x of the two string ends
 def in_pit(frame: np.ndarray) -> bool                       # frame (21,): trunk z < -PIT_DROP_M
-def bench_profile(bench: Bench, event_id: str, seed: int) -> dict
-#   {"ramp_n_per_s", "top_n", "jerks": [[amp_n, hz, phase_rad], …]}   (Plan B mirrors this shape)
-#   phases: np.random.default_rng([zlib.crc32(event_id.encode()), seed, 4]).uniform(0, 2π, len(jerk_hz))
-def bench_force(profile: dict, t_s: float) -> float
-#   min(top_n, max(0.0, ramp_n_per_s * t_s + Σ amp * sin(2π hz t_s + phase))); never asked during the settle
-#   (clamped to the top: a duck dragged in at the top never outscores one that held)
 
 # Only the pit decides (owner, 2026-10-20 evening): a duck is OUT when, after a control step, its
 # trunk is in the pit (in_pit of its last frame, z < -PIT_DROP_M). A duck knocked over, sitting or
-# lying on the platform stays in play and can be dragged. A MuJoCo solver reset on the bench ends
-# the run as "pit" at that step's force; in a bout it stays a draw.
-
-@dataclass(frozen=True)
-class BenchOutcome:
-    seed: int
-    status: str            # "pit" | "held"
-    force_n: float         # bench_force at the step it went out; top_n if it held to the end
-    time_s: float | None   # when it entered the pit; None if it held
-    trace: np.ndarray      # (1, frames, 21); stops at the step it went out
-    settle: np.ndarray     # (1, settle + 1, 21)
-    profile: dict
-
-def run_bench(manifest: Manifest, policy, seed: int, model=None) -> BenchOutcome
-# timed length manifest.time_limit_s; the winch's ctrl is set before every control step
+# lying on the platform stays in play and can be dragged. A MuJoCo solver reset in a bout stays a draw.
 
 @dataclass(frozen=True)
 class BoutOutcome:
@@ -323,16 +295,12 @@ def play_match(manifest: Manifest, a, b, seeds: Sequence[int], ratings: tuple[fl
 
 ```python
 # arena/evaluate.py
-SeedResult(seed, status, time_s, force_n: float | None = None)     # a bench seed's status: "pit" | "held"
-def mean_hold_force(per_seed, time_limit_s) -> float      # METRICS["mean_hold_force"]
-def seed_row(result: SeedResult) -> dict                  # seed, status, time_s, plus force_n only when set; every writer of a seed uses it
-# Evaluation gains bench: dict | None = None (the traced seed's profile)
-# evaluate(manifest, policy) on a tug -> _evaluate_bench: run_bench on every seed;
-#   seeds_finished = len(seeds); trace seed = lower median by (force_n, seed);
-#   command_vx = manifest.command[0]; scan = ()
+SeedResult(seed, status, time_s, score_cm: float | None = None)
+def mean_ground_cm(per_seed, time_limit_s) -> float       # METRICS["mean_ground_cm"]
+def seed_row(result: SeedResult) -> dict                  # seed, status, time_s, plus score_cm only when set; every writer of a seed uses it
 
-# arena/store.py: RunRecord gains bench: dict | None = None. to_dict writes `bench` and a seed's
-# `force_n` only when set, so every stored race and performance serialises as today.
+# arena/store.py: a seed's `score_cm` is written only when set, so every stored race and
+# performance serialises as today.
 
 # arena/index.py
 def sort_key(record) -> tuple   # (-score if higher_wins(record.event_id) else score, -seeds_finished, submitted_at)
@@ -341,38 +309,65 @@ def sort_key(record) -> tuple   # (-score if higher_wins(record.event_id) else s
 # versus enters its cup: it takes a policy entered on purpose).
 ```
 
-`arena score` on a tug (Plan A pins it, Plan B reads it): one line per seed,
-`seed 1: pit      4.77 N at 21.76 s`, `seed 2: held     7.00 N`, `seed 3: pit      0.62 N at 1.02 s`,
-then `rating: 4.21 N · replay from seed 3`.
+Plan E adds:
+
+```python
+# manifest.py
+METRICS = ("mean_finish_time", "votes", "mean_ground_cm"); HIGHER_WINS = frozenset({"mean_ground_cm"})
+@dataclass(frozen=True)
+class Rating:
+    reference: str        # the reference duck: a file name in arena/assets/policies/
+    pit_bonus_cm: float   # added when the reference ends in the pit, taken off when the entry does
+# Manifest gains rating: Rating | None = None, bout: BoutRules | None = None. A tug: versus and mean_ground_cm, needs
+# [rating] and [bout], its time_limit_s equal to [bout]'s; others refuse both.
+# course.py
+def tug_layout(course, rig: str = "legs") -> list[Start]   # [west yaw 0, east yaw 180]
+def compile_tug(manifest: Manifest) -> mujoco.MjModel       # two ducks, STRING limited to (0, string_m)
+# tug.py
+SIDES = ("west", "east")
+def reference_duck(manifest: Manifest) -> Policy            # load_policy(ASSET_ROOT / "policies" / manifest.rating.reference)
+def entry_side(seed: int) -> int                            # 0 (west) on an odd seed, 1 (east) on an even one
+def bout_status(outcome: BoutOutcome, entry: int) -> str    # "won" | "lost" | "pit_won" | "pit_lost" | "draw"
+def bout_score_cm(outcome: BoutOutcome, entry: int, pit_bonus_cm: float, offset) -> float
+# evaluate.py
+SeedResult(seed, status, time_s, score_cm: float | None = None); def mean_ground_cm(per_seed, time_limit_s) -> float
+# a tug: one run_bout per seed, the entry on entry_side(seed), reference_duck opposite; trace seed = lower median by
+# (score_cm, seed), its (2, frames, 21) trace and settle; no record field (a page places the entry by trace_seed)
+```
+
+The reference duck's bytes ship with the Arena (`arena/assets/policies/tug-reference-t7-250.onnx`,
+pinned by sha256 in `tests/test_assets.py`, recorded in `arena/assets/PROVENANCE.md`).
+
+`arena score` on a tug (Plan F reads it): per seed
+`f"seed {s}: {SIDES[entry_side(s)]:<4} {status:<8} {score_cm:+7.1f} cm at {time_s:.2f} s"`, then
+`f"rating: {score:.1f} cm · replay from seed {n}"` (a minus sign when negative).
 
 API (Plan A): `event_summary` of a tug adds `course: "tug"`, `length_m`, `width_m`, `string_m`,
 `pit_m`, `pit_depth_m`, `walls: [{name, pos, half}]`, `pit: [{name, pos, half}]`,
-`string_offset: [x, y, z]`, `winch: [x, y, z]`, `bench: {ramp_n_per_s, top_n}`,
-`bout: {time_limit_s, bouts_to_win, max_bouts}`. `GET /api/runs/{id}` adds `bench` (the profile)
-on a tug run; `per_seed` items carry `force_n`. A tug's board rows carry `bench`; a player's
-publications carry `metric`. `POST /api/events/{id}/submit` answers with the event's `metric` (every
+`string_offset: [x, y, z]`, `bout: {time_limit_s, bouts_to_win, max_bouts}`. `per_seed` items
+carry `score_cm`; every board row carries `trace_seed`; a player's publications carry `metric`. `POST /api/events/{id}/submit` answers with the event's `metric` (every
 event; the publish CLI reads it, Plan B's Task 13).
 
 ```js
 // app/src/format.js
 export const isTug = (event) => event?.course === "tug";
-export function formatScore(value, { finished, metric } = {})   // "4.21 N" for "mean_hold_force"; seconds otherwise, as today
+export function formatScore(value, { finished, metric } = {})   // "12.3 cm" for "mean_ground_cm"; seconds otherwise, as today
 // app/src/tug.js — new (mirrors arena/tug.py; MJCF coordinates in, three.js out)
 export function toThree([x, y, z])                  // [x, z, -y]
 export function stringEnd(frame, offset)            // [x, y, z]
-export function benchForce(profile, t)              // equal to arena.tug.bench_force to 1e-9
-export function forceAt(profile, index, lead)       // 0 while index < lead, else benchForce(profile, (index - lead) * CTRL_DT)
+export const SIDES, REFERENCE, BOUT_WORDS; export function entrySide(seed)   // mirror tug.py's SIDES, entry_side
+export function ratingLane(traces, settles, {traceSeed, livery, name})   // the entry's bout lane
 export function tugDucks(entry)                     // a tug lane -> [{trace, lead, livery, name}], a settle led in
-export function tugEnds(event, frames)              // MJCF [a, b]: duck 0's string end; duck 1's, or event.winch
+export function tugEnds(event, frames)              // MJCF [a, b]: the two ducks' string ends
+export function tugSpan(frames)
 export function buildTugCourse(event)               // Group "course": platforms, pit, the served walls, the centre line
 export function buildString()                       // { group, update(endA, endB) }: the string and its red marker
-export function buildWinch(event)                   // { group, setForce(newtons) }: drum, cable anchor, a dial in N
 // app/src/clip/score.js
-export function clipVerdict(run)                    // {stamp, pass}: a tug's traced seed HELD ON | PULLED IN
+export function clipVerdict(run)                    // {stamp, pass}: stamps a tug's traced status; `clip/plan.js stampLane(run, laneCount)`
 ```
 
-A tug lane handed to `viewer.setLanes` (one per call) is `{tug: "bench", trace, settle?, bench: profile, livery, name}`
-or `{tug: "bout", ducks: [{trace, settle?, livery, name}, {…}]}` (west first; a duck's trace is in
+A tug lane handed to `viewer.setLanes` (one per call) is only
+`{tug: "bout", ducks: [{trace, settle?, livery, name}, {…}]}` (west first; a duck's trace is in
 world coordinates, so it needs no start; an optional `settle` plays before `trace`).
 
 ## Plan B — cross-repo names
@@ -380,19 +375,18 @@ world coordinates, so it needs no start; an optional `settle` plays before `trac
 Plan B copies these Arena names into `microduck-challenges` (its job cannot import the Arena) and
 pins each one with a parity test; the Arena must not change them without Plan B's copy:
 `platform_west`, `platform_east`, `pit_floor`, `wall_left`, `wall_right` (geom names),
-`STRING_SITE`, `STRING`, `WINCH_SITE`, `WINCH`, `SPAWN_HEIGHT_M`, `WALL_THICKNESS_M`,
-`PLATFORM_OVERRUN_M`, `string_offset("legs")`, `PIT_DROP_M`, `tug_layout`'s west start,
-`winch_position`, the gear sign (a positive winch ctrl pulls towards the drum), the bench keyframe's
-one ctrl per actuator, `bench_profile`'s shape and `bench_force`, `manifest.termination` (summaries only),
-the tug's `[course]`, `[command]`, `[start]` and `[bench]`.
+`STRING_SITE`, `STRING`, `SPAWN_HEIGHT_M`, `WALL_THICKNESS_M`,
+`PLATFORM_OVERRUN_M`, `string_offset("legs")`, `PIT_DROP_M`, `tug_layout`'s two starts,
+`manifest.termination` (summaries only), the tug's `[course]`, `[command]`, `[start]`, `[bout]`,
+`[rating]` and the reference duck's bytes.
 
-A retune of `[bench]` or `[command]` by Plan B is, in one sitting: a commit on the arena `versus`
+A retune of `[command]`, `[bout]` or `[rating]` by Plan B is, in one sitting: a commit on the arena `versus`
 branch (`arena/events/tug-of-war.toml`, its two Python suite calls green), the challenges'
 constants, and both repos' parity tests green; C and D read the toml.
 
 microduck_rl (Plan B's Task 13): `publish --enter` says a tug entry as
-`[publish] entered on tug-of-war: a 4.21 N rating → <page url>` (it reads the submit answer's
-`score` and `metric`).
+`[publish] entered on tug-of-war: a 12.3 cm rating → <page url>` (it reads the submit answer's
+`score` and `metric`; metric `mean_ground_cm`).
 
 ## Plan C — names
 
@@ -418,7 +412,7 @@ class Entrant:
     run_id: str
     policy_name: str
     livery: str
-    rating: float
+    rating: float          # in cm (the tug's mean_ground_cm)
     model_sha256: str
     source: dict          # RunRecord.source: where the policy is fetched from
     name: str             # the duck's on-air name in this cup, set once by entrants_at: policy_name, or
