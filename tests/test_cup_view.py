@@ -70,6 +70,7 @@ def test_the_champion_and_the_secret_wait_for_the_final():
     assert before["matches"][6]["a"] == 0
     after = cup_view(cup, REVEAL(6))
     assert (after["champion"], after["secret"]) == (0, cup.secret)
+    assert [row["played"] for row in after["groups"][0]["table"]] == [3, 3, 3, 3]   # the final of two group-mates is not the group's
     assert cup_view(cup, ends_at(cup))["state"] == "aired"
 
 
@@ -78,7 +79,17 @@ def test_a_knockout_pair_waits_for_the_round_before_it():
     early = cup_view(cup, REVEAL(5) - timedelta(milliseconds=1))["matches"][6:]
     assert [(m["a"], m["b"], m["title"]) for m in early] == [(None, None, "Semi-final 1"), (None, None, "Semi-final 2"), (None, None, "Final")]
     assert [m["a"] is not None for m in cup_view(cup, REVEAL(5))["matches"][6:]] == [True, True, False]
+    assert cup_view(cup, REVEAL(7) - timedelta(milliseconds=1))["matches"][8]["a"] is None
     assert cup_view(cup, REVEAL(7))["matches"][8]["a"] is not None
+
+
+def test_only_the_next_reveal_is_timed():
+    """A tug clip grows with each bout: the whole timetable would tell at the start how every match went."""
+    cup = played_cup(4, starts_at=START_ISO)
+    assert [m["reveal_at"] for m in cup_view(cup, START)["matches"]] == ["2026-10-30T17:00:12Z"] + [None] * 6
+    # 11.6 s, 23.2 s and 34.8 s, rounded up to the second
+    assert [m["reveal_at"] for m in cup_view(cup, REVEAL(1))["matches"]] == \
+        ["2026-10-30T17:00:12Z", "2026-10-30T17:00:24Z", "2026-10-30T17:00:35Z", None, None, None, None]
 
 
 def test_a_skipped_cup_says_so():
