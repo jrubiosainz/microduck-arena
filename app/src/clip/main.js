@@ -130,10 +130,11 @@ async function main() {
     $("sheet").hidden = !(act === "outro" || layout === "vertical");
     if (act === "outro") {
       // Reversed for the viewer, the author's lane is its last. The stamp lands
-      // on it, kept whole inside the screen and clear of the figures band.
+      // on it; a tug's is kept whole inside the screen and clear of the figures.
       const screen = $("stamp").parentElement.getBoundingClientRect();
       const floor = $("sheet").getBoundingClientRect().top - screen.top;
-      const { x, y } = stampAt(viewer.spot(lanes.length - 1), $("stamp").getBoundingClientRect(), screen, floor);
+      const spot = viewer.spot(lanes.length - 1);
+      const { x, y } = stampAt(run.event, spot, $("stamp").getBoundingClientRect(), screen, floor);
       Object.assign($("stamp").style, { left: `${100 * x}%`, top: `${100 * y}%` });
     }
     return step;

@@ -35,17 +35,24 @@ describe("clipPlan", () => {
 });
 
 describe("stampAt", () => {
+  const TUG = { course: "tug" };
   const STAMP = { width: 900, height: 200 };
   const LANDSCAPE = { width: 1920, height: 1080 };
-  it("lands the stamp on the duck when it stands whole there", () => {
-    expect(stampAt({ x: 0.5, y: 0.6 }, STAMP, LANDSCAPE, 890)).toEqual({ x: 0.5, y: 0.6 });
+  it("lands a tug's stamp on the duck when it stands whole there", () => {
+    expect(stampAt(TUG, { x: 0.5, y: 0.6 }, STAMP, LANDSCAPE, 890)).toEqual({ x: 0.5, y: 0.6 });
   });
   it("moves it no further than it takes to keep it inside the screen's edges", () => {
-    expect(stampAt({ x: 0.02, y: 0.05 }, STAMP, LANDSCAPE, 890)).toEqual({ x: (36 + 450) / 1920, y: (36 + 100) / 1080 });
-    expect(stampAt({ x: 0.99, y: 0.5 }, STAMP, LANDSCAPE, 890).x).toBe((1920 - 36 - 450) / 1920);
+    expect(stampAt(TUG, { x: 0.02, y: 0.05 }, STAMP, LANDSCAPE, 890)).toEqual({ x: (36 + 450) / 1920, y: (36 + 100) / 1080 });
+    expect(stampAt(TUG, { x: 0.99, y: 0.5 }, STAMP, LANDSCAPE, 890).x).toBe((1920 - 36 - 450) / 1920);
   });
   it("keeps it above the figures band where the band covers the screen, and above the screen's bottom where it does not", () => {
-    expect(stampAt({ x: 0.3, y: 0.95 }, STAMP, LANDSCAPE, 890).y).toBe((890 - 36 - 100) / 1080);
-    expect(stampAt({ x: 0.5, y: 0.99 }, STAMP, { width: 1080, height: 1233 }, 1233).y).toBe((1233 - 36 - 100) / 1233);
+    expect(stampAt(TUG, { x: 0.3, y: 0.95 }, STAMP, LANDSCAPE, 890).y).toBe((890 - 36 - 100) / 1080);
+    expect(stampAt(TUG, { x: 0.5, y: 0.99 }, STAMP, { width: 1080, height: 1233 }, 1233).y).toBe((1233 - 36 - 100) / 1233);
+  });
+  it("lands a race's and a stage's stamp on the duck wherever it stands, as it always has", () => {
+    for (const course of ["race", "stage"]) {
+      const spot = { x: 0.02, y: 0.95 };
+      expect(stampAt({ course }, spot, STAMP, LANDSCAPE, 890)).toBe(spot);
+    }
   });
 });
