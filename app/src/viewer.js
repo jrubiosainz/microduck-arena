@@ -193,6 +193,10 @@ export function cameraPose(spec, lead, sideOffset, rise) {
 const TRAVEL_TURN = (30 * Math.PI) / 180;
 const TRAVEL_REACH = 1.3;
 const TRAVEL_LIFT = 8;
+// The highest the travel starts, in metres over the floor: under the hall's
+// light fittings (2.2 m) and its roof. A race's never climbs this high (1.4 m
+// at most); a tug's chase, fitted far out for a portrait frame, would.
+const TRAVEL_TOP = 2;
 // How far beyond the camera's farthest stand the near stand starts.
 const STAND_CLEARANCE = 0.3;
 
@@ -200,7 +204,8 @@ const STAND_CLEARANCE = 0.3;
  * The camera `u` of the way through a clip's opening travel, 0 to 1: an orbit
  * round the chase's target, from ahead of the line where the waiting ducks face
  * it, to the chase itself. An orbit rather than a straight line, so it never
- * cuts through the lanes. Pure, so it is testable.
+ * cuts through the lanes; never higher than TRAVEL_TOP, so it never starts above
+ * the hall's roof. Pure, so it is testable.
  */
 export function travelPose(chase, u) {
   if (u >= 1) return chase;
@@ -213,7 +218,7 @@ export function travelPose(chase, u) {
   return {
     position: [
       x + out * (dx * Math.cos(turn) + dz * Math.sin(turn)),
-      y + (chase.position[1] - y) * (1 + (TRAVEL_LIFT - 1) * left),
+      Math.min(TRAVEL_TOP, y + (chase.position[1] - y) * (1 + (TRAVEL_LIFT - 1) * left)),
       z + out * (dz * Math.cos(turn) - dx * Math.sin(turn)),
     ],
     target: chase.target,
