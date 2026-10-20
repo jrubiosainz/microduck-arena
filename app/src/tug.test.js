@@ -5,7 +5,7 @@ import { PALETTE, colour } from "./palette.js";
 import { buildGym } from "./gym.js";
 import { TRACE_WIDTH } from "./replay.js";
 import {
-  benchForce, buildString, buildTugCourse, buildWinch, cutPit, floorUnder, forceAt, stringEnd, toThree, tugDistance, tugDucks,
+  benchForce, buildString, buildTugCourse, buildWinch, cutPit, disposeTugCourse, floorUnder, forceAt, stringEnd, toThree, tugDistance, tugDucks,
   tugEnds, tugPose, tugSpan,
 } from "./tug.js";
 
@@ -92,6 +92,34 @@ describe("the tug drawn", () => {
     const once = winch.group.getObjectByName("needle").rotation.z;
     winch.setForce(6.4);
     expect(winch.group.getObjectByName("needle").rotation.z).toBeCloseTo(2 * once, 9);
+  });
+  it("paints the dial again only when its reading changes; the needle moves with every pull", () => {
+    const fillText = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ fillText, clearRect() {}, beginPath() {}, arc() {}, fill() {} });
+    const winch = buildWinch(TUG);
+    const dial = [];
+    winch.group.traverse((node) => node.material?.map && dial.push(node.material.map));
+    const needle = winch.group.getObjectByName("needle");
+    winch.setForce(3.2);
+    const [paints, version, angle] = [fillText.mock.calls.length, dial[0].version, needle.rotation.z];
+    winch.setForce(3.204);
+    expect([fillText.mock.calls.length, dial[0].version]).toEqual([paints, version]);
+    expect(needle.rotation.z).not.toBe(angle);
+    winch.setForce(3.21);
+    expect(fillText.mock.calls.at(-1)[0]).toBe("3.21 N");
+    expect(dial[0].version).toBe(version + 1);
+  });
+  it("frees a tug's course with the string and the winch on it: every geometry, material and the dial", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(new Proxy({}, { get: (ctx, key) => ctx[key] ?? (() => {}) }));
+    const course = buildTugCourse(TUG);
+    course.add(buildString().group, buildWinch(TUG).group);
+    const owned = new Set();
+    course.traverse((node) => node.isMesh && [node.geometry, node.material, node.material.map].forEach((one) => one && owned.add(one)));
+    const freed = new Set();
+    owned.forEach((one) => one.addEventListener("dispose", () => freed.add(one)));
+    disposeTugCourse(course);
+    expect([...owned].some((one) => one.isTexture)).toBe(true);
+    expect([...owned].filter((one) => !freed.has(one))).toEqual([]);
   });
   it("opens the hall's floor over the pit: nothing of the hall bridges it, its boards laid as before", () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(new Proxy({}, { get: (ctx, key) => ctx[key] ?? (() => {}) }));

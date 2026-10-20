@@ -53,7 +53,7 @@ import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
 import {
-  buildString, buildTugCourse, buildWinch, cutPit, floorUnder, forceAt, tugDucks, tugEnds, tugPose, tugSpan,
+  buildString, buildTugCourse, buildWinch, cutPit, disposeTugCourse, floorUnder, forceAt, tugDucks, tugEnds, tugPose, tugSpan,
 } from "./tug.js";
 import { SWEEP_TURN, sweepAt } from "./sweep.js";
 
@@ -408,6 +408,8 @@ export async function createViewer(
   let stage = null;
   // While a tug plays: its event, the string, the winch (a bench's alone) and the winch's pull.
   let tug = null;
+  // A tug's course, which clearScene frees with the string and the winch on it.
+  let tugCourse = null;
   // The stadium's crowd, rebuilt with the course: posed in draw, disposed
   // with the course in clearScene.
   let audience = null;
@@ -450,6 +452,8 @@ export async function createViewer(
       scene.remove(course);
       course = null;
     }
+    if (tugCourse) disposeTugCourse(tugCourse);
+    tugCourse = null;
   }
 
   // The chase over `lead`; on a tug, moved out or in until the `span` it must hold fits the frame as
@@ -487,7 +491,10 @@ export async function createViewer(
       course = tugged
         ? buildTugCourse(event)
         : attachCourse(scene, event, Math.max(1, laneCount), entries.map((entry) => entry.colour));
-      if (tugged) scene.add(course);
+      if (tugged) {
+        scene.add(course);
+        tugCourse = course;
+      }
       // The near stand starts a stride beyond where the chase camera stands,
       // clip travel included, so the lens is never inside it: on a tug, where
       // its fit stands over the ducks' first frame.

@@ -189,9 +189,15 @@ export function buildWinch({ winch, bench: { top_n } }) {
   add(new CylinderGeometry(0.007, 0.007, 0.004, 16), flat(PALETTE.dark), CENTRE.x, CENTRE.y, 0.01).rotation.x = Math.PI / 2;
 
   const mid = DIAL_PX / 2;
+  let reading = null;
   return {
     group,
     setForce(newtons) {
+      needle.rotation.z = -(newtons / top_n) * SWEEP;
+      // The face is painted, and sent to the GPU, again only when its reading changes.
+      const text = `${newtons.toFixed(2)} N`;
+      if (text === reading) return;
+      reading = text;
       ctx.clearRect(0, 0, DIAL_PX, DIAL_PX);
       ctx.fillStyle = `#${PALETTE.frame.toString(16)}`;
       ctx.beginPath();
@@ -208,11 +214,21 @@ export function buildWinch({ winch, bench: { top_n } }) {
       ctx.font = 'bold 48px "DM Sans", sans-serif';
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`${newtons.toFixed(2)} N`, mid, mid + 58);
+      ctx.fillText(text, mid, mid + 58);
       map.needsUpdate = true;
-      needle.rotation.z = -(newtons / top_n) * SWEEP;
     },
   };
+}
+
+/** Frees a tug's course once it is off the scene, with the string and the winch on it: every
+ * geometry, every material and the dial's texture. */
+export function disposeTugCourse(course) {
+  course.traverse((node) => {
+    if (!node.isMesh) return;
+    node.geometry.dispose();
+    node.material.map?.dispose();
+    node.material.dispose();
+  });
 }
 
 // How far past a duck's trunk the picture keeps room for the rest of it, lying back included.
