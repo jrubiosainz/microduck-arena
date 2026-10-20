@@ -594,3 +594,42 @@ def test_a_tug_entry_is_said_as_a_rating(tmp_path, monkeypatch, fake_mjlab, spri
 ## Self-review
 
 Spec §3 covered by Tasks 2–4 and 12 (the workshop's Test step is Arena code: a contract gap). Plan A's names used as written; `Manifest.start.joint_rad/yaw_deg` and mjlab 1.3.0's `spec_fn`, `reset_base`, `reset_robot_joints`, `root_link_pose_w`, `write_root_link_pose_to_sim`, `is_terminated`, `root_height_below_minimum`, `projected_gravity_b` and class terms (`ManagerTermBase`, built by the termination manager with `(cfg=…, env=…)` and reset per env) checked in the installed code. The publish CLI's line for a tug entry is Task 13 (contract § Plan B). Lessons: physics pinned (BAM), every checkpoint on the Arena (roller), seed re-runs, noise reliance, anchors, 50 Hz traces (swag), a stop rule.
+
+---
+
+## Amendment (2026-10-20 evening): only the pit decides, and the ducks must pull
+
+t1's final review found that every trained policy dives face-down 1.3–1.9 s in, just under the 60° fall line, and holds the winch by friction; and that in bouts both ducks stand still with the string slack, so millimetres of marker drift decide. The owner then ruled: **only the pit decides** (no fall rule; going down to hold is a viable strategy; the point is to drag the opponent into the pit) and **retrain so the ducks really pull**. Plan A's Task 13 removes the fall from the Arena. t1's candidate (2750) is void. Every judge from now on reads the 50 Hz traces, not only ratings: trunk z, tilt, which bodies touch the platform, the string's end-to-end distance and the marker.
+
+### Task 14: The recipe without the fall rule, taught to pull
+
+**Files:** Modify `tug_of_war/env.py`, `tug_of_war/rewards.py`, `tug_of_war/challenge.toml` (only if a knob is added), `tests/test_tug_of_war.py`.
+
+**Interfaces:**
+- Consumes: Plan A Task 13's Arena (no `"fall"` on the tug; `[termination]` is summaries only).
+- Produces: terminations exactly `time_out`, `nan_state`, `in_pit` (`ArenaFall`, its test and the `FALL_GRAVITY_Z`/`FALL_HOLD_S` copies and parity asserts go; D9/D10 rewritten); `hold(env)` pays the winch command while not terminated, whatever the posture; `WinchCommandCfg.yield_prob: float = 0.4` and `yield_top_n: tuple[float, float] = (0.0, 1.5)` — on a reset, an env draws a yielding episode with probability `yield_prob`, its top from `yield_top_n` (an opponent the duck can out-pull, so walking back reels the winch out); `retreat(env, offset, scale) -> (n,)`: `tanh(max(-v_x, 0) / scale)` where `v_x` is the string end's x velocity in the world (the west duck backs away from the pit along −x), weight 1.0, `scale = 0.2`; the `back_reward` knob keeps `track_linear_velocity`.
+
+- [ ] **Step 1: Failing tests:** `test_the_pit_alone_ends_an_episode` (`set(cfg.terminations) == {"time_out", "nan_state", "in_pit"}`, `cfg.rewards["out"].weight == -50.0`); `test_hold_pays_the_pull_whatever_the_posture` (a duck on its side gets the winch command); `test_some_episodes_have_a_yielding_winch` (with `yield_prob` 0.4 over 2000 draws, the share of tops ≤ 1.5 N is 0.4 ± 0.05; with 0, none); `test_retreat_pays_backing_away_from_the_pit` (a string end moving −x at 0.2 m/s pays `tanh(1)`, one moving +x pays 0); delete `test_a_fall_is_the_arenas_rule` and the fall asserts in `test_the_constants_are_the_arenas`.
+- [ ] **Step 2: Run** the file: the new tests fail.
+- [ ] **Step 3: Implement** them; `env.py`'s docstring decisions list says why (owner's ruling; t1's dive and static bouts).
+- [ ] **Step 4: Run** the file, then the suite, then `test_the_env_pulls_on_time` and `test_a_trunk_in_the_pit_ends_the_episode` on the real env: green.
+- [ ] **Step 5: Commit:** "The Tug of War's recipe: only the pit ends an episode, and a yielding winch teaches the duck to back away and pull".
+
+### Task 15: Train and judge on the traces (t2, t3)
+
+**Files:** none tracked; the ledger; `logs/tug_of_war/onnx/`.
+
+- [ ] **Step 1: Launch two trainings** from the Task 14 commit (clean tree), as Task 9 step 2 with run names `t2` (`--agent.seed 1`) and `t3` (`--agent.seed 2`), ckpt repos `Nico-robot/mjlab-tugofwar-microduck-t2` / `-t3`, `--detach`; job ids in the ledger. The controller waits for checkpoints.
+- [ ] **Step 2: Judge each checkpoint ≥ 500** as before (export, `arena score`), and read its traces at 50 Hz with `run_bench` (seed 1) and `run_bout` (against the run's own checkpoint ≥ 500 iterations away, seed 1): report trunk z and tilt over time, which bodies touch the platform, the string's end-to-end distance (taut ≥ 0.995 m) and the marker's path.
+- [ ] **Step 3: Gate G2** (unchanged): best rating ≥ max(zero, walker) + 1.5 N on Plan A Task 13's Arena (re-measure the two baselines there first: they change without the fall rule).
+- [ ] **Step 4: Gate G5 (the ducks pull):** over `check.py --bouts 10` between the best and a checkpoint ≥ 500 iterations away: the string is taut (≥ 0.995 m) for at least half of each bout on median, the marker moves at least 5 cm in at least 6 of the 10 bouts, and at least 2 bouts end in the pit.
+- [ ] **Step 5:** G2 and G5 pass: Task 16. Else ONE lever (Task 10's list, plus: `retreat` weight, `yield_prob`, the yielding top, a shorter `[bout] time_limit_s` is NOT a lever — it is the Arena's), commit, relaunch `t<n>`; the stop rule applies (3 trainings failing a gate in a row → report to the owner).
+
+### Task 16: The candidate and the guide's facts
+
+**Files:** `tug_of_war/AGENTS.md`, `README.md`/`challenge.toml` wording; the ledger.
+
+- [ ] **Step 1:** Pick the candidate by bouts (a round robin of the five best-rated checkpoints passing G5, `--bouts 6`, most wins, ties to the rating); export as Task 12 step 2 from the clean tree; re-rate.
+- [ ] **Step 2:** "What is known" rewritten from measurements only (t1's dive and static bouts as the history, then t2/t3's ratings, traces, G5 numbers and the round robin; the candidate named with its rating); fix the facts the final review flagged: "leans far back"/"both hold" (they were false), the "Healthy curves" that would have stopped t1 (say that once the winch can out-pull any duck these curves fall for good, and to watch the replay or trace), "every entry plays the weekly cup" → "each player's latest entry plays the weekly cup", "pick by rating" → "rating for the board, bouts for the cup", the "five best-rated" wording.
+- [ ] **Step 3:** Record in the ledger the G4 ruling explicitly (trained checkpoints of one run cluster; the scale separates trained from untrained) instead of a PASS.
+- [ ] **Step 4:** Suite; commit "The Tug of War's guide says what the trainings measured, the dive and the pull"; hand over the owner's command (Task 12 step 5) for the new candidate. Keep this worktree until the owner has published (its logs hold the run); the checkpoints are also in the private ckpt repos.
