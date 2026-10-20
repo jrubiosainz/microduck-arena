@@ -44,6 +44,13 @@ describe("the tug's arithmetic, as the server's", () => {
     const bout = tugDucks({ tug: "bout", ducks: [{ trace, livery: "a", name: "W" }, { trace, livery: "b", name: "E" }] });
     expect(bout.map((d) => [d.name, d.lead])).toEqual([["W", 0], ["E", 0]]);
   });
+  it("a lane stopped before its first timed step, without its settle, has no duck to draw", () => {
+    const empty = new Float32Array(0);
+    expect(tugDucks({ tug: "bench", trace: empty, bench: PROFILE, livery: "gold", name: "@alice" })).toEqual([]);
+    expect(tugDucks({ tug: "bout", ducks: [{ trace: empty, livery: "a", name: "W" }, { trace: empty, livery: "b", name: "E" }] })).toEqual([]);
+    const settle = new Float32Array(2 * TRACE_WIDTH);
+    expect(tugDucks({ tug: "bench", trace: empty, settle, bench: PROFILE, livery: "gold", name: "@alice" })[0].trace.length).toBe(2 * TRACE_WIDTH);
+  });
 });
 
 describe("the tug drawn", () => {

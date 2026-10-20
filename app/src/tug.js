@@ -37,10 +37,12 @@ export function benchForce({ ramp_n_per_s: ramp, top_n: top, jerks }, t) {
 export const forceAt = (profile, index, lead) =>
   index < lead ? 0 : benchForce(profile, (index - lead) * CTRL_DT);
 
-/** The lanes of an entry for `viewer.setLanes`: a bench's one duck, a bout's two (west first), each settle led in. */
+/** The lanes of an entry for `viewer.setLanes`: a bench's one duck, a bout's two (west first), each settle led in;
+ * none for a run stopped before its first timed step and handed over without its settle, which has no frame to draw. */
 export function tugDucks(entry) {
   const ducks = entry.tug === "bench" ? [entry] : entry.ducks;
   const lead = Math.max(...ducks.map((duck) => (duck.settle ? frameCount(duck.settle) : 0)));
+  if (!lead && !frameCount(ducks[0].trace)) return [];
   return ducks.map(({ trace, settle, livery, name }) => ({
     trace: leadIn(settle ?? new Float32Array(0), trace, lead),
     lead,
