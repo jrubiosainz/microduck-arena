@@ -7,7 +7,7 @@ describe("lanesFor", () => {
     const board = [1, 2, 3].map(rank => ({ run_id: `R${rank}`, you: rank === 2 }));
     expect(lanesFor({ board, event: { id: "got-a-talent", course: "stage" } })).toEqual([board[1]]);
   });
-  it("puts a bench run on the bench alone: one duck against the winch", () => {
+  it("puts a rated run alone: its traced bout", () => {
     const TUG = { id: "tug-of-war", course: "tug" };
     const board = [1, 2, 3].map(rank => ({ run_id: `R${rank}`, you: rank === 2 }));
     expect(lanesFor({ board, event: TUG })).toEqual([board[1]]);

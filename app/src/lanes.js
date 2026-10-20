@@ -9,8 +9,8 @@ export const RIVALS = 3;
 /**
  * The lanes a publication opens on: this run first, then the ducks ranked
  * just under it. Shared by the publication page and the clip page, so the
- * video races exactly the ducks the page does. A performance and a bench run
- * play alone: the stage is the troupe's, the bench one duck's against the winch.
+ * video races exactly the ducks the page does. A performance and a rated run
+ * play alone: the stage is the troupe's, the tug the entry's traced bout.
  */
 export function lanesFor(run) {
   const at = run.board.findIndex((row) => row.you);

@@ -65,7 +65,7 @@ describe("travelPose", () => {
   });
 
   it("keeps a tug's travel under the hall's lights, however far its fit stands out", () => {
-    // The portrait clip's fit over a bench's first frame: about 2.3 m out (tug.js tugPose).
+    // The portrait clip's fit over a bout's first frame: about 2.3 m out (tug.js tugPose).
     const tug = tugPose(cameraPose({ kind: "chase" }, 0, 1.324, 0), 1.35, 1080 / 1233, 42);
     const start = travelPose(tug, 0).position[1];
     expect(start).toBeLessThanOrEqual(2);

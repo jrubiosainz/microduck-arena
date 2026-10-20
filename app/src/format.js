@@ -5,8 +5,8 @@ export function formatScore(value, { finished, metric } = {}) {
   // A DNF is scored at the event's time limit. Printing that number would read
   // as an achieved time, so say what actually happened instead.
   if (finished === 0) return "DNF";
-  // The bench's rating is the mean force it held, in newtons.
-  if (metric === "mean_hold_force") return `${value.toFixed(2)} N`;
+  // A tug's rating is the mean ground it won from the reference duck, in centimetres.
+  if (metric === "mean_ground_cm") return `${value.toFixed(1)} cm`;
   return `${value.toFixed(3)}s`;
 }
 
@@ -35,7 +35,7 @@ export function formatSpeed(vx, { finished } = {}) {
  * no line and no speed. The event summary says so in `course`. */
 export const isStage = (event) => event?.course === "stage";
 
-/** Whether an event is the tug of war: a duck pulls on a string, rated in newtons on the bench. */
+/** Whether an event is the tug of war: two ducks pull on a string, a duck rated in centimetres won from the reference. */
 export const isTug = (event) => event?.course === "tug";
 
 /**
@@ -62,7 +62,7 @@ export function formatEventFacts(event) {
   if (isTug(event)) {
     return [
       { label: "course", value: `${event.length_m} m lane, ${event.pit_m} m pit` },
-      { label: "winch", value: `up to ${event.bench.top_n} N` },
+      { label: "bout", value: `up to ${event.bout.time_limit_s} s` },
       { label: "rig", value: event.rig },
     ];
   }

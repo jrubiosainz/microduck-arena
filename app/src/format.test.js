@@ -10,8 +10,8 @@ import {
 } from "./format.js";
 
 const TUG = {
-  id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug", metric: "mean_hold_force", rig: "legs", vote: null,
-  length_m: 4, pit_m: 0.3, bench: { ramp_n_per_s: 0.25, top_n: 7 },
+  id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug", metric: "mean_ground_cm", rig: "legs", vote: null,
+  length_m: 4, pit_m: 0.3, bout: { time_limit_s: 45, bouts_to_win: 2, max_bouts: 5 },
 };
 
 describe("formatScore", () => {
@@ -121,18 +121,18 @@ describe("a stage's facts", () => {
   });
 });
 
-describe("the tug of war counts in newtons", () => {
-  it("prints the mean force held, two decimals and the unit", () => {
-    expect(formatScore(4.2134, { finished: 5, metric: "mean_hold_force" })).toBe("4.21 N");
+describe("the tug of war counts in centimetres", () => {
+  it("prints the mean ground won, one decimal and the unit", () => {
+    expect(formatScore(-15.24, { finished: 5, metric: "mean_ground_cm" })).toBe("-15.2 cm");
     expect(formatScore(12.3456, { finished: 5 })).toBe("12.346s");
   });
   it("knows a tug by its course", () => {
     expect([isTug({ course: "tug" }), isTug({ course: "lane" }), isTug(undefined)]).toEqual([true, false, false]);
   });
-  it("tells its course, its winch and its rig", () => {
+  it("tells its course, its bout and its rig", () => {
     expect(formatEventFacts(TUG)).toEqual([
       { label: "course", value: "4 m lane, 0.3 m pit" },
-      { label: "winch", value: "up to 7 N" },
+      { label: "bout", value: "up to 45 s" },
       { label: "rig", value: "legs" },
     ]);
   });

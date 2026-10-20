@@ -5,6 +5,7 @@
 
 import { isStage, isTug } from "./format.js";
 import { leadIn } from "./replay.js";
+import { ratingLane } from "./tug.js";
 
 /**
  * Every duck of a performance as the stage draws it, in duck order: its trace (after `lead` frames
@@ -28,15 +29,15 @@ export function stageDucks(cast, traces, settles, { livery, eventRig, lead = 0 }
 
 /**
  * One run as a lane of the viewer, from its traces (api.js, one per duck): on a stage its
- * performance, every duck of its cast; on the bench its one duck against the winch; on a lane the
- * one duck that raced. `lane` is what the page draws it with: run id, name, tier, colour, livery,
- * and on the bench the winch's profile, `bench`, its dial reads.
+ * performance, every duck of its cast; on a tug its two-duck bout (ratingLane: the entry on its end
+ * of the string, the reference on the other); on a lane the one duck that raced. `lane` is what the
+ * page draws it with: run id, name, tier, colour, livery, and on a tug the bout's seed, `traceSeed`.
  */
 export function replayLane(event, cast, traces, lane) {
   if (isStage(event)) {
     return { ...lane, ducks: stageDucks(cast, traces, null, { livery: lane.livery, eventRig: event.rig }) };
   }
-  return isTug(event) ? { ...lane, tug: "bench", trace: traces[0] } : { ...lane, trace: traces[0] };
+  return isTug(event) ? { ...lane, ...ratingLane(traces, null, lane) } : { ...lane, trace: traces[0] };
 }
 
 /** The policies a troupe borrowed from the Hub, each once, in the order its ducks first bring them. */

@@ -5,8 +5,6 @@ import { TRACE_WIDTH, frameCount } from "./replay.js";
 const STAGE = { id: "got-a-talent", course: "stage", rig: "legs" };
 const SPRINT = { id: "sprint-2m", course: "lane", rig: "legs" };
 const TUG = { id: "tug-of-war", course: "tug", rig: "legs" };
-// arena.tug.bench_profile(bench, "tug-of-war", 1): the winch a bench run pulled against.
-const PROFILE = { ramp_n_per_s: 0.25, top_n: 7, jerks: [[0.4, 0.7, 2.8020456591211773], [0.4, 1.9, 2.137798647724724]] };
 /** A borrowed policy as arena/cast.py borrowed_source records it. */
 const borrowed = (user, name) => ({
   repo_id: `${user}/microduck-${name}`, filename: "policy.onnx", revision: "a".repeat(40),
@@ -73,10 +71,10 @@ describe("replayLane", () => {
     expect(replayLane(SPRINT, [{ policy: "self", rig: null, start: null, sound: null }], [trace], lane)).toEqual({ ...lane, trace });
   });
 
-  it("puts a bench run's duck on the bench, against the winch its lane carries", () => {
-    const trace = frames(2, 0);
-    expect(replayLane(TUG, [{ policy: "self" }], [trace], { ...lane, bench: PROFILE }))
-      .toEqual({ ...lane, bench: PROFILE, tug: "bench", trace });
+  it("puts a rated run's entry on its end of the string and the reference duck on the other", () => {
+    const [west, east] = [frames(2, 0), frames(2, 1)];
+    expect(replayLane(TUG, [{ policy: "self" }], [west, east], { ...lane, traceSeed: 4 })).toEqual({ ...lane, traceSeed: 4, tug: "bout",
+      ducks: [{ trace: west, livery: "charcoal", name: "Reference" }, { trace: east, livery: "purple", name: "alice" }] });
   });
 });
 

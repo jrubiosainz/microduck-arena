@@ -53,7 +53,7 @@ import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
 import {
-  buildString, buildTugCourse, buildWinch, cutPit, disposeTugCourse, floorUnder, forceAt, tugDucks, tugEnds, tugPose, tugSpan,
+  buildString, buildTugCourse, cutPit, disposeTugCourse, floorUnder, tugDucks, tugEnds, tugPose, tugSpan,
 } from "./tug.js";
 import { SWEEP_TURN, sweepAt } from "./sweep.js";
 
@@ -406,9 +406,9 @@ export async function createViewer(
   let gym = null;
   let judges = null;
   let stage = null;
-  // While a tug plays: its event, the string, the winch (a bench's alone) and the winch's pull.
+  // While a tug plays: its event and the string.
   let tug = null;
-  // A tug's course, which clearScene frees with the string and the winch on it.
+  // A tug's course, which clearScene frees with the string on it.
   let tugCourse = null;
   // The stadium's crowd, rebuilt with the course: posed in draw, disposed
   // with the course in clearScene.
@@ -467,10 +467,8 @@ export async function createViewer(
     clearScene();
     const talent = isStage(event);
     const tugged = isTug(event);
-    // The winch's pull, which a bench's lane carries: what its dial reads.
-    const profile = entries[0]?.bench ?? null;
     if (talent) entries = stageLanes(entries);
-    // A tug plays one lane: a bench's duck or a bout's two, every one drawn solid.
+    // A tug plays one lane: a bout's two ducks, every one drawn solid.
     if (tugged) entries = entries.length ? tugDucks(entries[0]).map((duck) => ({ ...duck, opacity: 1 })) : [];
     const laneCount = tugged ? 1 : entries.length;
     raceLights.forEach(light => { light.visible = !talent; });
@@ -498,7 +496,7 @@ export async function createViewer(
       // The near stand starts a stride beyond where the chase camera stands,
       // clip travel included, so the lens is never inside it: on a tug, where
       // its fit stands over the ducks' first frame.
-      const start = tugged && entries.length ? tugSpan(event, entries.map((entry) => frameAt(entry.trace, 0))) : null;
+      const start = tugged && entries.length ? tugSpan(entries.map((entry) => frameAt(entry.trace, 0))) : null;
       const chase = (start ? chasePose((start[0] + start[1]) / 2, 0, start[1] - start[0]) : chasePose(0, 0, null)).position[2];
       const clearance = chase * TRAVEL_REACH + STAND_CLEARANCE;
       const ground = course.getObjectByName("ground");
@@ -520,9 +518,8 @@ export async function createViewer(
         for (const set of [audience, gym, judges]) set.group.position.x -= event.length_m / 2;
         cutPit(gym.group.getObjectByName("parquet"), event);
         if (entries.length) {
-          tug = { event, rope: buildString(), winch: profile && buildWinch(event), profile };
+          tug = { event, rope: buildString() };
           course.add(tug.rope.group);
-          if (tug.winch) course.add(tug.winch.group);
         }
       } else if (!slopeDeg) {
         ground.material.dispose();
@@ -673,14 +670,13 @@ export async function createViewer(
       }
     });
     // The chase and the screens follow the leader; on a tug, the middle of
-    // what the chase must hold, from the west duck to the dial or the east duck.
+    // what the chase must hold, from the west duck to the east one.
     let lead = lanes.length ? Math.max(...frames.map((frame) => frame[0])) : middle;
     let span = null;
     if (tug) {
       const [a, b] = tugEnds(tug.event, frames);
       tug.rope.update(a, b);
-      tug.winch?.setForce(forceAt(tug.profile, indices[0], lanes[0].lead));
-      const [west, east] = tugSpan(tug.event, frames);
+      const [west, east] = tugSpan(frames);
       lead = (west + east) / 2;
       span = east - west;
     }

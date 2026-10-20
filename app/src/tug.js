@@ -1,15 +1,12 @@
-// The tug of war's arithmetic, as the server's (arena/tug.py): where a string is tied, how hard
-// the bench's winch pulls, and the lanes the viewer plays; and the tug drawn: its course, the
-// string and the winch.
+// The tug of war's arithmetic, as the server's (arena/tug.py): where a string is tied, which end
+// of it a rated entry holds, and the lanes the viewer plays; and the tug drawn: its course and the
+// string.
 // Frames are MJCF (z up); `toThree` carries a point to the scene.
 
-import {
-  BoxGeometry, CanvasTexture, CylinderGeometry, Group, Mesh, MeshBasicMaterial, Path, PlaneGeometry, Shape,
-  ShapeGeometry, SRGBColorSpace, Vector2, Vector3,
-} from "three";
+import { BoxGeometry, CylinderGeometry, Group, Mesh, Path, PlaneGeometry, Shape, ShapeGeometry, Vector2, Vector3 } from "three";
 import { OVERRUN, TRACK } from "./course.js";
 import { PALETTE, flat } from "./palette.js";
-import { CTRL_DT, frameCount, leadIn } from "./replay.js";
+import { frameCount, leadIn } from "./replay.js";
 
 /** An MJCF point (x, y, z up) in the three.js scene (y up). */
 export const toThree = ([x, y, z]) => [x, z, -y];
@@ -27,20 +24,33 @@ export function stringEnd(frame, offset) {
   ];
 }
 
-/** The winch's pull in newtons `t` seconds into the timed run, never below 0, never above the top. */
-export function benchForce({ ramp_n_per_s: ramp, top_n: top, jerks }, t) {
-  const pull = ramp * t + jerks.reduce((sum, [amp, hz, phase]) => sum + amp * Math.sin(2 * Math.PI * hz * t + phase), 0);
-  return Math.min(top, Math.max(0, pull));
+/** Which end of the string, 0 west and 1 east, the entry holds on a bout's seed: west on an odd one. */
+export const entrySide = (seed) => 1 - (seed % 2);
+
+/** The other duck of every bout. */
+const REFERENCE = { livery: "charcoal", name: "Reference" };
+
+/** How an entry's bout ended, in its own words (arena/tug.py's seed statuses). */
+export const BOUT_WORDS = { won: "won the pull", lost: "lost the pull", draw: "draw", pit_won: "pulled it in", pit_lost: "dragged in" };
+
+/**
+ * A rated run's bout as a lane of the viewer, from its two traces (west first) and, for a clip, their
+ * settles: the entry, `lane`'s livery and name, on its end of the string, the reference duck on the
+ * other, in `classic` when the entry wears the reference's `charcoal`.
+ */
+export function ratingLane(traces, settles, { traceSeed, livery, name }) {
+  const side = entrySide(traceSeed);
+  const duck = (k, who) => ({ trace: traces[k], ...(settles && { settle: settles[k] }), ...who });
+  const ducks = [];
+  ducks[side] = duck(side, { livery, name });
+  ducks[1 - side] = duck(1 - side, { ...REFERENCE, livery: livery === REFERENCE.livery ? "classic" : REFERENCE.livery });
+  return { tug: "bout", ducks };
 }
 
-/** The dial at a lane's frame `index`: nothing during the `lead` frames of settle, then the winch from the clock's start. */
-export const forceAt = (profile, index, lead) =>
-  index < lead ? 0 : benchForce(profile, (index - lead) * CTRL_DT);
-
-/** The lanes of an entry for `viewer.setLanes`: a bench's one duck, a bout's two (west first), each settle led in;
+/** The lanes of an entry for `viewer.setLanes`: a bout's two ducks (west first), each settle led in;
  * none for a run stopped before its first timed step and handed over without its settle, which has no frame to draw. */
 export function tugDucks(entry) {
-  const ducks = entry.tug === "bench" ? [entry] : entry.ducks;
+  const ducks = entry.ducks;
   const lead = Math.max(...ducks.map((duck) => (duck.settle ? frameCount(duck.settle) : 0)));
   if (!lead && !frameCount(ducks[0].trace)) return [];
   return ducks.map(({ trace, settle, livery, name }) => ({
@@ -54,13 +64,10 @@ export function tugDucks(entry) {
 /** The floor under a point `x` along the lane: the pit's, deep, over the pit; the platforms' either side. */
 export const floorUnder = ({ pit_m, pit_depth_m }, x) => (Math.abs(x) < pit_m / 2 ? -pit_depth_m : 0);
 
-/** Both string ends, MJCF, of one frame per duck: the second is the duck's, or the winch on the bench. */
-export const tugEnds = (event, frames) => [
-  stringEnd(frames[0], event.string_offset),
-  frames[1] ? stringEnd(frames[1], event.string_offset) : event.winch,
-];
+/** Both string ends, MJCF, of one frame per duck. */
+export const tugEnds = (event, frames) => frames.map((frame) => stringEnd(frame, event.string_offset));
 
-// The marker's red, and the needle's: the site's recording dot (club.css).
+// The marker's red: the site's recording dot (club.css).
 const RED = 0xff3b30;
 
 /**
@@ -142,91 +149,11 @@ export function buildString() {
   };
 }
 
-const DRUM = 0.03; // the drum's radius: the string leaves it at its top, the winch's point
-const DIAL = 0.08; // the dial's radius
-const RIM = DIAL + 0.006; // its steel rim's
-const CENTRE = new Vector3(0.06, 0.17, 0); // the dial's centre from the winch's point, three.js axes
-const SWEEP = (3 * Math.PI) / 4; // the needle's travel, from nothing to the winch's top
-const DIAL_PX = 256;
-
-/**
- * The bench's winch at its point (the event's `winch`, MJCF), standing on the platform: an orange
- * drum across the lane on two cheeks, and over it a dial facing the camera's side, whose needle and
- * reading `setForce` sets to the winch's pull.
- */
-export function buildWinch({ winch, bench: { top_n } }) {
-  const group = new Group();
-  group.name = "winch";
-  group.position.set(...toThree(winch));
-  const floor = -winch[2];
-  const add = (geometry, material, x, y, z) => {
-    const mesh = new Mesh(geometry, material);
-    mesh.position.set(x, y, z);
-    group.add(mesh);
-    return mesh;
-  };
-  const steel = flat(PALETTE.stand);
-  add(new CylinderGeometry(DRUM, DRUM, 0.1, 24), flat(PALETTE.cone), 0, -DRUM, 0).rotation.x = Math.PI / 2;
-  const cheek = 0.02 - DRUM - floor;
-  for (const z of [-0.056, 0.056]) add(new BoxGeometry(0.09, cheek, 0.012), steel, 0, floor + cheek / 2, z);
-  add(new BoxGeometry(0.2, 0.012, 0.14), steel, 0.04, floor + 0.006, 0);
-  add(new BoxGeometry(0.014, CENTRE.y - floor, 0.014), steel, CENTRE.x, (CENTRE.y + floor) / 2, -0.012);
-  add(new CylinderGeometry(RIM, RIM, 0.01, 40), steel, CENTRE.x, CENTRE.y, 0).rotation.x = Math.PI / 2;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = DIAL_PX;
-  const ctx = canvas.getContext("2d");
-  const map = new CanvasTexture(canvas);
-  map.colorSpace = SRGBColorSpace;
-  const face = new MeshBasicMaterial({ map, transparent: true, toneMapped: false });
-  add(new PlaneGeometry(DIAL * 2, DIAL * 2), face, CENTRE.x, CENTRE.y, 0.006);
-  // At rest the needle leans as far left of upright as the top leans right of it.
-  const blade = new BoxGeometry(0.004, DIAL * 0.8, 0.002);
-  blade.translate(0, DIAL * 0.4, 0);
-  blade.rotateZ(SWEEP / 2);
-  const needle = add(blade, flat(RED), CENTRE.x, CENTRE.y, 0.009);
-  needle.name = "needle";
-  add(new CylinderGeometry(0.007, 0.007, 0.004, 16), flat(PALETTE.dark), CENTRE.x, CENTRE.y, 0.01).rotation.x = Math.PI / 2;
-
-  const mid = DIAL_PX / 2;
-  let reading = null;
-  return {
-    group,
-    setForce(newtons) {
-      needle.rotation.z = -(newtons / top_n) * SWEEP;
-      // The face is painted, and sent to the GPU, again only when its reading changes.
-      const text = `${newtons.toFixed(2)} N`;
-      if (text === reading) return;
-      reading = text;
-      ctx.clearRect(0, 0, DIAL_PX, DIAL_PX);
-      ctx.fillStyle = `#${PALETTE.frame.toString(16)}`;
-      ctx.beginPath();
-      ctx.arc(mid, mid, mid - 2, 0, 2 * Math.PI);
-      ctx.fill();
-      // A dot a newton round the needle's arc, clockwise from its rest; the reading under it.
-      ctx.fillStyle = `#${PALETTE.dark.toString(16)}`;
-      for (let n = 0; n <= top_n; n += 1) {
-        const angle = -Math.PI / 2 - SWEEP / 2 + (n / top_n) * SWEEP;
-        ctx.beginPath();
-        ctx.arc(mid + 100 * Math.cos(angle), mid + 100 * Math.sin(angle), 6, 0, 2 * Math.PI);
-        ctx.fill();
-      }
-      ctx.font = 'bold 48px "DM Sans", sans-serif';
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(text, mid, mid + 58);
-      map.needsUpdate = true;
-    },
-  };
-}
-
-/** Frees a tug's course once it is off the scene, with the string and the winch on it: every
- * geometry, every material and the dial's texture. */
+/** Frees a tug's course once it is off the scene, with the string on it: every geometry and material. */
 export function disposeTugCourse(course) {
   course.traverse((node) => {
     if (!node.isMesh) return;
     node.geometry.dispose();
-    node.material.map?.dispose();
     node.material.dispose();
   });
 }
@@ -236,12 +163,11 @@ const DUCK_REACH = 0.15;
 // How much of the frame's width a tug's span may fill.
 const FILL = 0.9;
 
-/** What a tug's camera holds along the lane at one frame, MJCF x from west to east: from the west duck,
- * room kept round it, to the dial's far edge on the bench, or to the east duck on a bout. */
-export function tugSpan(event, frames) {
+/** What a tug's camera holds along the lane at one frame, MJCF x from west to east: from the west duck
+ * to the east one, room kept round each. */
+export function tugSpan(frames) {
   const xs = frames.map((frame) => frame[0]);
-  const east = frames.length > 1 ? Math.max(...xs) + DUCK_REACH : event.winch[0] + CENTRE.x + RIM;
-  return [Math.min(...xs) - DUCK_REACH, east];
+  return [Math.min(...xs) - DUCK_REACH, Math.max(...xs) + DUCK_REACH];
 }
 
 /**
