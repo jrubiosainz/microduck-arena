@@ -46,7 +46,7 @@ export function replayLine(run) {
 
 /** What the scoreboard says over its number, and the stamp it lands. A stage has no time and no
  * finish: its number is the performance's length, and it was performed or cut short. A bench run
- * always ends, in the pit, on the floor or holding on: its number is its rating, in newtons. */
+ * always ends, dragged into the pit or holding on: its number is its rating, in newtons. */
 export function verdict(run) {
   const dnf = run.seeds_finished === 0;
   if (isStage(run.event)) return { label: "length", stamp: dnf ? "CUT SHORT" : "PERFORMED" };
