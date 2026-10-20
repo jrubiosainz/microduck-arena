@@ -1,7 +1,14 @@
 // The tug of war's arithmetic, as the server's (arena/tug.py): where a string is tied, where
-// the marker stands, how hard the bench's winch pulls, and the lanes the viewer plays.
+// the marker stands, how hard the bench's winch pulls, and the lanes the viewer plays; and the tug
+// drawn: its course, the string and the winch.
 // Frames are MJCF (z up); `toThree` carries a point to the scene.
 
+import {
+  BoxGeometry, CanvasTexture, CylinderGeometry, Group, Mesh, MeshBasicMaterial, Path, PlaneGeometry, Shape,
+  ShapeGeometry, SRGBColorSpace, Vector2, Vector3,
+} from "three";
+import { OVERRUN, TRACK } from "./course.js";
+import { PALETTE, flat } from "./palette.js";
 import { CTRL_DT, frameCount, leadIn } from "./replay.js";
 
 /** An MJCF point (x, y, z up) in the three.js scene (y up). */
@@ -51,3 +58,156 @@ export const tugEnds = (event, frames) => [
   stringEnd(frames[0], event.string_offset),
   frames[1] ? stringEnd(frames[1], event.string_offset) : event.winch,
 ];
+
+// The marker's red, and the needle's: the site's recording dot (club.css).
+const RED = 0xff3b30;
+
+/**
+ * The tug's course, centred on its pit, in course.js's axes: a platform either side of the pit, the
+ * lane between the walls, its top the floor the ducks stand on, running OVERRUN past the walls'
+ * ends; the pit's sides under the walls; the pit's floor, the `ground` a stadium is laid round; a
+ * line across it under the string's middle at the start; and the served walls, see-through.
+ */
+export function buildTugCourse({ length_m, width_m, pit_m, pit_depth_m, walls }) {
+  const course = new Group();
+  course.name = "course";
+  const add = (name, geometry, material, position) => {
+    const mesh = new Mesh(geometry, material);
+    mesh.name = name;
+    mesh.position.set(...position);
+    course.add(mesh);
+    return mesh;
+  };
+  const track = flat(TRACK);
+  const platform = length_m / 2 + OVERRUN - pit_m / 2;
+  for (const [name, side] of [["platform_west", -1], ["platform_east", 1]]) {
+    add(name, new BoxGeometry(platform, pit_depth_m, width_m), track, [side * (pit_m + platform) / 2, -pit_depth_m / 2, 0]);
+  }
+  const glass = Object.assign(flat(PALETTE.paper), { transparent: true, opacity: 0.25, depthWrite: false });
+  for (const { name, pos, half } of walls) {
+    add(name, new BoxGeometry(half[0] * 2, half[2] * 2, half[1] * 2), glass, toThree(pos));
+    add("pit_side", new BoxGeometry(pit_m, pit_depth_m, half[1] * 2), track, [0, -pit_depth_m / 2, -pos[1]]);
+  }
+  const ground = add("ground", new PlaneGeometry(length_m + OVERRUN * 2, width_m), flat(PALETTE.ink), [0, -pit_depth_m, 0]);
+  ground.rotation.x = -Math.PI / 2;
+  add("centre_line", new BoxGeometry(0.02, 0.002, width_m), flat(PALETTE.paper), [0, 0.001 - pit_depth_m, 0]);
+  return course;
+}
+
+/**
+ * The hall's floor (gym.js's "parquet", a plane laid flat) cut open over the pit, so that the pit is
+ * a hole in it rather than under it. Its boards stay where they were: the plane's own texture
+ * coordinates are kept, which the floor's texture is repeated for.
+ */
+export function cutPit(floor, { pit_m, width_m }) {
+  floor.updateWorldMatrix(true, false);
+  const [a, b] = [-1, 1].map((side) => floor.worldToLocal(new Vector3((side * pit_m) / 2, 0, (side * width_m) / 2)));
+  const { width, height } = floor.geometry.parameters;
+  const corners = (x0, y0, x1, y1) => [new Vector2(x0, y0), new Vector2(x1, y0), new Vector2(x1, y1), new Vector2(x0, y1)];
+  const shape = new Shape(corners(-width / 2, -height / 2, width / 2, height / 2));
+  shape.holes.push(new Path(corners(a.x, a.y, b.x, b.y)));
+  const geometry = new ShapeGeometry(shape);
+  const { position, uv } = geometry.attributes;
+  for (let i = 0; i < uv.count; i += 1) uv.setXY(i, position.getX(i) / width + 0.5, position.getY(i) / height + 0.5);
+  floor.geometry.dispose();
+  floor.geometry = geometry;
+}
+
+const UP = new Vector3(0, 1, 0);
+
+/** The string, 2 mm thick, with a red ribbon hanging at its middle; `update` ties it to two MJCF ends. */
+export function buildString() {
+  const group = new Group();
+  const rope = new Mesh(new CylinderGeometry(0.001, 0.001, 1, 6), flat(PALETTE.paper));
+  rope.name = "string";
+  const ribbon = new BoxGeometry(0.012, 0.05, 0.003);
+  ribbon.translate(0, -0.025, 0);
+  const marker = new Mesh(ribbon, flat(RED));
+  marker.name = "marker";
+  group.add(rope, marker);
+  const from = new Vector3();
+  const along = new Vector3();
+  return {
+    group,
+    update(a, b) {
+      from.set(...toThree(a));
+      along.set(...toThree(b)).sub(from);
+      rope.scale.y = along.length();
+      rope.position.copy(from).addScaledVector(along, 0.5);
+      rope.quaternion.setFromUnitVectors(UP, along.normalize());
+      marker.position.copy(rope.position);
+    },
+  };
+}
+
+const DRUM = 0.03; // the drum's radius: the string leaves it at its top, the winch's point
+const DIAL = 0.08; // the dial's radius
+const SWEEP = (3 * Math.PI) / 4; // the needle's travel, from nothing to the winch's top
+const DIAL_PX = 256;
+
+/**
+ * The bench's winch at its point (the event's `winch`, MJCF), standing on the platform: an orange
+ * drum across the lane on two cheeks, and over it a dial facing the camera's side, whose needle and
+ * reading `setForce` sets to the winch's pull.
+ */
+export function buildWinch({ winch, bench: { top_n } }) {
+  const group = new Group();
+  group.name = "winch";
+  group.position.set(...toThree(winch));
+  const floor = -winch[2];
+  const add = (geometry, material, x, y, z) => {
+    const mesh = new Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    group.add(mesh);
+    return mesh;
+  };
+  const steel = flat(PALETTE.stand);
+  add(new CylinderGeometry(DRUM, DRUM, 0.1, 24), flat(PALETTE.cone), 0, -DRUM, 0).rotation.x = Math.PI / 2;
+  const cheek = 0.02 - DRUM - floor;
+  for (const z of [-0.056, 0.056]) add(new BoxGeometry(0.09, cheek, 0.012), steel, 0, floor + cheek / 2, z);
+  add(new BoxGeometry(0.2, 0.012, 0.14), steel, 0.04, floor + 0.006, 0);
+  const centre = new Vector3(0.06, 0.17, 0);
+  add(new BoxGeometry(0.014, centre.y - floor, 0.014), steel, centre.x, (centre.y + floor) / 2, -0.012);
+  add(new CylinderGeometry(DIAL + 0.006, DIAL + 0.006, 0.01, 40), steel, centre.x, centre.y, 0).rotation.x = Math.PI / 2;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = DIAL_PX;
+  const ctx = canvas.getContext("2d");
+  const map = new CanvasTexture(canvas);
+  map.colorSpace = SRGBColorSpace;
+  const face = new MeshBasicMaterial({ map, transparent: true, toneMapped: false });
+  add(new PlaneGeometry(DIAL * 2, DIAL * 2), face, centre.x, centre.y, 0.006);
+  // At rest the needle leans as far left of upright as the top leans right of it.
+  const blade = new BoxGeometry(0.004, DIAL * 0.8, 0.002);
+  blade.translate(0, DIAL * 0.4, 0);
+  blade.rotateZ(SWEEP / 2);
+  const needle = add(blade, flat(RED), centre.x, centre.y, 0.009);
+  needle.name = "needle";
+  add(new CylinderGeometry(0.007, 0.007, 0.004, 16), flat(PALETTE.dark), centre.x, centre.y, 0.01).rotation.x = Math.PI / 2;
+
+  const mid = DIAL_PX / 2;
+  return {
+    group,
+    setForce(newtons) {
+      ctx.clearRect(0, 0, DIAL_PX, DIAL_PX);
+      ctx.fillStyle = `#${PALETTE.frame.toString(16)}`;
+      ctx.beginPath();
+      ctx.arc(mid, mid, mid - 2, 0, 2 * Math.PI);
+      ctx.fill();
+      // A dot a newton round the needle's arc, clockwise from its rest; the reading under it.
+      ctx.fillStyle = `#${PALETTE.dark.toString(16)}`;
+      for (let n = 0; n <= top_n; n += 1) {
+        const angle = -Math.PI / 2 - SWEEP / 2 + (n / top_n) * SWEEP;
+        ctx.beginPath();
+        ctx.arc(mid + 100 * Math.cos(angle), mid + 100 * Math.sin(angle), 6, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      ctx.font = 'bold 48px "DM Sans", sans-serif';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${newtons.toFixed(2)} N`, mid, mid + 58);
+      map.needsUpdate = true;
+      needle.rotation.z = -(newtons / top_n) * SWEEP;
+    },
+  };
+}

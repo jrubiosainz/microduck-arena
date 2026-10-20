@@ -50,6 +50,7 @@ export function laneSpacing({ width_m = 0.8, walls = [] } = {}) {
 export const LANE_COLORS = [0xff7a2f, 0x8fb8dc, 0xc8ff2e, 0x9d87e8, 0xffd23f];
 export const LANE_CSS = ["#ff7a2f", "#8fb8dc", "#c8ff2e", "#9d87e8", "#ffd23f"];
 export const OVERRUN = 0.4; // ground extends this far past both lines
+export const TRACK = 0x22242a; // the rubber of a level track
 const LINE_WIDTH = 0.03;
 
 /** Lateral offset for lane `i` of `n`, in three.js z. */
@@ -76,7 +77,7 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
     new PlaneGeometry(length_m + OVERRUN * 2, span),
     // Rubber track stays matte; the painted ramp has a broad satin highlight.
     new MeshStandardMaterial({
-      color: slope_deg ? 0x456d7b : 0x22242a,
+      color: slope_deg ? 0x456d7b : TRACK,
       roughness: slope_deg ? 0.72 : 1,
       metalness: 0,
       envMapIntensity: slope_deg ? 0.45 : 0.15,

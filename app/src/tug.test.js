@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { Raycaster, Vector3 } from "three";
+import { describe, expect, it, vi } from "vitest";
+import { OVERRUN } from "./course.js";
+import { buildGym } from "./gym.js";
 import { TRACE_WIDTH } from "./replay.js";
-import { benchForce, forceAt, markerX, stringEnd, toThree, tugDucks, tugEnds } from "./tug.js";
+import {
+  benchForce, buildString, buildTugCourse, buildWinch, cutPit, forceAt, markerX, stringEnd, toThree, tugDucks, tugEnds,
+} from "./tug.js";
 
 const TUG = {
   id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug", metric: "mean_hold_force", rig: "legs", vote: null,
@@ -37,5 +42,55 @@ describe("the tug's arithmetic, as the server's", () => {
     expect([duck.lead, duck.trace.length, duck.livery, duck.name]).toEqual([2, 5 * TRACE_WIDTH, "gold", "@alice"]);
     const bout = tugDucks({ tug: "bout", ducks: [{ trace, livery: "a", name: "W" }, { trace, livery: "b", name: "E" }] });
     expect(bout.map((d) => [d.name, d.lead])).toEqual([["W", 0], ["E", 0]]);
+  });
+});
+
+describe("the tug drawn", () => {
+  it("cuts the lane at the pit and lays the pit's floor deep", () => {
+    const course = buildTugCourse(TUG);
+    const west = course.getObjectByName("platform_west"), box = west.geometry.parameters;
+    expect(west.position.y + box.height / 2).toBeCloseTo(0, 9);
+    expect(west.position.x + box.width / 2).toBeCloseTo(-0.15, 9);
+    expect(west.position.x - box.width / 2).toBeCloseTo(-(2 + OVERRUN), 9);
+    const ground = course.getObjectByName("ground");
+    expect([ground.position.y, ground.geometry.parameters.width]).toEqual([-0.3, 4 + OVERRUN * 2]);
+    expect(course.getObjectByName("wall_left").position.toArray()).toEqual(toThree([0, 0.425, 0.075]));
+    expect(course.getObjectByName("centre_line").position.x).toBe(0);
+  });
+  it("stretches the string between its ends and hangs the marker in the middle", () => {
+    const string = buildString();
+    string.update([-0.5, 0, 0.15], [0.5, 0, 0.15]);
+    const rope = string.group.getObjectByName("string");
+    expect(rope.scale.y).toBeCloseTo(1, 9);
+    [0, 0.15, 0].forEach((v, i) => expect(rope.position.toArray()[i]).toBeCloseTo(v, 9));
+    expect(new Vector3(0, 1, 0).applyQuaternion(rope.quaternion).x).toBeCloseTo(1, 9);
+    expect(string.group.getObjectByName("marker").position.toArray()).toEqual(rope.position.toArray());
+  });
+  it("reads the winch's pull on its dial", () => {
+    const fillText = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ fillText, clearRect() {}, fillRect() {}, beginPath() {}, arc() {}, stroke() {}, fill() {} });
+    const winch = buildWinch(TUG);
+    expect(winch.group.position.toArray()).toEqual(toThree(TUG.winch));
+    winch.setForce(3.2);
+    expect(fillText.mock.calls.at(-1)[0]).toBe("3.20 N");
+    const once = winch.group.getObjectByName("needle").rotation.z;
+    winch.setForce(6.4);
+    expect(winch.group.getObjectByName("needle").rotation.z).toBeCloseTo(2 * once, 9);
+  });
+  it("opens the hall's floor over the pit: nothing of the hall bridges it, its boards laid as before", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(new Proxy({}, { get: (ctx, key) => ctx[key] ?? (() => {}) }));
+    const image = { naturalWidth: 1, naturalHeight: 1 };
+    const gym = buildGym(4, -3, 3.8, { arena: image, pollen: image, huggingFace: image }, TUG.width_m);
+    gym.group.position.x = -2; // built from 0 to the length, centred on the pit as the viewer moves it
+    gym.group.updateMatrixWorld(true);
+    const down = (x, z) => new Raycaster(new Vector3(x, 0.5, z), new Vector3(0, -1, 0), 0, 0.8).intersectObject(gym.group);
+    const boards = down(1, 1).map((hit) => hit.uv);
+    expect(boards).toHaveLength(1);
+    cutPit(gym.group.getObjectByName("parquet"), TUG);
+    expect([down(0, 0), down(0.14, -0.39), down(-0.14, 0.39)]).toEqual([[], [], []]);
+    const [after] = down(1, 1);
+    [after.uv.x, after.uv.y].forEach((v, i) => expect(v).toBeCloseTo(boards[0].toArray()[i], 6)); // float32 coordinates
+    expect(down(0.2, 0)).toHaveLength(1);
+    expect(down(0, 1.2)).toHaveLength(2); // the court's centre line still runs beside the track
   });
 });
