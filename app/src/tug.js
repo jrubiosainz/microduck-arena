@@ -1,6 +1,6 @@
-// The tug of war's arithmetic, as the server's (arena/tug.py): where a string is tied, where
-// the marker stands, how hard the bench's winch pulls, and the lanes the viewer plays; and the tug
-// drawn: its course, the string and the winch.
+// The tug of war's arithmetic, as the server's (arena/tug.py): where a string is tied, how hard
+// the bench's winch pulls, and the lanes the viewer plays; and the tug drawn: its course, the
+// string and the winch.
 // Frames are MJCF (z up); `toThree` carries a point to the scene.
 
 import {
@@ -26,10 +26,6 @@ export function stringEnd(frame, offset) {
     frame[2] + vz + w * t[2] + (ux * t[1] - uy * t[0]),
   ];
 }
-
-/** The marker's x: the middle of the two string ends. */
-export const markerX = (westFrame, eastFrame, offset) =>
-  (stringEnd(westFrame, offset)[0] + stringEnd(eastFrame, offset)[0]) / 2;
 
 /** The winch's pull in newtons `t` seconds into the timed run, never below 0, never above the top. */
 export function benchForce({ ramp_n_per_s: ramp, top_n: top, jerks }, t) {

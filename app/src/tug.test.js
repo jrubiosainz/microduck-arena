@@ -5,7 +5,7 @@ import { PALETTE, colour } from "./palette.js";
 import { buildGym } from "./gym.js";
 import { TRACE_WIDTH } from "./replay.js";
 import {
-  benchForce, buildString, buildTugCourse, buildWinch, cutPit, floorUnder, forceAt, markerX, stringEnd, toThree, tugDistance, tugDucks,
+  benchForce, buildString, buildTugCourse, buildWinch, cutPit, floorUnder, forceAt, stringEnd, toThree, tugDistance, tugDucks,
   tugEnds, tugPose, tugSpan,
 } from "./tug.js";
 
@@ -31,9 +31,8 @@ describe("the tug's arithmetic, as the server's", () => {
     expect([forceAt(PROFILE, 10, 26), forceAt(PROFILE, 26, 26)]).toEqual([0, benchForce(PROFILE, 0)]);
     expect(forceAt(PROFILE, 76, 26)).toBeCloseTo(0.9667824432317804, 9);
   });
-  it("a string end turns with the trunk, the marker is the middle, a bench's string ends at the winch", () => {
+  it("a string end turns with the trunk, a bench's string ends at the winch", () => {
     [-0.4847333395016046, 0.12555736835487435, 0.1624215].forEach((v, i) => expect(stringEnd(A, TUG.string_offset)[i]).toBeCloseTo(v, 6));
-    expect(markerX(A, B, TUG.string_offset)).toBeCloseTo(0.04463333024919769, 6);
     expect(toThree([1, 2, 3])).toEqual([1, 3, -2]);
     expect(tugEnds(TUG, [B])[1]).toEqual(TUG.winch);
     tugEnds(TUG, [A, B])[1].forEach((v, i) => expect(v).toBeCloseTo([0.574, 0, 0.1524215][i], 6));

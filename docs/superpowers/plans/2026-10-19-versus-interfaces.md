@@ -353,7 +353,6 @@ export function formatScore(value, { finished, metric } = {})   // "4.21 N" for 
 // app/src/tug.js — new (mirrors arena/tug.py; MJCF coordinates in, three.js out)
 export function toThree([x, y, z])                  // [x, z, -y]
 export function stringEnd(frame, offset)            // [x, y, z]
-export function markerX(westFrame, eastFrame, offset)
 export function benchForce(profile, t)              // equal to arena.tug.bench_force to 1e-9
 export function forceAt(profile, index, lead)       // 0 while index < lead, else benchForce(profile, (index - lead) * CTRL_DT)
 export function tugDucks(entry)                     // a tug lane -> [{trace, lead, livery, name}], a settle led in
