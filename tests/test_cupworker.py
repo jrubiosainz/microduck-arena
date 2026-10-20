@@ -1,17 +1,23 @@
 import hashlib
+import json
+import threading
+import time
 from dataclasses import replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 import arena
 from arena import cupworker
-from arena.constants import RUNNER_VERSION
-from arena.cup import Cup, cup_times, draw_groups, iso, parse_iso
+from arena.constants import NUM_JOINTS, OBS_SIZE, RUNNER_VERSION
+from arena.cup import Cup, cup_times, draw_groups, ends_at, iso, parse_iso
 from arena.cupworker import (
+    CupWorker,
+    Standing,
     all_cups,
     compute_matches,
     entrants_at,
@@ -19,10 +25,11 @@ from arena.cupworker import (
     load_entrant,
     running_order,
 )
+from arena.hub_fetch import FetchError
 from arena.manifest import BoutRules, load_event
 from arena.match import BoutResult, MatchOutcome, bout_seed
 from arena.policy import load_policy
-from arena.store import LocalStore
+from arena.store import LocalStore, Withdrawal
 from arena.trace import decode
 from tests.test_cup import entrant
 from tests.test_store import make_record
@@ -125,3 +132,251 @@ def test_a_cup_plays_on_the_real_physics_and_replays_identically():
     assert len(first.matches) == 7 and first.matches[-1].round == "final" and first == again
     assert files.keys() == files_again.keys()
     assert all(np.array_equal(decode(files[k]), decode(files_again[k])) for k in files)
+
+
+# Cup 1 closes 2026-10-23T14:00Z and premieres at 16:00Z; cup 2 closes 2026-10-30T15:00Z and premieres at 17:00Z.
+EARLY = replace(TUG, cup=replace(TUG.cup, first=date(2026, 10, 23)))
+T1 = datetime(2026, 10, 23, 14, 1, tzinfo=UTC)
+
+
+class Clock:
+    def __init__(self, at): self.at = at
+    def __call__(self): return self.at
+
+
+class FakeClips:
+    def __init__(self): self.owed = []
+    def enqueue(self, run_id, priority=0): self.owed.append(run_id)
+
+
+class Crashing:
+    """A store whose `at`-th write raises before it lands, as a Space restarting there would."""
+    def __init__(self, store, at): self.store, self.at, self.writes = store, at, 0
+    def __getattr__(self, name): return getattr(self.store, name)
+    def _write(self):
+        self.writes += 1
+        if self.writes == self.at:
+            raise RuntimeError("the Space restarted")
+    def put_cup_files(self, *args): self._write(); self.store.put_cup_files(*args)
+    def mark_clip_pending(self, *args): self._write(); self.store.mark_clip_pending(*args)
+
+
+@pytest.fixture
+def no_physics(monkeypatch):
+    monkeypatch.setattr(cupworker, "play_match", fake_play)
+    monkeypatch.setattr(cupworker, "compile_tug", lambda *_: None)
+    monkeypatch.setattr(cupworker.secrets, "token_hex", lambda n: "ab" * n)
+
+
+def enter(store, n, at="2026-10-22T09:00:00Z"):
+    for i in range(n):
+        store.append(make_record(run_id=f"R{i}", event_id="tug-of-war", user=f"p{i}", score=float(n - i), submitted_at=at), b"t")
+
+
+def clip_json(seconds=10.0):
+    return json.dumps({"rendered_at": "2026-10-23T14:30:00Z", "layouts": {"landscape": {"seconds": seconds}}}).encode()
+
+
+def render(store, number=1, seconds=10.0):
+    """What the clip jobs leave behind for every clip this cup owes."""
+    for m in load_cup(store, "tug-of-war", number).matches:
+        if store.clip_state(m.match_id)[0] == "pending":
+            store.put_clip(m.match_id, {"clip.json": clip_json(seconds)})
+
+
+def worker(store, clock, clips=None, load=lambda e: e.user):
+    return CupWorker(store, clips or FakeClips(), events=[EARLY], load=load, now=clock, log=lambda _: None)
+
+
+def gone(user):
+    """A load for which `user`'s policy no longer exists."""
+    def load(entrant):
+        if entrant.user == user:
+            raise FetchError(f"could not read {user}/tug: 404")
+        return entrant.user
+    return load
+
+
+def written(root):
+    """Every cup file and every clip's pending marker, by path."""
+    return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*"))
+            if p.is_file() and (p.relative_to(root).parts[0] == "cups" or p.name == "pending.json")}
+
+
+def test_a_cup_goes_from_close_to_its_running_order(tmp_path, no_physics):
+    store, clips, clock = LocalStore(tmp_path), FakeClips(), Clock(T1)
+    enter(store, 6)
+    cups = worker(store, clock, clips)
+    cups.tick()
+    cup = load_cup(store, "tug-of-war", 1)
+    assert cup.secret == "ab" * 16 and len(cup.matches) == 9 and cup.order is None
+    assert clips.owed == [m.match_id for m in cup.matches]
+    assert all(store.clip_state(m.match_id)[0] == "pending" for m in cup.matches)
+    assert json.loads((tmp_path / "clips" / cup.matches[0].match_id / "pending.json").read_text()) == {
+        "run_id": "tug-of-war-0001-000", "user": "arena", "event_id": "tug-of-war", "queued_at": "2026-10-23T14:01:00Z"}
+    render(store)
+    clock.at = datetime(2026, 10, 23, 15, tzinfo=UTC)
+    cups.tick()
+    assert load_cup(store, "tug-of-war", 1).order["starts_at"] == "2026-10-23T16:00:00Z"
+
+
+def test_a_pending_clip_is_owed_once(tmp_path, no_physics):
+    """The clip jobs follow a pending clip themselves: queued again every tick, it could race a launch into a second job."""
+    store, clips, clock = LocalStore(tmp_path), FakeClips(), Clock(T1)
+    enter(store, 6)
+    cups = worker(store, clock, clips)
+    cups.tick()
+    clock.at = T1 + timedelta(minutes=30)
+    cups.tick()
+    assert clips.owed == [m.match_id for m in load_cup(store, "tug-of-war", 1).matches]
+
+
+def test_a_late_order_starts_ten_minutes_after_it_is_fixed(tmp_path, no_physics):
+    store, clock = LocalStore(tmp_path), Clock(T1)
+    enter(store, 6)
+    cups = worker(store, clock)
+    cups.tick()
+    render(store)
+    clock.at = datetime(2026, 10, 23, 16, 30, 25, tzinfo=UTC)
+    cups.tick()
+    assert load_cup(store, "tug-of-war", 1).order["starts_at"] == "2026-10-23T16:40:25Z"
+
+
+def test_a_crash_after_any_step_ends_in_the_same_cup(tmp_path, no_physics):
+    reference = LocalStore(tmp_path / "reference")
+    enter(reference, 6)
+    cups = worker(reference, Clock(T1))
+    cups.tick()
+    render(reference)
+    cups.tick()
+    expected = written(reference.root)
+    assert "cups/tug-of-war/0001/order.json" in expected
+    for k in range(1, 13):  # the draw, the matches, nine pending markers, the order
+        store = LocalStore(tmp_path / f"crash-{k}")
+        enter(store, 6)
+        flaky = Crashing(store, k)
+        crashing = worker(flaky, Clock(T1))
+        crashing.tick()
+        cup = load_cup(store, "tug-of-war", 1)
+        if cup is not None and cup.matches:
+            render(store)
+        crashing.tick()
+        assert flaky.writes >= k, k
+        fresh = worker(store, Clock(T1))
+        fresh.tick()
+        render(store)
+        fresh.tick()
+        assert written(store.root) == expected, k
+
+
+def test_a_failed_match_clip_is_relaunched_every_ten_minutes_and_holds_the_order(tmp_path, no_physics):
+    store, clips, clock = LocalStore(tmp_path), FakeClips(), Clock(T1)
+    enter(store, 6)
+    cups = worker(store, clock, clips)
+    cups.tick()
+    first = load_cup(store, "tug-of-war", 1).matches[0].match_id
+    store.fail_clip(first, "2026-10-23T14:05:00Z", "ffmpeg exited 1")
+    render(store)
+    clips.owed.clear()
+    for minutes, owed in ((5, [first]), (10, [first]), (15, [first, first])):
+        clock.at = T1 + timedelta(minutes=minutes)
+        cups.tick()
+        assert clips.owed == owed, minutes
+        assert load_cup(store, "tug-of-war", 1).order is None
+    store.put_clip(first, {"clip.json": clip_json()})
+    cups.tick()
+    assert load_cup(store, "tug-of-war", 1).order is not None
+
+
+def test_a_withdrawal_after_close_changes_nothing(tmp_path, no_physics):
+    store = LocalStore(tmp_path)
+    enter(store, 6)
+    store.withdraw(Withdrawal("R5", "tug-of-war", "p5", "2026-10-23T14:00:01Z"))
+    store.withdraw(Withdrawal("R4", "tug-of-war", "p4", "2026-10-23T13:59:59Z"))
+    worker(store, Clock(T1)).tick()
+    assert [e.user for e in load_cup(store, "tug-of-war", 1).entrants] == ["p0", "p1", "p2", "p3", "p5"]
+
+
+def test_an_entrant_whose_policy_no_longer_loads_is_left_out_after_ten_minutes(tmp_path, no_physics):
+    store, clock, said = LocalStore(tmp_path), Clock(T1), []
+    enter(store, 6)
+    cups = CupWorker(store, FakeClips(), events=[EARLY], load=gone("p2"), now=clock, log=said.append)
+    cups.tick()
+    assert load_cup(store, "tug-of-war", 1) is None
+    assert any("waits for p2 (FetchError: could not read p2/tug: 404)" in line for line in said)
+    clock.at = datetime(2026, 10, 23, 14, 10, tzinfo=UTC)
+    cups.tick()
+    assert [e.user for e in load_cup(store, "tug-of-war", 1).entrants] == ["p0", "p1", "p3", "p4", "p5"]
+    assert any("without p2" in line for line in said)
+
+
+def test_a_drawn_duck_whose_policy_no_longer_loads_stands_still_after_ten_minutes(tmp_path, no_physics, monkeypatch):
+    """The draw landed, the Space restarted before the matches, and p2's repo is gone since: the draw is frozen, so
+    p2 keeps its place and its matches are played by a duck holding its standing pose, rather than the cup held forever."""
+    store = LocalStore(tmp_path)
+    enter(store, 6)
+    worker(Crashing(store, 2), Clock(T1)).tick()
+    assert load_cup(store, "tug-of-war", 1).matches == ()
+    played = []
+    monkeypatch.setattr(cupworker, "play_match", lambda m, a, b, seeds, ratings, model=None:
+                        played.append((a, b)) or fake_play(m, a, b, seeds, ratings))
+    clock = Clock(T1)
+    restarted = worker(store, clock, load=gone("p2"))
+    restarted.tick()
+    assert load_cup(store, "tug-of-war", 1).matches == () and played == []
+    clock.at = datetime(2026, 10, 23, 14, 10, tzinfo=UTC)
+    restarted.tick()
+    cup = load_cup(store, "tug-of-war", 1)
+    assert [e.user for e in cup.entrants] == ["p0", "p1", "p2", "p3", "p4", "p5"] and len(cup.matches) == 9
+    duck = lambda i: "standing" if cup.entrants[i].user == "p2" else cup.entrants[i].user
+    assert [tuple("standing" if isinstance(p, Standing) else p for p in pair) for pair in played] == [
+        (duck(m.a), duck(m.b)) for m in cup.matches]
+    assert any("standing" in (duck(m.a), duck(m.b)) for m in cup.matches)
+    assert np.array_equal(Standing().act(np.zeros(OBS_SIZE, np.float32)), np.zeros(NUM_JOINTS, np.float32))
+
+
+def test_too_few_entrants_skip_the_week(tmp_path, no_physics):
+    store, clips = LocalStore(tmp_path), FakeClips()
+    enter(store, 3)
+    cups = worker(store, Clock(T1), clips)
+    cups.tick()
+    cup = load_cup(store, "tug-of-war", 1)
+    assert cup.skipped is True and cup.groups == () and cup.matches == ()
+    assert clips.owed == []
+    before = sorted(tmp_path.rglob("*"))
+    cups.tick()
+    assert sorted(tmp_path.rglob("*")) == before
+
+
+def test_a_cup_gets_no_order_while_the_previous_one_has_not_aired(tmp_path, no_physics):
+    store, clock = LocalStore(tmp_path), Clock(T1)
+    enter(store, 6)
+    cups = worker(store, clock)
+    cups.tick()
+    clock.at = datetime(2026, 10, 30, 15, 1, tzinfo=UTC)
+    render(store, 1)
+    cups.tick()
+    first = load_cup(store, "tug-of-war", 1)
+    assert first.order["starts_at"] == "2026-10-30T15:11:00Z"
+    render(store, 2)
+    clock.at = ends_at(first) - timedelta(seconds=1)
+    cups.tick()
+    assert load_cup(store, "tug-of-war", 2).order is None
+    clock.at = ends_at(first)
+    cups.tick()
+    assert load_cup(store, "tug-of-war", 2).order["starts_at"] == "2026-10-30T17:00:00Z"
+
+
+def test_the_worker_ticks_at_once_in_its_own_thread_until_stopped(tmp_path, no_physics):
+    store = LocalStore(tmp_path)
+    enter(store, 3)
+    cups = worker(store, Clock(T1))
+    cups.start()
+    deadline = time.monotonic() + 10
+    while load_cup(store, "tug-of-war", 1) is None and time.monotonic() < deadline:
+        time.sleep(0.01)
+    threads = [t for t in threading.enumerate() if t.name == "arena-cups"]
+    cups.stop()
+    assert load_cup(store, "tug-of-war", 1).skipped and len(threads) == 1 and threads[0].daemon
+    threads[0].join(5)
+    assert not threads[0].is_alive()

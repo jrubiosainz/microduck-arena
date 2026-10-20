@@ -1,3 +1,5 @@
+import threading
+
 from fastapi.testclient import TestClient
 
 from arena.manifest import all_events
@@ -104,3 +106,11 @@ def test_the_booth_says_why_it_is_off(tmp_path, monkeypatch):
     monkeypatch.setattr(bible, "load", unreadable)
     assert booted().state.booth_off == ("the commentators' bible does not load: "
                                         "lore: characters must be exactly peter and ray")
+
+
+def test_the_app_holds_a_cup_worker_it_starts_only_where_clips_render(tmp_path):
+    """A cup cannot premiere without its clips: off a Space nothing renders, so nothing computes cups."""
+    app = create_app(ArenaConfig.from_env(store_dir=tmp_path))
+    with TestClient(app):
+        assert [m.id for m in app.state.cups.events] == ["tug-of-war"]
+        assert "arena-cups" not in [t.name for t in threading.enumerate() if t.is_alive()]

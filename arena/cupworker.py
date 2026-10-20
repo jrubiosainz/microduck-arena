@@ -1,24 +1,34 @@
+import json
+import secrets
 import tempfile
+import threading
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import replace
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from itertools import accumulate
 from pathlib import Path
 
-from .constants import RUNNER_VERSION
+import numpy as np
+
+from .constants import NUM_JOINTS, RUNNER_VERSION
 from .course import compile_tug
 from .cup import (
     GROUP_NAMES,
     Cup,
     Entrant,
     MatchRecord,
+    closed_cups,
+    cup_times,
+    draw_groups,
+    ends_at,
     first_knockout,
     group_fixtures,
     group_table,
     iso,
     match_id,
     match_label,
+    parse_iso,
     round_name,
 )
 from .hub_fetch import fetch_policy
@@ -28,6 +38,14 @@ from .match import bout_seed, play_match
 from .policy import Policy, load_policy
 from .store import RunRecord, Store
 from .trace import encode
+
+# An order fixed late still leaves the live this long to lay the show before it starts.
+ORDER_LEAD = timedelta(minutes=10)
+# How long after the close an entrant's policy may fail to load before the cup goes on without it.
+LOAD_PATIENCE = timedelta(minutes=10)
+# A match clip that failed is launched again this often, as long as it stays failed.
+CLIP_RETRY = timedelta(minutes=10)
+TICK_S = 30
 
 
 def load_cup(store: Store, event_id: str, number: int) -> Cup | None:
@@ -112,3 +130,141 @@ def running_order(cup: Cup, clips: Mapping[str, float], starts_at: datetime, sho
     starts = accumulate((segment["duration_ms"] for segment in laid), initial=0)
     return {"starts_at": iso(starts_at),
             "segments": [{"kind": segment["kind"], "at_ms": at, **segment} for segment, at in zip(laid, starts)]}
+
+
+class Standing:
+    """A drawn duck whose policy no longer loads: it holds its standing pose (an action of zeros) in every bout."""
+
+    def act(self, obs: np.ndarray) -> np.ndarray:
+        return np.zeros(NUM_JOINTS, dtype=np.float32)
+
+
+class CupWorker:
+    """Every cup of `events`, tick by tick, from close to its running order, each step read back from the store.
+
+    Close, then draw.json (with the secret), then matches.json and the bouts, then one clip owed per match, then
+    order.json once every match clip is ready and the event's previous cup has finished airing. Each write is one
+    store commit made once, so a restart at any point picks up where the dataset left off, with the same secret and
+    the same results. `show` is Plan D's writer; with None the order waits on the clips alone.
+    """
+
+    def __init__(self, store, clips, *, events, load: Callable[[Entrant], object],
+                 now: Callable[[], datetime] = lambda: datetime.now(UTC), log=print,
+                 show: Callable[[Cup, dict], dict] | None = None):
+        self.store = store
+        self.clips = clips
+        self.events = events
+        self.load = load
+        self.now = now
+        self.log = log
+        self.show = show
+        self._relaunched: dict[str, datetime] = {}  # match id -> when its failed clip was last launched again
+        self._stopped = threading.Event()
+
+    def tick(self) -> None:
+        for manifest in self.events:
+            try:
+                self._advance(manifest)
+            except Exception as exc:  # noqa: BLE001 — a cup that cannot move now moves next tick
+                self.log(f"cups: {manifest.id} held ({type(exc).__name__}: {exc})")
+
+    def start(self) -> None:
+        threading.Thread(target=self._work, name="arena-cups", daemon=True).start()
+
+    def stop(self) -> None:
+        self._stopped.set()
+
+    def _work(self) -> None:
+        self.tick()
+        while not self._stopped.wait(TICK_S):
+            self.tick()
+
+    def _advance(self, manifest: Manifest) -> None:
+        now = self.now()
+        for number in range(1, closed_cups(manifest.cup, now) + 1):
+            cup, policies = load_cup(self.store, manifest.id, number), None
+            if cup is None:
+                cup, policies = self._draw(manifest, number, now)
+            if cup is None or cup.skipped:
+                continue
+            if not cup.matches:
+                cup = self._play(manifest, cup, policies, now)
+                if cup is None:
+                    continue
+            if cup.order is None:
+                self._schedule(cup, now)
+
+    def _load(self, manifest: Manifest, number: int, entrants: Iterable[Entrant], now: datetime) -> dict | None:
+        """Each entrant's policy by run id, leaving out those that fail; None while one fails within LOAD_PATIENCE of
+        the close, so a Hub that is down for a moment costs nobody their place."""
+        policies, missing = {}, []
+        for entrant in entrants:
+            try:
+                policies[entrant.run_id] = self.load(entrant)
+            except Exception as exc:  # noqa: BLE001 — whatever stops a policy playing, it cannot play
+                missing.append(f"{entrant.user} ({type(exc).__name__}: {exc})")
+        if not missing:
+            return policies
+        if now < cup_times(manifest.cup, number)[0] + LOAD_PATIENCE:
+            self.log(f"cups: {manifest.id} #{number} waits for {', '.join(missing)}")
+            return None
+        self.log(f"cups: {manifest.id} #{number} goes on without {', '.join(missing)}")
+        return policies
+
+    def _draw(self, manifest: Manifest, number: int, now: datetime) -> tuple[Cup | None, dict | None]:
+        close_at, premiere_at = cup_times(manifest.cup, number)
+        withdrawn = frozenset(w.run_id for w in self.store.withdrawals() if w.withdrawn_at <= iso(close_at))
+        found = entrants_at(self.store.runs(manifest.id), withdrawn, close_at)
+        policies = self._load(manifest, number, found, now)
+        if policies is None:
+            return None, None
+        entrants = tuple(e for e in found if e.run_id in policies)
+        secret = secrets.token_hex(16)
+        skipped = len(entrants) < manifest.cup.min_entrants
+        groups = () if skipped else tuple(tuple(g) for g in draw_groups(entrants, secret))
+        cup = Cup(manifest.id, number, iso(close_at), iso(premiere_at), secret, entrants, groups, skipped)
+        self.store.put_cup_files(manifest.id, number, {"draw.json": cup.draw_json()})
+        self.log(f"cups: {manifest.id} #{number} skipped, {len(entrants)} entrants of {manifest.cup.min_entrants}"
+                 if skipped else f"cups: {manifest.id} #{number} drawn, {len(entrants)} entrants in {len(groups)} groups")
+        return cup, policies
+
+    def _play(self, manifest: Manifest, cup: Cup, policies: dict | None, now: datetime) -> Cup | None:
+        """Every match of the drawn cup, with the policies of its draw; drawn on an earlier tick (a restart, a failed
+        write), they are loaded again under the same patience. The draw is frozen: a duck whose policy no longer loads
+        keeps its place and plays standing still, rather than holding the cup forever."""
+        if policies is None:
+            policies = self._load(manifest, cup.number, cup.entrants, now)
+            if policies is None:
+                return None
+        cup, files = compute_matches(manifest, cup, lambda e: policies.get(e.run_id, Standing()))
+        self.store.put_cup_files(manifest.id, cup.number, {"matches.json": cup.matches_json(), **files})
+        self.log(f"cups: {manifest.id} #{cup.number} played, {len(cup.matches)} matches")
+        return cup
+
+    def _schedule(self, cup: Cup, now: datetime) -> None:
+        seconds = {}
+        for match in cup.matches:
+            state, written = self.store.clip_state(match.match_id)
+            if state == "ready":
+                seconds[match.match_id] = written["layouts"]["landscape"]["seconds"]
+            elif state == "none":
+                self.store.mark_clip_pending(match.match_id, "arena", cup.event_id, iso(now))
+                self.clips.enqueue(match.match_id)
+            elif state == "failed" and now - self._relaunched.get(match.match_id, now - CLIP_RETRY) >= CLIP_RETRY:
+                self._relaunched[match.match_id] = now
+                self.clips.enqueue(match.match_id)
+            # A pending clip is the clip jobs' to follow (their drain at boot, their rescan): queued again every tick, it
+            # would race a launch in progress into a second job.
+        if len(seconds) < len(cup.matches) or not self._previous_aired(cup, now):
+            return
+        starts_at = max(parse_iso(cup.premiere_at), (now + ORDER_LEAD).replace(microsecond=0))
+        order = running_order(cup, seconds, starts_at)
+        self.store.put_cup_files(cup.event_id, cup.number, {"order.json": json.dumps(order, indent=2).encode()})
+        self.log(f"cups: {cup.event_id} #{cup.number} airs from {order['starts_at']}")
+
+    def _previous_aired(self, cup: Cup, now: datetime) -> bool:
+        """One show at a time per event: a cup gets no order until the one before it has finished airing."""
+        if cup.number == 1:
+            return True
+        previous = load_cup(self.store, cup.event_id, cup.number - 1)
+        return previous is not None and (previous.skipped or (previous.order is not None and ends_at(previous) <= now))

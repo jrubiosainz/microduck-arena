@@ -60,6 +60,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     from .. import commentary
     from ..clips import ClipJobs
     from ..commentary.lore import load
+    from ..cupworker import CupWorker, load_entrant
 
     # Why the booth is off, for the boot to say in one line, or None when it is
     # on. The bible is edited by hand and deployed without a test job, so a
@@ -92,12 +93,24 @@ def create_app(config: ArenaConfig) -> FastAPI:
         running=config.clip_jobs, enabled=config.clips_enabled, backfill=config.clip_backfill,
         landed=lambda run_id: app.state.programme.landed(),
     )
+    app.state.cups = CupWorker(
+        app.state.store, app.state.clips, events=[m for m in all_events() if m.cup],
+        load=lambda e: load_entrant(app.state.store, e),
+    )
     if config.clip_worker and app.state.clips.available:
         @app.on_event("startup")
         def _launch_owed_clips() -> None:
             # A thread, as recovery is: the drain is Hub calls and the health
             # check cannot wait for them.
             app.state.clips.start()
+            # Only where clips render: a cup cannot premiere without its
+            # clips, and a clip job's own app (clip_worker=False) must not
+            # compute cups.
+            app.state.cups.start()
+
+        @app.on_event("shutdown")
+        def _stop_the_cups() -> None:
+            app.state.cups.stop()
 
     from ..commentary.stock import CommentaryStock
     from ..commentary.tab import PlanTab
