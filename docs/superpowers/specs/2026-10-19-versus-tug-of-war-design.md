@@ -26,8 +26,8 @@ match like a real sports broadcast.
 - **Versus event**: an event whose entries meet each other. `tug-of-war` is the first.
 - **Bout**: one tug of war between two ducks, up to the bout time limit.
 - **Match**: first to win two bouts, sides swapped between bouts.
-- **Pulling bench**: a solo test. One duck on the tug course, the string running across the pit
-  to a winch instead of an opponent. It gives the policy its **rating**, in newtons.
+- **Reference duck**: a frozen policy shipped with the Arena. Five bouts against it give a policy
+  its **rating**, in centimetres of marker displacement (plus a pit bonus).
 - **Cup**: one weekly tournament of the event, numbered (#1, #2…): draw, groups, knockout,
   premiere.
 - **Premiere**: the scheduled moment the cup's results go public, as the live channel's show.
@@ -50,7 +50,8 @@ match like a real sports broadcast.
 - Policies that perceive their opponent (sumo, football…). A tug policy is blind, as every Arena
   policy is today: proprioception and a fixed command. A future versus that needs perception will
   change the observation contract; not now.
-- Self-play training. The recipe trains against a winch.
+- Self-play between two learning policies. The recipe trains against a FROZEN opponent duck (a
+  league of frozen opponents comes later).
 - Rollers. Pollen's roller reference can neither brake nor reverse; the event is `rig = "legs"`.
 - A time limit on the show. The owner: "no limit; we'll set one later when it becomes a problem."
 - A Pollen reference in the cups. There is none (owner's decision, below).
@@ -63,7 +64,7 @@ match like a real sports broadcast.
 - A live show that stalls or improvises: nothing on air waits for an LLM or a render.
 - A rating or a cup result computed anywhere but on x86 (the Space, or an x86 HF Job running the
   Space's image). Never re-score on the Mac: a Mac re-race diverges from the Space after 1–3 s.
-- A training environment whose string, pit or winch differs from the Arena's. Every physics
+- A training environment whose string, pit or bout differs from the Arena's. Every physics
   difference between training and the Arena has cost a retrain before (the BAM lesson, 2026-09-28).
 - Changing any existing event's physics: the golden run and every published run stay as they are.
 
@@ -109,7 +110,7 @@ sweep in a versus.
   loses") was tried and removed the same day: the first trained policies then dived face-down just
   under the fall line and held by friction anyway; the owner's ruling is that going down to hold
   is a viable strategy, and the point of the game is to drag the opponent into the pit.
-- At the bout time limit (20 s to start with), if nobody is in the pit, the duck the marker moved
+- At the bout time limit (45 s, owner 2026-10-20 night: a 20 s bout never left time to drag anyone in), if nobody is in the pit, the duck the marker moved
   away from loses: as in a real tug of war, the winner pulls the marker to their side of the pit's
   centre line.
 - Both in the pit on the same control step: the marker's side decides. A marker exactly back at the
@@ -121,36 +122,42 @@ sweep in a versus.
 from the cup's secret (section 4), the match and the bout, so a whole cup replays identically on
 x86.
 
-## 2. The pulling bench: the rating (owner chose it over a sparring match)
+## 2. The rating: bouts against the reference duck (owner, 2026-10-20 night)
 
 The event's own board is a rating, like a race's time, so everything the races have works for it
-unchanged: entry, five seeds, board, points, clip, live rotation, commentary.
+unchanged: entry, five seeds, board, points, clip, live rotation, commentary. The first design (a
+"pulling bench": one duck against a ramping winch, rated by the force it held) was dropped the
+same night: a duck lying down held the winch by friction (~5.2 N) about as well as any trained
+duck, so the rating separated nobody, and training against a winch never taught a duck to pull
+another one.
 
-- **Setting**: the tug course, one duck, the string crossing the pit to a **winch**: an anchor on
-  a slide past the far edge, driven by a force that ramps up, with small seeded jerks so it pulls
-  like an opponent rather than a machine.
-- **Score per seed**: the string force the duck was holding when it entered the pit. A duck still
-  out of the pit at the end of the ramp, standing or not, scores the ramp's top. The force never
-  exceeds the top (the jerks are clamped), so being dragged in is never worth more than holding.
-- **Rating**: the mean over five seeds, in newtons; higher is better (a new metric, the first one
-  where higher wins — every sort that assumes "lower is better" must learn the direction).
-- **Clip**: the duck against the winch, with a dial showing the newtons rising. Landscape and
-  vertical, on the HF Job, like every run.
-- **What it is not**: a winch is not an opponent; a policy strong against a steady pull may be
-  fragile against another duck's jolts. The rating says who is strong; the cup says who wins.
-- Ramp rate, top force, jerk size: the builder's, set on the first trained policy so that the
-  ratings spread out instead of all landing at the top or at zero.
+- **The reference duck**: a frozen policy shipped with the Arena (its ONNX vendored like the
+  golden walker), first our own checkpoint that walks backwards and pulls the string taut (t7-250
+  of the tug recipe). Changing it later changes every rating, like a runner version.
+- **Score per seed**: one bout (the tug's own physics, 45 s) between the entry and the reference,
+  sides alternating with the seed. The score is the marker's displacement towards the entry at the
+  end of the bout, in centimetres (negative when the reference pulled it away), plus a bonus when
+  the reference is dragged into the pit (and the same malus when the entry is).
+- **Rating**: the mean over five seeds, in centimetres; higher is better.
+- **Clip**: the entry's median bout against the reference — a real tug of war, two ducks, the
+  string and the marker. Landscape and vertical, on the HF Job, like every run.
+- **What it is not**: one fixed opponent is not the whole field; the rating says how well a duck
+  pulls against the reference; the cup says who wins.
+- The pit bonus is the builder's, sized so a pit finish outweighs any marker margin.
 
 ## 3. Training, and the first candidate
 
-- A `tug_of_war` challenge in `microduck-challenges` (the usual folder: `env.py`,
-  `challenge.toml`, `tasks.py`, `rewards.py` if it needs its own terms). The duck trains against
-  **the bench's own winch**: the same string, the same attach point, the same pit and lane, the
-  same force-profile family, randomised. The event's fixed command is the command it trains on.
-- The workshop's Test step measures the bench locally (an indicative rating: a Mac is not the
-  Space).
-- **No Pollen reference** (owner). We train one policy with the recipe and the owner publishes it
-  **under his own name (Nico-robot) as the first candidate**. It is an ordinary entry.
+- A `tug_of_war` challenge in `microduck-challenges` (the usual folder). The duck trains
+  **against another duck** (owner, 2026-10-20 night): the Arena's own bout — the same string, pit,
+  lane and 45 s — with a frozen opponent policy on the other end, first the reference duck (our
+  walking-back t7-250). Later the opponent can be chosen, even switched during training, among the
+  best checkpoints and the published models (a league); not in the first version.
+- The workshop's Test step rates a checkpoint against the reference locally (indicative: a Mac is
+  not the Space).
+- **No Pollen reference in the cups** (owner). We train one policy with the recipe and the owner
+  publishes it **under his own name (Nico-robot) as the first candidate**. The release does not
+  wait for a strong one: the best duck available at release time is the first candidate, and the
+  recipe keeps improving after.
 
 ## 4. The weekly cup
 
@@ -259,7 +266,7 @@ Stages 2 and 3 do not wait for a good policy: they are developed and tested loca
 first training's intermediate checkpoints as stand-in entrants. Paid trainings on HF Jobs have no
 budget limit (owner).
 
-1. **The tug and the bench.** The course (lane + pit), the string, the winch, the bench event with
+1. **The tug and its rating.** The course (lane + pit), the string, the rating by bouts against the reference duck (first built as a winch bench, replaced 2026-10-20 night), the event with
    its rating, board, clips and commentary; the `tug_of_war` challenge recipe; the first
    candidate trained and published by the owner. The match itself (two ducks, the judge) is built
    here too, since the cup needs it and the bench shares its course.
@@ -291,6 +298,10 @@ relock as usual, then the owner publishes the first candidate.
   reverses the "a fall loses" decision of the same morning).
 - The policies must really pull: the recipe is retrained so the ducks walk back and tighten the
   string, judged by bouts that end in the pit, not by the marker's drift (2026-10-20, evening).
+- 2026-10-20 night: bouts last 45 s; the rating is five bouts against a frozen reference duck (cm
+  of marker displacement + a pit bonus), the winch bench is dropped; training is against a frozen
+  opponent duck (first the reference, later a league of checkpoints and published models); the
+  release does not wait for a strong trained duck.
 - A drawn cup is frozen: withdrawals after close change nothing in it.
 
 ## My calls (the owner may object)
@@ -314,7 +325,7 @@ relock as usual, then the owner publishes the first candidate.
 
 ## Left to the builder
 
-- The string, pit, winch and judge numbers, tuned on the first trained policy; the attach body
+- The string, pit, bonus and judge numbers, tuned on the first trained policy; the attach body
   for "the base of the neck".
 - How a cup, its matches and its show are laid out in the dataset and served by the API.
 - The match clip's composition (bouts chained, score bug, intro/outro) within the clip contract.
