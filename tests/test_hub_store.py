@@ -23,6 +23,7 @@ class FakeHub:
         self.head, self.info_delay_s, self.down = 0, info_delay_s, False
         self.infos = 0
         self.downloads: list[list[str]] = [[]]
+        self.messages: list[str] = []
 
     @property
     def sha(self):
@@ -62,6 +63,7 @@ class FakeHub:
         return filename in self.files
 
     def create_commit(self, repo_id, repo_type, commit_message, operations):
+        self.messages.append(commit_message)
         for op in operations:
             self.put(op.path_in_repo, op.path_or_fileobj)
         self.commit()
@@ -171,6 +173,14 @@ def test_concurrent_readers_share_one_refresh(tmp_path):
         reader.join()
     assert hub.infos == 1
     assert len({id(snapshot) for snapshot in got}) == 1
+
+
+def test_a_run_is_committed_with_its_score_in_seconds_or_centimetres(tmp_path):
+    hub = FakeHub(tmp_path)
+    store = HubStore("org/runs", api=hub)
+    store.append(make_record(score=21.5), b"trace")
+    store.append(make_record(event_id="tug-of-war", score=-15.24), b"trace")
+    assert hub.messages == ["sprint-2m: alice 21.500s", "tug-of-war: alice -15.2 cm"]
 
 
 def test_a_write_is_read_back_at_once(tmp_path):

@@ -147,6 +147,15 @@ def test_a_tug_best_beaten_by_a_little_below_zero_is_no_big_margin():
     assert facts["notable#/personal-best"].tags == ("pb",)
 
 
+def test_a_tug_best_is_a_big_margin_from_five_centimetres_whatever_its_size():
+    small = facts_for(run("alice", 1.7, "2026-09-11T10:00:00Z", event="tug-of-war"),
+                      run("alice", 1.5, "2026-09-10T10:00:00Z", event="tug-of-war"))
+    assert small["notable#/personal-best"].tags == ("pb",)
+    big = facts_for(run("alice", 7.0, "2026-09-11T10:00:00Z", event="tug-of-war"),
+                    run("alice", 1.5, "2026-09-10T10:00:00Z", event="tug-of-war"))
+    assert big["notable#/personal-best"].tags == ("pb", "big-margin")
+
+
 def test_a_displaced_rated_rival_is_quoted_in_centimetres():
     bob = run("bob", 3.0, "2026-09-01T10:00:00Z", event="tug-of-war")
     facts = facts_for(run("alice", 4.0, "2026-09-11T10:00:00Z", event="tug-of-war"), bob)

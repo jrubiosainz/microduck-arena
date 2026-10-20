@@ -336,7 +336,7 @@ export function formatScore(value, { finished, metric } = {})   // "12.3 cm" for
 // app/src/tug.js — new (mirrors arena/tug.py; MJCF coordinates in, three.js out)
 export function toThree([x, y, z])                  // [x, z, -y]
 export function stringEnd(frame, offset)            // [x, y, z]
-export const SIDES, REFERENCE, BOUT_WORDS; export function entrySide(seed)   // mirror tug.py's SIDES, entry_side; REFERENCE = {livery: "charcoal", name: "Reference"}
+export const SIDES, BOUT_WORDS; export function entrySide(seed)   // mirror tug.py's SIDES, entry_side; REFERENCE (module-private) = {livery: "charcoal", name: "Reference"}
 export function ratingLane(traces, settles, {traceSeed, livery, name})   // the entry's bout lane; the Reference wears "classic" when the entry wears "charcoal"
 export function tugDucks(entry)                     // a tug lane -> [{trace, lead, livery, name}], a settle led in
 export function tugEnds(event, frames)              // MJCF [a, b]: the two ducks' string ends

@@ -49,7 +49,7 @@ def _print_sweep(result) -> None:
 
 
 def _print_rating(result) -> None:
-    """The format Plan B's ledger reads: one line per seed, then the rating."""
+    """The format the training recipe's ledger reads: one line per seed, then the rating."""
     for r in result.per_seed:
         print(f"seed {r.seed}: {SIDES[entry_side(r.seed)]:<4} {r.status:<8} {r.score_cm:+7.1f} cm at {r.time_s:.2f} s")
     print(f"rating: {result.score:.1f} cm · replay from seed {result.trace_seed}")

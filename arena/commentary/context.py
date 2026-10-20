@@ -45,6 +45,10 @@ def label(value, limit: int = 80) -> bool:
             and not technical_text(value))
 
 
+# A gap in centimetres under which two ratings are close, and over which a better one is a big step.
+BIG_GAP_CM = 5.0
+
+
 def measure(manifest: Manifest) -> tuple[str, str]:
     """What the board's score is called and counted in: a rating in centimetres where higher wins,
     else a time in seconds."""
@@ -129,7 +133,7 @@ def _board(record: RunRecord, manifest: Manifest, event_runs) -> Fact:
         unit = measure(manifest)[1]
         gap = abs(record.score - leader.score)
         text += f", {gap:.2f} {unit} behind the leader, @{leader.user}."
-        if gap < (5.0 if unit == "cm" else 0.5):
+        if gap < (BIG_GAP_CM if unit == "cm" else 0.5):
             tags.append("close")
         return Fact("run#/board", text, "result", tuple(tags))
     return Fact("run#/board", text + ".", "result", tuple(tags))

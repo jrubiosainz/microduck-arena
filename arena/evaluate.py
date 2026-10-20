@@ -29,7 +29,7 @@ duration played, and only informs: a stage's board ranks on votes.
 A tug's rating is neither: the entry plays one bout a seed against the reference duck
 (arena/tug.py), west on odd seeds and east on even, on the event's own command. Nothing is
 swept: every duck walks backwards at the same command, and what is measured is the centimetres
-of ground the entry won, the marker's distance from the centre line towards its opponent, plus
+of ground the entry won, the marker's distance from the centre line towards its own side, plus
 the event's pit bonus when only the opponent went into the pit, minus it when only the entry
 did. The rating is the mean of those over every seed, and a higher one is better. The replay
 is the lower-median seed by score.

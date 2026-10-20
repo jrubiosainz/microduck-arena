@@ -83,7 +83,7 @@ async function main() {
   const replays = lanes.map((_, i) => leadIn(settles[i][0], traces[i][0], settle));
   // A stage plays the author's performance alone: every duck of its troupe from its settle. Each
   // beak moves on the stage; the clip's soundtrack plays the voices. A tug plays its bout
-  // against the reference duck, each settle handed over apart: the dial reads nothing until the settles end.
+  // against the reference duck, each settle handed over apart.
   const stage = isStage(run.event);
   const tug = isTug(run.event);
   const ducks = stage

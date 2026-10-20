@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .evaluate import SeedResult, seed_row
+from .manifest import higher_wins
 
 _BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford, ULID-style
 _TAIL_BITS = 60  # 12 base32 chars
@@ -638,6 +639,7 @@ class HubStore:
         from huggingface_hub import CommitOperationAdd
 
         run_path = f"runs/{record.event_id}/{record.run_id}.json"
+        score = f"{record.score:.1f} cm" if higher_wins(record.event_id) else f"{record.score:.3f}s"
         # Match LocalStore's refusal to overwrite. CommitOperationAdd would
         # otherwise apply a re-append of the same record — a retry loop in the
         # web layer, say — as a silent overwrite, which is exactly the history
@@ -654,7 +656,7 @@ class HubStore:
         self.api.create_commit(
             repo_id=self.repo_id,
             repo_type="dataset",
-            commit_message=f"{record.event_id}: {record.user} {record.score:.3f}s",
+            commit_message=f"{record.event_id}: {record.user} {score}",
             operations=[
                 CommitOperationAdd(
                     path_in_repo=run_path,
