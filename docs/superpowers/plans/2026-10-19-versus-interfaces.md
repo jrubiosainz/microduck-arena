@@ -534,7 +534,7 @@ booth broadcast, and `CommentaryStock` skips every `is_match_id` entry. `shows(s
 list[Show]` gives every cup with an order that has not ended (`Show(starts_ms, ends_ms, slots,
 standby)`). `Programme(source, now_ms, book, cups=...)` lays a cup's segments at their absolute
 times; the cycle before it ends with a `standby` slot that fills to `starts_at`:
-`{"kind": "standby", "at_ms", "duration_ms", "cup": {"event", "number", "title", "starts_at_ms"}}`.
+`{"kind": "standby", "at_ms", "duration_ms", "cup": {"title"}}`.
 A match segment is served as `{"kind": "replay", …, "run_id": <match id>, "clip", "media": "match"}`.
 
 Points: `receipts(…, cups: Sequence[Cup] = (), now)`; acts `cup_champion` 250, `cup_final` 150,

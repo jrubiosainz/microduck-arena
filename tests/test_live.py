@@ -428,7 +428,7 @@ def test_a_mark_that_cannot_be_written_does_not_take_the_grid_down(tmp_path, mon
 SHOW = Show(10_030_000, 10_041_600, (
     {"kind": "shutter", "at_ms": 10_030_000, "duration_ms": 1600, "next": {"match_id": "m", "title": "Final"}},
     {"kind": "replay", "at_ms": 10_031_600, "duration_ms": 10000, "run_id": "m", "clip": "v", "media": "match"}),
-    {"event": "tug-of-war", "number": 1, "title": "Cup #1", "starts_at_ms": 10_030_000})
+    {"title": "Cup #1"})
 TITLE = load_event("tug-of-war").title
 
 
@@ -464,7 +464,7 @@ def test_shows_lay_a_cup_at_its_absolute_times(tmp_path):
     assert show.slots[0]["next"] == {"match_id": cup.matches[0].match_id, "title": "Group A"}
     assert show.slots[1] == {"kind": "replay", "at_ms": start + 1600, "duration_ms": 10000,
                              "run_id": cup.matches[0].match_id, "clip": "20261030T152000Z", "media": "match"}
-    assert show.standby == {"event": "tug-of-war", "number": 1, "title": f"{TITLE} · Cup #1", "starts_at_ms": start}
+    assert show.standby == {"title": f"{TITLE} · Cup #1"}
     assert shows(store, ends_at(cup)) == []
 
 

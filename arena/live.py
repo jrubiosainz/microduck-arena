@@ -48,7 +48,7 @@ class Show:
     starts_ms: int
     ends_ms: int
     slots: tuple[dict, ...]  # each shutter, and each match as a replay slot with its clip version
-    standby: dict  # {"event", "number", "title", "starts_at_ms"}: what the screen waits for
+    standby: dict  # {"title"}: what the screen waits for
 
 
 def _ready(store, clip_id: str) -> tuple[int, str] | None:
@@ -114,8 +114,7 @@ def shows(store, now: datetime) -> list[Show]:
                 slots.append({"kind": "replay", "at_ms": at, "duration_ms": duration, "run_id": segment["match_id"],
                               "clip": clip_version(store.clip_state(segment["match_id"])[1]), "media": "match"})
         laid.append(Show(start, slots[-1]["at_ms"] + slots[-1]["duration_ms"], tuple(slots),
-                         {"event": cup.event_id, "number": cup.number,
-                          "title": f"{titles[cup.event_id]} · Cup #{cup.number}", "starts_at_ms": start}))
+                         {"title": f"{titles[cup.event_id]} · Cup #{cup.number}"}))
     return sorted(laid, key=lambda show: show.starts_ms)
 
 
