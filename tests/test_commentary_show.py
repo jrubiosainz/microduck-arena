@@ -227,6 +227,7 @@ def test_the_desk_is_told_what_the_segment_is_for():
     assert f"{DESK_ANGLES['opening']} {DESK_NUMBERS}" in system
     assert "never rounded or turned into metres" in system and "nothing added up, subtracted or counted" in system
     assert f"{DESK_PLAYERS['opening']} {DESK_HANDLES}" in system
+    assert "never as a player's duck: to name both, the duck's name, then 'steered by' and the handle" in system
     assert json.loads(router.asked[0][1]["content"])["facts"] == [
         {"index": i, "text": fact["text"]} for i, fact in enumerate(facts("opening"))]
     opening = facts("opening")

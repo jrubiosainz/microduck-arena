@@ -50,9 +50,11 @@ DESK_PLAYERS = {
     "ceremony": "Name the champion duck and its player's handle, and the beaten finalist once.",
     "close": "Name the champion duck and its player's handle.",
 }
-# A rematch or a streak fact names players alone, and the desk then says "Nico won" or "Ann's duck".
+# A rematch or a streak fact names players alone, and the desk then says "Nico won" or "Ann's duck"; told
+# only "never as someone's duck", it still says "@ann's duck" when it names a player once.
 DESK_HANDLES = ("A player is named only by the handle a fact prints, at sign included, never by a bare name; a "
-                "duck only by its name, never as someone's duck.")
+                "duck only by its own name, never as a player's duck: to name both, the duck's name, then "
+                "'steered by' and the handle.")
 DESK_FACTS = {
     "opening": ("cup#/cup", "cup#/next", "cup#/group/", "cup#/ratings", "cup#/defending"),
     "intro": ("cup#/cup", "cup#/next", "cup#/favourite", "cup#/last", "cup#/rematch", "cup#/streak/", "cup#/defending"),
