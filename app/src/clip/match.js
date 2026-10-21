@@ -8,7 +8,7 @@ import { FPS, INTRO_S, OUTRO_S, STRIDE, TRAVEL_S } from "./plan.js";
 
 /** How long a bout's last pose holds, its result on the bug, before the next bout or the outro: the
  * booth says the result as it is seen, never before. */
-export const BOUT_HOLD_S = 4;
+export const BOUT_HOLD_S = 6;
 
 const round3 = (seconds) => Math.round(seconds * 1000) / 1000;
 

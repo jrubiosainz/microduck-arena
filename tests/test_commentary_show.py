@@ -162,16 +162,16 @@ def test_a_bout_s_last_line_is_heard_while_the_clip_holds_its_end():
     result is said on its moment and heard whole by then."""
     first = CUP.matches[0]
     tape = footage(CUP)
-    tape[first.match_id] = {"duration_ms": 83040, "bouts": [
-        {"k": 0, "tape_start_s": 3.52, "tape_end_s": 48.52, "hold_end_s": 52.52, "seconds": 45.0,
+    tape[first.match_id] = {"duration_ms": 87040, "bouts": [
+        {"k": 0, "tape_start_s": 3.52, "tape_end_s": 48.52, "hold_end_s": 54.52, "seconds": 45.0,
          "moments": [Moment(0.0, "start", None), Moment(3.62, "lead", "west"),
                      Moment(45.0, "time", "west")]},
-        {"k": 1, "tape_start_s": 53.04, "tape_end_s": 76.5, "hold_end_s": 80.52, "seconds": 23.46,
+        {"k": 1, "tape_start_s": 55.04, "tape_end_s": 78.5, "hold_end_s": 84.52, "seconds": 23.46,
          "moments": [Moment(0.0, "start", None), Moment(17.04, "edge", "west"),
                      Moment(23.02, "slip", "west"), Moment(23.46, "pit", "west")]}]}
     lines = show(Router(), tape=tape)["calls"][first.match_id]["lines"]
     assert [(line["at_ms"], line.get("by_ms")) for line in lines] == [
-        (3520, None), (48520, 52520), (53040, None), (70080, None), (76500, 80520)]
+        (3520, None), (48520, 54520), (55040, None), (72080, None), (78500, 84520)]
 
 
 def test_a_bout_s_lines_are_written_from_that_bout_alone():
