@@ -248,6 +248,20 @@ def test_a_cup_goes_from_close_to_its_running_order(tmp_path, no_physics):
     assert load_cup(store, "tug-of-war", 1).order["starts_at"] == "2026-10-23T16:00:00Z"
 
 
+def test_the_draw_waits_a_minute_past_the_close_for_an_entry_stamped_before_it(tmp_path, no_physics):
+    """An entry is stamped when it is evaluated and lands in the dataset a few seconds later."""
+    store = LocalStore(tmp_path)
+    enter(store, 5)
+    cups = worker(store, Clock(datetime(2026, 10, 23, 14, 0, 30, tzinfo=UTC)))
+    cups.tick()
+    assert load_cup(store, "tug-of-war", 1) is None
+    store.append(make_record(run_id="R5", event_id="tug-of-war", user="p5", submitted_at="2026-10-23T13:59:59Z"), b"t")
+    store.append(make_record(run_id="R6", event_id="tug-of-war", user="p6", submitted_at="2026-10-23T14:00:01Z"), b"t")
+    cups.now = Clock(T1)
+    cups.tick()
+    assert sorted(e.user for e in load_cup(store, "tug-of-war", 1).entrants) == ["p0", "p1", "p2", "p3", "p4", "p5"]
+
+
 def test_a_pending_clip_is_owed_once(tmp_path, no_physics):
     """The clip jobs follow a pending clip themselves: queued again every tick, it could race a launch into a second job."""
     store, clips, clock = LocalStore(tmp_path), FakeClips(), Clock(T1)
@@ -326,13 +340,13 @@ def test_a_withdrawal_after_close_changes_nothing(tmp_path, no_physics):
 
 
 def test_an_entrant_whose_policy_no_longer_loads_is_left_out_after_ten_minutes(tmp_path, no_physics):
-    store, clock, said = LocalStore(tmp_path), Clock(datetime(2026, 10, 23, 14, tzinfo=UTC)), []  # the close instant
+    store, clock, said = LocalStore(tmp_path), Clock(T1), []  # the draw's first moment, a minute past the close
     enter(store, 6)
     cups = CupWorker(store, FakeClips(), events=[EARLY], load=gone("p2"), now=clock, log=said.append)
     cups.tick()
     assert load_cup(store, "tug-of-war", 1) is None
     assert any("waits for p2 (FetchError: could not read p2/tug: 404)" in line for line in said)
-    clock.at = datetime(2026, 10, 23, 14, 10, tzinfo=UTC)
+    clock.at = T1 + LOAD_PATIENCE
     cups.tick()
     assert [e.user for e in load_cup(store, "tug-of-war", 1).entrants] == ["p0", "p1", "p3", "p4", "p5"]
     assert any("without p2" in line for line in said)

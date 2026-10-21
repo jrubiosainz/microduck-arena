@@ -493,6 +493,7 @@ class CupWorker:
                  show: Callable[[Cup, dict], dict] | None = None): ...
     # show(cup, partial) writes the show (Plan D), filling `partial` as it goes, resumed next tick
     def tick(self) -> None    # close → draw.json → matches → owe clips → (D: write the show) → fix the order
+    # the draw waits DRAW_GRACE (60 s) past the close, entries still those stamped at or before it
     def start(self) -> None   # daemon thread "arena-cups", tick every 30 s
     def stop(self) -> None
 ```

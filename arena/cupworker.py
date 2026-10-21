@@ -41,6 +41,9 @@ from .trace import encode
 
 # An order fixed late still leaves the live this long to lay the show before it starts.
 ORDER_LEAD = timedelta(minutes=10)
+# The draw waits this long past the close: an entry is stamped when it is evaluated, and its commit
+# lands a few seconds later.
+DRAW_GRACE = timedelta(seconds=60)
 # How long a policy may fail to load, from this process's first try at a cup's step, before the cup goes on without it.
 LOAD_PATIENCE = timedelta(minutes=10)
 # A match clip that failed is launched again this often, as long as it stays failed.
@@ -182,7 +185,7 @@ class CupWorker:
 
     def _advance(self, manifest: Manifest) -> None:
         now = self.now()
-        for number in range(1, closed_cups(manifest.cup, now) + 1):
+        for number in range(1, closed_cups(manifest.cup, now - DRAW_GRACE) + 1):
             cup, policies = load_cup(self.store, manifest.id, number), None
             if cup is None:
                 cup, policies = self._draw(manifest, number, now)
