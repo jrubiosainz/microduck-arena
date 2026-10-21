@@ -33,6 +33,7 @@ def test_the_cups_list_names_the_open_cup_and_every_closed_one(client, monkeypat
     body = api.get("/api/events/tug-of-war/cups").json()
     assert (body["next"]["number"], body["next"]["premiere_at"]) == (2, "2026-11-06T17:00:00Z")
     assert [e["user"] for e in body["next"]["entrants"]] == ["p0", "p1", "p2", "p3"]
+    assert body["next"]["close_at"] == "2026-11-06T15:00:00Z"
     assert body["cups"] == [{"number": 1, "premiere_at": "2026-10-30T17:00:00Z", "starts_at": None, "state": "drawn", "champion": None}]
     assert api.get("/api/events/sprint-2m/cups").status_code == 404
 
@@ -72,6 +73,10 @@ def test_a_match_and_everything_of_it_is_a_404_until_its_reveal(client, monkeypa
     trace = api.get(paths[1])
     assert (trace.headers["x-duck-count"], trace.headers["x-frame-count"]) == ("2", "2")
     assert api.get(f"/api/matches/{mid}/bouts/2/trace").status_code == 404
+    clip = api.get(paths[3])
+    assert clip.json()["layouts"]["landscape"]["url"] == f"/api/matches/{mid}/clip/landscape.mp4?v=20261030T152000Z"
+    assert [r.headers["cache-control"] for r in (api.get("/api/events/tug-of-war/cups"), api.get("/api/events/tug-of-war/cups/1"), api.get(paths[0]), trace, clip)] == ["no-store"] * 5
+    assert api.get(paths[4]).headers["cache-control"] == "public, max-age=31536000, immutable"
     assert api.get("/api/matches/nope").status_code == 404 and api.get("/api/matches/tug-of-war-0009-000").status_code == 404
 
 
@@ -79,5 +84,5 @@ def test_the_clip_jobs_own_app_reads_every_match(tmp_path, monkeypatch):
     app = create_app(ArenaConfig.from_env(store_dir=tmp_path, reveal_all=True))
     cup = replace(played_cup(4), order=None)   # clips are rendered before there is an order
     store_cup(app.state.store, cup)
-    at(monkeypatch, datetime(2026, 10, 30, 15, 5, tzinfo=UTC))
-    assert TestClient(app).get(f"/api/matches/{cup.matches[6].match_id}").status_code == 200
+    api, mid = TestClient(app), cup.matches[6].match_id
+    assert [api.get(f"/api/matches/{mid}{tail}").status_code for tail in ("", "/bouts/0/trace", "/bouts/0/settle")] == [200] * 3

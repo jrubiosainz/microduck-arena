@@ -25,9 +25,9 @@ from ..cup import (
 )
 from ..cupworker import entrants_at, load_cup
 from ..manifest import Manifest, ManifestError, load_event
-from ..store import CLIP_MEDIA, clip_version
+from ..store import clip_version
 from ..trace import decode, decode_settle
-from .routes_read import _CLIP_TYPES, clip_body, event_summary, frames_response
+from .routes_read import clip_body, clip_file_response, event_summary, frames_response
 
 router = APIRouter(prefix="/api")
 NO_STORE = {"Cache-Control": "no-store"}
@@ -72,7 +72,7 @@ def list_cups(event_id: str, request: Request) -> JSONResponse:
         cups.append({"number": number, "premiere_at": cup.premiere_at, "starts_at": view["starts_at"],
                      "state": view["state"], "champion": None if champion is None else cup.entrants[champion].user})
     upcoming = cup_view(_unsettled(store, manifest, closed + 1, moment), moment)
-    return JSONResponse({"next": {k: upcoming[k] for k in ("number", "premiere_at", "entrants")}, "cups": cups},
+    return JSONResponse({"next": {k: upcoming[k] for k in ("number", "close_at", "premiere_at", "entrants")}, "cups": cups},
                         headers=NO_STORE)
 
 
@@ -89,8 +89,8 @@ def get_cup(event_id: str, number: int, request: Request) -> JSONResponse:
 def _public_match(request: Request, match_id: str, media: bool = False) -> tuple[Manifest, Cup, MatchRecord]:
     """The match, or a 404 until it may be told: from its reveal, or from `airs_at - PREFETCH` for its clip's media.
 
-    The live prepares a clip before its slot and the mp4 says nothing until it plays; Plan D serves its call by the
-    same rule.
+    The live prepares a clip before its slot, so its media are fetchable from 30 s before airing: a determined viewer
+    can learn a result one clip early, the price of a smooth live. Plan D serves its call by the same rule.
     """
     parsed = parse_match_id(match_id)
     if parsed is None:
@@ -150,8 +150,4 @@ def match_clip(match_id: str, request: Request) -> JSONResponse:
 @router.get("/matches/{match_id}/clip/{name}")
 def match_clip_file(match_id: str, name: str, request: Request) -> FileResponse:
     _public_match(request, match_id, media=True)
-    store = request.app.state.store
-    if name not in CLIP_MEDIA or store.clip_state(match_id)[0] != "ready":
-        raise HTTPException(status_code=404, detail=f"no clip file {name!r} for match {match_id}")
-    return FileResponse(store.clip_file(match_id, name), media_type=_CLIP_TYPES[name.rsplit(".", 1)[-1]],
-                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
+    return clip_file_response(request.app.state.store, match_id, name)

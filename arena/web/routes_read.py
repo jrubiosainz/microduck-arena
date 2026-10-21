@@ -7,6 +7,7 @@ web layer and the CLI can never disagree about who is first.
 
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import numpy as np
@@ -464,7 +465,7 @@ def run_clip(run_id: str, request: Request) -> JSONResponse:
     return clip_body(request, run_id, clip_url)
 
 
-def clip_body(request: Request, clip_id: str, url) -> JSONResponse:
+def clip_body(request: Request, clip_id: str, url: Callable[[str, str, dict], str]) -> JSONResponse:
     """Where a clip stands, and its files (at `url(clip_id, name, written)`) when it is ready. Polled by
     the publication page while a render is owed, so never cached.
 
@@ -510,19 +511,24 @@ def clip_url(run_id: str, name: str, manifest: dict, origin: str = "") -> str:
 
 @router.get("/runs/{run_id}/clip/{name}")
 def run_clip_file(run_id: str, name: str, request: Request, download: int = 0) -> FileResponse:
-    """A clip's file. Streamed from here because the dataset is private; the
-    bytes behind a ready clip never change, so cached hard. `download=1` makes
-    the answer an attachment with a name worth keeping."""
+    """A clip's file; `download=1` makes the answer an attachment with a name worth keeping."""
     store = request.app.state.store
     record = _find_run(store, run_id)
-    if name not in CLIP_MEDIA or store.clip_state(run_id)[0] != "ready":
-        raise HTTPException(status_code=404, detail=f"no clip file {name!r} for run {run_id}")
+    stem = safe_stem(record.user, record.policy_name, name.removesuffix(".mp4"))
+    return clip_file_response(
+        store, run_id, name,
+        f'attachment; filename="microduck-arena-{stem}.mp4"' if download and name.endswith(".mp4") else None,
+    )
+
+
+def clip_file_response(store, clip_id: str, name: str, disposition: str | None = None) -> FileResponse:
+    """A ready clip's file. Streamed from here because the dataset is private; the
+    bytes behind a ready clip never change, so cached hard."""
+    if name not in CLIP_MEDIA or store.clip_state(clip_id)[0] != "ready":
+        raise HTTPException(status_code=404, detail=f"no clip file {name!r} for {clip_id}")
     headers = {"Cache-Control": "public, max-age=31536000, immutable"}
-    if download and name.endswith(".mp4"):
-        stem = safe_stem(record.user, record.policy_name, name.removesuffix(".mp4"))
-        headers["Content-Disposition"] = f'attachment; filename="microduck-arena-{stem}.mp4"'
+    if disposition:
+        headers["Content-Disposition"] = disposition
     return FileResponse(
-        store.clip_file(run_id, name),
-        media_type=_CLIP_TYPES[name.rsplit(".", 1)[-1]],
-        headers=headers,
+        store.clip_file(clip_id, name), media_type=_CLIP_TYPES[name.rsplit(".", 1)[-1]], headers=headers,
     )
