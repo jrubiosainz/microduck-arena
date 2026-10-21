@@ -655,6 +655,22 @@ def test_a_player_page_lists_its_cups_newest_first(client):
     assert [cup["number"] for cup in api.get("/api/players/p0").json()["cups"]] == [2, 1]
 
 
+def test_a_cup_that_has_not_aired_tells_nothing_to_the_profiles_the_ladder_or_the_chip(tmp_path):
+    """The routes read their own clock: a cup dated 2099 is stored, played and ordered, and none of it is told."""
+    app = create_app(ArenaConfig.from_env(store_dir=tmp_path, dev_user="p0"))
+    api = TestClient(app)
+    store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
+    record_run(app, run_id="R0", event_id="tug-of-war", user="p0")
+
+    def told():
+        return [api.get(path).json() for path in ("/api/players/p0", "/api/standings", "/api/me")]
+
+    before = told()
+    assert [cup["number"] for cup in before[0]["cups"]] == [1]
+    store_cup(app.state.store, played_cup(6, number=2, starts_at="2099-01-02T17:00:00Z"))
+    assert told() == before
+
+
 def test_the_chip_counts_cup_points(tmp_path):
     app = create_app(ArenaConfig.from_env(store_dir=tmp_path, dev_user="p1"))
     store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
