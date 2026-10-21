@@ -3,13 +3,13 @@
 // asks for the soundtrack once. ?run=<id>&layout=landscape|vertical&frame=N, or
 // ?match=<id> for a cup's match.
 
-import { getBoutSettle, getBoutTrace, getMatch, getRun, getSettle, getTrace } from "../api.js";
+import { getBoutSettle, getBoutString, getBoutTrace, getMatch, getRun, getSettle, getString, getTrace } from "../api.js";
 import { boutLane } from "../bouts.js";
 import { credit, stageDucks } from "../cast.js";
 import { LANE_COLORS } from "../course.js";
 import { formatScore, isStage, isTug } from "../format.js";
 import { lanesFor } from "../lanes.js";
-import { CTRL_DT, frameCount, leadIn, standing } from "../replay.js";
+import { CTRL_DT, TRACE_WIDTH, frameCount, leadIn, standing } from "../replay.js";
 import { ratingLane } from "../tug.js";
 import { createViewer } from "../viewer.js";
 import { boutAt, matchPlan, matchWords, scoreAt } from "./match.js";
@@ -113,19 +113,21 @@ function expose(plan, score, draw) {
 async function main() {
   const run = await getRun(params.get("run"));
   const lanes = lanesFor(run);
-  // One trace and one settle per duck: a race's lane has one, a stage's troupe every duck.
-  const [traces, settles] = await Promise.all([
+  const stage = isStage(run.event);
+  const tug = isTug(run.event);
+  // One trace and one settle per duck: a race's lane has one, a stage's troupe every duck; a tug's
+  // lane its string too, settle and all.
+  const [traces, settles, strings] = await Promise.all([
     Promise.all(lanes.map((lane) => getTrace(lane.run_id))),
     Promise.all(lanes.map((lane) => getSettle(lane.run_id).then(standing))),
+    Promise.all(tug ? lanes.map((lane) => getString(lane.run_id)) : []),
   ]);
   // Every lane from where its ducks stand, all in step.
   const settle = Math.max(...settles.map(([first]) => frameCount(first)));
-  const replays = lanes.map((_, i) => leadIn(settles[i][0], traces[i][0], settle));
+  const replays = lanes.map((_, i) => leadIn(settles[i][0], traces[i][0], settle, TRACE_WIDTH));
   // A stage plays the author's performance alone: every duck of its troupe from its settle. Each
   // beak moves on the stage; the clip's soundtrack plays the voices. A tug plays its bout
-  // against the reference duck, each settle handed over apart.
-  const stage = isStage(run.event);
-  const tug = isTug(run.event);
+  // against the reference duck, each settle handed over apart, the string's beside them.
   const ducks = stage
     ? stageDucks(lanes[0].cast, traces[0], settles[0], { livery: lanes[0].livery, eventRig: run.event.rig, lead: settle })
     : [];
@@ -143,7 +145,7 @@ async function main() {
         ...(stage
           ? { ducks }
           : tug
-            ? ratingLane(traces[i], settles[i], { traceSeed: run.trace_seed, livery: lane.livery, name: `@${lane.user}` })
+            ? ratingLane(traces[i], settles[i], strings[i], { traceSeed: run.trace_seed, livery: lane.livery, name: `@${lane.user}` })
             : { trace: replays[i] }),
       }))
       // The camera stands beyond the last lane: reversed, the author's duck is
@@ -188,10 +190,11 @@ async function main() {
 async function mainMatch() {
   const id = params.get("match");
   const match = await getMatch(id);
-  // Two traces and two settles per bout, west first, bout k at k.
-  const [traces, settles] = await Promise.all([
+  // Two traces and two settles per bout, west first, and its string, bout k at k.
+  const [traces, settles, strings] = await Promise.all([
     Promise.all(match.bouts.map(({ k }) => getBoutTrace(id, k))),
     Promise.all(match.bouts.map(({ k }) => getBoutSettle(id, k).then(standing))),
+    Promise.all(match.bouts.map(({ k }) => getBoutString(id, k))),
   ]);
   const plan = matchPlan(
     match.bouts.map(({ k }) => ({ k, settle: frameCount(settles[k][0]), steps: frameCount(traces[k][0]) })),
@@ -208,7 +211,7 @@ async function mainMatch() {
     const act = actAt(plan, i);
     const { bout, step } = boutAt(plan, i);
     if (bout !== playing) {
-      viewer.setLanes([boutLane(match, bout, traces[bout], settles[bout])], match.event, { loop: false });
+      viewer.setLanes([boutLane(match, bout, traces[bout], settles[bout], strings[bout])], match.event, { loop: false });
       playing = bout;
     }
     // The bout's lane starts from its settle, as a rated run's does.

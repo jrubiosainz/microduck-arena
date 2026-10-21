@@ -4,7 +4,7 @@
 // policy, the one the followspot follows.
 
 import { isStage, isTug } from "./format.js";
-import { leadIn } from "./replay.js";
+import { TRACE_WIDTH, leadIn } from "./replay.js";
 import { ratingLane } from "./tug.js";
 
 /**
@@ -17,7 +17,7 @@ import { ratingLane } from "./tug.js";
  */
 export function stageDucks(cast, traces, settles, { livery, eventRig, lead = 0 }) {
   return cast.map((duck, k) => ({
-    trace: settles ? leadIn(settles[k], traces[k], lead) : traces[k],
+    trace: settles ? leadIn(settles[k], traces[k], lead, TRACE_WIDTH) : traces[k],
     lead,
     sound: duck.sound,
     rig: duck.rig ?? eventRig,
@@ -29,15 +29,16 @@ export function stageDucks(cast, traces, settles, { livery, eventRig, lead = 0 }
 
 /**
  * One run as a lane of the viewer, from its traces (api.js, one per duck): on a stage its
- * performance, every duck of its cast; on a tug its two-duck bout (ratingLane: the entry on its end
- * of the string, the reference on the other); on a lane the one duck that raced. `lane` is what the
- * page draws it with: run id, name, tier, colour, livery, and on a tug the bout's seed, `traceSeed`.
+ * performance, every duck of its cast; on a tug its two-duck bout and its `string` (ratingLane: the
+ * entry on its end of the string, the reference on the other); on a lane the one duck that raced.
+ * `lane` is what the page draws it with: run id, name, tier, colour, livery, and on a tug the bout's
+ * seed, `traceSeed`.
  */
-export function replayLane(event, cast, traces, lane) {
+export function replayLane(event, cast, traces, lane, string) {
   if (isStage(event)) {
     return { ...lane, ducks: stageDucks(cast, traces, null, { livery: lane.livery, eventRig: event.rig }) };
   }
-  return isTug(event) ? { ...lane, ...ratingLane(traces, null, lane) } : { ...lane, trace: traces[0] };
+  return isTug(event) ? { ...lane, ...ratingLane(traces, null, string, lane) } : { ...lane, trace: traces[0] };
 }
 
 /** The policies a troupe borrowed from the Hub, each once, in the order its ducks first bring them. */

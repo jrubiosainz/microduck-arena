@@ -78,15 +78,15 @@ describe("a training's page", () => {
   it("a tug's training rates its checkpoints in centimetres and replays the bout against the reference", async () => {
     const TUG = { id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug", metric: "mean_ground_cm", rig: "legs", vote: null };
     api.getJob.mockResolvedValue({ ...JOB, checkpoints: [row(0, 2), row(250, 10.1)], best: 250 });
-    const [w, e] = [new Float32Array(21), new Float32Array(21)];
-    api.getCheckpoint.mockResolvedValueOnce({ checkpoint: 250, score: 10.1, ducks: 2, traces: [w, e], trace_seed: 2, cast: null });
+    const [w, e, string] = [new Float32Array(21), new Float32Array(21), new Float32Array(51)];
+    api.getCheckpoint.mockResolvedValueOnce({ checkpoint: 250, score: 10.1, ducks: 2, traces: [w, e], string, trace_seed: 2, cast: null });
     const root = document.createElement("div");
     await open(root, TUG);
     await settle();
     expect(root.querySelector(".ckpts .hint").textContent).toBe("The higher, the stronger. Click one to watch it.");
     expect(root.querySelector(".score__value").textContent).toBe("10.1 cm");
     expect(viewer.setLanes).toHaveBeenLastCalledWith([{ tug: "bout", ducks: [{ trace: w, livery: "charcoal", name: "Reference" },
-      { trace: e, livery: "classic", name: "checkpoint 250" }] }], TUG);
+      { trace: e, livery: "classic", name: "checkpoint 250" }], string: { trace: string } }], TUG);
   });
 
   it("a click on a bar replays that checkpoint", async () => {

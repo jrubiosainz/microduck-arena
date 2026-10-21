@@ -1,7 +1,7 @@
 // One match of a cup: the stadium with its two ducks, any of its bouts replayed from the list, the clip
 // the show aired and the score.
 
-import { getBoutSettle, getBoutTrace, getMatch, getMe, matchClipUrl } from "./api.js";
+import { getBoutSettle, getBoutString, getBoutTrace, getMatch, getMe, matchClipUrl } from "./api.js";
 import { boutLane, winLine } from "./bouts.js";
 import { capitalised } from "./format.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
@@ -100,7 +100,7 @@ export async function renderMatch(root, matchId, state) {
   const bouts = new Map();
   const loaded = (k) => {
     if (!bouts.has(k)) {
-      const fetched = Promise.all([getBoutTrace(matchId, k), getBoutSettle(matchId, k)]);
+      const fetched = Promise.all([getBoutTrace(matchId, k), getBoutSettle(matchId, k), getBoutString(matchId, k)]);
       bouts.set(k, fetched);
       // A failed fetch is not remembered: the next click asks again.
       fetched.catch(() => bouts.delete(k));
@@ -121,10 +121,10 @@ export async function renderMatch(root, matchId, state) {
   const rows = [...page.querySelectorAll(".match-bout")];
   async function play(k) {
     rows.forEach((row, i) => row.toggleAttribute("aria-current", i === k));
-    const [traces, settles] = await loaded(k).catch(() => []);
+    const [traces, settles, string] = await loaded(k).catch(() => []);
     if (!traces) return;
     if (leaving.signal.aborted || !rows[k].hasAttribute("aria-current")) return;
-    created.setLanes([boutLane(match, k, traces, settles)], match.event);
+    created.setLanes([boutLane(match, k, traces, settles, string)], match.event);
   }
   rows.forEach((row, k) => row.addEventListener("click", () => play(k)));
   await play(0);

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { getBoutSettle, getBoutTrace } from "./api.js";
+import { getBoutSettle, getBoutString, getBoutTrace } from "./api.js";
 import { boutLine, matchHall, renderMatch } from "./match.js";
 
 vi.mock("./api.js", () => ({
-  getMatch: vi.fn(), getMe: vi.fn(), getBoutTrace: vi.fn(), getBoutSettle: vi.fn(),
+  getMatch: vi.fn(), getMe: vi.fn(), getBoutTrace: vi.fn(), getBoutSettle: vi.fn(), getBoutString: vi.fn(),
   matchClipUrl: (id, name, version) => `/api/matches/${id}/clip/${name}?v=${version}`,
 }));
 const setLanes = vi.fn();
@@ -65,9 +65,12 @@ describe("playing a bout", () => {
       return trace;
     });
     getBoutSettle.mockResolvedValue(trace);
+    const string = { settle: new Float32Array(0), trace: new Float32Array(0) };
+    getBoutString.mockResolvedValue(string);
     const root = document.createElement("div");
     document.body.append(root);
     await renderMatch(root, match.match_id, {});
+    expect(setLanes.mock.lastCall[0][0].string).toBe(string);
     setLanes.mockClear();
     const rows = root.querySelectorAll(".match-bout");
     rows[1].click();

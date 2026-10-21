@@ -19,7 +19,6 @@ from ..course import (
     RING_ROPE_RADIUS_M,
     ring_posts,
     ring_ropes,
-    string_offset,
     wall_boxes,
 )
 from ..cup import reached
@@ -107,11 +106,10 @@ def event_summary(manifest: Manifest) -> dict:
             "string_m": manifest.course.string_m,
             "pit_m": manifest.course.pit_m,
             "pit_depth_m": manifest.course.pit_depth_m,
-            # The capsules the physics compiles and the string's ends: the page draws what the ducks
-            # bounce off and pull, never a second arithmetic of it.
+            # The capsules the physics compiles: the page draws what the ducks bounce off, never a
+            # second arithmetic of it; the string it draws as recorded (/runs/{id}/string).
             "ropes": _capsules(ring_ropes(manifest.course), RING_ROPE_RADIUS_M),
             "posts": _capsules(ring_posts(manifest.course), RING_POST_RADIUS_M),
-            "string_offset": list(string_offset(manifest.rig)),
             "bout": {
                 "time_limit_s": manifest.bout.time_limit_s,
                 "bouts_to_win": manifest.bout.bouts_to_win,

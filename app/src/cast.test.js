@@ -71,10 +71,10 @@ describe("replayLane", () => {
     expect(replayLane(SPRINT, [{ policy: "self", rig: null, start: null, sound: null }], [trace], lane)).toEqual({ ...lane, trace });
   });
 
-  it("puts a rated run's entry on its end of the string and the reference duck on the other", () => {
+  it("puts a rated run's entry on its end of the string and the reference duck on the other, the string beside them", () => {
     const [west, east] = [frames(2, 0), frames(2, 1)];
-    expect(replayLane(TUG, [{ policy: "self" }], [west, east], { ...lane, traceSeed: 4 })).toEqual({ ...lane, traceSeed: 4, tug: "bout",
-      ducks: [{ trace: west, livery: "charcoal", name: "Reference" }, { trace: east, livery: "purple", name: "alice" }] });
+    expect(replayLane(TUG, [{ policy: "self" }], [west, east], { ...lane, traceSeed: 4 }, { trace: "st" })).toEqual({ ...lane, traceSeed: 4, tug: "bout",
+      ducks: [{ trace: west, livery: "charcoal", name: "Reference" }, { trace: east, livery: "purple", name: "alice" }], string: { trace: "st" } });
   });
 });
 

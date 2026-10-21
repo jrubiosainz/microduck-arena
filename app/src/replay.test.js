@@ -64,14 +64,14 @@ describe("splitDucks", () => {
 describe("leadIn", () => {
   it("plays the settle, then the trace", () => {
     const settle = traceOf(3).map((v) => v + 100);
-    const lane = leadIn(settle, traceOf(4), 3);
+    const lane = leadIn(settle, traceOf(4), 3, TRACE_WIDTH);
     expect(frameCount(lane)).toBe(7);
     expect([...frameAt(lane, 0)]).toEqual([...frameAt(settle, 0)]);
     expect([...frameAt(lane, 3)]).toEqual([...frameAt(traceOf(4), 0)]);
   });
 
   it("holds the trace's first frame for a run stored without a settle, so it keeps in step", () => {
-    const lane = leadIn(new Float32Array(0), traceOf(4), 3);
+    const lane = leadIn(new Float32Array(0), traceOf(4), 3, TRACE_WIDTH);
     expect(frameCount(lane)).toBe(7);
     for (const f of [0, 1, 2, 3]) expect([...frameAt(lane, f)]).toEqual([...frameAt(traceOf(4), 0)]);
     expect([...frameAt(lane, 4)]).toEqual([...frameAt(traceOf(4), 1)]);
@@ -79,7 +79,7 @@ describe("leadIn", () => {
 
   it("holds a shorter settle's own first frame, so the lane never jumps into it", () => {
     const settle = traceOf(2).map((v) => v + 100);
-    const lane = leadIn(settle, traceOf(4), 3);
+    const lane = leadIn(settle, traceOf(4), 3, TRACE_WIDTH);
     expect(frameCount(lane)).toBe(7);
     for (const f of [0, 1]) expect([...frameAt(lane, f)]).toEqual([...frameAt(settle, 0)]);
     expect([...frameAt(lane, 2)]).toEqual([...frameAt(settle, 1)]);

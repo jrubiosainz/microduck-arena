@@ -4,6 +4,7 @@ import {
   getEvents,
   getLeaderboard,
   getMe,
+  getString,
   getTrace,
   withdrawRun,
 } from "./api.js";
@@ -228,8 +229,18 @@ export async function renderRace(root, { event, state }) {
     return traces.get(runId);
   }
 
+  // A rated run's string beside its ducks: the page plays no settle, so its timed frames only.
+  const strings = new Map();
+  async function stringFor(runId) {
+    if (!strings.has(runId)) strings.set(runId, { trace: (await getString(runId)).trace });
+    return strings.get(runId);
+  }
+
   async function race(runIds, tiers = new Map()) {
-    const published = await Promise.all(runIds.map(traceFor));
+    const [published, strung] = await Promise.all([
+      Promise.all(runIds.map(traceFor)),
+      Promise.all(isTug(event) ? runIds.map(stringFor) : []),
+    ]);
     const lanes = runIds.map((runId, i) => replayLane(event, casts.get(runId), published[i], {
       runId,
       tier: tiers.get(runId) ?? "ghost",
@@ -238,7 +249,7 @@ export async function renderRace(root, { event, state }) {
       // The plate over the duck: the viewer builds one for a lane with a name.
       name: names.get(runId),
       traceSeed: seeds.get(runId),
-    }));
+    }, strung[i]));
     // A performance plays alone on the stage, a rated run alone against the reference duck.
     const solo = isStage(event) || isTug(event);
     viewer.setLanes(arrangeLanes(board, solo ? lanes.slice(0, 1) : lanes), event);

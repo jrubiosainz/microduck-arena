@@ -4,7 +4,7 @@
 // Two modes. Plain shows all of it at once and loops the replay. Reveal — the
 // author's first look — hides the result and plays it in beats (reveal.js).
 
-import { getClip, getMe, getRun, getTrace, markSeen } from "./api.js";
+import { getClip, getMe, getRun, getString, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { boardsheetMarkup, wireBoardsheet } from "./boardsheet.js";
 import { featured, replayLane } from "./cast.js";
@@ -295,6 +295,12 @@ export async function renderRun(root, runId, state) {
     if (!traces.has(id)) traces.set(id, await getTrace(id));
     return traces.get(id);
   };
+  // A rated run's string beside its ducks: the page plays no settle, so its timed frames only.
+  const strings = new Map();
+  const stringFor = async (id) => {
+    if (!strings.has(id)) strings.set(id, { trace: (await getString(id)).trace });
+    return strings.get(id);
+  };
   let viewer = null;
   let parked = null;
   async function race(runIds, tiers) {
@@ -302,7 +308,10 @@ export async function renderRun(root, runId, state) {
       parked = [runIds, tiers];
       return;
     }
-    const fetched = await Promise.all(runIds.map(traceFor));
+    const [fetched, strung] = await Promise.all([
+      Promise.all(runIds.map(traceFor)),
+      Promise.all(isTug(run.event) ? runIds.map(stringFor) : []),
+    ]);
     if (leaving.signal.aborted) return;
     const lanes = runIds.map((id, i) => replayLane(run.event, byId.get(id).cast, fetched[i], {
       runId: id,
@@ -312,7 +321,7 @@ export async function renderRun(root, runId, state) {
       name: byId.get(id).user,
       // The seed its bout replays, which says which end of the string the entry holds.
       traceSeed: byId.get(id).trace_seed,
-    }));
+    }, strung[i]));
     viewer.setLanes(colourLanes($("board"), lanes), run.event);
   }
   const sheet = wireBoardsheet(page, {

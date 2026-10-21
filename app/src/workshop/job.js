@@ -279,10 +279,10 @@ export async function mountJob(root, { status, account, route }) {
     const name = `checkpoint ${body.checkpoint}`;
     // A stage's lane is its troupe, each duck where its trace puts it. The workshop keeps no settle,
     // so nothing leads in.
-    // A tug's lane is the checkpoint's bout against the reference duck.
+    // A tug's lane is the checkpoint's bout against the reference duck, and its string.
     viewer.setLanes([stage
       ? { name, livery: "classic", ducks: stageDucks(body.cast, body.traces, null, { livery: "classic", eventRig: event.rig, lead: 0 }) }
-      : tug ? ratingLane(body.traces, null, { traceSeed: body.trace_seed, livery: "classic", name })
+      : tug ? ratingLane(body.traces, null, { trace: body.string }, { traceSeed: body.trace_seed, livery: "classic", name })
       : { trace: body.traces[0], tier: "trial", livery: "classic", name }], event);
   }
 

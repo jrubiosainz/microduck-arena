@@ -1,37 +1,31 @@
 import { PerspectiveCamera, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import { PALETTE, colour } from "./palette.js";
 import { TRACE_WIDTH } from "./replay.js";
 import {
-  BOUT_WORDS, SIDES, buildString, entrySide, ratingLane, stringEnd, toThree, tugDistance, tugDucks, tugEnds, tugPose, tugSpan,
+  BOUT_WORDS, SIDES, buildString, entrySide, ratingLane, stringAt, toThree, tugDistance, tugDucks, tugPose, tugSpan, tugString,
 } from "./tug.js";
 
-const TUG = {
-  id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug", metric: "mean_ground_cm", rig: "legs", vote: null,
-  ring_m: 3, string_m: 1, pit_m: 0.3, pit_depth_m: 0.3, string_offset: [0.026, 0.0145, 0.0324215],
-  bout: { time_limit_s: 45, bouts_to_win: 2, max_bouts: 5 },
-};
 const frame = (pos, quat) => Float32Array.from([...pos, ...quat, ...new Array(14).fill(0)]);
 const A = frame([-0.5, 0.1, 0.13], [Math.cos(Math.PI / 12), 0, 0, Math.sin(Math.PI / 12)]);
 const B = frame([0.6, 0.0145, 0.12], [0, 0, 0, 1]);
 
 describe("the tug's arithmetic, as the server's", () => {
-  it("a string end turns with the trunk", () => {
-    [-0.4847333395016046, 0.12555736835487435, 0.1624215].forEach((v, i) => expect(stringEnd(A, TUG.string_offset)[i]).toBeCloseTo(v, 6));
+  it("carries an MJCF point into the scene", () => {
     expect(toThree([1, 2, 3])).toEqual([1, 3, -2]);
   });
   it("puts the entry west on an odd seed and east on an even one, the reference on the other end", () => {
     expect([1, 2, 3].map(entrySide)).toEqual([0, 1, 0]);
-    expect(ratingLane(["tw", "te"], ["sw", "se"], { traceSeed: 2, livery: "blue", name: "@ann" })).toEqual({ tug: "bout", ducks: [
-      { trace: "tw", settle: "sw", livery: "charcoal", name: "Reference" }, { trace: "te", settle: "se", livery: "blue", name: "@ann" }] });
-    expect(ratingLane(["tw", "te"], null, { traceSeed: 3, livery: "blue", name: "@ann" }).ducks).toEqual([
-      { trace: "tw", livery: "blue", name: "@ann" }, { trace: "te", livery: "charcoal", name: "Reference" }]);
-    expect(ratingLane(["tw", "te"], null, { traceSeed: 1, livery: "charcoal", name: "@nico" }).ducks[1]).toEqual(
+    expect(ratingLane(["tw", "te"], ["sw", "se"], { trace: "st", settle: "ss" }, { traceSeed: 2, livery: "blue", name: "@ann" })).toEqual({
+      tug: "bout", ducks: [{ trace: "tw", settle: "sw", livery: "charcoal", name: "Reference" }, { trace: "te", settle: "se", livery: "blue", name: "@ann" }],
+      string: { trace: "st", settle: "ss" } });
+    const lane = ratingLane(["tw", "te"], null, { trace: "st" }, { traceSeed: 3, livery: "blue", name: "@ann" });
+    expect(lane.ducks).toEqual([{ trace: "tw", livery: "blue", name: "@ann" }, { trace: "te", livery: "charcoal", name: "Reference" }]);
+    expect(lane.string).toEqual({ trace: "st" });
+    expect(ratingLane(["tw", "te"], null, { trace: "st" }, { traceSeed: 1, livery: "charcoal", name: "@nico" }).ducks[1]).toEqual(
       { trace: "te", livery: "classic", name: "Reference" });
     expect(BOUT_WORDS).toEqual({ won: "won the pull", lost: "lost the pull", draw: "draw", pit_won: "pulled it in", pit_lost: "dragged in" });
   });
-  it("ties the string to both necks, and holds a bout from duck to duck", () => {
-    tugEnds(TUG, [A, B])[1].forEach((v, i) => expect(v).toBeCloseTo([0.574, 0, 0.1524215][i], 6));
+  it("holds a bout from duck to duck", () => {
     [A[0] - 0.15, B[0] + 0.15].forEach((v, i) => expect(tugSpan([B, A])[i]).toBeCloseTo(v, 9));
   });
   it("a bout's lanes are its two ducks, west first, each settle led in", () => {
@@ -47,31 +41,43 @@ describe("the tug's arithmetic, as the server's", () => {
     const settle = new Float32Array(2 * TRACE_WIDTH);
     expect(tugDucks({ tug: "bout", ducks: [{ trace: empty, settle, livery: "a", name: "W" }, { trace: empty, livery: "b", name: "E" }] })[0].trace.length).toBe(2 * TRACE_WIDTH);
   });
+  it("tugString keeps its settle's last frames, so a string led in with cut duck settles stays in step", () => {
+    const f = (v) => new Float32Array(51).fill(v);
+    const cat = (...a) => Float32Array.from(a.flatMap((x) => [...x]));
+    expect([...tugString({ string: { settle: cat(f(1), f(2), f(3)), trace: cat(f(9)) } }, 2)]).toEqual([...cat(f(2), f(3), f(9))]);
+    expect([...tugString({ string: { trace: cat(f(9)) } }, 2)]).toEqual([...cat(f(9), f(9), f(9))]);
+    expect([...stringAt(cat(f(1), f(2)), 1)]).toEqual([...f(2)]);
+  });
 });
 
 describe("the tug drawn", () => {
-  it("stretches the string between its ends and hangs the marker in the middle", () => {
-    const string = buildString();
-    string.update([-0.5, 0, 0.15], [0.5, 0, 0.15]);
-    const rope = string.group.getObjectByName("string");
-    expect(rope.scale.y).toBeCloseTo(1, 9);
-    [0, 0.15, 0].forEach((v, i) => expect(rope.position.toArray()[i]).toBeCloseTo(v, 9));
-    expect(new Vector3(0, 1, 0).applyQuaternion(rope.quaternion).x).toBeCloseTo(1, 9);
-    expect(string.group.getObjectByName("marker").position.toArray()).toEqual(rope.position.toArray());
+  it("draws the string through its points, the ribbon on point 8", () => {
+    const s = buildString();
+    const points = new Float32Array(51).map((_, i) => (i % 3 === 0 ? -0.5 + (i / 3) / 16 : i % 3 === 2 ? 0.1 : 0));
+    s.update(points);
+    const rope = s.group.getObjectByName("string"), ribbon = s.group.getObjectByName("marker");
+    expect(ribbon.position.toArray()).toEqual(toThree([0, 0, Math.fround(0.1)]));
+    rope.geometry.computeBoundingBox();
+    expect(rope.geometry.boundingBox.min.x).toBeCloseTo(-0.5, 3);   // a tube has no end caps
+    expect(rope.geometry.boundingBox.max.x).toBeCloseTo(0.5, 3);
+    expect(rope.geometry.boundingBox.max.z).toBeCloseTo(0.004, 6);  // the 4 mm radius: an 8 mm rope
+    s.dispose();   // geometry and material freed, the group off its parent
   });
-  it("makes the string a 4 mm rope in ink, dark against the ring's canvas and the stands behind it", () => {
-    const rope = buildString().group.getObjectByName("string");
-    expect(rope.geometry.parameters.radiusTop * 2).toBeCloseTo(0.004, 9);
-    expect(rope.material.color.equals(colour(PALETTE.ink))).toBe(true);
-  });
-  it("frees the string: its rope's and its ribbon's geometry and paint", () => {
+  it("frees the string: every tube it drew, its ribbon's geometry, and their paint", () => {
     const string = buildString();
-    const owned = [];
-    string.group.traverse((node) => node.isMesh && owned.push(node.geometry, node.material));
-    const freed = new Set();
-    owned.forEach((one) => one.addEventListener("dispose", () => freed.add(one)));
+    const owned = new Set(), freed = new Set();
+    const watch = () => string.group.traverse((node) => node.isMesh && [node.geometry, node.material].forEach((one) => {
+      owned.add(one);
+      one.addEventListener("dispose", () => freed.add(one));
+    }));
+    const points = new Float32Array(51).map((_, i) => (i % 3 === 0 ? i / 48 : 0));
+    watch();
+    string.update(points);
+    watch();
+    string.update(points);
+    watch();
     string.dispose();
-    expect(owned.filter((one) => !freed.has(one))).toEqual([]);
+    expect([...owned].filter((one) => !freed.has(one))).toEqual([]);
   });
 });
 

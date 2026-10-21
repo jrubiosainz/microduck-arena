@@ -35,7 +35,7 @@ def test_a_tug_serves_its_course_and_its_bouts(client):
     assert tug["ropes"][0] == {"name": "rope_west_0", "from": [-1.5, -1.5, 0.06], "to": [-1.5, 1.5, 0.06], "radius": 0.006}
     assert len(tug["ropes"]) == 12 and tug["posts"][3]["name"] == "post_se"
     assert not {"length_m", "width_m", "walls", "pit"} & tug.keys()
-    assert tug["string_offset"] == [0.026, 0.0145, 0.0324215]
+    assert "string_offset" not in tug   # the page draws the string as recorded
     assert "sweep_lo" not in tug and "size_m" not in tug and "winch" not in tug and "bench" not in tug
 
 

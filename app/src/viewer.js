@@ -48,7 +48,7 @@ import { buildRollerHall } from "./roller-hall.js";
 import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
-import { buildString, tugDucks, tugEnds, tugPose, tugSpan } from "./tug.js";
+import { buildString, stringAt, tugDucks, tugPose, tugSpan, tugString } from "./tug.js";
 import { buildTugVenue } from "./tug-venue.js";
 import { SWEEP_TURN, sweepAt } from "./sweep.js";
 
@@ -384,7 +384,7 @@ export async function createViewer(
   let gym = null;
   let judges = null;
   let stage = null;
-  // While a tug plays: its event and the string.
+  // While a tug plays: the string drawn, and its points, a frame each, in step with the ducks.
   let tug = null;
   // A tug's own venue round its ring.
   let venue = null;
@@ -447,8 +447,9 @@ export async function createViewer(
     const talent = isStage(event);
     const tugged = isTug(event);
     if (talent) entries = stageLanes(entries);
-    // A tug plays one lane: a bout's two ducks, every one drawn solid.
-    if (tugged) entries = entries.length ? tugDucks(entries[0]).map((duck) => ({ ...duck, opacity: 1 })) : [];
+    // A tug plays one lane: a bout's two ducks, every one drawn solid, and its string.
+    const bout = tugged ? entries[0] : null;
+    if (tugged) entries = bout ? tugDucks(bout).map((duck) => ({ ...duck, opacity: 1 })) : [];
     const laneCount = tugged ? 1 : entries.length;
     // The stage and a tug's venue are indoors, in the dark, lit by their own rigs.
     const dark = talent || tugged;
@@ -477,7 +478,7 @@ export async function createViewer(
       course = venue.group;
       scene.add(course);
       if (entries.length) {
-        tug = { event, rope: buildString() };
+        tug = { rope: buildString(), string: tugString(bout, entries[0].lead) };
         course.add(tug.rope.group);
       }
     } else if (event) {
@@ -642,8 +643,7 @@ export async function createViewer(
     let lead = lanes.length ? Math.max(...frames.map((frame) => frame[0])) : middle;
     let span = null;
     if (tug) {
-      const [a, b] = tugEnds(tug.event, frames);
-      tug.rope.update(a, b);
+      tug.rope.update(stringAt(tug.string, indices[0]));
       const [west, east] = tugSpan(frames);
       lead = (west + east) / 2;
       span = east - west;
