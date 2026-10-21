@@ -303,6 +303,7 @@ def test_a_call_is_one_line_per_moment_from_the_first_speaker_given():
     system = messages[0]["content"]
     assert CALL_CONTEXT in system and CALL_STYLE in system
     assert "The first line is ray's." in system
+    assert "This bout has 3 moments: answer exactly 3 lines, one per moment" in system
     assert LORE.characters["peter"]["sheet"][:60] in system
     assert json.loads(messages[1]["content"]) == {
         "facts": [{"index": i, "text": fact.text} for i, fact in enumerate(FACTS)],

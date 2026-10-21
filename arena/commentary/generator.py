@@ -282,7 +282,11 @@ def write_call(facts: list[Fact], moments: list[dict], first: str, *, lore: Lore
     """One line per moment of a bout, `first` speaking first, or Rejected with the reason."""
     if first not in ("peter", "ray"):
         raise ValueError(f"a call starts with peter or ray, not {first!r}")
-    system = (CALL_STYLE + CALL_CONTEXT + f"The first line is {first}'s. " + _characters(lore))
+    # Told only "one per moment", the writer splits a last moment that says several things (time
+    # up, the bout's winner, the score) over two lines, and the booth cannot play the call.
+    system = (CALL_STYLE + CALL_CONTEXT + f"The first line is {first}'s. "
+              + f"This bout has {len(moments)} moments: answer exactly {len(moments)} lines, one per "
+              "moment, a moment that says several things still one line. " + _characters(lore))
     fact_texts = [{"index": i, "text": fact.text} for i, fact in enumerate(facts)]
     draft, written = _ask(provider, system, {"facts": fact_texts, "moments": moments}, CALL_LIMIT)
 
