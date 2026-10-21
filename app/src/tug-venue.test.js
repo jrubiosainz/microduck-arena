@@ -32,14 +32,14 @@ describe("the tug's venue", () => {
       return [hit.object.name, hit.point.y];
     };
     const at = (name, y) => [name, expect.closeTo(y, 6)];
-    expect([down(-0.5, 0), down(1.9, 1.9), down(0, 2.05)]).toEqual([at("ring", 0), at("ring", 0), at("ring", 0)]);
-    expect([down(0, 0), down(0.14, -1.95)]).toEqual([at("pit_floor", -0.3), at("pit_floor", -0.3)]);
+    expect([down(-0.5, 0), down(1.4, 1.4), down(0, 1.55)]).toEqual([at("ring", 0), at("ring", 0), at("ring", 0)]);
+    expect([down(0, 0), down(0.14, -1.45)]).toEqual([at("pit_floor", -0.3), at("pit_floor", -0.3)]);
   });
 
-  it("squares the ring on the event's length: three white ropes a side, the top one at a duck's chest", () => {
+  it("squares the ring 3 m from rope to rope, inside the lane's 4 m: three white ropes a side, the top one at a duck's chest", () => {
     const ropes = new Box3().setFromObject(venue().group.getObjectByName("ropes"));
-    [ropes.min.x, ropes.min.z].forEach((v) => expect(v).toBeCloseTo(-2, 1));
-    [ropes.max.x, ropes.max.z].forEach((v) => expect(v).toBeCloseTo(2, 1));
+    [ropes.min.x, ropes.min.z].forEach((v) => expect(v).toBeCloseTo(-1.5, 1));
+    [ropes.max.x, ropes.max.z].forEach((v) => expect(v).toBeCloseTo(1.5, 1));
     expect(ropes.max.y).toBeCloseTo(0.18, 1);
   });
 
@@ -56,7 +56,7 @@ describe("the tug's venue", () => {
     const west = seats.filter((s) => s.x < -Math.abs(s.z));
     [near, far, east, west].forEach((side) => expect(side.length).toBe(seats.length / 4));
     expect(Math.min(...near.map((s) => s.z))).toBeGreaterThan(4);
-    expect(Math.max(...far.map((s) => s.z))).toBeGreaterThan(-3.5);
+    expect(Math.max(...far.map((s) => s.z))).toBeGreaterThan(-3);
   });
 
   it("frees what it built and leaves the shared Reachy model alone", () => {

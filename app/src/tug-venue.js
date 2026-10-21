@@ -17,7 +17,10 @@ import { buildJudges } from "./judges.js";
 import { crowd } from "./stadium.js";
 
 // The ring at a duck's scale (a wrestler's ring stands 1.2 m for 1.8 m wrestlers; a duck is 25 cm):
-// its canvas RING_RISE over the hall's floor, its apron APRON past the ropes, its ropes at ROPES.
+// RING from rope to rope, room enough for two ducks to pull (the owner's call: the lane under them is
+// still the event's length), its canvas RING_RISE over the hall's floor, its apron APRON past the
+// ropes, its ropes at ROPES.
+const RING = 3;
 const RING_RISE = 0.14;
 const APRON = 0.1;
 const ROPES = [0.06, 0.12, 0.18];
@@ -33,11 +36,11 @@ const TIER_RISE = 0.1;
 const SEAT = 0.3;
 const AISLE = 0.2;
 // The round truss: its radius, its height (over the clip's opening travel, 2 m at most), its section.
-const TRUSS = 2.9;
+const TRUSS = 2.3;
 const TRUSS_HEIGHT = 2.3;
 const TRUSS_SECTION = 0.14;
 const NODES = 96;
-const CANS = 24;
+const CANS = 20;
 
 const UP = new Vector3(0, 1, 0);
 const rectangle = (x0, y0, x1, y1) => [new Vector2(x0, y0), new Vector2(x1, y0), new Vector2(x1, y1), new Vector2(x0, y1)];
@@ -67,12 +70,12 @@ function skirtPrint(length, height, mark) {
 }
 
 /**
- * The venue round a tug, its ring the event's length square, crossed by the pit from rope to rope.
+ * The venue round a tug, its ring RING square, crossed by the pit from rope to rope.
  * `clearance` is how far out on +z the near stand may start, behind the chase camera and its
  * opening travel (viewer.js). Returns the group, the crowd for the viewer to cull, `pose` for the
  * crowd and the jury, and `dispose`; the shared models (spectators, Reachy) are left alone.
  */
-export function buildTugVenue({ length_m, pit_m, pit_depth_m }, spectators, reachy, branding, clearance) {
+export function buildTugVenue({ pit_m, pit_depth_m }, spectators, reachy, branding, clearance) {
   const group = new Group();
   group.name = "course";
   const geometries = new Set();
@@ -103,7 +106,7 @@ export function buildTugVenue({ length_m, pit_m, pit_depth_m }, spectators, reac
     return geometry.translate(...from.add(to).multiplyScalar(0.5).toArray());
   };
 
-  const half = length_m / 2;
+  const half = RING / 2;
   const edge = half + APRON;
   const floor = -RING_RISE;
   const black = surface(0x0b0c10, 0, 0.7);
@@ -173,9 +176,9 @@ export function buildTugVenue({ length_m, pit_m, pit_depth_m }, spectators, reac
     const back = inner + TIERS * TIER_DEPTH + 0.1;
     walls.push(new PlaneGeometry(length + 0.8, 2.6).rotateY(Math.PI).translate(0, floor + 1.3, back).rotateY(turn));
     ribbons.push(new PlaneGeometry(length + 0.8, 0.025).rotateY(Math.PI).translate(0, floor + 0.8, back - 0.01).rotateY(turn));
-    const shown = turn === Math.PI ? [-1.5, 1.5] : [0];
+    const shown = turn === Math.PI ? [-1.25, 1.25] : [0];
     for (const x of shown) {
-      screens.push(new PlaneGeometry(2, 0.5).rotateY(Math.PI).translate(x, floor + 1.17, back - 0.02).rotateY(turn));
+      screens.push(new PlaneGeometry(1.9, 0.475).rotateY(Math.PI).translate(x, floor + 1.17, back - 0.02).rotateY(turn));
     }
   }
   merged(tiers, surface(0x15161c, 0, 0.9), "tiers");
@@ -250,7 +253,7 @@ export function buildTugVenue({ length_m, pit_m, pit_depth_m }, spectators, reac
     group.add(light, light.target);
     return light;
   };
-  const key = spot(0xffffff, 16, [0, TRUSS_HEIGHT - 0.1, 0.8], 0.95);
+  const key = spot(0xffffff, 16, [0, TRUSS_HEIGHT - 0.1, 0.6], 0.8);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.far = TRUSS_HEIGHT + 1;
