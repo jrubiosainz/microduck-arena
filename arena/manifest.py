@@ -9,7 +9,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from .constants import CMD_SIZE
+from .constants import CMD_SIZE, CTRL_DT
 
 EVENTS_DIR = Path(__file__).parent / "events"
 
@@ -100,6 +100,36 @@ class Sweep:
 class Termination:
     fall_gravity_z: float
     fall_hold_s: float
+
+
+@dataclass(frozen=True)
+class Lights:
+    """Red light, green light: the caller past the finish line counts with its
+    back to the lanes, then turns round and watches them.
+
+    The schedule is declared, not drawn: phase k is green for `green_s[k]`, then
+    red for `red_s[k]`, and the cycle repeats until the time limit. It is the
+    same on every seed, so one caller times every lane of a replay and a page
+    can draw it from the event alone. Every duration is a whole number of control
+    steps, so the light changes on a step and nowhere in between.
+
+    While the light is red the duck is asked to stand still: the command's
+    twist (forward, lateral and yaw) drops to zero, head and body stay as
+    declared. The caller takes `turn_s` to turn round, and nothing a duck does
+    then counts. From the moment it faces the lanes to the end of the red, a
+    duck whose trunk strays more than `tolerance_m` across the floor from where
+    it stood when the caller finished turning is caught: its run ends there,
+    unfinished.
+    """
+
+    green_s: tuple[float, ...]
+    red_s: tuple[float, ...]
+    turn_s: float
+    tolerance_m: float
+
+    def to_dict(self) -> dict:
+        return {"green_s": list(self.green_s), "red_s": list(self.red_s),
+                "turn_s": self.turn_s, "tolerance_m": self.tolerance_m}
 
 
 @dataclass(frozen=True)
@@ -202,6 +232,8 @@ class Manifest:
     # whether the VOTE badge and the vote button exist at all.
     vote: Vote | None = None
     clip: ClipConfig = ClipConfig()
+    # None unless the event is played to a caller's red and green lights. A lane only.
+    lights: Lights | None = None
 
     def command_at(self, vx: float) -> tuple[float, ...]:
         """This event's command, with the forward speed replaced.
@@ -297,6 +329,45 @@ def _stage(raw: dict) -> Stage:
     return Stage(size_m=(float(size[0]), float(size[1])), max_ducks=most)
 
 
+def _number(value) -> bool:
+    # bool first: TOML's true is a Python int, and would otherwise read as 1.
+    return not isinstance(value, bool) and isinstance(value, (int, float))
+
+
+def _whole_steps(seconds: float) -> bool:
+    steps = seconds / CTRL_DT
+    return abs(steps - round(steps)) < 1e-6
+
+
+def _lights(raw: dict, path: Path) -> Lights:
+    where = f"{path}: [lights]"
+    if not isinstance(raw, dict):
+        raise ManifestError(f"{where} must be a table")
+    _refuse_unknown(raw, {"green_s", "red_s", "turn_s", "tolerance_m"}, "[lights]")
+    phases = {}
+    for key in ("green_s", "red_s"):
+        values = _require(raw, key, "[lights]")
+        if not isinstance(values, list) or not values or not all(_number(v) and v > 0 for v in values):
+            raise ManifestError(f"{where} {key} must be a non-empty list of positive seconds, got {values!r}")
+        if not all(_whole_steps(v) for v in values):
+            raise ManifestError(f"{where} every {key} must be a whole number of {CTRL_DT:g} s control steps")
+        phases[key] = tuple(float(v) for v in values)
+    if len(phases["green_s"]) != len(phases["red_s"]):
+        raise ManifestError(f"{where} green_s and red_s must have as many phases as each other")
+    turn = _require(raw, "turn_s", "[lights]")
+    if not _number(turn) or turn < 0 or not _whole_steps(turn):
+        raise ManifestError(
+            f"{where} turn_s must be zero or more, a whole number of {CTRL_DT:g} s control steps, got {turn!r}"
+        )
+    if turn >= min(phases["red_s"]):
+        raise ManifestError(f"{where} turn_s must be shorter than every red_s, or the caller never looks")
+    tolerance = _require(raw, "tolerance_m", "[lights]")
+    if not _number(tolerance) or tolerance <= 0:
+        raise ManifestError(f"{where} tolerance_m must be a positive distance, got {tolerance!r}")
+    return Lights(green_s=phases["green_s"], red_s=phases["red_s"], turn_s=float(turn),
+                  tolerance_m=float(tolerance))
+
+
 def _sweep(raw: dict, path: Path) -> Sweep:
     sweep = Sweep(
         lo=float(_require(raw, "lo", "[sweep]")),
@@ -355,6 +426,8 @@ def load_manifest(path: Path) -> Manifest:
             raise ManifestError(f"{path}: a stage plays one performance, so it declares exactly one seed")
         if "sweep" in raw:
             raise ManifestError(f"{path}: a stage plays each entry's timeline, so it takes no [sweep]")
+        if "lights" in raw:
+            raise ManifestError(f"{path}: a stage has no line to walk to, so it takes no [lights]")
         course, sweep = _stage(course_raw), None
     else:
         course = Course(
@@ -419,6 +492,7 @@ def load_manifest(path: Path) -> Manifest:
         command=_command(_require(raw, "command", str(path))),
         vote=vote,
         clip=_clip(raw.get("clip"), "[clip]"),
+        lights=_lights(raw["lights"], path) if "lights" in raw else None,
     )
 
 

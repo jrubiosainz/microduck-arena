@@ -74,6 +74,10 @@ def event_summary(manifest: Manifest) -> dict:
             "sweep_hi": manifest.sweep.hi,
             "sweep_step": manifest.sweep.step,
             "sweep_count": len(manifest.sweep.speeds()),
+            # Red light, green light: the caller's whole schedule, or null. It is
+            # the same on every seed, so the page draws the caller and its light
+            # from the event alone, in step with any replay of it.
+            "lights": manifest.lights.to_dict() if manifest.lights else None,
         }
     else:
         # The stage's floor and its cap, so the server's placement rules, the workshop's plan and

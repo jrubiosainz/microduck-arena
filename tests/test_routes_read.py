@@ -29,6 +29,7 @@ def test_events_lists_the_whole_programme(client):
         "sprint-2m",
         "roller-sprint-2m",
         "hill-climb-1m5",
+        "red-light-green-light-2m5",
         "got-a-talent",
     }
 
@@ -248,11 +249,12 @@ def test_the_programme_is_served_in_its_declared_order(client):
     """Sorted once on the server, so every client reads the same programme."""
     api, _ = client
     events = api.get("/api/events").json()["events"]
-    assert [e["id"] for e in events[:4]] == [
+    assert [e["id"] for e in events[:5]] == [
         "sprint-2m",
         "got-a-talent",
         "roller-sprint-2m",
         "hill-climb-1m5",
+        "red-light-green-light-2m5",
     ]
     assert [e["order"] for e in events] == sorted(e["order"] for e in events)
 
@@ -279,6 +281,21 @@ def test_a_stage_event_is_served_without_a_lane_or_a_sweep(client):
         assert key not in talent, key
     assert talent["time_limit_s"] == 20.0
     assert talent["seeds"] == 1
+
+
+def test_a_lane_serves_its_lights_so_the_page_can_draw_the_caller(client):
+    """The schedule is the same on every seed: the page draws the caller and
+    its light from the event, in step with any replay."""
+    api, _ = client
+    events = {e["id"]: e for e in api.get("/api/events").json()["events"]}
+    assert events["red-light-green-light-2m5"]["lights"] == {
+        "green_s": [0.6, 2.4, 1.6, 3.0, 2.0, 2.8],
+        "red_s": [1.6, 2.0, 1.4, 2.4, 1.8, 2.2],
+        "turn_s": 0.4,
+        "tolerance_m": 0.03,
+    }
+    assert events["sprint-2m"]["lights"] is None
+    assert "lights" not in events["got-a-talent"]
 
 
 def test_a_stage_serves_where_a_duck_may_start(client):
@@ -413,7 +430,7 @@ def test_every_event_says_what_kind_of_course_it_is(client):
     api, _ = client
     courses = {e["id"]: e["course"] for e in api.get("/api/events").json()["events"]}
     assert courses == {"sprint-2m": "lane", "roller-sprint-2m": "lane", "hill-climb-1m5": "lane",
-                       "got-a-talent": "stage"}
+                       "red-light-green-light-2m5": "lane", "got-a-talent": "stage"}
 
 
 def test_a_voted_events_publication_stands_where_its_votes_put_it(client):

@@ -53,7 +53,7 @@ from .constants import (
     TRACE_WIDTH,
 )
 from .course import compile_course, compile_stage, duck_prefix, ramp_dir
-from .manifest import Manifest
+from .manifest import Lights, Manifest
 from .timeline import Start, Timeline
 
 _WORLD_DOWN = np.array([0.0, 0.0, -1.0])
@@ -62,7 +62,7 @@ _WORLD_DOWN = np.array([0.0, 0.0, -1.0])
 @dataclass(frozen=True)
 class RunOutcome:
     seed: int
-    status: str  # "finish" | "fall" | "timeout"
+    status: str  # "finish" | "fall" | "timeout" | "caught" (moving under a red light)
     time_s: float | None
     progress_m: float
     # Where the start line landed in course coordinates, after settling. Exposed
@@ -260,6 +260,40 @@ def _start(manifest: Manifest, model, policies, yaws_deg, seed: int, commands) -
     return sim, settle
 
 
+@dataclass(frozen=True)
+class _LightSteps:
+    """A lights schedule laid over a run's timed control steps, indexed by step.
+
+    `red`: the duck is asked to stand during that step. `mark`: the caller
+    has just finished turning round once that step is over, so where the duck
+    stands then is where it has to stay. `watch`: the caller is looking once that
+    step is over, so a duck that has strayed from its mark by then is caught.
+    """
+
+    red: np.ndarray
+    mark: np.ndarray
+    watch: np.ndarray
+
+    @classmethod
+    def of(cls, lights: Lights, steps: int) -> "_LightSteps":
+        red, mark, watch = (np.zeros(steps, dtype=bool) for _ in range(3))
+        turn = round(lights.turn_s / CTRL_DT)
+        phase, onset = 0, 0
+        while onset < steps:
+            index = phase % len(lights.green_s)
+            onset += round(lights.green_s[index] / CTRL_DT)
+            length = round(lights.red_s[index] / CTRL_DT)
+            # Step i ends at (i + 1) * CTRL_DT, so the step that ends as the caller
+            # faces the lanes, turn steps into the red, is onset + turn - 1:
+            # with no turn at all, the last green step.
+            if onset + turn - 1 < steps:
+                mark[onset + turn - 1] = True
+            red[onset:onset + length] = True
+            watch[onset + turn:onset + length] = True
+            phase, onset = phase + 1, onset + length
+        return cls(red=red, mark=mark, watch=watch)
+
+
 def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) -> RunOutcome:
     # Converted once per run, not per step. The manifest holds an immutable tuple
     # so a loaded event cannot be mutated in place by anything downstream.
@@ -269,7 +303,17 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     # only gets to say how fast.
     command = np.asarray(manifest.command if command is None else command, dtype=np.float64)
     model = model if model is not None else compile_course(manifest)
-    sim, settle = _start(manifest, model, [policy], [0.0], seed, [command])
+
+    # Red light, green light (arena.manifest.Lights): under a red light the duck
+    # is asked to stand, its command's twist zeroed and its head and body left as
+    # declared. It settles standing, too, on the line, and walks off when the
+    # clock starts on the first green: nobody gets a flying start.
+    lights = manifest.lights
+    stand = None
+    if lights is not None:
+        stand = command.copy()
+        stand[0:3] = 0.0
+    sim, settle = _start(manifest, model, [policy], [0.0], seed, [command if stand is None else stand])
     data, adr = sim.data, sim.ducks[0].adr
 
     direction = ramp_dir(manifest.course.slope_deg)
@@ -284,8 +328,12 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     progress = 0.0
     written = 0
 
+    if lights is not None:
+        schedule = _LightSteps.of(lights, max_steps)
+        mark = None
+
     for step in range(max_steps):
-        sim.step([command])
+        sim.step([stand if lights is not None and schedule.red[step] else command])
         sim.record(frames[:, written])
         written += 1
 
@@ -306,6 +354,18 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
         if tipped_for >= fall_steps_needed:
             status = "fall"
             break
+
+        # Caught is judged after the fall and before the finish: a duck the caller
+        # sees moving does not get to cross the line on that step. A duck still
+        # coasting while the caller turns round is not seen, and if it crosses then
+        # it has finished.
+        if lights is not None:
+            here = data.qpos[adr.free:adr.free + 2]
+            if schedule.mark[step]:
+                mark = here.copy()
+            elif schedule.watch[step] and float(np.hypot(*(here - mark))) > lights.tolerance_m:
+                status = "caught"
+                break
 
         progress = float(direction @ data.qpos[0:3]) - start_progress
         if progress >= manifest.course.length_m:

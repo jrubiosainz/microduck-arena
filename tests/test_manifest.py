@@ -259,6 +259,7 @@ EXPECTED_CATEGORIES = {
     "sprint-2m": "race",
     "roller-sprint-2m": "race",
     "hill-climb-1m5": "race",
+    "red-light-green-light-2m5": "race",
     "got-a-talent": "showcase",
 }
 
@@ -290,6 +291,7 @@ def test_the_programme_has_a_declared_order_with_the_sprint_first():
         "got-a-talent",
         "roller-sprint-2m",
         "hill-climb-1m5",
+        "red-light-green-light-2m5",
     ]
 
 
