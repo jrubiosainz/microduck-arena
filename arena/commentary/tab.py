@@ -10,9 +10,13 @@ renderer's. A backgrounded renderer stops committing frames and its screenshot
 waits on a frame that never comes; the clip renderer measured this over seven
 clips on the Space, and found the anti-backgrounding flags did not prevent it.
 Being the only tab is what does.
+
+Two threads share the tab, the reserve's and the cup worker's: a lock keeps their
+asks one at a time.
 """
 
 import json
+import threading
 import time
 
 from websockets.exceptions import ConnectionClosed
@@ -30,6 +34,7 @@ class PlanTab:
         self.nice = nice
         self._chrome = None
         self._tab = None
+        self._lock = threading.Lock()
 
     def _open(self) -> None:
         binary = self.binary or find_chrome()
@@ -52,32 +57,39 @@ class PlanTab:
         self._chrome, self._tab = chrome, tab
 
     def _wait_ready(self, tab, timeout_s: float = 60.0) -> None:
-        """Until the page has installed its `window.plan`."""
+        """Until the page has installed its `window.plan` and `window.planCall`."""
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
-            if tab.evaluate("Boolean(window.plan)"):
+            if tab.evaluate("Boolean(window.plan && window.planCall)"):
                 return
             time.sleep(0.1)
         raise TimeoutError("the plan page never became ready")
 
     def prepare(self, dialogue: dict) -> dict:
         """The dialogue's timed plan, computed by the page."""
-        if self._tab is None:
-            self._open()
-        asking = f"window.plan({json.dumps(dialogue)})"
-        try:
-            return self._tab.evaluate(asking)
-        except (ConnectionClosed, OSError):
-            # A closed socket and a socket error are the two shapes a dead
-            # browser actually takes — killed by the host, out of memory — and
-            # nothing else: a `RuntimeError` here is the page's own JS
-            # throwing over a dialogue it cannot time, and relaunching a live
-            # browser over that would just hand the same error back. A dead
-            # browser is replaced once; a second failure is the machine
-            # talking, and the reserve's caller logs it and tries the next run.
-            self.close()
-            self._open()
-            return self._tab.evaluate(asking)
+        return self._evaluate(f"window.plan({json.dumps(dialogue)})")
+
+    def prepare_call(self, call: dict) -> dict:
+        """A match's play-by-play as a plan, each line at its moment, computed by the page."""
+        return self._evaluate(f"window.planCall({json.dumps(call)})")
+
+    def _evaluate(self, asking: str) -> dict:
+        with self._lock:
+            if self._tab is None:
+                self._open()
+            try:
+                return self._tab.evaluate(asking)
+            except (ConnectionClosed, OSError):
+                # A closed socket and a socket error are the two shapes a dead
+                # browser actually takes — killed by the host, out of memory — and
+                # nothing else: a `RuntimeError` here is the page's own JS
+                # throwing over a dialogue it cannot time, and relaunching a live
+                # browser over that would just hand the same error back. A dead
+                # browser is replaced once; a second failure is the machine
+                # talking, and the reserve's caller logs it and tries the next run.
+                self.close()
+                self._open()
+                return self._tab.evaluate(asking)
 
     def close(self) -> None:
         if self._chrome is not None:

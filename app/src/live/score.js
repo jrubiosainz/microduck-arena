@@ -192,6 +192,52 @@ function phrase(style, words, mark, random) {
   return out;
 }
 
+/** A linear congruential generator: the same seed, the same numbers, on every screen. */
+function lcg(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+/** One line spoken from `start`: its captions and its notes are pushed on the
+ * lists, and the time the last caption ends is returned. */
+function speak(turn, start, random, captions, notes) {
+  if (!Object.hasOwn(VOICES, turn.speaker) || typeof turn.text !== "string" || !turn.text.trim() || turn.text.length > 500) {
+    throw new Error("Invalid commentary turn");
+  }
+  const voice = VOICES[turn.speaker];
+  const words = turn.text.trim().split(/\s+/);
+  if (words.some((w) => w.length > WORD_CHARS)) throw new Error("Caption word is too long");
+  const chunks = [];
+  for (const word of words) {
+    if (!chunks.length || `${chunks.at(-1).join(" ")} ${word}`.length > CAPTION_CHARS) chunks.push([]);
+    chunks.at(-1).push(word);
+  }
+  let cursor = start;
+  for (const chunk of chunks) {
+    const start_ms = cursor;
+    let words = [];
+    for (const [i, text] of chunk.entries()) {
+      words.push({ text, ms: Math.round(voice.word_ms + Math.min(85, text.length * 6.5) + random() * 65) });
+      const mark = /([.!?,;:])["'”’)\]]*$/.exec(text)?.[1];
+      if (!mark && i < chunk.length - 1) continue;
+      for (const { at, ms, ...sound } of phrase(voice, words, mark, random)) {
+        notes.push({
+          speaker: turn.speaker, start_ms: cursor + at, end_ms: cursor + at + ms,
+          variant: Math.floor(random() * 0x7fffffff), ...sound,
+        });
+      }
+      cursor += words.reduce((sum, word) => sum + word.ms, 0) + (/[.!?]/.test(mark) ? 160 : mark ? 85 : 0);
+      words = [];
+    }
+    cursor = Math.max(cursor, start_ms + Math.max(1300, chunk.join(" ").length * 45));
+    captions.push({ speaker: turn.speaker, name: voice.name, text: chunk.join(" "), start_ms, end_ms: cursor });
+  }
+  return cursor;
+}
+
 export function prepare(dialogue, seed = hash(dialogue?.run_id ?? "")) {
   if (
     typeof dialogue?.run_id !== "string" || !dialogue.run_id ||
@@ -201,49 +247,14 @@ export function prepare(dialogue, seed = hash(dialogue?.run_id ?? "")) {
   ) {
     throw new Error("Invalid commentary");
   }
-  let state = seed >>> 0;
-  const random = () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-    return state / 4294967296;
-  };
+  const random = lcg(seed);
   const between = (a, b) => a + (b - a) * random();
   const captions = [], notes = [], gestures = [], turns = [];
   let cursor = 800;
   for (const [index, turn] of dialogue.turns.entries()) {
-    if (
-      !Object.hasOwn(VOICES, turn.speaker) || typeof turn.text !== "string" || !turn.text.trim() ||
-      turn.text.length > 500 || (index && dialogue.turns[index - 1].speaker === turn.speaker)
-    ) {
-      throw new Error("Invalid commentary turn");
-    }
+    if (index && dialogue.turns[index - 1].speaker === turn.speaker) throw new Error("Invalid commentary turn");
     const turnStart = cursor;
-    const voice = VOICES[turn.speaker];
-    const words = turn.text.trim().split(/\s+/);
-    if (words.some((w) => w.length > WORD_CHARS)) throw new Error("Caption word is too long");
-    const chunks = [];
-    for (const word of words) {
-      if (!chunks.length || `${chunks.at(-1).join(" ")} ${word}`.length > CAPTION_CHARS) chunks.push([]);
-      chunks.at(-1).push(word);
-    }
-    for (const chunk of chunks) {
-      const start_ms = cursor;
-      let words = [];
-      for (const [i, text] of chunk.entries()) {
-        words.push({ text, ms: Math.round(voice.word_ms + Math.min(85, text.length * 6.5) + random() * 65) });
-        const mark = /([.!?,;:])["'”’)\]]*$/.exec(text)?.[1];
-        if (!mark && i < chunk.length - 1) continue;
-        for (const { at, ms, ...sound } of phrase(voice, words, mark, random)) {
-          notes.push({
-            speaker: turn.speaker, start_ms: cursor + at, end_ms: cursor + at + ms,
-            variant: Math.floor(random() * 0x7fffffff), ...sound,
-          });
-        }
-        cursor += words.reduce((sum, word) => sum + word.ms, 0) + (/[.!?]/.test(mark) ? 160 : mark ? 85 : 0);
-        words = [];
-      }
-      cursor = Math.max(cursor, start_ms + Math.max(1300, chunk.join(" ").length * 45));
-      captions.push({ speaker: turn.speaker, name: voice.name, text: chunk.join(" "), start_ms, end_ms: cursor });
-    }
+    cursor = speak(turn, cursor, random, captions, notes);
     turns.push({ speaker: turn.speaker, start_ms: turnStart, end_ms: cursor });
     cursor += 500;
   }
@@ -284,6 +295,31 @@ export function prepare(dialogue, seed = hash(dialogue?.run_id ?? "")) {
   return {
     version: 2, run_id: dialogue.run_id, duration_ms, seed, sample_rate: SAMPLE_RATE, channels: 2,
     captions, notes, gestures,
+  };
+}
+
+/** A match's play-by-play as a plan: each line starts at its moment in the
+ * clip (`at_ms`), a line that would overlap the one before waits for it, and
+ * nothing runs past the clip. The match is on screen, so nothing draws the booth. */
+export function prepareCall({ id, lines, duration_ms }, seed = hash(id ?? "")) {
+  if (
+    typeof id !== "string" || !id || !Array.isArray(lines) || !lines.length ||
+    !Number.isInteger(duration_ms) || duration_ms <= 0 || duration_ms % FRAME_MS ||
+    !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff ||
+    lines.some(({ at_ms, speaker }, i) => !Object.hasOwn(VOICES, speaker) || !Number.isInteger(at_ms) || at_ms < 0 || at_ms >= duration_ms || (i && at_ms < lines[i - 1].at_ms))
+  ) {
+    throw new Error("Invalid call");
+  }
+  const random = lcg(seed);
+  const captions = [], notes = [];
+  let free = 0;
+  for (const line of lines) free = speak(line, Math.max(line.at_ms, free), random, captions, notes);
+  const inside = (list) => list
+    .filter((item) => item.start_ms < duration_ms)
+    .map((item) => ({ ...item, end_ms: Math.min(item.end_ms, duration_ms) }));
+  return {
+    version: 2, run_id: id, duration_ms, seed, sample_rate: SAMPLE_RATE, channels: 2,
+    captions: inside(captions), notes: inside(notes), gestures: [],
   };
 }
 

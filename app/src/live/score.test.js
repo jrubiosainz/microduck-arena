@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { SAMPLE_RATE, VOICES, poseAt, prepare, synthesize } from "./score.js";
+import { SAMPLE_RATE, VOICES, poseAt, prepare, prepareCall, synthesize } from "./score.js";
 import { loadSynth } from "./voice.js";
 
 const round3 = (value) => Math.round(value * 1000) / 1000;
@@ -129,6 +129,65 @@ describe("prepare", () => {
     expect(() => prepare({ run_id: "x", turns: [turn("peter", "One."), turn("peter", "Two.")] })).toThrow("Invalid commentary turn");
     expect(() => prepare({ run_id: "x", turns: [turn("peter", "One."), turn("bob", "Two.")] })).toThrow("Invalid commentary turn");
     expect(() => prepare({ run_id: "x", turns: [turn("peter", "x".repeat(43)), turn("ray", "Two.")] })).toThrow("Caption word is too long");
+  });
+});
+
+describe("prepareCall", () => {
+  const call = {
+    id: "tug-of-war-0001-003",
+    duration_ms: 20000,
+    lines: [
+      { at_ms: 2000, speaker: "peter", text: "The marker slides west!" },
+      { at_ms: 9000, speaker: "ray", text: "And into the pit." },
+    ],
+  };
+
+  it("starts each caption at its line's moment", () => {
+    const plan = prepareCall(call);
+    expect(plan.version).toBe(2);
+    expect(plan.run_id).toBe(call.id);
+    expect(plan.duration_ms).toBe(20000);
+    expect(plan.gestures).toEqual([]);
+    expect(plan.captions.find((c) => c.speaker === "peter").start_ms).toBe(2000);
+    expect(plan.captions.find((c) => c.speaker === "ray").start_ms).toBe(9000);
+    for (const note of plan.notes) {
+      expect(plan.captions.some((c) => c.speaker === note.speaker && c.start_ms <= note.start_ms && note.end_ms <= c.end_ms)).toBe(true);
+    }
+  });
+
+  it("pushes a line that would overlap the one before", () => {
+    const plan = prepareCall({
+      ...call,
+      lines: [
+        { at_ms: 1000, speaker: "peter", text: "The marker slides west, and it keeps on sliding, Ray!" },
+        { at_ms: 1200, speaker: "ray", text: "Slowly." },
+      ],
+    });
+    const peter = plan.captions.filter((c) => c.speaker === "peter");
+    expect(plan.captions.find((c) => c.speaker === "ray").start_ms).toBe(peter.at(-1).end_ms);
+  });
+
+  it("keeps every caption and note inside the clip", () => {
+    const plan = prepareCall({
+      ...call,
+      lines: [{ at_ms: 19000, speaker: "peter", text: "The marker slides west, and it keeps on sliding, Ray, to the edge!" }],
+    });
+    expect(plan.captions[0].start_ms).toBe(19000);
+    for (const item of [...plan.captions, ...plan.notes]) expect(item.end_ms).toBeLessThanOrEqual(20000);
+  });
+
+  it("is deterministic and refuses what it cannot time", () => {
+    expect(prepareCall(call)).toEqual(prepareCall(call));
+    const [first, second] = call.lines;
+    for (const bad of [
+      { ...call, lines: [{ ...first, at_ms: 20000 }] },
+      { ...call, lines: [second, first] },
+      { ...call, duration_ms: 20010 },
+      { ...call, lines: [{ ...first, speaker: "paul" }] },
+      { ...call, lines: [] },
+    ]) {
+      expect(() => prepareCall(bad)).toThrow("Invalid call");
+    }
   });
 });
 

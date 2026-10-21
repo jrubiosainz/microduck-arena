@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 describe("the plan page", () => {
-  it("exposes prepare on the window and nothing else", async () => {
+  it("exposes prepare and planCall on the window and nothing else", async () => {
     await import("./main.js");
     expect(typeof window.plan).toBe("function");
+    expect(typeof window.planCall).toBe("function");
   });
 
   it("turns a dialogue into a plan whose duration is whole frames", async () => {
