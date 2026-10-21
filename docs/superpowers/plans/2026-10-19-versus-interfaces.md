@@ -605,6 +605,7 @@ def write_show(cup: Cup, *, manifest, history, lore, provider, model, tab, rng,
 #   returns, filling `done` in place as it goes (a run cut off resumes from it):
 #   {"desk": {id: {"kind", "after", "dialogue": {"turns", "brief"}, "plan", "screen"}},
 #    "calls": {match_id: {"lines": [{"at_ms", "speaker", "text"}], "plan"}}}
+#   a bout's last line also has "by_ms": the next bout's tape start, or the clip's end after the last bout
 #   one LLM call per desk segment and one per bout (the play-by-play); call lines name ducks by their on-air `name`
 # PlanTab gains prepare_call(call: dict) -> dict  (window.planCall in plan.html)
 ```
@@ -624,7 +625,8 @@ PREFETCH`; 404 before, and for anything the show does not hold. Slots:
 
 ```js
 // app/src/live/score.js
-export function prepareCall({ id, lines, duration_ms })   // a plan whose captions start at each line's at_ms
+export function prepareCall({ id, lines, duration_ms })   // a plan whose captions start at each line's at_ms;
+                                                          // a line with by_ms starts early enough to end by it
 export function singCaption(plan, caption, sing, out)     // replaces synthesize: one caption's notes, mono 48 kHz, into `out`
 // app/src/live/voice.js: start(plan, offsetMs) sings one mono AudioBuffer per caption still to come, each started on
 //   the context's clock from one instant (memory held = the speech, not the plan's length); stop() stops them all

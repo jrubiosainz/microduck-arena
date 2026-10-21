@@ -300,20 +300,37 @@ export function prepare(dialogue, seed = hash(dialogue?.run_id ?? "")) {
 
 /** A match's play-by-play as a plan: each line starts at its moment in the
  * clip (`at_ms`), a line that would overlap the one before waits for it, and
- * nothing runs past the clip. The match is on screen, so nothing draws the booth. */
+ * nothing runs past the clip. A line with `by_ms` (a bout's last: the clip moves
+ * on to the next bout or ends just after its moment) starts early enough to be
+ * heard whole by then, never over the line before. The match is on screen, so
+ * nothing draws the booth. */
 export function prepareCall({ id, lines, duration_ms }, seed = hash(id ?? "")) {
   if (
     typeof id !== "string" || !id || !Array.isArray(lines) || !lines.length ||
     !Number.isInteger(duration_ms) || duration_ms <= 0 || duration_ms % FRAME_MS ||
     !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff ||
-    lines.some(({ at_ms, speaker }, i) => !Object.hasOwn(VOICES, speaker) || !Number.isInteger(at_ms) || at_ms < 0 || at_ms >= duration_ms || (i && at_ms < lines[i - 1].at_ms))
+    lines.some(({ at_ms, by_ms, speaker }, i) => !Object.hasOwn(VOICES, speaker) || !Number.isInteger(at_ms) || at_ms < 0 || at_ms >= duration_ms || (i && at_ms < lines[i - 1].at_ms) ||
+      (by_ms !== undefined && (!Number.isInteger(by_ms) || by_ms <= at_ms || by_ms > duration_ms)))
   ) {
     throw new Error("Invalid call");
   }
   const random = lcg(seed);
   const captions = [], notes = [];
   let free = 0;
-  for (const line of lines) free = speak(line, Math.max(line.at_ms, free), random, captions, notes);
+  for (const line of lines) {
+    // Said from 0 for its length, then moved where it starts: wherever it is said, it draws the
+    // same random numbers, so a line that keeps its moment is timed as it always was.
+    const said = { captions: [], notes: [] };
+    const length = speak(line, 0, random, said.captions, said.notes);
+    const start = Math.max(free, Math.min(line.at_ms, (line.by_ms ?? Infinity) - length));
+    for (const item of [...said.captions, ...said.notes]) {
+      item.start_ms += start;
+      item.end_ms += start;
+    }
+    captions.push(...said.captions);
+    notes.push(...said.notes);
+    free = start + length;
+  }
   const inside = (list) => list
     .filter((item) => item.start_ms < duration_ms)
     .map((item) => ({ ...item, end_ms: Math.min(item.end_ms, duration_ms) }));

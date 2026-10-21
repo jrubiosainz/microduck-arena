@@ -23,6 +23,7 @@ from .generator import NO_CALLBACK, Rejected, direction, write, write_call
 from .lore import Lore
 
 CALL_GAP_S = 4.0  # between a bout's start and its end, a moment is called this long after the last
+#                   and this long before the end
 TRIES = 3  # answers asked for one desk segment or one bout before the show waits
 
 DESK_TURNS = {"opening": (5, 6), "intro": (3, 4), "recap": (4, 5), "ceremony": (5, 6), "close": (3,)}
@@ -89,10 +90,12 @@ def show_outline(cup: Cup) -> list[dict]:
 
 def thin(moments: Sequence[Moment]) -> list[Moment]:
     """The moments a call has time to say: the start and the end of the bout, and between them
-    only a moment CALL_GAP_S or more after the last one kept."""
-    kept = []
+    only a moment CALL_GAP_S or more after the last one kept and before the end: the end's line
+    is to be heard whole before the clip moves on, and a line said just before would hold it back."""
+    end, kept = moments[-1].at_s, []
     for moment in moments:
-        if moment.kind in ("start", "pit", "time") or moment.at_s - kept[-1].at_s >= CALL_GAP_S:
+        if moment.kind in ("start", "pit", "time") or (
+                moment.at_s - kept[-1].at_s >= CALL_GAP_S and end - moment.at_s >= CALL_GAP_S):
             kept.append(moment)
     return kept
 
@@ -214,7 +217,11 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
                  if fact.ref in CALL_FACTS]
         facts += _profiles(profiles, [cup.entrants[match.a], cup.entrants[match.b]])
         taped, lines, first = footage[match.match_id], [], "peter"
-        for bout, tape in zip(match.bouts, taped["bouts"], strict=True):
+        # A bout ends on its tape's last frame, just before the next bout's tape or the clip's end:
+        # its last line is to be heard whole by then.
+        moves_on = ([round(1000 * tape["tape_start_s"]) for tape in taped["bouts"][1:]]
+                    + [taped["duration_ms"]])
+        for bout, tape, by_ms in zip(match.bouts, taped["bouts"], moves_on, strict=True):
             aired = thin(tape["moments"])
             written = _tried(log, f"{match.match_id} bout {bout.k + 1}", write_call, facts,
                              _told(cup, manifest, match, bout, aired), first, lore=lore,
@@ -222,6 +229,7 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
             start, end, seconds = tape["tape_start_s"], tape["tape_end_s"], tape["seconds"]
             lines += [{"at_ms": round(1000 * (start + (end - start) * moment.at_s / seconds)), **line}
                       for moment, line in zip(aired, written["lines"])]
+            lines[-1]["by_ms"] = by_ms
             first = "ray" if lines[-1]["speaker"] == "peter" else "peter"
         plan = tab.prepare_call({"id": match.match_id, "lines": lines,
                                  "duration_ms": taped["duration_ms"]})

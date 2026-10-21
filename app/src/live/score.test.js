@@ -138,7 +138,7 @@ describe("prepareCall", () => {
     duration_ms: 20000,
     lines: [
       { at_ms: 2000, speaker: "peter", text: "The marker slides west!" },
-      { at_ms: 9000, speaker: "ray", text: "And into the pit." },
+      { at_ms: 9000, by_ms: 20000, speaker: "ray", text: "And into the pit." },
     ],
   };
 
@@ -160,11 +160,40 @@ describe("prepareCall", () => {
       ...call,
       lines: [
         { at_ms: 1000, speaker: "peter", text: "The marker slides west, and it keeps on sliding, Ray!" },
-        { at_ms: 1200, speaker: "ray", text: "Slowly." },
+        { at_ms: 1200, by_ms: 2000, speaker: "ray", text: "Slowly." },
       ],
     });
     const peter = plan.captions.filter((c) => c.speaker === "peter");
+    // Even a line to be heard by a time it can no longer make never starts over the one before.
     expect(plan.captions.find((c) => c.speaker === "ray").start_ms).toBe(peter.at(-1).end_ms);
+  });
+
+  it("hears a bout's last line whole by its by_ms, so the next bout's first line starts on its moment", () => {
+    // The rehearsal's match 002: each bout ends on its tape's last frame, 520 ms before the next
+    // bout's tape and 2540 ms before the clip's end.
+    const rehearsal = {
+      id: "tug-of-war-0001-002",
+      duration_ms: 75040,
+      lines: [
+        { at_ms: 3520, speaker: "peter", text: "Backpedal and Sway start the first bout, both ducks steady." },
+        { at_ms: 48520, by_ms: 49040, speaker: "ray", text: "Time expires, marker favors Backpedal, who takes the bout." },
+        { at_ms: 49040, speaker: "peter", text: "Bout two begins with Backpedal leading one bout to nil." },
+        { at_ms: 66080, speaker: "ray", text: "Sway is dangerously close to the pit now." },
+        { at_ms: 72500, by_ms: 75040, speaker: "peter", text: "Sway drops into the pit, Backpedal wins the match." },
+      ],
+    };
+    const plan = prepareCall(rehearsal);
+    // The same lines with nothing to be heard by and room for all: each one's natural length.
+    const natural = prepareCall({ ...rehearsal, duration_ms: 120000, lines: rehearsal.lines.map(({ by_ms, ...line }) => line) });
+    expect(plan.captions.map((c) => c.text)).toEqual(rehearsal.lines.map((line) => line.text));
+    for (const [i, caption] of plan.captions.entries()) {
+      expect(caption.end_ms - caption.start_ms).toBe(natural.captions[i].end_ms - natural.captions[i].start_ms);
+      if (i) expect(caption.start_ms).toBeGreaterThanOrEqual(plan.captions[i - 1].end_ms);
+    }
+    expect(plan.captions[1].end_ms).toBe(49040);
+    expect(plan.captions[2].start_ms).toBe(49040);
+    expect(plan.captions[3].start_ms).toBe(66080);
+    expect(plan.captions[4].end_ms).toBe(75040);
   });
 
   it("keeps every caption and note inside the clip", () => {
@@ -181,6 +210,8 @@ describe("prepareCall", () => {
     const [first, second] = call.lines;
     for (const bad of [
       { ...call, lines: [{ ...first, at_ms: 20000 }] },
+      { ...call, lines: [first, { ...second, by_ms: 20040 }] },
+      { ...call, lines: [first, { ...second, by_ms: 9000 }] },
       { ...call, lines: [second, first] },
       { ...call, duration_ms: 20010 },
       { ...call, lines: [{ ...first, speaker: "paul" }] },

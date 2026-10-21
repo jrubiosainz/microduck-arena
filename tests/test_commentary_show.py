@@ -119,12 +119,17 @@ def test_the_outline_opens_introduces_every_match_recaps_each_group_round_and_cr
 
 def test_thin_keeps_the_start_and_the_end_and_spaces_the_rest():
     start = Moment(0.0, "start", None)
-    lead, edge, pit = (Moment(0.42, "lead", "west"), Moment(5.42, "edge", "east"),
-                       Moment(8.02, "pit", "east"))
-    assert thin([start, lead, edge, pit]) == [start, edge, pit]
     lead, slip, time = (Moment(4.0, "lead", "west"), Moment(7.9, "slip", "east"),
                         Moment(45.0, "time", "west"))
     assert thin([start, lead, slip, time]) == [start, lead, time]
+    # The rehearsal's pit finishes (match 002's second bout, match 000's first): a slip or an edge
+    # just before the pit held the deciding line back until the clip ran out.
+    lead, edge, slip, pit = (Moment(2.44, "lead", "east"), Moment(17.04, "edge", "west"),
+                             Moment(23.02, "slip", "west"), Moment(23.46, "pit", "west"))
+    assert thin([start, lead, edge, slip, pit]) == [start, edge, pit]
+    ground, edge, slip, pit = (Moment(1.26, "ground", "west"), Moment(12.18, "edge", "east"),
+                               Moment(12.56, "slip", "east"), Moment(13.02, "pit", "east"))
+    assert thin([start, ground, edge, slip, pit]) == [start, pit]
 
 
 def test_every_desk_segment_and_every_call_is_written_and_timed():
@@ -148,6 +153,23 @@ def test_every_desk_segment_and_every_call_is_written_and_timed():
     assert [line["speaker"] for line in first["lines"]] == ["peter", "ray"] * 3
     assert ("prepare_call", {"id": IDS[0], "lines": first["lines"], "duration_ms": 30000}) in tab.asked
     assert first["plan"]["duration_ms"] == 30000
+
+
+def test_a_bout_s_last_line_is_heard_before_the_clip_moves_on():
+    """The rehearsal's match 002: a bout ends on its tape's last frame, 0.52 s before the next
+    bout's tape and 2.54 s before the clip's end, so its last line must be heard by then."""
+    first = CUP.matches[0]
+    tape = footage(CUP)
+    tape[first.match_id] = {"duration_ms": 75040, "bouts": [
+        {"k": 0, "tape_start_s": 3.52, "tape_end_s": 48.52, "seconds": 45.0,
+         "moments": [Moment(0.0, "start", None), Moment(3.62, "lead", "west"),
+                     Moment(45.0, "time", "west")]},
+        {"k": 1, "tape_start_s": 49.04, "tape_end_s": 72.5, "seconds": 23.46,
+         "moments": [Moment(0.0, "start", None), Moment(17.04, "edge", "west"),
+                     Moment(23.02, "slip", "west"), Moment(23.46, "pit", "west")]}]}
+    lines = show(Router(), tape=tape)["calls"][first.match_id]["lines"]
+    assert [(line["at_ms"], line.get("by_ms")) for line in lines] == [
+        (3520, None), (48520, 49040), (49040, None), (66080, None), (72500, 75040)]
 
 
 def test_a_bout_s_lines_are_written_from_that_bout_alone():
