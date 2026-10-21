@@ -362,7 +362,9 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
                on_progress=lambda stage, done, total: None) -> RenderedRun:
     """Every layout of one run, each in a browser of its own; the first one
     renders the soundtrack they all share, and they are recorded `parallel` at
-    a time. The poster is the landscape clip's.
+    a time. The poster is the landscape clip's. A cup's match is filmed
+    landscape only: nothing plays it upright, and every match of a cup renders
+    between the close and the premiere.
 
     `budget_s` bounds the whole render of a race's clip, from here, and a
     longer clip gets as much time per frame (`budget_for`) — a stuck tab or an
@@ -378,6 +380,7 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
     if not ffmpeg_available():
         raise RuntimeError("no ffmpeg on the PATH")
     started = time.monotonic()
+    filmed = ["landscape"] if is_match_id(run_id) else list(SIZES)
     on_progress("opening", 0, 0)
     with contextlib.ExitStack() as stack:
         work = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="arena-clip-")))
@@ -390,7 +393,7 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
         # change that; being the only tab in a browser takes the question away.
         tabs = {
             layout: _open(stack.enter_context(Chrome(binary, nice, gpu)), origin, run_id, layout)
-            for layout in SIZES
+            for layout in filmed
         }
         on_progress("soundtrack", 0, 0)
         pcm_path = work / "soundtrack.f32"
@@ -400,9 +403,9 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
         # known before its first frame: the bar only ever goes forward, whether
         # the layouts are recorded one at a time or together.
         frames = tabs["landscape"].evaluate("window.clip.plan")["frames"]
-        total = frames * len(SIZES)
+        total = frames * len(filmed)
         deadline = started + budget_for(budget_s, frames)
-        done = dict.fromkeys(SIZES, 0)
+        done = dict.fromkeys(filmed, 0)
         counted = threading.Lock()
 
         def drew(layout: str, i: int) -> None:
@@ -420,7 +423,7 @@ def record_run(origin: str, run_id: str, parallel: int = 1, binary: str | None =
             return layout, rendered, poster
 
         with ThreadPoolExecutor(max_workers=max(1, parallel)) as pool:
-            results = list(pool.map(one, SIZES))
+            results = list(pool.map(one, filmed))
     layouts = {layout: rendered for layout, rendered, _ in results}
     poster = next(poster for layout, _, poster in results if layout == "landscape")
     return RenderedRun(layouts=layouts, poster=poster)

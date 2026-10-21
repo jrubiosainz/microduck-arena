@@ -586,14 +586,10 @@ def test_a_failed_clip_is_owed_one_more_go_at_the_next_boot(tmp_path):
     assert [(item[0], item[-1]) for item in sorted(jobs.queue.queue)] == [(0, "P1"), (1, "F1")]
 
 
-def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
-    """Two tabs in one browser means one of them is always the background tab,
-    and a backgrounded renderer stops committing frames. Measured on the Space
-    over seven clips: every landscape layout — the tab that was opened first —
-    stalled once or twice on its screenshot, and no vertical one ever did.
-    Chrome's own anti-backgrounding flags did not change it; being the only tab
-    in a browser is what takes the question away."""
-    opened = []
+@pytest.fixture
+def browsers(monkeypatch):
+    """Every Chrome record_run opens, each a stand-in, and the layout each tab opens on."""
+    opened, tabs = [], []
 
     class FakeChrome:
         def __init__(self, binary, nice=10, gpu=False):
@@ -614,10 +610,20 @@ def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
     monkeypatch.setattr(recorder, "Chrome", FakeChrome)
     monkeypatch.setattr(recorder, "find_chrome", lambda: "/chrome")
     monkeypatch.setattr(recorder, "ffmpeg_available", lambda: True)
-    monkeypatch.setattr(recorder, "_open", lambda *_: FakeTab())
+    monkeypatch.setattr(recorder, "_open", lambda chrome, origin, run_id, layout: tabs.append(layout) or FakeTab())
     monkeypatch.setattr(recorder, "_soundtrack", lambda _: b"")
     monkeypatch.setattr(recorder, "_record_layout", lambda *_, **__: (made, b"png"))
+    return opened, tabs
 
+
+def test_each_layout_gets_a_browser_of_its_own(browsers):
+    """Two tabs in one browser means one of them is always the background tab,
+    and a backgrounded renderer stops committing frames. Measured on the Space
+    over seven clips: every landscape layout — the tab that was opened first —
+    stalled once or twice on its screenshot, and no vertical one ever did.
+    Chrome's own anti-backgrounding flags did not change it; being the only tab
+    in a browser is what takes the question away."""
+    opened, _ = browsers
     steps = []
     run = recorder.record_run("http://o", "R1", parallel=2,
                               on_progress=lambda stage, *_: steps.append(stage))
@@ -626,6 +632,13 @@ def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
     assert all(chrome.closed for chrome in opened)
     assert set(run.layouts) == set(recorder.SIZES) and run.poster == b"png"
     assert steps[:2] == ["opening", "soundtrack"]
+
+
+def test_a_match_clip_is_rendered_landscape_only(browsers):
+    """Nothing plays a match's clip upright, and every match of a cup renders between the close and the premiere."""
+    opened, tabs = browsers
+    run = recorder.record_run("http://o", "tug-of-war-0001-004", parallel=2)
+    assert (len(opened), tabs, set(run.layouts)) == (1, ["landscape"], {"landscape"})
 
 
 def test_a_match_clip_opens_the_match_on_the_clip_page():
