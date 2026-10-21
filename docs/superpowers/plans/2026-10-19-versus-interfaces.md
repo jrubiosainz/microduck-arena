@@ -538,7 +538,9 @@ before it ends with a `standby` slot that fills to `starts_at`, from the premier
 `{"kind": "standby", "at_ms", "duration_ms", "cup": {"title"}}`. Past its premiere a cup with no
 order yet is "starting soon": standby slots of `LATE_STANDBY_MS` (60 s) carrying `"late": true`,
 whose card gives no time, until the order lands (at least `ORDER_LEAD` ahead, beyond the grid).
-A match segment is served as `{"kind": "replay", …, "run_id": <match id>, "clip", "media": "match"}`.
+A match segment is served as `{"kind": "replay", …, "run_id": <match id>, "clip", "media": "match"}`;
+`clip` is None while its clip is not ready (deleted to be rendered again): the screens hold the
+shutter's panel over it.
 
 Points: `receipts(…, cups: Sequence[Cup] = (), now)`; acts `cup_champion` 250, `cup_final` 150,
 `cup_semi` 100, counted from the final's reveal; `source_id` = the deciding match id.

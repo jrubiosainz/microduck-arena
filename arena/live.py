@@ -122,9 +122,12 @@ def shows(store, now: datetime) -> list[Show]:
             if segment["kind"] == "shutter":
                 slots.append({"kind": "shutter", "at_ms": at, "duration_ms": duration, "next": segment["next"]})
             else:
-                # The order carries each clip's length, not its render: that is read here.
+                # The order carries each clip's length, not its render: that is read here. A clip
+                # deleted to be rendered again has none: its media fail to load, and the screens hold
+                # the shutter's panel over its slot, as over a withdrawn run's.
+                state, clip = store.clip_state(segment["match_id"])
                 slots.append({"kind": "replay", "at_ms": at, "duration_ms": duration, "run_id": segment["match_id"],
-                              "clip": clip_version(store.clip_state(segment["match_id"])[1]), "media": "match"})
+                              "clip": clip_version(clip) if state == "ready" else None, "media": "match"})
         laid.append(Show(premiere, start, slots[-1]["at_ms"] + slots[-1]["duration_ms"], tuple(slots), standby))
     return sorted(laid, key=lambda show: show.premiere_ms)
 

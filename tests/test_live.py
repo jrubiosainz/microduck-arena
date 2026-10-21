@@ -3,6 +3,7 @@ only says which part of it to serve."""
 
 import hashlib
 import json
+import shutil
 from collections import Counter
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -479,6 +480,17 @@ def test_the_cycle_stands_by_for_a_show_then_plays_it_at_its_times(tmp_path):
     assert slots[8] == SHOW.slots[1] and slots[9]["at_ms"] == 10_041_600
     for a, b in pairwise(slots):
         assert b["at_ms"] == a["at_ms"] + a["duration_ms"]
+
+
+def test_a_match_whose_clip_is_rendered_again_is_laid_with_no_render(tmp_path):
+    """Its clip deleted to be rendered again, its slot fails to load on the screens, which hold the shutter's panel
+    over it as over a withdrawn run's: the channel never fails for it."""
+    store, cup = LocalStore(tmp_path), played_cup(4, starts_at=START_ISO)
+    store_cup(store, cup)
+    shutil.rmtree(tmp_path / "clips" / cup.matches[1].match_id)
+    [show] = shows(store, START)
+    assert [slot["clip"] for slot in show.slots if slot["kind"] == "replay"] == \
+        ["20261030T152000Z", None] + ["20261030T152000Z"] * 5
 
 
 def test_a_cup_with_no_running_order_yet_is_a_show_with_no_start(tmp_path):
