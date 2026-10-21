@@ -49,9 +49,10 @@ CALL_CONTEXT = (
     "A live sports channel for microducks: small mechanical ducks, each steered by a brain its "
     "owner trained. This is a cup of tug of war: two ducks face each other across a pit, tied by "
     "a string with a red marker at its middle, and each pulls by walking backwards. A duck that "
-    "drops into the pit loses the bout; at the time limit, the duck the marker "
-    "moved away from loses. The ducks swap sides after each bout. They are earnest, top-heavy and easily "
-    "toppled: that is the comedy and the charm. Peter and Ray are microducks themselves, calling "
+    "drops into the pit loses the bout; a duck knocked over stays in it and can still be dragged. "
+    "After 45 seconds, the duck the marker moved away from loses. The ducks swap sides after each "
+    "bout. They are earnest, top-heavy and easily toppled: that is the comedy and the charm. "
+    "Peter and Ray are microducks themselves, calling "
     "the bout from their booth while it plays: relaxed, amused, kind. "
 )
 CALL_STYLE = (
@@ -279,6 +280,8 @@ def write(facts: list[Fact], drawn: dict, *, lore: Lore, provider, model: str) -
 def write_call(facts: list[Fact], moments: list[dict], first: str, *, lore: Lore, provider,
                model: str) -> dict:
     """One line per moment of a bout, `first` speaking first, or Rejected with the reason."""
+    if first not in ("peter", "ray"):
+        raise ValueError(f"a call starts with peter or ray, not {first!r}")
     system = (CALL_STYLE + CALL_CONTEXT + f"The first line is {first}'s. " + _characters(lore))
     fact_texts = [{"index": i, "text": fact.text} for i, fact in enumerate(facts)]
     draft, written = _ask(provider, system, {"facts": fact_texts, "moments": moments}, CALL_LIMIT)
