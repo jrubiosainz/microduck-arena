@@ -48,6 +48,9 @@ DESK_PLAYERS = {
     "ceremony": "Name the champion duck and its player's handle, and the beaten finalist once.",
     "close": "Name the champion duck and its player's handle.",
 }
+# A rematch or a streak fact names players alone, and the desk then says "Nico won" or "Ann's duck".
+DESK_HANDLES = ("A player is named only by the handle a fact prints, at sign included, never by a bare name; a "
+                "duck only by its name, never as someone's duck.")
 DESK_FACTS = {
     "opening": ("cup#/cup", "cup#/next", "cup#/group/", "cup#/ratings", "cup#/defending"),
     "intro": ("cup#/cup", "cup#/next", "cup#/favourite", "cup#/last", "cup#/rematch", "cup#/streak/", "cup#/defending"),
@@ -119,7 +122,7 @@ def _desk_dialogue(facts: list[Fact], kind: str, recent: list[dict], *, lore: Lo
                    model: str, rng: random.Random) -> tuple[dict, dict]:
     """A direction drawn for one desk segment, and the dialogue written to it."""
     drawn = {**direction(rng, recent, lore.scenes), "turns": rng.choice(DESK_TURNS[kind]),
-             "angle": f"{DESK_ANGLES[kind]} {DESK_NUMBERS}", "player": DESK_PLAYERS[kind],
+             "angle": f"{DESK_ANGLES[kind]} {DESK_NUMBERS}", "player": f"{DESK_PLAYERS[kind]} {DESK_HANDLES}",
              "callback": NO_CALLBACK}
     return drawn, write(facts, drawn, lore=lore, provider=provider, model=model)
 
