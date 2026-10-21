@@ -139,8 +139,5 @@ export const getMatch = (matchId) => json(`/api/matches/${matchId}`);
 export const getBoutTrace = (matchId, k) => frames(`/api/matches/${matchId}/bouts/${k}/trace`);
 export const getBoutSettle = (matchId, k) => frames(`/api/matches/${matchId}/bouts/${k}/settle`);
 
-/** Where a match's clip stands, as a run's does (getClip). */
-export const getMatchClip = (matchId) => json(`/api/matches/${matchId}/clip`);
-
 // Versioned by its render, as a run's clip files are (clipUrl).
 export const matchClipUrl = (matchId, name, version) => `/api/matches/${matchId}/clip/${name}?v=${version}`;

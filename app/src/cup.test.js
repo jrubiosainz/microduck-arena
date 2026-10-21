@@ -6,7 +6,7 @@ const four = ["Tank", "Lean", "Grip", "Sway"].map((name, i) => ({ user: `p${i}`,
 const open = { event, number: 1, open: 1, min_entrants: 4, state: "open", close_at: "2026-10-30T15:00:00Z",
   premiere_at: "2026-10-30T17:00:00Z", starts_at: null, entrants: four };
 const done = (i, a, b) => ({ match_id: `tug-of-war-0001-00${i}`, index: i, round: i < 6 ? "group" : "final", group: i < 6 ? "A" : null,
-  a, b, title: "t", reveal_at: "2026-10-30T17:00:02Z", wins: [2, 0], winner: a, bouts: [], decided_by: "bouts" });
+  a, b, title: "t", wins: [2, 0], winner: a, bouts: [], decided_by: "bouts" });
 const pairs = [[0, 3], [1, 2], [0, 2], [3, 1], [0, 1], [2, 3], [0, 1]];
 const aired = { ...open, open: 2, state: "aired", starts_at: "2026-10-30T17:00:00Z", champion: 0,
   groups: [{ name: "A", table: [0, 1, 2, 3].map((entrant) => ({ entrant, played: 3, won: 3 - entrant, lost: entrant, bouts_for: 6 - 2 * entrant, bouts_against: 2 * entrant })) }],
@@ -57,7 +57,7 @@ describe("the cup page", () => {
 
   it("mid-show a knockout match nobody has reached says so and links nowhere", () => {
     const airing = { ...aired, state: "airing", champion: null, matches: [...aired.matches.slice(0, 6),
-      { match_id: "tug-of-war-0001-006", index: 6, round: "final", group: null, a: null, b: null, title: "Final", reveal_at: "2026-10-30T17:01:12Z" }] };
+      { match_id: "tug-of-war-0001-006", index: 6, round: "final", group: null, a: null, b: null, title: "Final" }] };
     const page = cupPage(airing, Date.parse("2026-10-30T17:01:00Z"));
     expect(page.querySelector(".cup-round").textContent).toContain("To be decided");
     expect(page.querySelectorAll('a[href^="#/m/"]')).toHaveLength(6);

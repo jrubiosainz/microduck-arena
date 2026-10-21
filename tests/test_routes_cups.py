@@ -56,27 +56,27 @@ def test_a_match_and_everything_of_it_is_a_404_until_its_reveal(client, monkeypa
     cup = played_cup(4, starts_at=START_ISO)
     store_cup(app.state.store, cup)
     mid = cup.matches[0].match_id
-    paths = [f"/api/matches/{mid}{tail}" for tail in ("", "/bouts/0/trace", "/bouts/0/settle", "/clip", "/clip/landscape.mp4")]
+    paths = [f"/api/matches/{mid}{tail}" for tail in ("", "/bouts/0/trace", "/bouts/0/settle", "/clip/landscape.mp4")]
 
     def codes(moment):
         at(monkeypatch, moment)
         return [api.get(p).status_code for p in paths]
     # The clip's media come 30 s before it airs, so the live can buffer them; the rest once it has aired.
-    assert codes(AIRS(0) - PREFETCH - timedelta(milliseconds=1)) == [404] * 5
-    assert codes(AIRS(0) - PREFETCH) == [404, 404, 404, 200, 200]
-    assert codes(AIRS(0)) == [404, 404, 404, 200, 200]
-    assert codes(REVEAL(0) - timedelta(milliseconds=1)) == [404, 404, 404, 200, 200]
-    assert codes(REVEAL(0)) == [200] * 5
+    assert codes(AIRS(0) - PREFETCH - timedelta(milliseconds=1)) == [404] * 4
+    assert codes(AIRS(0) - PREFETCH) == [404, 404, 404, 200]
+    assert codes(AIRS(0)) == [404, 404, 404, 200]
+    assert codes(REVEAL(0) - timedelta(milliseconds=1)) == [404, 404, 404, 200]
+    assert codes(REVEAL(0)) == [200] * 4
+    # The match page reads its clip's render off the match, the live off its slot: no route says where a clip stands.
+    assert api.get(f"/api/matches/{mid}/clip").status_code == 404
     body = api.get(paths[0]).json()
     assert (body["a"]["user"], body["b"]["user"], body["winner"], body["wins"], body["round"], body["group"]) == ("p0", "p3", "a", [2, 0], "group", "A")
     assert (body["title"], body["clip"]) == ("Group A · duck 0 vs duck 3", "20261030T152000Z")
     trace = api.get(paths[1])
     assert (trace.headers["x-duck-count"], trace.headers["x-frame-count"]) == ("2", "2")
     assert api.get(f"/api/matches/{mid}/bouts/2/trace").status_code == 404
-    clip = api.get(paths[3])
-    assert clip.json()["layouts"]["landscape"]["url"] == f"/api/matches/{mid}/clip/landscape.mp4?v=20261030T152000Z"
-    assert [r.headers["cache-control"] for r in (api.get("/api/events/tug-of-war/cups"), api.get("/api/events/tug-of-war/cups/1"), api.get(paths[0]), trace, clip)] == ["no-store"] * 5
-    assert api.get(paths[4]).headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert [r.headers["cache-control"] for r in (api.get("/api/events/tug-of-war/cups"), api.get("/api/events/tug-of-war/cups/1"), api.get(paths[0]), trace)] == ["no-store"] * 4
+    assert api.get(paths[3]).headers["cache-control"] == "public, max-age=31536000, immutable"
     assert api.get("/api/matches/nope").status_code == 404 and api.get("/api/matches/tug-of-war-0009-000").status_code == 404
 
 

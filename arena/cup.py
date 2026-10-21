@@ -280,8 +280,7 @@ def cup_view(cup: Cup, now: datetime) -> dict:
 
     Before the start, the field alone. From the start, the groups and their pairs; a knockout pair once the round before
     it is revealed; each result, and its weight in the tables, from its reveal; the champion and the secret from the
-    final's. Only the next reveal is timed: a tug clip grows with each bout, so the whole timetable would tell how every
-    match went.
+    final's. No reveal is timed: a tug clip grows with each bout, so a match's reveal time would tell how it went.
     """
     state = cup_state(cup, now)
     view = {"event_id": cup.event_id, "number": cup.number, "state": state, "close_at": cup.close_at,
@@ -289,9 +288,7 @@ def cup_view(cup: Cup, now: datetime) -> dict:
             "entrants": [entrant.view() for entrant in cup.entrants]}
     if state not in ("airing", "aired"):
         return view
-    reveals = {m.match_id: revealed_at(cup, m.match_id) for m in cup.matches}
-    shown = {mid for mid, at in reveals.items() if at <= now}
-    upcoming = next((m.match_id for m in cup.matches if m.match_id not in shown), None)
+    shown = {m.match_id for m in cup.matches if revealed_at(cup, m.match_id) <= now}
     ratings = [entrant.rating for entrant in cup.entrants]
 
     def paired(match: MatchRecord) -> bool:
@@ -300,16 +297,9 @@ def cup_view(cup: Cup, now: datetime) -> dict:
         first = next(m for m in cup.matches if m.round == match.round)
         return cup.matches[first.index - 1].match_id in shown
 
-    def reveal_at(match_id: str) -> str | None:
-        if match_id not in shown and match_id != upcoming:
-            return None
-        at = reveals[match_id]
-        # Rounded up to the second: a page refetching at its countdown's zero never finds the match still hidden.
-        return iso(at + timedelta(microseconds=-at.microsecond % 1_000_000))
-
     def public(match: MatchRecord) -> dict:
         out = {"match_id": match.match_id, "index": match.index, "round": match.round, "group": match.group,
-               "reveal_at": reveal_at(match.match_id), "a": None, "b": None, "title": match_label(cup, match)}
+               "a": None, "b": None, "title": match_label(cup, match)}
         if paired(match):
             out.update(a=match.a, b=match.b, title=match_title(cup, match))
         if match.match_id in shown:

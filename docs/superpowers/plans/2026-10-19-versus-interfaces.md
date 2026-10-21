@@ -524,7 +524,8 @@ API (Plan C, `arena/web/routes_cups.py`, `now()` read per request, patched by te
 - `GET /api/events/{id}/cups/{number}` → `{"event", "open", "min_entrants", **cup_view(cup, now)}`
 - `GET /api/matches/{match_id}` → the match once revealed (404 before): `{match_id, event, cup, round, group, title, a, b, bouts, wins, winner, decided_by, clip}` (`a`/`b` are `Entrant.view()`, `winner` `"a"`/`"b"`)
 - `GET /api/matches/{match_id}/bouts/{k}/trace`, `…/settle` (float32, `X-Duck-Count: 2`) — 404 before the reveal.
-- `GET /api/matches/{match_id}/clip`, `…/clip/{name}` — 404 before `airs_at − PREFETCH`.
+- `GET /api/matches/{match_id}/clip/{name}` (a clip file) — 404 before `airs_at − PREFETCH`. No route says where a
+  match's clip stands: the match page reads `clip` off the match, the live off its slot.
 
 Live (Plan C): `pool(store, now)` (`now` required: the programme and the commentary stock pass it)
 adds the matches of every cup that has finished airing, until the event's next cup starts; a match
@@ -547,7 +548,7 @@ export function cupHref(eventId, number); export function matchHref(matchId)
 // app/src/api.js
 export function getCups(eventId); export function getCup(eventId, number); export function getMatch(matchId)
 export function getBoutTrace(matchId, k); export function getBoutSettle(matchId, k)
-export function getMatchClip(matchId); export function matchClipUrl(matchId, name, version)
+export function matchClipUrl(matchId, name, version)
 // app/src/bouts.js
 export function boutLane(match, k, traces, settles)   // {tug: "bout", ducks: [west, east]}, each {trace, settle, livery, name} (the entrant's on-air name), a/b placed by bouts[k].a_side
 // app/src/clip/match.js: matchPlan(bouts), boutAt(plan, i), scoreAt(plan, match, i), matchWords(match)

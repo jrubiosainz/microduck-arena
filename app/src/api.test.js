@@ -12,7 +12,6 @@ import {
   getLeaderboard,
   getLive,
   getMatch,
-  getMatchClip,
   getPlayer,
   getStandings,
   getSettle,
@@ -203,12 +202,11 @@ describe("a match", () => {
     expect(matchClipUrl("tug-of-war-0001-000", "landscape.mp4", "v1")).toBe("/api/matches/tug-of-war-0001-000/clip/landscape.mp4?v=v1");
   });
 
-  it("reads a match, its clip and its bouts' settles under the match", async () => {
+  it("reads a match and its bouts' settles under the match", async () => {
     respondWith({ body: {}, bytes: new Float32Array(84).buffer, headers: { "X-Duck-Count": "2" } });
     await getMatch("tug-of-war-0001-000");
-    await getMatchClip("tug-of-war-0001-000");
     await getBoutSettle("tug-of-war-0001-000", 2);
     expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/api/matches/tug-of-war-0001-000",
-      "/api/matches/tug-of-war-0001-000/clip", "/api/matches/tug-of-war-0001-000/bouts/2/settle"]);
+      "/api/matches/tug-of-war-0001-000/bouts/2/settle"]);
   });
 });

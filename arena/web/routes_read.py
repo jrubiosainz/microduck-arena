@@ -7,7 +7,6 @@ web layer and the CLI can never disagree about who is first.
 
 import re
 from collections import defaultdict
-from collections.abc import Callable
 from datetime import UTC, datetime
 
 import numpy as np
@@ -471,12 +470,7 @@ def frames_response(ducks: np.ndarray) -> Response:
 
 @router.get("/runs/{run_id}/clip")
 def run_clip(run_id: str, request: Request) -> JSONResponse:
-    _find_run(request.app.state.store, run_id)
-    return clip_body(request, run_id, clip_url)
-
-
-def clip_body(request: Request, clip_id: str, url: Callable[[str, str, dict], str]) -> JSONResponse:
-    """Where a clip stands, and its files (at `url(clip_id, name, written)`) when it is ready. Polled by
+    """Where this run's clip stands, and its files when it is ready. Polled by
     the publication page while a render is owed, so never cached.
 
     The store answers only for what it has written — a clip, or the reason
@@ -484,13 +478,15 @@ def clip_body(request: Request, clip_id: str, url: Callable[[str, str, dict], st
     run is waiting in a line or being photographed right now, and how far in.
     A backfilled run marks nothing pending at all, so the store alone would
     call its clip `none` all the way through the making of it."""
-    state, written = request.app.state.store.clip_state(clip_id)
+    store = request.app.state.store
+    _find_run(store, run_id)
+    state, written = store.clip_state(run_id)
     if state == "ready":
         body = {
             "state": state,
-            "poster": url(clip_id, written["poster"], written),
+            "poster": clip_url(run_id, written["poster"], written),
             "layouts": {
-                name: {"url": url(clip_id, layout["file"], written), "width": layout["width"],
+                name: {"url": clip_url(run_id, layout["file"], written), "width": layout["width"],
                        "height": layout["height"], "seconds": layout["seconds"]}
                 for name, layout in written["layouts"].items()
             },
@@ -498,7 +494,7 @@ def clip_body(request: Request, clip_id: str, url: Callable[[str, str, dict], st
     elif state == "failed":
         body = {"state": state, "reason": written.get("reason"),
                 "failed_at": written.get("failed_at")}
-    elif (standing := request.app.state.clips.progress(clip_id)) is None:
+    elif (standing := request.app.state.clips.progress(run_id)) is None:
         # Nothing written and no worker holding it. A pending marker that
         # outlived the process which owed it is still owed — the next drain
         # takes it — so waiting is honest there; nothing at all is not.

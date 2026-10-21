@@ -27,7 +27,7 @@ from ..cupworker import entrants_at, load_cup
 from ..manifest import Manifest, ManifestError, load_event
 from ..store import clip_version
 from ..trace import decode, decode_settle
-from .routes_read import clip_body, clip_file_response, event_summary, frames_response
+from .routes_read import clip_file_response, event_summary, frames_response
 
 router = APIRouter(prefix="/api")
 NO_STORE = {"Cache-Control": "no-store"}
@@ -135,16 +135,6 @@ def match_trace(match_id: str, k: int, request: Request) -> Response:
 @router.get("/matches/{match_id}/bouts/{k}/settle")
 def match_settle(match_id: str, k: int, request: Request) -> Response:
     return frames_response(decode_settle(_bout_file(request, match_id, k)))
-
-
-def match_clip_url(match_id: str, name: str, manifest: dict) -> str:
-    return f"/api/matches/{match_id}/clip/{name}?v={clip_version(manifest)}"
-
-
-@router.get("/matches/{match_id}/clip")
-def match_clip(match_id: str, request: Request) -> JSONResponse:
-    _public_match(request, match_id, media=True)
-    return clip_body(request, match_id, match_clip_url)
 
 
 @router.get("/matches/{match_id}/clip/{name}")

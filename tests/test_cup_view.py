@@ -83,13 +83,11 @@ def test_a_knockout_pair_waits_for_the_round_before_it():
     assert cup_view(cup, REVEAL(7))["matches"][8]["a"] is not None
 
 
-def test_only_the_next_reveal_is_timed():
-    """A tug clip grows with each bout: the whole timetable would tell at the start how every match went."""
+def test_a_match_to_come_tells_no_time():
+    """A tug clip grows with each bout: a match's reveal time would tell how it went."""
     cup = played_cup(4, starts_at=START_ISO)
-    assert [m["reveal_at"] for m in cup_view(cup, START)["matches"]] == ["2026-10-30T17:00:12Z"] + [None] * 6
-    # 11.6 s, 23.2 s and 34.8 s, rounded up to the second
-    assert [m["reveal_at"] for m in cup_view(cup, REVEAL(1))["matches"]] == \
-        ["2026-10-30T17:00:12Z", "2026-10-30T17:00:24Z", "2026-10-30T17:00:35Z", None, None, None, None]
+    assert [set(m) for m in cup_view(cup, START)["matches"]] == \
+        [{"match_id", "index", "round", "group", "a", "b", "title"}] * 7
 
 
 def test_a_skipped_cup_says_so():
