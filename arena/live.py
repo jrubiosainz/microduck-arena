@@ -125,8 +125,9 @@ def cycle(entries: list[Entry], k: int) -> list[Entry]:
     in the rest: dated by their reveal, they would otherwise be the newest and
     open every cycle until the next cup, with no booth, the final before its
     semi-finals."""
-    newest = sorted((e for e in entries if e.title is None), key=lambda e: (e.submitted_at, e.run_id), reverse=True)
-    head, rest = newest[:HEAD], newest[HEAD:] + [e for e in entries if e.title is not None]
+    newest = sorted(entries, key=lambda e: (e.submitted_at, e.run_id), reverse=True)
+    runs = [e for e in newest if e.title is None]
+    head, rest = runs[:HEAD], runs[HEAD:] + [e for e in newest if e.title is not None]
     random.Random(k).shuffle(rest)
     return head + rest
 
