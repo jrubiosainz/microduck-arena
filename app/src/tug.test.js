@@ -1,12 +1,12 @@
 import { PerspectiveCamera, Raycaster, Vector3 } from "three";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OVERRUN } from "./course.js";
 import { PALETTE, colour } from "./palette.js";
 import { buildGym } from "./gym.js";
 import { TRACE_WIDTH } from "./replay.js";
 import {
-  BOUT_WORDS, SIDES, buildString, buildTugCourse, cutPit, disposeTugCourse, entrySide, floorUnder, ratingLane, stringEnd, toThree, tugDistance,
-  tugDucks, tugEnds, tugPose, tugSpan,
+  BOUT_WORDS, RING_RISE, SIDES, buildString, buildTugCourse, cutPit, disposeTugCourse, entrySide, floorUnder, openRing, ratingLane, stringEnd,
+  toThree, tugDistance, tugDucks, tugEnds, tugPose, tugSpan,
 } from "./tug.js";
 
 const TUG = {
@@ -54,16 +54,46 @@ describe("the tug's arithmetic, as the server's", () => {
 });
 
 describe("the tug drawn", () => {
-  it("cuts the lane at the pit and lays the pit's floor deep", () => {
+  // jsdom draws nothing: the skirt's print and the hall's signs paint into a context that takes it all.
+  beforeEach(() => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(new Proxy({}, { get: (ctx, key) => ctx[key] ?? (() => {}) }));
+  });
+  const down = (course, x, z) => {
+    course.updateMatrixWorld(true);
+    return new Raycaster(new Vector3(x, 1, z), new Vector3(0, -1, 0), 0, 2).intersectObjects(course.children.filter((node) => node.isMesh));
+  };
+
+  it("stands the ducks on the ring's canvas, open over the pit between the walls, the pit's floor deep under it", () => {
     const course = buildTugCourse(TUG);
-    const west = course.getObjectByName("platform_west"), box = west.geometry.parameters;
-    expect(west.position.y + box.height / 2).toBeCloseTo(0, 9);
-    expect(west.position.x + box.width / 2).toBeCloseTo(-0.15, 9);
-    expect(west.position.x - box.width / 2).toBeCloseTo(-(2 + OVERRUN), 9);
+    const floor = (x, z) => down(course, x, z).filter((hit) => ["ring", "ground"].includes(hit.object.name))[0];
+    const at = (name, y) => [name, expect.closeTo(y, 6)];
+    expect([floor(-0.5, 0), floor(1.9, 0.39), floor(0, 0.45)].map((hit) => [hit.object.name, hit.point.y])).toEqual([at("ring", 0), at("ring", 0), at("ring", 0)]);
+    expect([floor(0, 0), floor(0.14, -0.39)].map((hit) => [hit.object.name, hit.point.y])).toEqual([at("ground", -0.3), at("ground", -0.3)]);
     const ground = course.getObjectByName("ground");
-    expect([ground.position.y, ground.geometry.parameters.width]).toEqual([-0.3, 4 + OVERRUN * 2]);
-    expect(course.getObjectByName("wall_left").position.toArray()).toEqual(toThree([0, 0.425, 0.075]));
+    expect(ground.geometry.parameters.width).toBe(4 + OVERRUN * 2);
     expect(course.getObjectByName("centre_line").position.x).toBe(0);
+    const skirt = course.getObjectByName("skirt");
+    expect(skirt.position.y + skirt.geometry.parameters.height / 2).toBeCloseTo(0, 9);
+    expect(skirt.geometry.parameters.height).toBe(RING_RISE);
+  });
+  it("draws the walls as three ropes each, at their places, the top one at their height", () => {
+    const sides = buildTugCourse(TUG).children.filter((node) => node.name === "ropes");
+    expect(sides.map((side) => side.position.z)).toEqual([-0.425, 0.425]);
+    for (const side of sides) {
+      expect(side.children.map((rope) => rope.position.y)).toEqual([0.05, 0.1, 0.15].map((y) => expect.closeTo(y, 9)));
+      expect(side.children.every((rope) => rope.geometry.parameters.height === 4)).toBe(true);
+    }
+  });
+  it("leaves out the ropes between a low camera and the ducks, and only those", () => {
+    const course = buildTugCourse(TUG);
+    const sides = () => course.children.filter((node) => node.name === "ropes").map((side) => side.visible);
+    const camera = new PerspectiveCamera();
+    camera.position.set(-0.4, 0.4, 1.6); // the chase: the near ropes would cross the ducks' legs
+    openRing(course, camera);
+    expect(sides()).toEqual([true, false]);
+    camera.position.set(-0.4, 1.6, 2.4); // high and wide: they run under the ducks' feet
+    openRing(course, camera);
+    expect(sides()).toEqual([true, true]);
   });
   it("the floor under the feet is the pit's own over the pit, the platforms' either side of it", () => {
     expect([-0.5, -0.149, 0, 0.149, 0.151].map((x) => floorUnder(TUG, x))).toEqual([0, -0.3, -0.3, -0.3, 0]);
@@ -77,23 +107,26 @@ describe("the tug drawn", () => {
     expect(new Vector3(0, 1, 0).applyQuaternion(rope.quaternion).x).toBeCloseTo(1, 9);
     expect(string.group.getObjectByName("marker").position.toArray()).toEqual(rope.position.toArray());
   });
-  it("makes the string a 4 mm rope in ink, dark against the cyan rail and the stands behind it", () => {
+  it("makes the string a 4 mm rope in ink, dark against the ring's canvas and the stands behind it", () => {
     const rope = buildString().group.getObjectByName("string");
     expect(rope.geometry.parameters.radiusTop * 2).toBeCloseTo(0.004, 9);
     expect(rope.material.color.equals(colour(PALETTE.ink))).toBe(true);
   });
-  it("frees a tug's course with the string on it: every geometry and material, no texture", () => {
+  it("frees a tug's course with the string on it: every geometry, material and the skirt's print", () => {
     const course = buildTugCourse(TUG);
     course.add(buildString().group);
     const owned = new Set();
-    course.traverse((node) => node.isMesh && [node.geometry, node.material].forEach((one) => owned.add(one)));
+    course.traverse((node) => {
+      if (!node.isMesh) return;
+      owned.add(node.geometry);
+      for (const material of [node.material].flat()) [material, material.map].filter(Boolean).forEach((one) => owned.add(one));
+    });
     const freed = new Set();
     owned.forEach((one) => one.addEventListener("dispose", () => freed.add(one)));
     disposeTugCourse(course);
     expect([...owned].filter((one) => !freed.has(one))).toEqual([]);
   });
   it("opens the hall's floor over the pit: nothing of the hall bridges it, its boards laid as before", () => {
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(new Proxy({}, { get: (ctx, key) => ctx[key] ?? (() => {}) }));
     const image = { naturalWidth: 1, naturalHeight: 1 };
     const gym = buildGym(4, -3, 3.8, { arena: image, pollen: image, huggingFace: image }, TUG.width_m);
     gym.group.position.x = -2; // built from 0 to the length, centred on the pit as the viewer moves it

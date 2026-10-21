@@ -124,9 +124,8 @@ export function seats(length, inner, side) {
   );
 }
 
-/** The cyan rail along one edge of the track, `edge` from its axis, on its nine paper posts; none
- * where it would stand over a `pit` that wide across the track's middle (a tug's). */
-export function buildRail(length, edge, side, pit = 0) {
+/** The cyan rail along one edge of the track, `edge` from its axis, on its nine paper posts. */
+export function buildRail(length, edge, side) {
   const rail = new Group();
   rail.name = "rail";
   const z = side * edge;
@@ -134,7 +133,6 @@ export function buildRail(length, edge, side, pit = 0) {
   bar.position.set(length / 2, RAIL_HEIGHT, z);
   rail.add(bar);
   for (const x of along(POSTS, -OVERRUN + 0.1, length + OVERRUN - 0.1)) {
-    if (pit && Math.abs(x - length / 2) < (pit + POST[0]) / 2) continue;
     const post = new Mesh(new BoxGeometry(POST[0], POST[1], POST[0]), flat(PALETTE.post));
     post.position.set(x, POST[1] / 2, z);
     rail.add(post);
@@ -355,11 +353,11 @@ function fused(kinematics, geometries, shell, frame = SIT) {
  * drew — so a wider arena pushes it out, without a second
  * copy of either sum. `clearance` is how far out on +z, the camera's side, the
  * near stand may start; its rail and cones keep their places in front of it.
- * The stadium's own distance is kept wherever it already clears. A `pit` across
- * the track's middle keeps the rails' posts off it. Returns the crowd, for the
- * render loop to pose and the next re-race to dispose.
+ * The stadium's own distance is kept wherever it already clears. A `roped`
+ * course (a tug's ring) is its own barrier: no rail, no cones. Returns the
+ * crowd, for the render loop to pose and the next re-race to dispose.
  */
-export function attachStadium(course, { kinematics, geometries }, clearance, pit = 0) {
+export function attachStadium(course, { kinematics, geometries }, clearance, roped = false) {
   const { width, height: span } = course.getObjectByName("ground").geometry.parameters;
   const length = width - OVERRUN * 2;
   const edge = { [-1]: span / 2, [1]: Math.max(span / 2, clearance - GAP) };
@@ -370,7 +368,7 @@ export function attachStadium(course, { kinematics, geometries }, clearance, pit
   course.add(stadium);
   const placed = [];
   for (const side of [-1, 1]) {
-    stadium.add(buildRail(length, edge[side], side, pit), buildCones(length, edge[side], side));
+    if (!roped) stadium.add(buildRail(length, edge[side], side), buildCones(length, edge[side], side));
     const inner = edge[side] + (side === -1 ? JURY_APRON : GAP);
     stadium.add(buildStand(length, inner, side));
     placed.push(...seats(length, inner, side));

@@ -53,7 +53,7 @@ import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
 import {
-  buildString, buildTugCourse, cutPit, disposeTugCourse, floorUnder, tugDucks, tugEnds, tugPose, tugSpan,
+  RING_RISE, buildString, buildTugCourse, cutPit, disposeTugCourse, floorUnder, openRing, tugDucks, tugEnds, tugPose, tugSpan,
 } from "./tug.js";
 import { SWEEP_TURN, sweepAt } from "./sweep.js";
 
@@ -505,7 +505,7 @@ export async function createViewer(
       if (roller) {
         gym = buildRollerHall(courseLength, height, branding, spectators);
       } else {
-        audience = attachStadium(course, spectators, clearance, tugged ? event.pit_m : 0);
+        audience = attachStadium(course, spectators, clearance, tugged);
         course.updateMatrixWorld(true);
         const stadiumBounds = new Box3().setFromObject(course);
         gym = buildGym(courseLength, stadiumBounds.min.z, stadiumBounds.max.z, branding, height);
@@ -514,8 +514,9 @@ export async function createViewer(
       judges = buildJudges(reachy, courseLength, Math.max(1, laneCount) * spacing / 2, gym.sponsorMaps, roller ? 3 : 4);
       scene.add(judges.group);
       if (tugged) {
-        // The stadium, the hall and the jury are built for a course from 0 to its length.
-        for (const set of [audience, gym, judges]) set.group.position.x -= event.length_m / 2;
+        // The stadium, the hall and the jury are built for a course from 0 to its length, on the
+        // floor the ducks stand on: the ring's canvas stands RING_RISE over theirs.
+        for (const set of [audience, gym, judges]) set.group.position.add(new Vector3(-event.length_m / 2, -RING_RISE, 0));
         cutPit(gym.group.getObjectByName("parquet"), event);
         if (entries.length) {
           tug = { event, rope: buildString() };
@@ -702,6 +703,7 @@ export async function createViewer(
       else camera.lookAt(_target);
     }
     controls?.update();
+    if (tugCourse) openRing(tugCourse, camera);
     gym?.renderScreens?.(renderer, scene, seconds, lead);
     // Racers, judges and spectators move: their shadows are redrawn for every
     // picture, once, here — a roller hall's screen feeds reuse the last one.
