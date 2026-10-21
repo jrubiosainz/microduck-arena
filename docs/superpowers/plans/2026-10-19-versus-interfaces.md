@@ -546,7 +546,7 @@ shutter's panel over it.
 Points: `receipts(…, cups: Sequence[Cup] = (), now)`; acts `cup_champion` 250, `cup_final` 150,
 `cup_semi` 100, counted from the final's reveal; `source_id` = the deciding match id.
 `GET /api/players/{user}` adds `cups: [{event_id, event_title, number, starts_at, reached}]`
-(`reached`: `"champion"`, `"final"`, a round name, or `"group"`), each cup from its final's reveal.
+(`reached`: `"champion"`, `"final"`, a round name, or `"group"`), each cup from its final's reveal, newest first.
 
 ```js
 // app/src/router.js: #/c/<event>/<number> -> {view: "cup", eventId, number}; #/m/<matchId> -> {view: "match", matchId}

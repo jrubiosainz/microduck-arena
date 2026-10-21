@@ -236,7 +236,7 @@ def player_standings(request: Request) -> dict:
 
 @router.get("/players/{user}")
 def player_page(user: str, request: Request) -> dict:
-    """A player's total, rank, and every publication they made, newest first."""
+    """A player's total, rank, every publication they made and every cup they played, newest first."""
     store = request.app.state.store
     runs, withdrawn = _all_runs(store), _withdrawn(store)
     mine = sorted((r for r in runs if r.user == user), key=lambda r: r.submitted_at, reverse=True)
@@ -297,7 +297,7 @@ def player_page(user: str, request: Request) -> dict:
         "cups": [
             {"event_id": cup.event_id, "event_title": events[cup.event_id].title, "number": cup.number,
              "starts_at": cup.order["starts_at"], "reached": got}
-            for cup in cups if revealed_final(cup, now)
+            for cup in sorted(cups, key=lambda cup: cup.premiere_at, reverse=True) if revealed_final(cup, now)
             for entrant, got in zip(cup.entrants, reached(cup)) if entrant.user == user
         ],
     }

@@ -647,6 +647,14 @@ def test_a_player_page_and_the_ladder_count_the_cups(client):
     assert (ladder["p1"], ladder["p2"]) == (150, 100)
 
 
+def test_a_player_page_lists_its_cups_newest_first(client):
+    api, app = client
+    store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
+    store_cup(app.state.store, played_cup(6, number=2, starts_at="2026-01-09T17:00:00Z"))
+    record_run(app, run_id="R0", event_id="tug-of-war", user="p0")
+    assert [cup["number"] for cup in api.get("/api/players/p0").json()["cups"]] == [2, 1]
+
+
 def test_the_chip_counts_cup_points(tmp_path):
     app = create_app(ArenaConfig.from_env(store_dir=tmp_path, dev_user="p1"))
     store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
