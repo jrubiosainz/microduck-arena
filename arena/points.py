@@ -11,10 +11,12 @@ filter, so a run either counts everywhere or nowhere.
 """
 
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
 from . import votes
+from .cup import Cup, MatchRecord, iso, reached, revealed_at
 from .constants import RUNNER_VERSION
 from .index import by_user, leaderboard, sort_key
 from .manifest import Vote
@@ -24,6 +26,7 @@ from .store import RunRecord
 # earned while you hold the place, not at a close.
 SCHEDULE = {
     "first_event": 100, "run": 10, "own_best": 25, "podium": (250, 150, 100), "ballot": 2,
+    "cup_champion": 250, "cup_final": 150, "cup_semi": 100,
 }
 RUNS_PER_DAY = 3
 
@@ -132,9 +135,10 @@ def receipts(
     voted: dict[str, Vote] | None = None,
     now: datetime | None = None,
     runner_version: int = RUNNER_VERSION,
+    cups: Sequence[Cup] = (),
 ) -> list[Receipt]:
-    if ballots and now is None:
-        raise ValueError("a sliding window needs a `now`; this module never reads a clock")
+    if (ballots or cups) and now is None:
+        raise ValueError("a sliding window and a cup's reveal need a `now`; this module never reads a clock")
     voted = voted or {}
     runs = counting(records, withdrawn, runner_version)
     out: list[Receipt] = []
@@ -196,6 +200,33 @@ def receipts(
         finishers = _podium_finishers(rows)
         for row, points in zip(finishers, SCHEDULE["podium"]):
             out.append(_receipt(row.record, "podium", points))
+    for cup in cups:
+        out.extend(_cup_receipts(cup, now))
+    return out
+
+
+def revealed_final(cup: Cup, now: datetime) -> MatchRecord | None:
+    """The cup's final once its clip has finished airing, else None."""
+    final = next((m for m in cup.matches if m.round == "final"), None)
+    revealed = None if final is None else revealed_at(cup, final.match_id)
+    return final if revealed is not None and revealed <= now else None
+
+
+def _cup_receipts(cup: Cup, now: datetime) -> list[Receipt]:
+    """The podium of a cup, paid from the instant its final is revealed: no point before the result is public.
+
+    A frozen cup pays even an entrant who has since withdrawn."""
+    final = revealed_final(cup, now)
+    if final is None:
+        return []
+    revealed = revealed_at(cup, final.match_id)
+    semis = {i: m.match_id for m in cup.matches if m.round == "semi-final" for i in (m.a, m.b)}
+    sources = {"champion": ("cup_champion", final.match_id), "final": ("cup_final", final.match_id)}
+    out = []
+    for i, got in enumerate(reached(cup)):
+        act, source = sources.get(got) or (("cup_semi", semis[i]) if got == "semi-final" else (None, None))
+        if act:
+            out.append(Receipt(cup.entrants[i].user, act, SCHEDULE[act], cup.event_id, source, iso(revealed)))
     return out
 
 

@@ -26,6 +26,8 @@ from arena.commentary.generator import (
 from arena.commentary.lore import load
 from arena.store import LocalStore
 from tests.test_commentary_context import run
+from tests.test_cupworker import played_cup, store_cup
+from tests.test_store import make_record
 
 LORE = load()
 PLAN = {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []}
@@ -190,3 +192,12 @@ def test_compose_raises_rejected_and_find_run_raises_lookup(tmp_path):
             rng=random.Random(1))
     with pytest.raises(LookupError):
         find_run(store, "NOPE")
+
+
+def test_a_season_counts_the_cups_aired_before_the_run(tmp_path):
+    store = LocalStore(tmp_path)
+    store_cup(store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
+    mine = make_record(run_id="R9", event_id="tug-of-war", user="p1", submitted_at="2026-02-01T09:00:00Z")
+    store.append(mine, b"trace")
+    facts = gather(store, mine, LORE, BroadcastBook(tmp_path / "book"), random.Random(0), callback=False)
+    assert "@p1 has 510 points this season" in next(f.text for f in facts if f.ref == "notable#/profile")

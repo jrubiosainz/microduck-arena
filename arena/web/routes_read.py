@@ -16,10 +16,12 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 
 from .. import votes
 from ..course import pit_boxes, string_offset, tug_walls, wall_boxes
+from ..cup import reached
+from ..cupworker import all_cups
 from ..evaluate import seed_row
 from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
-from ..points import boards_by_user, receipts, standings
+from ..points import boards_by_user, receipts, revealed_final, standings
 from ..store import CLIP_MEDIA, RunRecord, clip_version
 from ..timeline import EDGE_MARGIN_M, MIN_SPACING_M
 from ..trace import decode, decode_settle
@@ -227,6 +229,7 @@ def player_standings(request: Request) -> dict:
             ballots=_ballots(request, rules, now),
             voted=rules,
             now=now,
+            cups=all_cups(store),
         )
     )
     return {"rows": [{"rank": c.rank, "user": c.user, "points": c.points} for c in cards]}
@@ -242,8 +245,9 @@ def player_page(user: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail=f"{user!r} has not published yet")
     rules, now = _voted(), datetime.now(UTC)
     ballots = _ballots(request, rules, now)
+    cups = all_cups(store)
     card = next(
-        (c for c in standings(receipts(runs, withdrawn, ballots, rules, now)) if c.user == user),
+        (c for c in standings(receipts(runs, withdrawn, ballots, rules, now, cups=cups)) if c.user == user),
         None,
     )
     events = {m.id: m for m in all_events()}
@@ -291,6 +295,12 @@ def player_page(user: str, request: Request) -> dict:
         "points": card.points if card else 0,
         "rank": card.rank if card else None,
         "publications": publications,
+        "cups": [
+            {"event_id": cup.event_id, "event_title": events[cup.event_id].title, "number": cup.number,
+             "starts_at": cup.order["starts_at"], "reached": got}
+            for cup in cups if revealed_final(cup, now)
+            for entrant, got in zip(cup.entrants, reached(cup)) if entrant.user == user
+        ],
     }
 
 
@@ -356,7 +366,7 @@ def run_detail(run_id: str, request: Request) -> dict:
         # Podium receipts are HELD, so this list can change between two reads.
         "receipts": [
             {"act": r.act, "points": r.points}
-            for r in receipts(runs, withdrawn, _ballots(request, rules, now), rules, now)
+            for r in receipts(runs, withdrawn, _ballots(request, rules, now), rules, now, cups=all_cups(store))
             if r.source_id == record.run_id
         ],
         "seen": record.run_id in store.seen(),

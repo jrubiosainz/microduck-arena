@@ -8,6 +8,8 @@ together for one run, at the moment the reserve needs it.
 
 from huggingface_hub import get_token
 
+from ..cup import parse_iso
+from ..cupworker import all_cups
 from ..manifest import all_events
 from ..points import counting, receipts
 from ..store import RunRecord
@@ -78,7 +80,8 @@ def gather(store, record: RunRecord, lore: Lore, book, rng, callback: bool) -> l
     all_runs = [r for m in all_events() for r in store.runs(m.id)]
     s = situation(record, all_runs, withdrawn, events)
     voted = {m.id: m.vote for m in events.values() if m.vote is not None}
-    earned = receipts(counting(list(s.runs), frozenset()), frozenset(), voted=voted)
+    earned = receipts(counting(list(s.runs), frozenset()), frozenset(), voted=voted,
+                      cups=all_cups(store), now=parse_iso(record.submitted_at))
     facts = list(result_facts(record, s.manifest, s.on_event(), earned))
     facts += pick(notable_facts(s)) + profiles(s, earned)
     used = used_memories(book)

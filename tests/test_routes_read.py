@@ -3,10 +3,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from arena.evaluate import SeedResult
+from arena.manifest import load_event
 from arena.timeline import EDGE_MARGIN_M, MIN_SPACING_M
 from arena.trace import encode
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
+from tests.test_cupworker import played_cup, store_cup
 from tests.test_store import ALONE, WALKER, make_record
 
 
@@ -626,3 +628,19 @@ def test_a_run_detail_carries_its_place_its_receipts_and_its_event(client):
     assert sum(r["points"] for r in body["receipts"]) == 260
     # Dropped: it cost a full trace decode, and the page loads the trace anyway.
     assert "frames" not in body
+
+
+def test_a_player_page_and_the_ladder_count_the_cups(client):
+    api, app = client
+    store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
+    record_run(app, run_id="R0", event_id="tug-of-war", user="p0")
+    assert api.get("/api/players/p0").json()["cups"] == [{"event_id": "tug-of-war", "event_title": load_event("tug-of-war").title,
+        "number": 1, "starts_at": "2026-01-02T17:00:00Z", "reached": "champion"}]
+    ladder = {row["user"]: row["points"] for row in api.get("/api/standings").json()["rows"]}
+    assert (ladder["p1"], ladder["p2"]) == (150, 100)
+
+
+def test_the_chip_counts_cup_points(tmp_path):
+    app = create_app(ArenaConfig.from_env(store_dir=tmp_path, dev_user="p1"))
+    store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
+    assert TestClient(app).get("/api/me").json()["points"] == 150
