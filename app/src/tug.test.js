@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PALETTE, colour } from "./palette.js";
 import { TRACE_WIDTH } from "./replay.js";
 import {
-  BOUT_WORDS, SIDES, buildString, entrySide, floorUnder, ratingLane, stringEnd, toThree, tugDistance, tugDucks, tugEnds, tugPose, tugSpan,
+  BOUT_WORDS, SIDES, buildString, entrySide, ratingLane, stringEnd, toThree, tugDistance, tugDucks, tugEnds, tugPose, tugSpan,
 } from "./tug.js";
 
 const TUG = {
@@ -51,9 +51,6 @@ describe("the tug's arithmetic, as the server's", () => {
 });
 
 describe("the tug drawn", () => {
-  it("the floor under the feet is the pit's own over the pit, the platforms' either side of it", () => {
-    expect([-0.5, -0.149, 0, 0.149, 0.151].map((x) => floorUnder(TUG, x))).toEqual([0, -0.3, -0.3, -0.3, 0]);
-  });
   it("stretches the string between its ends and hangs the marker in the middle", () => {
     const string = buildString();
     string.update([-0.5, 0, 0.15], [0.5, 0, 0.15]);

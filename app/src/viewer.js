@@ -11,10 +11,6 @@
 import {
   ACESFilmicToneMapping,
   Box3,
-  CanvasTexture,
-  Mesh,
-  MeshBasicMaterial,
-  PlaneGeometry,
   HemisphereLight,
   Color,
   DirectionalLight,
@@ -52,7 +48,7 @@ import { buildRollerHall } from "./roller-hall.js";
 import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
-import { buildString, floorUnder, tugDucks, tugEnds, tugPose, tugSpan } from "./tug.js";
+import { buildString, tugDucks, tugEnds, tugPose, tugSpan } from "./tug.js";
 import { buildTugVenue } from "./tug-venue.js";
 import { SWEEP_TURN, sweepAt } from "./sweep.js";
 
@@ -141,13 +137,12 @@ export function stageCamera(lanes, layout, lag) {
     aspect, fov, layout.depth, layout.width, placesAt);
 }
 
-// Project the midpoint of the feet vertically onto the course, or onto the
-// `floor` under them when it lies lower (a tug's pit). Parenting the ring to
-// the course also aligns its plane with the ramp.
-export function placeMarker(marker, ground, feet, slopeDeg, floor = 0) {
+// Project the midpoint of the feet vertically onto the course. Parenting the
+// ring to the course also aligns its plane with the ramp.
+export function placeMarker(marker, ground, feet, slopeDeg) {
   if (marker.parent !== ground) ground.add(marker);
   const angle = slopeDeg * Math.PI / 180;
-  marker.position.set((feet.x + 0.004 * Math.sin(angle)) / Math.cos(angle), floor + 0.004, feet.z);
+  marker.position.set((feet.x + 0.004 * Math.sin(angle)) / Math.cos(angle), 0.004, feet.z);
 }
 
 const leftFoot = new Vector3();
@@ -326,22 +321,6 @@ export async function createViewer(
   const environment = pmrem.fromScene(room, 0.02);
   room.dispose();
   pmrem.dispose();
-
-  // A shared contact shadow grounds racers without another scene render.
-  const shadowCanvas = document.createElement("canvas");
-  shadowCanvas.width = shadowCanvas.height = 64;
-  const shadowContext = shadowCanvas.getContext("2d");
-  const gradient = shadowContext.createRadialGradient(32, 32, 3, 32, 32, 32);
-  gradient.addColorStop(0, "rgba(0,0,0,0.3)");
-  gradient.addColorStop(0.45, "rgba(0,0,0,0.16)");
-  gradient.addColorStop(1, "rgba(0,0,0,0)");
-  shadowContext.fillStyle = gradient;
-  shadowContext.fillRect(0, 0, 64, 64);
-  const shadowMap = new CanvasTexture(shadowCanvas);
-  const shadowMaterial = new MeshBasicMaterial({
-    map: shadowMap, transparent: true, depthWrite: false, toneMapped: false,
-  });
-  const shadowGeometry = new PlaneGeometry(0.26, 0.18);
 
   const scene = new Scene();
   scene.environment = environment.texture;
@@ -577,22 +556,15 @@ export async function createViewer(
       const jaw = mouth ? jawPivot(rig) : null;
       scene.add(rig.placer);
 
-      // The follow-spot, on the course so it climbs a slope with it (placeMarker). On the stage and
-      // on a tug, a contact shadow alone: no ring.
-      const shadowed = talent || tugged;
-      const marker = shadowed ? new Mesh(shadowGeometry, shadowMaterial) : buildMarker(tier, entry.colour ?? null);
-      if (shadowed) marker.rotation.x = -Math.PI / 2;
-      else {
-        const shadow = new Mesh(shadowGeometry, shadowMaterial);
-        shadow.position.z = -0.001; // Below the ring, above the course, including slopes.
-        marker.add(shadow);
-      }
+      // A race's lane ring, on the course so it climbs a slope with it (placeMarker); none on the
+      // stage or a tug. Every duck's own shadow grounds it: each scene's lights cast them.
+      const marker = talent || tugged ? null : buildMarker(tier, entry.colour ?? null);
 
-      // The duck's name, hung over its head in its lane's colour: there is
-      // no legend over the picture, so the name rides the duck.
+      // The duck's name, hung over its head in its lane's colour (white where there is no lane):
+      // there is no legend over the picture, so the name rides the duck.
       let plate = null;
       if (entry.name) {
-        plate = nameplate(entry.name, `#${marker.material.color.getHexString()}`, "#08080c");
+        plate = nameplate(entry.name, marker ? `#${marker.material.color.getHexString()}` : "#ffffff", "#08080c");
         plate.sprite.scale.set(PLATE_HEIGHT * plate.ratio, PLATE_HEIGHT, 1);
         scene.add(plate.sprite);
       }
@@ -658,7 +630,7 @@ export async function createViewer(
       // Follow both feet, including sideways drift and the lane offset.
       if (lane.marker) {
         feetPosition(lane.rig, _feet);
-        placeMarker(lane.marker, course ?? scene, _feet, slopeDeg, tug ? floorUnder(tug.event, _feet.x) : 0);
+        placeMarker(lane.marker, course ?? scene, _feet, slopeDeg);
       }
       if (lane.plate) {
         lane.rig.bodies.get("trunk_base").getWorldPosition(_trunk);
@@ -768,9 +740,6 @@ export async function createViewer(
       clearScene();
       environment.dispose();
       key.shadow.dispose();
-      shadowMap.dispose();
-      shadowMaterial.dispose();
-      shadowGeometry.dispose();
       renderer.dispose();
     },
   };
