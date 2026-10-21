@@ -38,6 +38,9 @@ DESK_ANGLES = {
                 "and look back on their cup in one line.",
     "close": "The show is ending: name the champion once more and say when the next cup premieres.",
 }
+# Left to itself the desk turns "favourite by 41.1 cm" into "over forty centimetres" or "nearly half a metre".
+DESK_NUMBERS = ("Say a rating or a gap exactly as a fact prints it, its decimal and cm included: never rounded, "
+                "never in metres, never 'nearly' or 'over' a number.")
 DESK_PLAYERS = {
     "opening": "Name ducks by their names as the facts print them, the favourites first; a player by handle at most once.",
     "intro": "Name both ducks of the next match by their names as printed, and each one's player by handle once.",
@@ -116,7 +119,8 @@ def _desk_dialogue(facts: list[Fact], kind: str, recent: list[dict], *, lore: Lo
                    model: str, rng: random.Random) -> tuple[dict, dict]:
     """A direction drawn for one desk segment, and the dialogue written to it."""
     drawn = {**direction(rng, recent, lore.scenes), "turns": rng.choice(DESK_TURNS[kind]),
-             "angle": DESK_ANGLES[kind], "player": DESK_PLAYERS[kind], "callback": NO_CALLBACK}
+             "angle": f"{DESK_ANGLES[kind]} {DESK_NUMBERS}", "player": DESK_PLAYERS[kind],
+             "callback": NO_CALLBACK}
     return drawn, write(facts, drawn, lore=lore, provider=provider, model=model)
 
 
