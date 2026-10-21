@@ -484,6 +484,24 @@ def test_a_restart_mid_show_joins_the_segment_airing_now(tmp_path):
     slots = Programme(lambda: [entry("A")], Clock(10_035_000), BroadcastBook(tmp_path), cups=lambda: [SHOW]).slots()
     assert slots[0] == SHOW.slots[1] and (slots[1]["kind"], slots[1]["at_ms"]) == ("shutter", 10_041_600)
 
+
+def test_a_cups_matches_join_the_shuffled_rest_and_the_newest_runs_still_open_the_cycle(tmp_path):
+    """A match enters the pool at its reveal, later than every run: as the newest it would open every
+    cycle for a week with no booth, the final before its semi-finals."""
+    store, cup = LocalStore(tmp_path), played_cup(4, starts_at=START_ISO)
+    store_cup(store, cup)
+    for i in range(5):
+        store.append(make_record(run_id=f"S{i}", user=f"u{i}", submitted_at=f"2026-10-2{i}T10:00:00Z"), b"t")
+        store.put_clip(f"S{i}", {"clip.json": json.dumps({"layouts": {"landscape": {"seconds": 8.0}}}).encode()})
+    entries = pool(store, ends_at(cup))
+    matches = [e for e in entries if e.title is not None]
+    assert len(matches) == 7 and min(e.submitted_at for e in matches) > max(e.submitted_at for e in entries if e.title is None)
+    for k in range(5):
+        order = [e.run_id for e in cycle(entries, k)]
+        assert order[:HEAD] == ["S4", "S3", "S2"]
+        assert sorted(order) == sorted(e.run_id for e in entries)
+
+
 def ready(app, run_id, user="alice", seconds=8.0):
     app.state.store.append(make_record(run_id=run_id, user=user), encode(np.zeros((5, 21), "f4")))
     app.state.store.put_clip(run_id, {"clip.json": json.dumps({"layouts": {"landscape": {"seconds": seconds}}}).encode()})

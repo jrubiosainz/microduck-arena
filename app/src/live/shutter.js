@@ -49,9 +49,10 @@ export function createShutter(container) {
       card.hidden = !announce;
       if (announce) {
         // A cup match is announced by its title alone, never by a player.
-        event.textContent = next.title ?? next.event;
-        user.hidden = Boolean(next.title);
-        user.textContent = `@${next.user}`;
+        const match = Boolean(next.title);
+        event.textContent = match ? next.title : next.event;
+        user.hidden = match;
+        user.textContent = match ? "" : `@${next.user}`;
       }
     },
     hide() {

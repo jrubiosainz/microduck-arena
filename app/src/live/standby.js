@@ -24,20 +24,16 @@ export function createStandby(stage) {
     time.textContent = countdown(current.duration_ms - offsetMs);
   }
 
-  function play(slot, offsetMs) {
-    current = slot;
-    title.textContent = slot.cup.title;
-    card.hidden = false;
-    seek(offsetMs);
-  }
-
+  // No show() and no muted(): a standby never follows a shutter, and it has no sound.
   return {
     failed: false,
     prepare() {}, // nothing to load: the card is drawn from the slot
-    show(slot) {
-      play(slot, 0);
+    play(slot, offsetMs) {
+      current = slot;
+      title.textContent = slot.cup.title;
+      card.hidden = false;
+      seek(offsetMs);
     },
-    play,
     seek,
     stop() {
       card.hidden = true;

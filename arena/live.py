@@ -121,9 +121,12 @@ def shows(store, now: datetime) -> list[Show]:
 
 def cycle(entries: list[Entry], k: int) -> list[Entry]:
     """One pass over the pool: the newest runs first, the rest shuffled by the
-    cycle number, so every screen computes the same order."""
-    newest = sorted(entries, key=lambda e: (e.submitted_at, e.run_id), reverse=True)
-    head, rest = newest[:HEAD], newest[HEAD:]
+    cycle number, so every screen computes the same order. A cup's matches are
+    in the rest: dated by their reveal, they would otherwise be the newest and
+    open every cycle until the next cup, with no booth, the final before its
+    semi-finals."""
+    newest = sorted((e for e in entries if e.title is None), key=lambda e: (e.submitted_at, e.run_id), reverse=True)
+    head, rest = newest[:HEAD], newest[HEAD:] + [e for e in entries if e.title is not None]
     random.Random(k).shuffle(rest)
     return head + rest
 
@@ -215,6 +218,12 @@ class Programme:
         # What the kept slots are playing is claimed before anything is laid,
         # and the claims grow with the grid: a booth laid for one entry is
         # claimed against the next. No booth is ever handed to two slots.
+        #
+        # A show is laid where its order says, so the grid must not have
+        # reached its start before the order is known, or its slots would
+        # overlap what was laid there. The cup worker fixes an order at least
+        # ORDER_LEAD (10 minutes) ahead, and the grid reaches no further than
+        # HORIZON_MS plus one entry.
         claimed, shows = self._claimed(), None
         while self._cursor < until_ms:
             shows = self._cups() if shows is None else shows  # read once per extension that lays something
