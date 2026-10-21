@@ -307,11 +307,11 @@ def test_match_footage_reads_each_bout_and_where_its_clip_tapes_it(tmp_path):
     blob = encode(dragged(), np.zeros((2, 3, 21), np.float32))  # its settle is no part of the bout
     store.put_cup_files("tug-of-war", 1, {f"bouts/{first.match_id}-0.npz": blob})
     store.put_clip(first.match_id, {"clip.json": taped_clip([0])})
-    assert match_footage(store, replace(CUP, matches=(first,)), MANIFEST) == {first.match_id: {
+    assert match_footage(store, replace(CUP, matches=CUP.matches[:2]), MANIFEST, {}) == {first.match_id: {
         "duration_ms": 30000, "bouts": [{"k": 0, "tape_start_s": 2.0, "tape_end_s": 10.02, "seconds": 8.02,
                                          "moments": moments(decode(blob), MANIFEST.course, string_offset("legs"))}]}}
-    with pytest.raises(LookupError):
-        match_footage(store, replace(CUP, matches=CUP.matches[:2]), MANIFEST)
+    # the second match's clip is not ready: it is called on a later tick, as the first already is here
+    assert match_footage(store, replace(CUP, matches=CUP.matches[:2]), MANIFEST, {first.match_id: {}}) == {}
 
 
 def test_a_cup_s_show_is_composed_from_its_store_and_the_cups_before_it(tmp_path):

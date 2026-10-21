@@ -165,11 +165,12 @@ class CupWorker:
     """Every cup of `events`, tick by tick, from close to its running order, each step read back from the store.
 
     Close, then draw.json (with the secret), then matches.json and the bouts, then one clip owed per match, then, once
-    every match clip is ready, show.json (its calls are timed on the clips' tapes), then order.json once the event's
-    previous cup has finished airing. Each write is one store commit made once, so a restart at any point picks up
-    where the dataset left off, with the same secret and the same results. `show(cup, partial)` writes the show,
-    filling `partial` as it goes, so a write cut off resumes on the next tick; with no `show` (no booth) the cup airs
-    its matches alone.
+    every match is called, show.json, then order.json once the event's previous cup has finished airing. Each write is
+    one store commit made once, so a restart at any point picks up where the dataset left off, with the same secret
+    and the same results. `show(cup, partial)` writes into `partial` what it can of the show now and returns it: the
+    desk needs only the matches, a match's call its clip (its lines are timed on the clip's tape), so the show is
+    written while the clips render, each call on the first tick its clip is ready, and a write cut off resumes on the
+    next tick. With no `show` (no booth) the cup airs its matches alone.
     """
 
     def __init__(self, store, clips, *, events, load: Callable[[Entrant], object],
@@ -286,13 +287,13 @@ class CupWorker:
                 self.clips.enqueue(match.match_id)
             # A pending clip is the clip jobs' to follow (their drain at boot, their rescan): queued again every tick, it
             # would race a launch in progress into a second job.
-        if len(seconds) < len(cup.matches):
-            return
         show = None
         if self.show is not None:
             show = self._written_show(manifest, cup, now)
             if show is None:
                 return
+        if len(seconds) < len(cup.matches):
+            return
         # Read again: a show takes minutes to write, and the live relies on an order fixed ORDER_LEAD before it starts.
         now = self.now()
         if not self._previous_aired(cup, now):
@@ -303,8 +304,9 @@ class CupWorker:
         self.log(f"cups: {cup.event_id} #{cup.number} airs from {order['starts_at']}")
 
     def _written_show(self, manifest: Manifest, cup: Cup, now: datetime) -> dict | None:
-        """The cup's show.json, written now when it is missing; None while its writer fails, what it wrote kept to
-        resume from: on the next tick when the router was down, SHOW_RETRY after a segment refused every time."""
+        """The cup's show.json, stored once every match is called; until then each tick writes what it can of it,
+        what it wrote kept to go on from. None while a clip is not ready or the writer fails: resumed on the next tick
+        when the router was down, SHOW_RETRY after a segment refused every time."""
         key = (cup.event_id, cup.number)
         stored = self.store.cup_file(cup.event_id, cup.number, "show.json")
         if stored is not None:
@@ -313,9 +315,11 @@ class CupWorker:
         if now - self._refused.get(key, now - SHOW_RETRY) < SHOW_RETRY:
             return None
         title = f"{manifest.title} Cup #{cup.number}"
-        self.log(f"cups: writing the show of {title}")
+        if key not in self._shows:  # once, not on every tick the clips render
+            self._shows[key] = {"desk": {}, "calls": {}}
+            self.log(f"cups: writing the show of {title}")
         try:
-            show = self.show(cup, self._shows.setdefault(key, {"desk": {}, "calls": {}}))
+            show = self.show(cup, self._shows[key])
         except Exception as exc:  # noqa: BLE001 — a show that cannot be written now is resumed later
             # Not at the top: the commentary package imports this module.
             from .commentary.generator import Rejected
@@ -323,6 +327,8 @@ class CupWorker:
             if isinstance(exc, Rejected):
                 self._refused[key] = now
             self.log(f"cups: the show of {title} waits ({type(exc).__name__}: {exc})")
+            return None
+        if len(show["calls"]) < len(cup.matches):
             return None
         self.store.put_cup_files(cup.event_id, cup.number,
                                  {"show.json": json.dumps(show, indent=2, ensure_ascii=False).encode()})

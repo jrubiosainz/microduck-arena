@@ -7,7 +7,7 @@ booth cannot play is logged and asked for again, TRIES times in all, and then th
 """
 
 import random
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 
 from ..constants import CTRL_DT
 from ..course import string_offset
@@ -187,9 +187,10 @@ def _tried(log, what: str, writer, *args, **kwargs):
 def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lore, provider,
                model: str, tab, rng: random.Random, profiles: Mapping[str, Fact],
                footage: Mapping[str, dict], done: dict | None = None, log=print) -> dict:
-    """Every desk segment, then every match's call, each put into `done` the moment it is timed, so
-    a show cut off by the router resumes where it stopped. `footage[match_id]` is where the
-    match's clip tapes each bout and the bout's moments."""
+    """Every desk segment, then the call of every match `footage` has, each put into `done` the
+    moment it is timed, so a show cut off by the router resumes where it stopped and a match whose
+    clip is not ready yet is called on a later write. `footage[match_id]` is where the match's
+    clip tapes each bout and the bout's moments."""
     show = {"desk": {}, "calls": {}} if done is None else done
     for segment in show_outline(cup):
         if segment["id"] in show["desk"]:
@@ -207,7 +208,7 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
                 "direction": drawn, "model": written["model"]}},
             "plan": plan, "screen": screen_view(cup, segment["after"] + 1, manifest)}
     for match in cup.matches:
-        if match.match_id in show["calls"]:
+        if match.match_id in show["calls"] or match.match_id not in footage:
             continue
         facts = [fact for fact in cup_facts(cup, match.index, history, manifest)
                  if fact.ref in CALL_FACTS]
@@ -228,14 +229,16 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
     return show
 
 
-def match_footage(store, cup: Cup, manifest: Manifest) -> dict:
-    """Per match, its clip's length and, per bout, where the clip tapes it and its moments, read
-    from its trace; LookupError for a match whose clip is not ready."""
+def match_footage(store, cup: Cup, manifest: Manifest, called: Collection[str]) -> dict:
+    """Per match not yet `called` whose clip is ready, its clip's length and, per bout, where the
+    clip tapes it and its moments, read from its trace."""
     offset, footage = string_offset(manifest.rig), {}
     for match in cup.matches:
+        if match.match_id in called:
+            continue
         state, clip = store.clip_state(match.match_id)
         if state != "ready":
-            raise LookupError(f"the clip of {match.match_id} is {state}")
+            continue
         landscape, bouts = clip["layouts"]["landscape"], []
         for tape in landscape["timing"]["bouts"]:
             trace = decode(store.cup_file(cup.event_id, cup.number,
@@ -255,10 +258,11 @@ def earlier_cups(store, cup: Cup) -> list[Cup]:
 
 def compose_show(store, cup: Cup, *, lore: Lore, provider, model: str, tab, rng: random.Random,
                  done: dict, log=print) -> dict:
-    """The cup's show from the store: its event, the cups before it, its players' seasons and
-    its match clips, `done` filled as it is written."""
+    """The cup's show from the store, as far as its clips allow: its event, the cups before it,
+    its players' seasons and the clips of the matches not called yet, `done` filled as it is
+    written."""
     manifest = load_event(cup.event_id)
     history = earlier_cups(store, cup)
     return write_show(cup, manifest=manifest, history=history, lore=lore, provider=provider,
                       model=model, tab=tab, rng=rng, profiles=player_profiles(store, cup, history),
-                      footage=match_footage(store, cup, manifest), done=done, log=log)
+                      footage=match_footage(store, cup, manifest, done["calls"]), done=done, log=log)

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import random
 import threading
 import time
 from dataclasses import replace
@@ -262,9 +263,10 @@ def ready_cup(tmp_path):
 
 
 def written_show(cup):
-    """A show as the running order reads it: every desk segment of the cup's outline, each plan 12.04 s long."""
+    """A whole show as the running order reads it: every desk segment of the cup's outline, each plan 12.04 s long,
+    and every match called."""
     return {"desk": {s["id"]: {"kind": s["kind"], "after": s["after"], "plan": {"duration_ms": 12040}}
-                     for s in show_outline(cup)}, "calls": {}}
+                     for s in show_outline(cup)}, "calls": {m.match_id: {"lines": []} for m in cup.matches}}
 
 
 def test_with_a_show_the_order_puts_the_desk_around_every_match():
@@ -415,6 +417,88 @@ def test_a_show_found_stored_after_all_drops_what_was_written_of_it(tmp_path, no
     cups.tick()
     assert len(asked) == 1 and load_cup(store, "tug-of-war", 1).order is not None
     assert cups._shows == {}
+
+
+def booth(tmp_path):
+    """Six entries past the close and a worker with the real show writer: a fake router, each answer 10 s of the
+    worker's clock, and a fake plan page that keeps what it timed."""
+    from arena.commentary.show import compose_show
+    from tests.test_commentary_show import LORE, FakeTab, Router  # it reads this module
+
+    store, clock, router, tab, said = LocalStore(tmp_path), Clock(T1), Router(), FakeTab(), []
+    enter(store, 6)
+
+    def provider(messages, max_tokens):
+        clock.at += timedelta(seconds=10)
+        return router(messages, max_tokens)
+
+    def show(cup, done):
+        return compose_show(store, cup, lore=LORE, provider=provider, model="fake/model", tab=tab,
+                            rng=random.Random(7), done=done)
+
+    return SimpleNamespace(store=store, clock=clock, router=router, tab=tab, said=said,
+                           cups=worker(store, clock, show=show, log=said.append))
+
+
+def timed(tab):
+    """What the plan page timed, in order: the desk segments' ids and the called matches' ids."""
+    return ([asked["run_id"] for kind, asked in tab.asked if kind == "prepare"],
+            [asked["id"] for kind, asked in tab.asked if kind == "prepare_call"])
+
+
+def land(store, matches):
+    """The clip jobs render these matches' clips, with where each clip tapes each bout."""
+    from tests.test_commentary_show import taped_clip
+
+    for match in matches:
+        store.put_clip(match.match_id, {"clip.json": taped_clip([bout.k for bout in match.bouts])})
+
+
+def test_the_desk_is_written_as_soon_as_the_matches_are_computed(tmp_path, no_physics):
+    """It needs the results, never the clips: written while they render, it is not left for after the last one."""
+    b = booth(tmp_path)
+    b.cups.tick()
+    cup = load_cup(b.store, "tug-of-war", 1)
+    assert all(b.store.clip_state(m.match_id)[0] == "pending" for m in cup.matches)
+    assert timed(b.tab) == ([f"tug-of-war-0001-{s['id']}" for s in show_outline(cup)], [])
+    assert len(b.router.asked) == 15 and b.router.calls() == []  # 15 desk segments, no bout
+    assert b.store.cup_file("tug-of-war", 1, "show.json") is None and cup.order is None
+
+
+def test_a_match_is_called_on_the_first_tick_its_clip_is_ready(tmp_path, no_physics):
+    b = booth(tmp_path)
+    b.cups.tick()
+    cup, (desk, _) = load_cup(b.store, "tug-of-war", 1), timed(b.tab)
+    land(b.store, [cup.matches[3], cup.matches[5]])
+    asked = len(b.router.asked)
+    b.cups.tick()
+    assert timed(b.tab) == (desk, [cup.matches[3].match_id, cup.matches[5].match_id])
+    assert len(b.router.asked) - asked == len(b.router.calls()) == 4  # their two bouts each, no desk segment again
+    b.cups.tick()
+    assert len(b.router.asked) == asked + 4  # nothing new to write
+    assert b.store.cup_file("tug-of-war", 1, "show.json") is None and load_cup(b.store, "tug-of-war", 1).order is None
+
+
+def test_the_last_match_called_stores_the_show_and_fixes_the_order_from_a_fresh_clock(tmp_path, no_physics):
+    b = booth(tmp_path)
+    b.cups.tick()
+    cup = load_cup(b.store, "tug-of-war", 1)
+    land(b.store, cup.matches[:-1])
+    b.cups.tick()
+    assert b.store.cup_file("tug-of-war", 1, "show.json") is None and load_cup(b.store, "tug-of-war", 1).order is None
+    land(b.store, cup.matches[-1:])
+    b.clock.at = datetime(2026, 10, 23, 16, tzinfo=UTC)  # the premiere; the final's two bouts take 20 s to call
+    b.cups.tick()
+    assert len(b.router.asked) == 15 + 18 and timed(b.tab)[1] == [m.match_id for m in cup.matches]
+    show = json.loads(b.store.cup_file("tug-of-war", 1, "show.json"))
+    assert list(show["desk"]) == [s["id"] for s in show_outline(cup)]
+    assert list(show["calls"]) == [m.match_id for m in cup.matches]
+    order = load_cup(b.store, "tug-of-war", 1).order
+    assert order["starts_at"] == "2026-10-23T16:10:20Z"  # ORDER_LEAD after the show was written, not before
+    assert order == running_order(cup, {m.match_id: 30.0 for m in cup.matches},
+                                  datetime(2026, 10, 23, 16, 10, 20, tzinfo=UTC), show=show)
+    assert b.said[2:] == ["cups: writing the show of Tug of War Cup #1", "cups: the show of Tug of War Cup #1 is written",
+                          "cups: tug-of-war #1 airs from 2026-10-23T16:10:20Z"]  # one line, not one per tick
 
 
 def test_the_draw_waits_a_minute_past_the_close_for_an_entry_stamped_before_it(tmp_path, no_physics):
