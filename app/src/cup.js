@@ -6,7 +6,7 @@
 
 import { flipTiles } from "./animation.js";
 import { getCup, getMe } from "./api.js";
-import { countdown, formatScore } from "./format.js";
+import { capitalised, countdown, formatScore } from "./format.js";
 import { cupHref, dress, eventGuideHref, liveHref, matchHref, playerHref } from "./router.js";
 import { chequer, footer, settleIdentity, signage } from "./signage.js";
 import { symbol } from "./symbols.js";
@@ -195,7 +195,7 @@ function bracket(cup) {
     const ties = el("div", "cup-ties");
     ties.append(...knockout.filter((m) => m.round === round).map((m) => tie(cup, m)));
     const column = el("div", "cup-round");
-    column.append(el("h4", "eyebrow", round[0].toUpperCase() + round.slice(1)), ties);
+    column.append(el("h4", "eyebrow", capitalised(round)), ties);
     box.append(column);
   }
   return box;

@@ -2,6 +2,7 @@
 // from its settle, and an outro on the winner. Pure, as plan.js, whose actAt and travelAt read this
 // plan as they read a run's.
 
+import { winLine } from "../bouts.js";
 import { CTRL_DT } from "../replay.js";
 import { FPS, INTRO_S, OUTRO_S, STRIDE, TRAVEL_S } from "./plan.js";
 
@@ -60,10 +61,9 @@ export function scoreAt(plan, match, i) {
  * the higher rating. */
 export function matchWords(match) {
   const [won, lost] = match.winner === "a" ? match.wins : [...match.wins].reverse();
-  const winner = match[match.winner].name;
   return {
     title: `${match.event.title} · Cup #${match.cup}`,
     line: match.title,
-    outro: match.decided_by === "rating" ? `${winner} wins on rating` : `${winner} wins ${won}–${lost}`,
+    outro: match.decided_by === "rating" ? winLine(match) : `${winLine(match)} ${won}–${lost}`,
   };
 }

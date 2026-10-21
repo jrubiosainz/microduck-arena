@@ -2,7 +2,7 @@
 // the show aired and the score.
 
 import { getBoutSettle, getBoutTrace, getMatch, getMe, matchClipUrl } from "./api.js";
-import { boutLane } from "./bouts.js";
+import { boutLane, winLine } from "./bouts.js";
 import { capitalised } from "./format.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { cupHref, dress, playerHref } from "./router.js";
@@ -15,8 +15,6 @@ function el(tag, className, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
-
-const winnerName = (match) => match[match.winner].name;
 
 /** What a bout's line says it was decided by: the duck dragged into the pit, or the marker's side. */
 const HOW = {
@@ -65,7 +63,7 @@ export function matchHall(match) {
     byline.append(i ? " vs " : "", who, ` · ${side.policy_name}`);
   });
   page.querySelector(".match-score").textContent = `${match.wins[0]}–${match.wins[1]}`;
-  page.querySelector(".stamp").textContent = `${winnerName(match)} wins${match.decided_by === "rating" ? " on rating" : ""}`;
+  page.querySelector(".stamp").textContent = winLine(match);
   page.querySelector(".match-bouts").append(...match.bouts.map((bout) => {
     const row = el("li");
     row.append(el("button", "match-bout", boutLine(match, bout)));
@@ -102,7 +100,10 @@ export async function renderMatch(root, matchId, state) {
   const bouts = new Map();
   const loaded = (k) => {
     if (!bouts.has(k)) {
-      bouts.set(k, Promise.all([getBoutTrace(matchId, k), getBoutSettle(matchId, k)]));
+      const fetched = Promise.all([getBoutTrace(matchId, k), getBoutSettle(matchId, k)]);
+      bouts.set(k, fetched);
+      // A failed fetch is not remembered: the next click asks again.
+      fetched.catch(() => bouts.delete(k));
     }
     return bouts.get(k);
   };
@@ -120,7 +121,8 @@ export async function renderMatch(root, matchId, state) {
   const rows = [...page.querySelectorAll(".match-bout")];
   async function play(k) {
     rows.forEach((row, i) => row.toggleAttribute("aria-current", i === k));
-    const [traces, settles] = await loaded(k);
+    const [traces, settles] = await loaded(k).catch(() => []);
+    if (!traces) return;
     if (leaving.signal.aborted || !rows[k].hasAttribute("aria-current")) return;
     created.setLanes([boutLane(match, k, traces, settles)], match.event);
   }

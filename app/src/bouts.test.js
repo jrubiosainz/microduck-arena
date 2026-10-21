@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boutLane, matchLiveries } from "./bouts.js";
+import { boutLane, matchLiveries, winLine } from "./bouts.js";
 
 describe("boutLane", () => {
   it("puts each side on its end of the rope, west first, under its on-air name", () => {
@@ -15,5 +15,13 @@ describe("boutLane", () => {
     expect(matchLiveries({ livery: "charcoal" }, { livery: "charcoal" })).toEqual(["charcoal", "classic"]);
     const twins = { a: { livery: "blue", name: "Tank" }, b: { livery: "blue", name: "Lean" }, bouts: [{ a_side: "east" }] };
     expect(boutLane(twins, 0, ["tw", "te"], ["sw", "se"]).ducks.map((duck) => duck.livery)).toEqual(["classic", "blue"]);
+  });
+});
+
+describe("winLine", () => {
+  it("names the winner by its on-air name, and by rating when the bouts tied", () => {
+    const match = { a: { name: "Tank" }, b: { name: "Lean" }, winner: "b", decided_by: "bouts" };
+    expect(winLine(match)).toBe("Lean wins");
+    expect(winLine({ ...match, decided_by: "rating" })).toBe("Lean wins on rating");
   });
 });
