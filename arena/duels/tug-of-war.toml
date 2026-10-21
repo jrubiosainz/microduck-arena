@@ -1,0 +1,51 @@
+# A tug of war between two policies (arena/duel.py). Not an event: arena/duels/ is not
+# on the programme, the boards or the store. `arena duel A.onnx B.onnx` plays it from
+# the shell. docs/superpowers/specs/2026-10-21-tug-of-war-duel-design.md says what each
+# number was measured to do.
+id           = "tug-of-war"
+title        = "Tug of War"
+rig          = "legs"
+kind         = "perpetual"
+# The bell: a bout nobody has lost by then is decided on points.
+time_limit_s = 20.0
+# Every seed is played twice, the two policies swapping decks.
+seeds        = [1, 2, 3]
+
+# Both ducks are asked to walk straight on, away from the pit, at the pace the
+# reference walker walks best. They settle standing, and pull from the first timed step.
+[command]
+vel  = [0.3, 0.0, 0.0]
+head = [0.0, 0.0, 0.0, 0.0]
+body = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+# Each trunk starts setback_m from its deck's inner edge, its back to the pit.
+[start]
+keyframe  = "STAND"
+settle_s  = 0.5
+setback_m = 0.25
+
+[start.perturbation]
+joint_rad = 0.01
+yaw_deg   = 2.0
+
+# Two decks face each other across the pit, walled along their sides like a lane:
+# without the walls, a duck pulled off its line can leave by the side, not the pit.
+[decks]
+gap_m         = 0.5
+length_m      = 2.0
+width_m       = 0.8
+wall_height_m = 0.15
+pit_depth_m   = 0.6
+
+# Between a harness site on each trunk, capped at the harnesses' distance at the start
+# plus slack_m. timeconst_s is how hard the cap is (the solref of MuJoCo's tendon limit).
+[rope]
+slack_m          = 0.015
+timeconst_s      = 0.022
+harness_height_m = 0.025
+
+# A trunk drop_m below the decks is in the pit: its duck has lost. At the bell, the
+# rope's middle must have moved more than margin_m towards one deck for a win on points.
+[referee]
+drop_m   = 0.10
+margin_m = 0.05

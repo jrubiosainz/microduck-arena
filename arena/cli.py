@@ -15,6 +15,7 @@ from . import stage
 from . import trace as trace_codec
 from .cast import cast_of, load_borrowed
 from .constants import CTRL_DT
+from .duel import load_duel_by_id, round_robin, standings
 from .evaluate import evaluate
 from .hub_fetch import FetchError, fetch_references
 from .index import ENTRANTS, leaderboard
@@ -105,6 +106,51 @@ def _cmd_score(args) -> int:
             record, trace_codec.encode(result.trace, result.settle), Path(args.onnx).read_bytes()
         )
         print(f"recorded {record.run_id}")
+    return 0
+
+
+def _how(bout, on_deck) -> str:
+    """How a bout ended, in words: on_deck[k] stood on deck k."""
+    at = f"{bout.time_s:.2f} s"
+    if bout.end == "void":
+        return f"void at {at}: the simulation diverged, a draw"
+    if bout.end == "pit":
+        if bout.winner is None:
+            return f"both fell off their decks at {at}, a draw"
+        return f"{on_deck[bout.winner]} won: {on_deck[1 - bout.winner]} fell off its deck at {at}"
+    if bout.winner is None:
+        return f"a draw at the bell, the rope's middle at {bout.rope_mid_m:+.3f} m"
+    return (f"{on_deck[bout.winner]} won at the bell, "
+            f"the rope's middle {abs(bout.rope_mid_m):.3f} m its way")
+
+
+def _cmd_duel(args) -> int:
+    if len(args.onnx) < 2:
+        print("a duel takes two policies, or more for a round robin", file=sys.stderr)
+        return 1
+    duel = load_duel_by_id(args.duel)
+    policies = [load_policy(Path(path)) for path in args.onnx]
+    names = [Path(path).stem for path in args.onnx]
+    if len(set(names)) < len(names):
+        names = [f"{name} ({k + 1})" for k, name in enumerate(names)]
+    seeds = ", ".join(str(seed) for seed in duel.seeds)
+    print(f"{duel.title}: seed{'s' if len(duel.seeds) > 1 else ''} {seeds}, "
+          f"each played from both decks; the bell at {duel.time_limit_s:g} s")
+    matches = round_robin(duel, policies)
+    for (i, j), match in matches.items():
+        if len(policies) == 2:
+            for played in match.bouts:
+                on_deck = (names[i], names[j]) if played.deck0 == 0 else (names[j], names[i])
+                print(f"seed {played.bout.seed}  {on_deck[0]} | {on_deck[1]}  "
+                      f"{_how(played.bout, on_deck)}")
+        a, b = match.points
+        print(f"{names[i]} {a:g}–{b:g} {names[j]}")
+    if len(policies) > 2:
+        width = max(len(name) for name in names)
+        print(f"\n{'#':>2}  {'policy':<{width}}  won  drawn  lost  points")
+        for rank, row in enumerate(standings(names, matches), 1):
+            print(f"{rank:>2}  {row.name:<{width}}  {row.won:>3}  {row.drawn:>5}  "
+                  f"{row.lost:>4}  {row.points:>6g}")
     return 0
 
 
@@ -347,6 +393,13 @@ def main(argv=None) -> int:
         "--livery", default="classic", help="which colourway to race in"
     )
     score.set_defaults(func=_cmd_score)
+
+    duel = subs.add_parser(
+        "duel", help="play policies against each other in a duel: two a match, more a round robin"
+    )
+    duel.add_argument("onnx", nargs="+")
+    duel.add_argument("--duel", default="tug-of-war", help="which of arena/duels/")
+    duel.set_defaults(func=_cmd_duel)
 
     board = subs.add_parser("board", help="print a leaderboard")
     board.add_argument("--event", required=True)
