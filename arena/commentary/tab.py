@@ -87,11 +87,16 @@ class PlanTab:
                 # browser over that would just hand the same error back. A dead
                 # browser is replaced once; a second failure is the machine
                 # talking, and the reserve's caller logs it and tries the next run.
-                self.close()
+                self._close()
                 self._open()
                 return self._tab.evaluate(asking)
 
     def close(self) -> None:
+        """Once the page has answered what it is being asked: never under an ask in progress."""
+        with self._lock:
+            self._close()
+
+    def _close(self) -> None:
         if self._chrome is not None:
             self._chrome.close()
         self._chrome = None

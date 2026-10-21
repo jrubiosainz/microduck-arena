@@ -9,8 +9,8 @@ import { shutterAt } from "./shutter.js";
 
 const FRESH_MS = 40; // a shutter entered within its first frame gets its wind
 // A cup's match clips, calls and desk segments are served from 30 s before
-// they air, and what failed to load is never asked for again: every slot is
-// prepared from 25 s before, which leaves a screen's clock 5 s of slack.
+// they air, and asked for any earlier they would fail: every slot is prepared
+// from 25 s before, which leaves a screen's clock 5 s of slack.
 export const PREFETCH_MS = 25_000;
 
 export function createChannel({ clock, segments, shutter, onState, onReload, gust }) {

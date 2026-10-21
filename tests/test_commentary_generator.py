@@ -290,7 +290,8 @@ CALL = [{"speaker": "ray", "text": "Off they go."},
 
 def call_with(lines, first="ray"):
     provider = provider_for(reply(lines))
-    return write_call(FACTS, MOMENTS, first, lore=LORE, provider=provider, model="fake/model"), provider
+    return write_call(FACTS, MOMENTS, first, lore=LORE, provider=provider, model="fake/model",
+                      time_limit_s=45.0), provider
 
 
 def test_a_call_is_one_line_per_moment_from_the_first_speaker_given():
@@ -301,7 +302,7 @@ def test_a_call_is_one_line_per_moment_from_the_first_speaker_given():
     [(messages, max_tokens)] = provider.calls
     assert max_tokens == CALL_LIMIT
     system = messages[0]["content"]
-    assert CALL_CONTEXT in system and CALL_STYLE in system
+    assert CALL_CONTEXT.format(time_limit="45") in system and CALL_STYLE in system
     assert "The first line is ray's." in system
     assert "This bout has 3 moments: answer exactly 3 lines, one per moment" in system
     assert LORE.characters["peter"]["sheet"][:60] in system
@@ -328,7 +329,15 @@ def test_the_call_prompt_carries_no_private_prop():
 
 
 def test_the_call_prompt_says_only_the_pit_puts_a_duck_out():
-    assert "knocked over stays in it and can still be dragged" in CALL_CONTEXT and "45 seconds" in CALL_CONTEXT
+    assert "knocked over stays in it and can still be dragged" in CALL_CONTEXT
+
+
+def test_the_call_prompt_gives_the_event_s_own_time_limit():
+    provider = provider_for(reply(CALL))
+    write_call(FACTS, MOMENTS, "ray", lore=LORE, provider=provider, model="m", time_limit_s=30.0)
+    system = provider.calls[0][0][0]["content"]
+    assert "After 30 seconds, the duck the marker moved away from loses." in system
+    assert "45 seconds" not in system
 
 
 def test_a_call_names_a_duck_never_its_player():
@@ -345,4 +354,4 @@ def test_a_call_line_says_what_only_its_moment_has():
 
 def test_a_call_starts_with_peter_or_ray():
     with pytest.raises(ValueError, match="peter or ray"):
-        write_call(FACTS, [], "bob", lore=LORE, provider=None, model="m")
+        write_call(FACTS, [], "bob", lore=LORE, provider=None, model="m", time_limit_s=45.0)

@@ -115,6 +115,19 @@ describe("createCall", () => {
     expect(call.failed).toBe(true);
   });
 
+  it("asks again as its match plays for a call that was not there when it was prepared, and only then", async () => {
+    // Not served yet, or a network blip: prepared on every frame from 25 s before, it is asked for once.
+    call.prepare(called);
+    await Promise.resolve();
+    call.prepare(called);
+    expect(getCall).toHaveBeenCalledTimes(1);
+    state.calls.set(called.run_id, { lines: [], plan });
+    await call.play(called, 3000);
+    expect(getCall).toHaveBeenCalledTimes(2);
+    expect(voice.start).toHaveBeenCalledWith(plan, 3000);
+    expect(text()).toBe("The marker slides west!");
+  });
+
   it("leaves a call that lands after its match was stopped unvoiced", async () => {
     let land;
     getCall.mockImplementationOnce(() => new Promise((resolve) => { land = resolve; }));

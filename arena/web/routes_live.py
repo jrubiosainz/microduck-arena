@@ -6,9 +6,9 @@ import time
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from ..cup import PREFETCH, parse_iso, revealed_at
+from ..cup import PREFETCH, Cup, parse_iso, revealed_at
 from ..cupworker import load_cup
-from .routes_cups import NO_STORE, _public_match
+from .routes_cups import NO_STORE, _cups_event, _public_match
 
 router = APIRouter(prefix="/api")
 
@@ -47,18 +47,25 @@ def _written_show(request: Request, event_id: str, number: int) -> dict | None:
     return shows[(event_id, number)]
 
 
-@router.get("/live/show/{event_id}/{number}/{segment_id}")
-def desk(event_id: str, number: int, segment_id: str, request: Request) -> JSONResponse:
-    """A desk segment a desk slot names, from PREFETCH before the reveal it may mention: the end of the match it
-    follows, or the show's start for the opening, which follows none."""
-    cup = load_cup(request.app.state.store, event_id, number)
-    show = None if cup is None or cup.order is None else _written_show(request, event_id, number)
-    segment = None if show is None else show["desk"].get(segment_id)
-    if segment is None:
-        raise HTTPException(status_code=404, detail=f"no desk segment {segment_id!r}", headers=NO_STORE)
+def _opened(cup: Cup, segment: dict) -> bool:
+    """From PREFETCH before the reveal the segment may mention: the end of the match it follows, or the show's start
+    for the opening, which follows none."""
+    if cup.order is None:
+        return False
     after = segment["after"]
     opens = parse_iso(cup.order["starts_at"]) if after == -1 else revealed_at(cup, cup.matches[after].match_id)
-    if now_ms() < (opens - PREFETCH).timestamp() * 1000:
+    return now_ms() >= (opens - PREFETCH).timestamp() * 1000
+
+
+@router.get("/live/show/{event_id}/{number}/{segment_id}")
+def desk(event_id: str, number: int, segment_id: str, request: Request) -> JSONResponse:
+    """A desk segment a desk slot names, once opened; as a match's call, of a cup's event only, and all of them to
+    the clip job's own app (`reveal_all`)."""
+    _cups_event(event_id)
+    cup = load_cup(request.app.state.store, event_id, number)
+    show = None if cup is None else _written_show(request, event_id, number)
+    segment = None if show is None else show["desk"].get(segment_id)
+    if segment is None or not (request.app.state.config.reveal_all or _opened(cup, segment)):
         raise HTTPException(status_code=404, detail=f"no desk segment {segment_id!r}", headers=NO_STORE)
     return JSONResponse({key: segment[key] for key in ("dialogue", "plan", "screen")}, headers=NO_STORE)
 
@@ -68,6 +75,7 @@ def call(match_id: str, request: Request) -> JSONResponse:
     """A called match's lines and their plan: they narrate the match, so they are served by its clip media's rule."""
     _, cup, _ = _public_match(request, match_id, media=True)
     show = _written_show(request, cup.event_id, cup.number)
-    if show is None:
+    called = None if show is None else show["calls"].get(match_id)
+    if called is None:
         raise HTTPException(status_code=404, detail=f"no call for {match_id!r}", headers=NO_STORE)
-    return JSONResponse(show["calls"][match_id], headers=NO_STORE)
+    return JSONResponse(called, headers=NO_STORE)

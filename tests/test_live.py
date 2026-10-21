@@ -577,9 +577,9 @@ def on_air(match):
     return START_MS + segment["at_ms"], START_MS + segment["at_ms"] + segment["duration_ms"]
 
 
-def show_api(tmp_path, *shown, unwritten=()):
+def show_api(tmp_path, *shown, unwritten=(), reveal_all=False):
     """The app over `shown` cups, each stored with its show.json, and `unwritten` ones stored with none."""
-    app = create_app(ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie"))
+    app = create_app(ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie", reveal_all=reveal_all))
     for cup, show in shown:
         store_cup(app.state.store, cup)
         app.state.store.put_cup_files(cup.event_id, cup.number, {"show.json": json.dumps(show).encode()})
@@ -658,6 +658,30 @@ def test_what_the_show_does_not_hold_is_a_404(tmp_path, monkeypatch):
                  "/api/live/show/tug-of-war/2/opening", f"/api/live/call/{unordered.matches[0].match_id}",
                  "/api/live/show/tug-of-war/3/opening", f"/api/live/call/{unwritten.matches[0].match_id}"):
         assert api.get(path).status_code == 404, path
+
+
+def test_a_match_the_show_has_no_call_for_is_a_404(tmp_path, monkeypatch):
+    first = CUP.matches[0]
+    uncalled = {**WRITTEN, "calls": {k: v for k, v in WRITTEN["calls"].items() if k != first.match_id}}
+    api = show_api(tmp_path, (CUP, uncalled))
+    at(monkeypatch, on_air(first)[0])
+    answer = api.get(f"/api/live/call/{first.match_id}")
+    assert answer.status_code == 404 and answer.headers["cache-control"] == "no-store"
+
+
+def test_a_desk_segment_is_told_by_the_call_s_rule(tmp_path, monkeypatch):
+    """A cup's event only, and the whole show to the clip job's own app (`reveal_all`), as a match's call."""
+    at(monkeypatch, START_MS - 3_600_000)
+    revealed = show_api(tmp_path / "reveal-all", (CUP, WRITTEN), reveal_all=True)
+    assert revealed.get("/api/live/show/tug-of-war/1/ceremony").json()["dialogue"] == WRITTEN["desk"]["ceremony"]["dialogue"]
+    assert revealed.get(f"/api/live/call/{CUP.matches[-1].match_id}").status_code == 200
+    api = show_api(tmp_path / "sprint", (CUP, WRITTEN))
+    api.app.state.store.put_cup_files("sprint-2m", 1, {
+        "draw.json": CUP.draw_json(), "matches.json": CUP.matches_json(),
+        "order.json": json.dumps(CUP.order).encode(), "show.json": json.dumps(WRITTEN).encode()})
+    at(monkeypatch, int(ends_at(CUP).timestamp() * 1000))
+    assert api.get("/api/live/show/tug-of-war/1/opening").status_code == 200
+    assert api.get("/api/live/show/sprint-2m/1/opening").status_code == 404  # a race has no cup
 
 
 def test_two_cups_of_one_event_serve_their_own_show(tmp_path, monkeypatch):

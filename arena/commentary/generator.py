@@ -50,8 +50,9 @@ CALL_CONTEXT = (
     "owner trained. This is a cup of tug of war: two ducks face each other across a pit, tied by "
     "a string with a red marker at its middle, and each pulls by walking backwards. A duck that "
     "drops into the pit loses the bout; a duck knocked over stays in it and can still be dragged. "
-    "After 45 seconds, the duck the marker moved away from loses. The ducks swap sides after each "
-    "bout. They are earnest, top-heavy and easily toppled: that is the comedy and the charm. "
+    "After {time_limit} seconds, the duck the marker moved away from loses. The ducks swap sides "
+    "after each bout. They are earnest, top-heavy and easily toppled: that is the comedy and the "
+    "charm. "
     "Peter and Ray are microducks themselves, calling "
     "the bout from their booth while it plays: relaxed, amused, kind. "
 )
@@ -280,13 +281,15 @@ def write(facts: list[Fact], drawn: dict, *, lore: Lore, provider, model: str) -
 
 
 def write_call(facts: list[Fact], moments: list[dict], first: str, *, lore: Lore, provider,
-               model: str) -> dict:
-    """One line per moment of a bout, `first` speaking first, or Rejected with the reason."""
+               model: str, time_limit_s: float) -> dict:
+    """One line per moment of a bout, `first` speaking first, or Rejected with the reason; a bout
+    lasts at most the event's `time_limit_s`."""
     if first not in ("peter", "ray"):
         raise ValueError(f"a call starts with peter or ray, not {first!r}")
     # Told only "one per moment", the writer splits a last moment that says several things (time
     # up, the bout's winner, the score) over two lines, and the booth cannot play the call.
-    system = (CALL_STYLE + CALL_CONTEXT + f"The first line is {first}'s. "
+    system = (CALL_STYLE + CALL_CONTEXT.format(time_limit=f"{time_limit_s:g}")
+              + f"The first line is {first}'s. "
               + f"This bout has {len(moments)} moments: answer exactly {len(moments)} lines, one per "
               "moment, a moment that says several things still one line. " + _characters(lore))
     fact_texts = [{"index": i, "text": fact.text} for i, fact in enumerate(facts)]

@@ -221,7 +221,8 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
             aired = thin(tape["moments"])
             written = _tried(log, f"{match.match_id} bout {bout.k + 1}", write_call, facts,
                              _told(cup, manifest, match, bout, aired), first, lore=lore,
-                             provider=provider, model=model)
+                             provider=provider, model=model,
+                             time_limit_s=manifest.bout.time_limit_s)
             start, end, seconds = tape["tape_start_s"], tape["tape_end_s"], tape["seconds"]
             lines += [{"at_ms": round(1000 * (start + (end - start) * moment.at_s / seconds)), **line}
                       for moment, line in zip(aired, written["lines"])]

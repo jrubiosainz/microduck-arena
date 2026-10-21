@@ -52,6 +52,11 @@ export function createCall(stage, { replay, audio }) {
       const playing = (current = { call: null });
       replay.play(slot, offsetMs);
       if (!slot.call) return;
+      // A call that was not there when it was prepared (not served yet, a
+      // network blip) is asked for again now that it is due, not kept missing
+      // for the rest of the session.
+      const kept = calls.get(slot.run_id);
+      if (kept && (await kept) === null) calls.delete(slot.run_id);
       const call = await callFor(slot);
       // A stop while the call was on its way leaves it unvoiced, and so does a
       // clip that failed to load: the shutter's panel holds over its slot.

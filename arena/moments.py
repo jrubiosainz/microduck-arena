@@ -20,7 +20,9 @@ KINDS = ("start", "lead", "ground", "edge", "slip", "pit", "time")
 class Moment:
     """`side` is, per kind: start, None; lead, the new leader; ground, the side the marker was
     pulled to; edge, slip and pit, the duck at its edge, slipping, dropping in; time, the side the
-    marker favours at the limit (None when it is on the centre line)."""
+    marker favours at the limit (None when it is on the centre line). `time` is the trace's last
+    frame: the time limit, or, for a bout a MuJoCo reset ended early (a draw), where it stopped,
+    which show.py tells as such, never as time up."""
 
     at_s: float
     kind: str
@@ -33,7 +35,9 @@ def _first(flags: np.ndarray) -> int | None:
 
 def moments(trace: np.ndarray, course: Tug, offset) -> list[Moment]:
     """A bout's moments, (2, frames, 21) -> in order of time, then of kind, west before east.
-    Frame j is recorded after step j + 1, so it is at (j + 1) control steps."""
+    Frame j is recorded after step j + 1, so it is at (j + 1) control steps. A bout nobody
+    dropped out of ends on a `time` moment at its last frame, whether it ran to the limit or a
+    reset stopped it."""
     frames = trace.shape[1]
     x = marker_x(trace, offset)
     found = [(0.0, "start", None)]

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SAMPLE_RATE, VOICES, prepare, prepareCall } from "./score.js";
-import { createVoice, loadCalls, loadSynth, windGust } from "./voice.js";
+import { SING_AHEAD_MS, createVoice, loadCalls, loadSynth, windGust } from "./voice.js";
 
 const wasm = async (url) => ({ ok: url === "/sound/microduck-voice.wasm", arrayBuffer: async () => readFileSync(`public${url}`) });
 
@@ -193,38 +193,62 @@ describe("createVoice", () => {
     };
   };
 
-  it("sings each caption in mono, all on the context's clock from one instant, from the join offset plus the time it took to sing", async () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("sings each caption shortly before it plays, never a whole match's at once", async () => {
+    vi.useFakeTimers();
+    const context = fakeContext();
+    createVoice(context, await voice).start(call, 0);
+    // When each caption sung so far starts, in ms of the plan: the plan's 0 is the context's 3 s.
+    const started = () => context.starts.map(({ when }) => Math.round((when - 3) * 1000));
+    expect(call.captions.map((c) => c.start_ms)).toEqual([2000, 8264, 30000, 58000]);
+    expect(started()).toEqual([2000]);
+    vi.advanceTimersByTime(8264 - SING_AHEAD_MS - 1);
+    expect(started()).toEqual([2000]);
+    vi.advanceTimersByTime(1);
+    expect(started()).toEqual([2000, 8264]);
+    vi.advanceTimersByTime(30000 - 8264);
+    expect(started()).toEqual([2000, 8264, 30000]);
+    vi.runAllTimers();
+    expect(started()).toEqual([2000, 8264, 30000, 58000]);
+  });
+
+  it("sings each caption in mono, all on the context's clock from one instant, a caption sung late from that much further in", async () => {
+    vi.useFakeTimers();
     const context = fakeContext();
     const sing = await voice;
-    const began = performance.now();
-    createVoice(context, sing).start(plan, 1234);
-    const took = performance.now() - began;
+    // Singing takes the context's clock a millisecond a note.
+    const slow = (seed, note) => {
+      context.currentTime += 0.001;
+      return sing(seed, note);
+    };
+    createVoice(context, slow).start(plan, 1234);
+    vi.runAllTimers();
+    const zero = 3 - 1.234; // the plan's 0 on the context's clock
     expect(context.starts).toHaveLength(plan.captions.length);
     for (const [{ buffer, when, offset }, caption] of context.starts.map((start, i) => [start, plan.captions[i]])) {
       expect(buffer.numberOfChannels).toBe(1);
       expect(buffer.sampleRate).toBe(SAMPLE_RATE);
       expect(buffer.length).toBe(((caption.end_ms - caption.start_ms) * SAMPLE_RATE) / 1000);
+      expect(when - offset).toBeCloseTo(zero + caption.start_ms / 1000, 9);
       if (caption.start_ms <= 1234) {
-        // The caption the screen joins inside starts now, from the join.
-        expect(when).toBe(3);
+        // The caption the screen joins inside starts once it is sung, from where the plan has got to by then.
         expect(offset).toBeGreaterThan((1234 - caption.start_ms) / 1000);
-        expect(offset).toBeLessThanOrEqual((1234 + took - caption.start_ms) / 1000);
       } else {
         expect(offset).toBe(0);
-        expect(when).toBeGreaterThanOrEqual(3 + (caption.start_ms - 1234 - took) / 1000);
-        expect(when).toBeLessThan(3 + (caption.start_ms - 1234) / 1000);
       }
     }
-    // One instant for every caption: the gaps between them are the plan's own.
-    const [first, second] = context.starts;
-    expect(second.when - first.when + first.offset).toBeCloseTo((plan.captions[1].start_ms - plan.captions[0].start_ms) / 1000, 9);
   });
 
   it("sounds exactly as the whole plan sung at once, the booth's and a match's call alike", async () => {
+    vi.useFakeTimers();
     const sing = await voice;
     for (const sung of [plan, call]) {
       const context = fakeContext();
       createVoice(context, sing).start(sung, 0);
+      vi.runAllTimers();
       const whole = wholePlan(sung, sing);
       const heard = new Float32Array(sung.duration_ms * 48);
       for (const [{ buffer }, caption] of context.starts.map((start, i) => [start, sung.captions[i]])) {
@@ -236,8 +260,10 @@ describe("createVoice", () => {
   });
 
   it("holds only the speech: a long call with three lines is sung into no more than its captions", async () => {
+    vi.useFakeTimers();
     const context = fakeContext();
     createVoice(context, await voice).start(call, 0);
+    vi.runAllTimers();
     const held = context.starts.reduce((sum, { buffer }) => sum + buffer.length, 0);
     const spoken = call.captions.reduce((sum, c) => sum + (c.end_ms - c.start_ms) * 48, 0);
     expect(held).toBe(spoken);
@@ -245,24 +271,32 @@ describe("createVoice", () => {
   });
 
   it("sings nothing of a caption already over, and nothing at all for a join past the plan's end", async () => {
+    vi.useFakeTimers();
     const sing = await voice;
     const context = fakeContext();
     createVoice(context, sing).start(call, 31000);
+    vi.runAllTimers();
     expect(context.starts.map(({ buffer }) => buffer.length)).toEqual(
       call.captions.filter((c) => c.end_ms > 31000).map((c) => (c.end_ms - c.start_ms) * 48));
     const late = fakeContext();
     createVoice(late, sing).start(plan, 99999);
+    vi.runAllTimers();
     expect(late.starts).toEqual([]);
   });
 
-  it("stops every caption it scheduled, sung or still to come", async () => {
+  it("stops every caption it scheduled, and sings none of those still to come", async () => {
+    vi.useFakeTimers();
     const context = fakeContext();
     const speaker = createVoice(context, await voice);
     speaker.start(call, 0);
+    vi.advanceTimersByTime(7000);
+    expect(context.starts).toHaveLength(2);
     speaker.stop();
     expect(context.stopped).toEqual(context.starts.map(({ buffer }) => buffer));
+    vi.runAllTimers();
+    expect(context.starts).toHaveLength(2);
     speaker.stop();
-    expect(context.stopped).toHaveLength(context.starts.length);
+    expect(context.stopped).toHaveLength(2);
   });
 
   it("breathes the wind twice across the shutter", async () => {

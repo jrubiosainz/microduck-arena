@@ -3,8 +3,24 @@ from dataclasses import replace
 from datetime import UTC, date, datetime, time
 
 from arena.cup import (
-    Cup, Entrant, MatchRecord, closed_cups, cup_times, draw_groups, first_knockout, group_count, group_fixtures,
-    group_table, is_match_id, match_id, match_label, match_title, parse_match_id, reached, round_name,
+    Cup,
+    Entrant,
+    MatchRecord,
+    closed_cups,
+    cup_times,
+    cup_title,
+    draw_groups,
+    first_knockout,
+    group_count,
+    group_fixtures,
+    group_table,
+    is_match_id,
+    match_id,
+    match_label,
+    match_title,
+    parse_match_id,
+    reached,
+    round_name,
 )
 from arena.manifest import CupRules
 from arena.match import BoutResult
@@ -106,6 +122,10 @@ def test_the_knockout_crosses_the_groups():
     assert first_knockout([[g, 8 + g] for g in range(8)]) == [
         (0, 9), (2, 11), (4, 13), (6, 15), (1, 8), (3, 10), (5, 12), (7, 14)]   # A1–B2 … G1–H2, then B1–A2 … H1–G2
     assert [round_name(n) for n in (1, 2, 4, 8, 16)] == ["final", "semi-final", "quarter-final", "round of 16", "round of 32"]
+
+
+def test_a_cup_is_named_on_air_by_its_event_and_number():
+    assert cup_title("Tug of War", 12) == "Tug of War · Cup #12"
 
 
 def test_a_title_says_the_stage_and_both_ducks():

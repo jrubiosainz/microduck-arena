@@ -13,6 +13,7 @@ from ..cup import (
     Entrant,
     MatchRecord,
     cup_times,
+    cup_title,
     group_fixtures,
     group_table,
     parse_iso,
@@ -80,7 +81,7 @@ def screen_view(cup: Cup, before: int, manifest: Manifest) -> dict:
     upcoming = cup.matches[before] if before < count else None
     stage = ("Champion" if upcoming is None else f"Groups · round {group_round(cup, upcoming)} of {group_rounds(cup)}"
              if upcoming.group else upcoming.round.capitalize())
-    return {"title": f"{manifest.title} · Cup #{cup.number}", "stage": stage, "groups": groups, "knockout": knockout,
+    return {"title": cup_title(manifest.title, cup.number), "stage": stage, "groups": groups, "knockout": knockout,
             "next": None if upcoming is None else {"a": names[upcoming.a], "b": names[upcoming.b],
                                                    "group": upcoming.group, "round": upcoming.round},
             "champion": names[cup.matches[-1].winner] if upcoming is None else None}

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from .broadcasts import BroadcastBook, utcnow
-from .cup import ends_at, iso, match_title, parse_iso, revealed_at
+from .cup import cup_title, ends_at, iso, match_title, parse_iso, revealed_at
 from .manifest import all_events
 from .store import clip_version
 
@@ -98,7 +98,7 @@ def pool(store, now: datetime) -> list[Entry]:
             if ready is not None:
                 entries.append(Entry(match.match_id, cup.entrants[match.winner].user, manifest.title,
                                      iso(revealed_at(cup, match.match_id)), *ready,
-                                     title=f"{manifest.title} · Cup #{cup.number} · {match_title(cup, match)}"))
+                                     title=f"{cup_title(manifest.title, cup.number)} · {match_title(cup, match)}"))
     return entries
 
 
@@ -113,7 +113,7 @@ def shows(store, now: datetime) -> list[Show]:
         if cup.skipped or (cup.order is not None and ends_at(cup) <= now):
             continue
         premiere = int(parse_iso(cup.premiere_at).timestamp() * 1000)
-        standby = {"title": f"{titles[cup.event_id]} · Cup #{cup.number}"}
+        standby = {"title": cup_title(titles[cup.event_id], cup.number)}
         if cup.order is None:
             laid.append(Show(premiere, None, None, (), standby))
             continue

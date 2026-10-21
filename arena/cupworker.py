@@ -21,6 +21,7 @@ from .cup import (
     MatchRecord,
     closed_cups,
     cup_times,
+    cup_title,
     draw_groups,
     ends_at,
     first_knockout,
@@ -315,7 +316,7 @@ class CupWorker:
             return json.loads(stored)
         if now - self._failed.get(key, now - SHOW_RETRY) < SHOW_RETRY:
             return None
-        title = f"{manifest.title} Cup #{cup.number}"
+        title = cup_title(manifest.title, cup.number)
         if key not in self._shows:  # once, not on every tick the clips render
             self._shows[key] = {"desk": {}, "calls": {}}
             self.log(f"cups: writing the show of {title}")

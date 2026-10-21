@@ -32,14 +32,18 @@ const segment = {
 };
 
 describe("createInterlude", () => {
-  let context;
+  let context, clock, now;
   beforeEach(() => {
     // jsdom draws no 2D canvas: the captions measure nothing and show each line whole, as jsdom's own null would,
     // without its notice in every test.
     context = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    // The page's clock stands still unless a test moves it.
+    clock = 0;
+    now = vi.spyOn(performance, "now").mockImplementation(() => clock);
   });
   afterEach(() => {
     context.mockRestore();
+    now.mockRestore();
     state.booths.length = 0;
     state.broadcasts.clear();
     state.shows.clear();
@@ -101,6 +105,19 @@ describe("createInterlude", () => {
     expect(voice.start).toHaveBeenCalledWith(segment.plan, 7000);
     expect(order).toEqual(["booth", "voice"]);
     expect(booth.draw).toHaveBeenLastCalledWith(7000);
+  });
+
+  it("starts a desk joined late from where the segment has got to once its file lands", async () => {
+    const voice = { start: vi.fn(), stop: vi.fn(), muted: vi.fn() };
+    const ambience = { start: vi.fn(), stop: vi.fn(), muted: vi.fn() };
+    const interlude = await createInterlude(document.createElement("div"), { audio: () => ({ voice, ambience }) });
+    getShow.mockImplementationOnce(async () => {
+      clock += 400; // the round trip
+      return segment;
+    });
+    await interlude.play(desk, 7000);
+    expect(voice.start).toHaveBeenCalledWith(segment.plan, 7400);
+    expect(state.booths[0].draw).toHaveBeenLastCalledWith(7400);
   });
 
   it("draws nothing of the last desk at the next one's offset while the next one's file is on its way", async () => {

@@ -315,7 +315,7 @@ def test_the_worker_writes_the_show_once_then_fixes_the_order(tmp_path, no_physi
     assert [s["segment"] for s in cup.order["segments"] if s["kind"] == "desk"] == list(written_show(cup)["desk"])
     assert cup.order == running_order(cup, {m.match_id: 10.0 for m in cup.matches},
                                       datetime(2026, 10, 23, 16, tzinfo=UTC), show=written_show(cup))
-    assert said == ["cups: writing the show of Tug of War Cup #1", "cups: the show of Tug of War Cup #1 is written",
+    assert said == ["cups: writing the show of Tug of War · Cup #1", "cups: the show of Tug of War · Cup #1 is written",
                     "cups: tug-of-war #1 airs from 2026-10-23T16:00:00Z"]
 
     # A show takes minutes to write: one done past the premiere is still aired ORDER_LEAD after it is fixed.
@@ -342,8 +342,8 @@ def test_an_unwritten_show_holds_the_order_and_resumes_on_the_next_tick(tmp_path
     cups = worker(store, Clock(datetime(2026, 10, 23, 15, tzinfo=UTC)), show=write, log=said.append)
     cups.tick()
     assert load_cup(store, "tug-of-war", 1).order is None and store.cup_file("tug-of-war", 1, "show.json") is None
-    assert said == ["cups: writing the show of Tug of War Cup #1",
-                    "cups: the show of Tug of War Cup #1 waits (ConnectError: router down)"]
+    assert said == ["cups: writing the show of Tug of War · Cup #1",
+                    "cups: the show of Tug of War · Cup #1 waits (ConnectError: router down)"]
     cups.tick()
     assert given[1][0] is given[0][0] and (given[0][1], given[1][1]) == ({}, {"opening": {"kind": "opening"}})
     assert load_cup(store, "tug-of-war", 1).order is not None
@@ -384,8 +384,8 @@ def test_a_show_refused_every_time_is_asked_again_ten_minutes_later_not_every_ti
         clock.at = refused_at + later
         cups.tick()
     assert [at for at, _ in given] == [refused_at] and load_cup(store, "tug-of-war", 1).order is None
-    assert said == ["cups: writing the show of Tug of War Cup #1",
-                    "cups: the show of Tug of War Cup #1 waits (Rejected: model answer is not JSON)"]
+    assert said == ["cups: writing the show of Tug of War · Cup #1",
+                    "cups: the show of Tug of War · Cup #1 waits (Rejected: model answer is not JSON)"]
     clock.at = refused_at + SHOW_RETRY
     cups.tick()
     assert given[1] == (refused_at + SHOW_RETRY, {"opening": {"kind": "opening"}})
@@ -541,7 +541,7 @@ def test_the_last_match_called_stores_the_show_and_fixes_the_order_from_a_fresh_
     assert order["starts_at"] == "2026-10-23T16:10:20Z"  # ORDER_LEAD after the show was written, not before
     assert order == running_order(cup, {m.match_id: 30.0 for m in cup.matches},
                                   datetime(2026, 10, 23, 16, 10, 20, tzinfo=UTC), show=show)
-    assert b.said[2:] == ["cups: writing the show of Tug of War Cup #1", "cups: the show of Tug of War Cup #1 is written",
+    assert b.said[2:] == ["cups: writing the show of Tug of War · Cup #1", "cups: the show of Tug of War · Cup #1 is written",
                           "cups: tug-of-war #1 airs from 2026-10-23T16:10:20Z"]  # one line, not one per tick
 
 

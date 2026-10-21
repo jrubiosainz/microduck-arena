@@ -129,6 +129,39 @@ def test_closing_closes_the_browser(monkeypatch):
     assert tab._chrome is None
 
 
+def test_closing_waits_for_an_ask_in_progress(monkeypatch):
+    """The reserve's thread may be asking the page when the app shuts down: the browser is not
+    closed under it."""
+    asking, answered = threading.Event(), threading.Event()
+
+    class Slow(FakeTab):
+        def evaluate(self, expression, await_promise=False, timeout=60.0):
+            if expression == READY:
+                return True
+            asking.set()
+            answered.wait(5)
+            return PLAN
+
+    class SlowChrome(FakeChrome):
+        def tab(self, width, height):
+            return Slow()
+
+    monkeypatch.setattr("arena.commentary.tab.Chrome", SlowChrome)
+    tab = PlanTab("http://127.0.0.1:8000", binary="/chrome")
+    reserve = threading.Thread(target=lambda: tab.prepare({"run_id": "a", "turns": []}))
+    reserve.start()
+    asking.wait(5)
+    chrome = tab._chrome
+    closing = threading.Thread(target=tab.close)
+    closing.start()
+    closing.join(0.2)
+    assert not chrome.closed
+    answered.set()
+    reserve.join(5)
+    closing.join(5)
+    assert chrome.closed and tab._chrome is None
+
+
 def test_no_chrome_on_the_machine_is_told_plainly(monkeypatch):
     monkeypatch.setattr("arena.commentary.tab.find_chrome", lambda: None)
     with pytest.raises(RuntimeError, match="no Chrome"):

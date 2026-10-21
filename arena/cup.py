@@ -193,6 +193,11 @@ def round_name(matches_in_round: int) -> str:
     return {1: "final", 2: "semi-final", 4: "quarter-final"}.get(matches_in_round, f"round of {2 * matches_in_round}")
 
 
+def cup_title(event_title: str, number: int) -> str:
+    """The cup as it is named on air, on the standby card, the desk's screen and a match's card."""
+    return f"{event_title} · Cup #{number}"
+
+
 def _stage(match: MatchRecord) -> str:
     return f"Group {match.group}" if match.group else match.round.capitalize()
 

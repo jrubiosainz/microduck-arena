@@ -96,14 +96,18 @@ export async function createInterlude(stage, { audio }) {
       seek(0);
     },
     async play(slot, offsetMs) {
+      const began = performance.now();
       const file = await mount(slot);
       if (!file) return;
       canvas.hidden = false;
+      // A file fetched as the screen joined lands a round trip later: the
+      // segment starts where it has got to by then.
+      const at = offsetMs + performance.now() - began;
       const sound = audio();
-      sound?.voice.start(file.plan, offsetMs);
+      sound?.voice.start(file.plan, at);
       sound?.ambience.start();
       muted(isMuted());
-      seek(offsetMs);
+      seek(at);
     },
     seek,
     stop,
