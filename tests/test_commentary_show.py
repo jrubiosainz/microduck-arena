@@ -225,6 +225,7 @@ def test_the_desk_is_told_what_the_segment_is_for():
     system = router.asked[0][0]["content"]
     assert DESK_ANGLES["opening"] in system and DESK_PLAYERS["opening"] in system
     assert f"{DESK_ANGLES['opening']} {DESK_NUMBERS}" in system
+    assert "never rounded or turned into metres" in system and "nothing added up, subtracted or counted" in system
     assert f"{DESK_PLAYERS['opening']} {DESK_HANDLES}" in system
     assert json.loads(router.asked[0][1]["content"])["facts"] == [
         {"index": i, "text": fact["text"]} for i, fact in enumerate(facts("opening"))]

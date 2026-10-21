@@ -38,9 +38,11 @@ DESK_ANGLES = {
                 "and look back on their cup in one line.",
     "close": "The show is ending: name the champion once more and say when the next cup premieres.",
 }
-# Left to itself the desk turns "favourite by 41.1 cm" into "over forty centimetres" or "nearly half a metre".
-DESK_NUMBERS = ("Say a rating or a gap exactly as a fact prints it, its decimal and cm included: never rounded, "
-                "never in metres, never 'nearly' or 'over' a number.")
+# Left to itself the desk turns "favourite by 41.1 cm" into "over forty centimetres" or "nearly half a metre",
+# and a path of four 2–0 wins into "eight bouts".
+DESK_NUMBERS = ("Every number said is one a fact prints, said as it prints it: a rating or a gap with its decimal "
+                "and cm, never rounded or turned into metres, never 'nearly' or 'over' one; nothing added up, "
+                "subtracted or counted.")
 DESK_PLAYERS = {
     "opening": "Name ducks by their names as the facts print them, the favourites first; a player by handle at most once.",
     "intro": "Name both ducks of the next match by their names as printed, and each one's player by handle once.",
