@@ -24,7 +24,7 @@ export const VOICES = Object.freeze({
 const TURNS = { min: 2, max: 6 };
 const CAPTION_CHARS = 84;
 const WORD_CHARS = 42;
-const LINE_PIECES = new RegExp(`.{1,${WORD_CHARS}}`, "g");
+const LINE_PIECES = new RegExp(`.{1,${WORD_CHARS}}`, "gu");
 const FRAME_MS = 40;
 // The steps a voice walks from one chirp to the next, in semitones: small ones most often.
 const STEPS = [-4, -3, -2, -2, -1, 1, 2, 2, 3, 4];

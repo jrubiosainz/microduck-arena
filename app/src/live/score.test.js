@@ -207,6 +207,15 @@ describe("prepareCall", () => {
       .captions[0].text).toBe(`${"x".repeat(42)} ${"x".repeat(38)}`);
   });
 
+  it("never breaks a long name inside a character, so an emoji in it stays whole", () => {
+    // A lone half of a surrogate pair cannot be stored as UTF-8: the show would never be written.
+    const text = `${"a".repeat(41)}\u{1F986}-tug-policy pulls west!`;
+    const plan = prepareCall({ ...call, lines: [{ at_ms: 2000, speaker: "peter", text }] });
+    const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+    expect(plan.captions.some((c) => lone.test(c.text))).toBe(false);
+    expect(plan.captions[0].text).toBe(`${"a".repeat(41)}\u{1F986} -tug-policy pulls west!`);
+  });
+
   it("keeps every caption and note inside the clip", () => {
     const plan = prepareCall({
       ...call,
