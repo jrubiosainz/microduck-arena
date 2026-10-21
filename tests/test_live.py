@@ -4,12 +4,14 @@ only says which part of it to serve."""
 import hashlib
 import json
 from collections import Counter
+from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 
 import numpy as np
 from fastapi.testclient import TestClient
 
 from arena.broadcasts import BroadcastBook
+from arena.cup import ends_at, iso
 from arena.live import (
     BEHIND_MS,
     HEAD,
@@ -18,14 +20,19 @@ from arena.live import (
     SHUTTER_MS,
     Entry,
     Programme,
+    Show,
     cycle,
     pool,
+    shows,
     slots_for,
 )
+from arena.manifest import load_event
 from arena.store import LocalStore, Withdrawal
 from arena.trace import encode
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
+from tests.test_cup_view import REVEAL, START, START_ISO
+from tests.test_cupworker import played_cup, store_cup
 from tests.test_store import make_record
 from tests.test_withdraw import sign_in, spaced  # noqa: F401 — spaced is a fixture
 
@@ -51,7 +58,7 @@ def test_the_pool_is_ready_clips_that_are_not_withdrawn(tmp_path):
     store.put_clip("D", {"clip.json": clip(8.033)})
     store.withdraw(Withdrawal(run_id="C", event_id="sprint-2m", user="c",
                               withdrawn_at="2026-09-14T12:00:00Z"))
-    entries = {e.run_id: e for e in pool(store)}
+    entries = {e.run_id: e for e in pool(store, datetime(2026, 9, 16, tzinfo=UTC))}
     assert set(entries) == {"A", "B"}
     # The render's stamp travels with the entry: it versions the media URLs.
     assert entries["A"] == Entry("A", "a", "2 m Sprint", "2026-09-03T10:00:00Z", 8000,
@@ -416,6 +423,66 @@ def test_a_mark_that_cannot_be_written_does_not_take_the_grid_down(tmp_path, mon
     assert programme.slots()
     assert book.get(made.id).aired_at is None
 
+
+# A cup of one match: its shutter at 10 030 000, its clip until 10 041 600.
+SHOW = Show(10_030_000, 10_041_600, (
+    {"kind": "shutter", "at_ms": 10_030_000, "duration_ms": 1600, "next": {"match_id": "m", "title": "Final"}},
+    {"kind": "replay", "at_ms": 10_031_600, "duration_ms": 10000, "run_id": "m", "clip": "v", "media": "match"}),
+    {"event": "tug-of-war", "number": 1, "title": "Cup #1", "starts_at_ms": 10_030_000})
+TITLE = load_event("tug-of-war").title
+
+
+def test_a_match_entry_is_announced_by_its_title_and_plays_its_match_clip_with_no_booth(tmp_path):
+    match = Entry("tug-of-war-0001-008", "p0", TITLE, "2026-10-30T17:01:34Z", 10000, "v1", title="Final · x vs y")
+    book = BroadcastBook(tmp_path)
+    book.put(match.run_id, {"run_id": match.run_id, "turns": [], "lore_refs": []},
+             {"duration_ms": 20000, "captions": [], "notes": [], "gestures": []}, "2026-10-30T18:00:00Z")
+    shutter, replay = slots_for([match], 1_000_000, book)
+    assert shutter["next"] == {"match_id": "tug-of-war-0001-008", "title": "Final · x vs y"}
+    assert replay == {"kind": "replay", "at_ms": 1_001_600, "duration_ms": 10000, "run_id": "tug-of-war-0001-008",
+                      "clip": "v1", "media": "match"}
+
+
+def test_an_aired_cup_joins_the_pool_until_the_next_cup_starts(tmp_path):
+    store, cup = LocalStore(tmp_path), played_cup(4, starts_at=START_ISO)
+    store_cup(store, cup)
+    assert pool(store, ends_at(cup) - timedelta(seconds=1)) == []
+    entries = pool(store, ends_at(cup))
+    assert len(entries) == 7 and entries[-1].title == f"{TITLE} · Cup #1 · Final · duck 0 vs duck 1"
+    assert (entries[-1].submitted_at, entries[-1].replay_ms, entries[-1].clip) == (iso(REVEAL(6)), 10000, "20261030T152000Z")
+    store_cup(store, played_cup(4, number=2, starts_at="2026-11-06T17:00:00Z"))
+    assert len(pool(store, datetime(2026, 11, 6, 16, 59, tzinfo=UTC))) == 7
+    assert pool(store, datetime(2026, 11, 6, 17, tzinfo=UTC)) == []
+
+
+def test_shows_lay_a_cup_at_its_absolute_times(tmp_path):
+    store, cup = LocalStore(tmp_path), played_cup(4, starts_at=START_ISO)
+    store_cup(store, cup)
+    start = int(START.timestamp() * 1000)
+    [show] = shows(store, START - timedelta(hours=1))
+    assert (show.starts_ms, show.ends_ms, len(show.slots)) == (start, start + 7 * 11600, 14)
+    assert show.slots[0]["next"] == {"match_id": cup.matches[0].match_id, "title": "Group A"}
+    assert show.slots[1] == {"kind": "replay", "at_ms": start + 1600, "duration_ms": 10000,
+                             "run_id": cup.matches[0].match_id, "clip": "20261030T152000Z", "media": "match"}
+    assert show.standby == {"event": "tug-of-war", "number": 1, "title": f"{TITLE} · Cup #1", "starts_at_ms": start}
+    assert shows(store, ends_at(cup)) == []
+
+
+def test_the_cycle_stands_by_for_a_show_then_plays_it_at_its_times(tmp_path):
+    programme = Programme(lambda: [entry("A"), entry("B")], Clock(10_000_000), BroadcastBook(tmp_path), cups=lambda: [SHOW])
+    slots = programme.slots()
+    assert [(s["kind"], s["at_ms"]) for s in slots[:8]] == [
+        ("shutter", 10_000_000), ("replay", 10_001_600), ("shutter", 10_009_600), ("replay", 10_011_200),
+        ("shutter", 10_019_200), ("replay", 10_020_800), ("standby", 10_028_800), ("shutter", 10_030_000)]
+    assert slots[6] == {"kind": "standby", "at_ms": 10_028_800, "duration_ms": 1200, "cup": SHOW.standby}
+    assert slots[8] == SHOW.slots[1] and slots[9]["at_ms"] == 10_041_600
+    for a, b in pairwise(slots):
+        assert b["at_ms"] == a["at_ms"] + a["duration_ms"]
+
+
+def test_a_restart_mid_show_joins_the_segment_airing_now(tmp_path):
+    slots = Programme(lambda: [entry("A")], Clock(10_035_000), BroadcastBook(tmp_path), cups=lambda: [SHOW]).slots()
+    assert slots[0] == SHOW.slots[1] and (slots[1]["kind"], slots[1]["at_ms"]) == ("shutter", 10_041_600)
 
 def ready(app, run_id, user="alice", seconds=8.0):
     app.state.store.append(make_record(run_id=run_id, user=user), encode(np.zeros((5, 21), "f4")))

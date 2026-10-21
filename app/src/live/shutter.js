@@ -2,7 +2,8 @@
 // from the left, 800 ms fully covering, a 400 ms sweep out to the right. The
 // slot underneath switches at 800 ms, while nothing shows through. On the way
 // out to a replay the panel carries the UP NEXT card, which is how the next
-// replay is announced.
+// replay is announced: a run by its event and its player, a cup match by its
+// title.
 
 import { wordmark } from "../wordmark.js";
 
@@ -47,7 +48,9 @@ export function createShutter(container) {
       const announce = destination && next;
       card.hidden = !announce;
       if (announce) {
-        event.textContent = next.event;
+        // A cup match is announced by its title alone, never by a player.
+        event.textContent = next.title ?? next.event;
+        user.hidden = Boolean(next.title);
         user.textContent = `@${next.user}`;
       }
     },

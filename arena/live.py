@@ -10,10 +10,12 @@ grid and the same clock, not because a stream was pushed at them.
 import random
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 
 from .broadcasts import BroadcastBook, utcnow
-from .store import clip_version
+from .cup import ends_at, iso, match_title, parse_iso, revealed_at
 from .manifest import all_events
+from .store import clip_version
 
 SHUTTER_MS = 1600
 HORIZON_MS = 5 * 60_000  # how far ahead the grid is built and served
@@ -36,28 +38,85 @@ class Entry:
     replay_ms: int
     # Which render of the clip: the screens build its media URLs from this.
     clip: str
+    # A cup match's, which announces it: "Tug of War · Cup #1 · Final · duck 0 vs duck 1".
+    title: str | None = None
 
 
-def pool(store) -> list[Entry]:
-    """Every run with a ready clip, not withdrawn."""
+@dataclass(frozen=True)
+class Show:
+    """A cup's running order on the grid: it airs at its own times, whatever the cycle is doing."""
+    starts_ms: int
+    ends_ms: int
+    slots: tuple[dict, ...]  # each shutter, and each match as a replay slot with its clip version
+    standby: dict  # {"event", "number", "title", "starts_at_ms"}: what the screen waits for
+
+
+def _ready(store, clip_id: str) -> tuple[int, str] | None:
+    """The clip's length and render, once it is ready to be laid."""
+    state, clip = store.clip_state(clip_id)
+    if state != "ready":
+        return None
+    replay_ms = round(clip["layouts"]["landscape"]["seconds"] * 1000)
+    # A length that is not a whole number of frames cannot be laid on the
+    # grid; such a clip stays off the programme rather than breaking the
+    # channel for everyone.
+    if replay_ms % 40:
+        return None
+    return replay_ms, clip_version(clip)
+
+
+def pool(store, now: datetime) -> list[Entry]:
+    """Every run with a ready clip, not withdrawn, and the matches of each
+    event's last cup once it has aired, until the event's next cup starts."""
+    from .cupworker import all_cups  # not at the top: cupworker reads SHUTTER_MS from this module
+
     withdrawn = {w.run_id for w in store.withdrawals()}
+    cups = all_cups(store)
     entries = []
     for manifest in all_events():
         for record in store.runs(manifest.id):
-            if record.run_id in withdrawn:
-                continue
-            state, clip = store.clip_state(record.run_id)
-            if state != "ready":
-                continue
-            replay_ms = round(clip["layouts"]["landscape"]["seconds"] * 1000)
-            # A length that is not a whole number of frames cannot be laid on
-            # the grid; such a run stays off the programme rather than
-            # breaking the channel for everyone.
-            if replay_ms % 40:
-                continue
-            entries.append(Entry(record.run_id, record.user, manifest.title,
-                                 record.submitted_at, replay_ms, clip_version(clip)))
+            ready = None if record.run_id in withdrawn else _ready(store, record.run_id)
+            if ready is not None:
+                entries.append(Entry(record.run_id, record.user, manifest.title, record.submitted_at, *ready))
+        started = [cup for cup in cups if cup.event_id == manifest.id
+                   and cup.order is not None and parse_iso(cup.order["starts_at"]) <= now]
+        if not started:
+            continue
+        cup = max(started, key=lambda one: one.number)
+        if ends_at(cup) > now:
+            continue
+        for match in cup.matches:
+            ready = _ready(store, match.match_id)
+            if ready is not None:
+                entries.append(Entry(match.match_id, cup.entrants[match.winner].user, manifest.title,
+                                     iso(revealed_at(cup, match.match_id)), *ready,
+                                     title=f"{manifest.title} · Cup #{cup.number} · {match_title(cup, match)}"))
     return entries
+
+
+def shows(store, now: datetime) -> list[Show]:
+    """Every cup with a running order that has not finished airing, by start."""
+    from .cupworker import all_cups  # not at the top: cupworker reads SHUTTER_MS from this module
+
+    titles = {manifest.id: manifest.title for manifest in all_events()}
+    laid = []
+    for cup in all_cups(store):
+        if cup.order is None or ends_at(cup) <= now:
+            continue
+        start = int(parse_iso(cup.order["starts_at"]).timestamp() * 1000)
+        slots = []
+        for segment in cup.order["segments"]:
+            at, duration = start + segment["at_ms"], segment["duration_ms"]
+            if segment["kind"] == "shutter":
+                slots.append({"kind": "shutter", "at_ms": at, "duration_ms": duration, "next": segment["next"]})
+            else:
+                # The order carries each clip's length, not its render: that is read here.
+                slots.append({"kind": "replay", "at_ms": at, "duration_ms": duration, "run_id": segment["match_id"],
+                              "clip": clip_version(store.clip_state(segment["match_id"])[1]), "media": "match"})
+        laid.append(Show(start, slots[-1]["at_ms"] + slots[-1]["duration_ms"], tuple(slots),
+                         {"event": cup.event_id, "number": cup.number,
+                          "title": f"{titles[cup.event_id]} · Cup #{cup.number}", "starts_at_ms": start}))
+    return sorted(laid, key=lambda show: show.starts_ms)
 
 
 def cycle(entries: list[Entry], k: int) -> list[Entry]:
@@ -87,11 +146,14 @@ def slots_for(entries: list[Entry], start_ms: int, book: BroadcastBook,
         at += slot["duration_ms"]
 
     for entry in entries:
+        match = entry.title is not None
         add({"kind": "shutter", "duration_ms": SHUTTER_MS,
-             "next": {"run_id": entry.run_id, "event": entry.event_title, "user": entry.user}})
+             "next": {"match_id": entry.run_id, "title": entry.title} if match
+             else {"run_id": entry.run_id, "event": entry.event_title, "user": entry.user}})
         add({"kind": "replay", "duration_ms": entry.replay_ms, "run_id": entry.run_id,
-             "clip": entry.clip})
-        waiting = book.unaired(entry.run_id)
+             "clip": entry.clip, **({"media": "match"} if match else {})})
+        # Peter and Ray's writer writes about runs: a match never has a booth.
+        waiting = None if match else book.unaired(entry.run_id)
         if waiting is not None and waiting.id not in claimed:
             claimed.add(waiting.id)
             add({"kind": "shutter", "duration_ms": SHUTTER_MS, "next": None})
@@ -105,12 +167,14 @@ class Programme:
     pool or the book changes: past what screens were promised when something
     lands, from the slot playing now when a run is withdrawn — keeping its place
     in the cycle it is walking either way, so the rebuild carries on from there
-    instead of opening a new cycle on the newest runs."""
+    instead of opening a new cycle on the newest runs. A cup's show airs at its
+    running order's own times: the cycle stands by for it, then resumes."""
 
-    def __init__(self, source, now_ms, book):
+    def __init__(self, source, now_ms, book, cups=list):
         self._source = source
         self._now = now_ms
         self._book = book
+        self._cups = cups  # the shows to air, as `shows` reads them
         self._lock = threading.Lock()
         self.origin_ms = now_ms()
         self._slots: list[dict] = []
@@ -151,18 +215,39 @@ class Programme:
         # What the kept slots are playing is claimed before anything is laid,
         # and the claims grow with the grid: a booth laid for one entry is
         # claimed against the next. No booth is ever handed to two slots.
-        claimed = self._claimed()
+        claimed, shows = self._claimed(), None
         while self._cursor < until_ms:
+            shows = self._cups() if shows is None else shows  # read once per extension that lays something
+            show = next((one for one in shows if one.ends_ms > self._cursor), None)
+            if show is not None and show.starts_ms <= self._cursor:
+                # Inside a show: its slots at their own times. A restart in the
+                # middle of one joins the segment airing now.
+                self._slots.extend(slot for slot in show.slots if slot["at_ms"] + slot["duration_ms"] > self._cursor)
+                self._cursor = show.ends_ms
+                continue
             if not self._pending and not self._take_up_the_cycle():
-                return
+                if show is None:
+                    return
+                self._stand_by(show)
+                continue
+            made = slots_for([self._pending[0]], self._cursor, self._book, claimed)
+            if show is not None and made[-1]["at_ms"] + made[-1]["duration_ms"] > show.starts_ms:
+                self._stand_by(show)  # the entry waits for after the show
+                continue
             entry = self._pending.pop(0)
-            made = slots_for([entry], self._cursor, self._book, claimed)
             claimed |= {slot["broadcast"] for slot in made if slot["kind"] == "booth"}
             self._laid.append((self._cursor, self._cycle, entry.run_id))
             self._slots.extend(made)
             self._cursor = made[-1]["at_ms"] + made[-1]["duration_ms"]
             if not self._pending:
                 self._cycle += 1  # walked to its end; the next one is whole
+
+    def _stand_by(self, show: Show) -> None:
+        """Fill to the show's start with its standby: the one slot of any
+        length, since it plays no frames."""
+        self._slots.append({"kind": "standby", "at_ms": self._cursor,
+                            "duration_ms": show.starts_ms - self._cursor, "cup": show.standby})
+        self._cursor = show.starts_ms
 
     def _mark_aired(self, now: int) -> None:
         """A booth whose slot has ended has been heard, wherever a screen was.

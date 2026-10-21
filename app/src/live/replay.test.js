@@ -50,6 +50,11 @@ describe("createReplay", () => {
     expect(second.hidden).toBe(false);
   });
 
+  it("plays a cup match from the match's clip", () => {
+    replay.prepare({ kind: "replay", at_ms: 0, duration_ms: 8000, run_id: "tug-of-war-0001-000", clip: "v1", media: "match" });
+    expect([...stage.querySelectorAll("video")].some((v) => v.getAttribute("src") === "/api/matches/tug-of-war-0001-000/clip/landscape.mp4?v=v1")).toBe(true);
+  });
+
   it("plays a slot it was not prepared for by preparing it first", async () => {
     await replay.play(B, 100);
     const shown = [...stage.querySelectorAll("video")].find((v) => !v.hidden);

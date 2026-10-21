@@ -2,7 +2,7 @@
 // the next clip is buffering while this one plays; the servo is grid.js's
 // `correction`: a nudge for a small error, a seek for a large one.
 
-import { clipUrl } from "../api.js";
+import { clipUrl, matchClipUrl } from "../api.js";
 import { isMuted } from "../sound.js";
 import { correction } from "./grid.js";
 
@@ -27,7 +27,7 @@ export function createReplay(stage, { onRefused }) {
 
   function load(slot) {
     const video = videos.find((v) => v !== active?.video);
-    video.src = clipUrl(slot.run_id, "landscape.mp4", slot.clip);
+    video.src = (slot.media === "match" ? matchClipUrl : clipUrl)(slot.run_id, "landscape.mp4", slot.clip);
     video.load();
     prepared = { video, slot };
   }

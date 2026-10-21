@@ -13,6 +13,7 @@ import { shouldReload } from "./live/grid.js";
 import { createInterlude } from "./live/interlude.js";
 import { createReplay } from "./live/replay.js";
 import { createShutter } from "./live/shutter.js";
+import { createStandby } from "./live/standby.js";
 import { createVoice, loadSynth } from "./live/voice.js";
 import { isMuted } from "./sound.js";
 import { wordmark } from "./wordmark.js";
@@ -169,6 +170,7 @@ export async function renderLive(root, state, { api = { getLive }, synth = loadS
   const clock = createClock();
   const shutter = createShutter(stage);
   const replay = createReplay(stage, { onRefused: () => { join.hidden = false; } });
+  const standby = createStandby(stage);
   const sound = createSound(synth);
   onTeardown(() => sound.close());
   let audio = null;
@@ -179,7 +181,7 @@ export async function renderLive(root, state, { api = { getLive }, synth = loadS
   }
   onTeardown(() => interlude.dispose());
   const channel = createChannel({
-    clock, segments: { replay, booth: interlude }, shutter, onState: setState,
+    clock, segments: { replay, booth: interlude, standby }, shutter, onState: setState,
     onReload: () => location.reload(),
     gust: () => audio?.voice.gust(audio.context.currentTime),
   });

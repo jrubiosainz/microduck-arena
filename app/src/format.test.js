@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  countdown,
   formatEventFacts,
   formatRate,
   formatScore,
@@ -135,5 +136,11 @@ describe("the tug of war counts in centimetres", () => {
       { label: "bout", value: "up to 45 s" },
       { label: "rig", value: "legs" },
     ]);
+  });
+});
+
+describe("countdown", () => {
+  it("counts down in the largest units that matter", () => {
+    expect([0, 4_500, 65_000, 3_725_000, 90_061_000].map(countdown)).toEqual(["0:00", "0:05", "1:05", "1:02:05", "1d 01:01:01"]);
   });
 });

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createChannel } from "./channel.js";
+import { PREFETCH_MS, createChannel } from "./channel.js";
 
 function segment() {
   return { prepare: vi.fn(), show: vi.fn(), play: vi.fn(), seek: vi.fn(), stop: vi.fn(), failed: false };
@@ -126,6 +126,21 @@ describe("createChannel", () => {
     now = 10500;
     channel.tick();
     expect(onReload).toHaveBeenCalledTimes(1);
+  });
+
+  it("prepares a cup match only from PREFETCH_MS before it airs, inside the 30 s its clip is served", () => {
+    const cup = [
+      { kind: "replay", at_ms: 0, duration_ms: 60000, run_id: "m0", clip: "v", media: "match" },
+      { kind: "shutter", at_ms: 60000, duration_ms: 1600, next: { match_id: "m1", title: "Final" } },
+      { kind: "replay", at_ms: 61600, duration_ms: 60000, run_id: "m1", clip: "v", media: "match" }];
+    channel.update({ slots: cup });
+    now = 61_600 - PREFETCH_MS - 1;
+    channel.tick();
+    expect(replay.prepare).not.toHaveBeenCalledWith(cup[2]);
+    now = 61_600 - PREFETCH_MS;
+    channel.tick();
+    expect(replay.prepare).toHaveBeenCalledWith(cup[2]);
+    expect(PREFETCH_MS).toBe(25_000);
   });
 
   it("says nothing before the first grid, then says a state once until it changes", () => {

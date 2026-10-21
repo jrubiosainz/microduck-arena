@@ -15,6 +15,17 @@ export function formatRate(rate) {
   return `${Math.round(rate * 100)}%`;
 }
 
+/** Time left, in the largest units that matter, seconds rounded up: "0:05", "1:02:05", "1d 01:01:01". */
+export function countdown(ms) {
+  const total = Math.ceil(ms / 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  const [days, hours, minutes, seconds] = [Math.floor(total / 86400), Math.floor(total / 3600) % 24,
+    Math.floor(total / 60) % 60, total % 60];
+  if (days) return `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  if (hours) return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  return `${minutes}:${pad(seconds)}`;
+}
+
 export function formatSeeds(finished, total) {
   return `${finished}/${total}`;
 }

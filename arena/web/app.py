@@ -8,13 +8,14 @@ Space later.
 import hashlib
 import random
 import threading
+from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..broadcasts import BroadcastBook
-from ..live import Programme, pool
+from ..live import Programme, pool, shows
 from ..manifest import all_events
 from .config import ArenaConfig
 from .routes_auth import router as auth_router
@@ -52,9 +53,11 @@ def create_app(config: ArenaConfig) -> FastAPI:
     # wasteful there.
     app.state.broadcasts = BroadcastBook(config.broadcast_dir)
 
-    # The programme reads the pool on every rebuild, never per request; the
-    # build hash lets a page that has run for days reload after a deploy.
-    app.state.programme = Programme(lambda: pool(app.state.store), now_ms, app.state.broadcasts)
+    # The programme reads the pool on every rebuild, never per request, and
+    # the cups as it lays; the build hash lets a page that has run for days
+    # reload after a deploy.
+    app.state.programme = Programme(lambda: pool(app.state.store, datetime.now(UTC)), now_ms, app.state.broadcasts,
+                                    cups=lambda: shows(app.state.store, datetime.now(UTC)))
     index = config.frontend_dir / "index.html" if config.frontend_dir else None
     app.state.build = hashlib.sha256(index.read_bytes()).hexdigest()[:12] if index else "dev"
 
@@ -123,7 +126,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     plan_page = config.frontend_dir and (config.frontend_dir / "plan.html").is_file()
     tab = PlanTab(config.origin) if writer and plan_page and find_chrome() else None
     app.state.commentary = CommentaryStock(
-        app.state.broadcasts, tab, writer, lambda: pool(app.state.store),
+        app.state.broadcasts, tab, writer, lambda: pool(app.state.store, datetime.now(UTC)),
         landed=lambda: app.state.programme.landed(),
     )
     if app.state.commentary.available:

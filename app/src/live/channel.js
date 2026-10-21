@@ -8,6 +8,10 @@ import { slotAfter, slotAt } from "./grid.js";
 import { shutterAt } from "./shutter.js";
 
 const FRESH_MS = 40; // a shutter entered within its first frame gets its wind
+// A cup match's clip is served from 30 s before it airs, and a video that
+// failed to load is never loaded again: a match slot is prepared from 25 s
+// before, which leaves a screen's clock 5 s of slack.
+export const PREFETCH_MS = 25_000;
 
 export function createChannel({ clock, segments, shutter, onState, onReload, gust }) {
   let slots = null; // nothing to say until the first grid
@@ -20,6 +24,7 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
   let state = null; // what the page was last told, so it hears each state once
 
   const segmentFor = (slot) => (slot && slot.kind !== "shutter" ? segments[slot.kind] : null);
+  const due = (slot, ms) => slot.media !== "match" || slot.at_ms - ms <= PREFETCH_MS;
 
   function report(value) {
     if (state === value) return;
@@ -74,7 +79,7 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
       if (slot.kind === "shutter") {
         shutter.draw(offset, slot.next);
         if (!shutterAt(offset).destination) {
-          if (next) segmentFor(next)?.prepare(next);
+          if (next && due(next, ms)) segmentFor(next)?.prepare(next);
         } else if (!uncovered) {
           uncovered = true;
           stopPrevious();
@@ -96,7 +101,7 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
           segment.seek(offset);
         }
         const after = next && slotAfter(slots, next);
-        if (after) segmentFor(after)?.prepare(after);
+        if (after && due(after, ms)) segmentFor(after)?.prepare(after);
       }
       report("live");
     },
