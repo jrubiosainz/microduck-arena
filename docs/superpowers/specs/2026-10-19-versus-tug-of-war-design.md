@@ -117,6 +117,10 @@ draw the string or read the course. Plan G (the Arena) and Plan H (the training)
 
 ### My calls (2026-10-21)
 
+The owner approved them all on 2026-10-21, with these four in particular: the upright line
+(t10-500's posture is sitting, not leaning), the strongest upright reference even if most
+players' ratings start negative, the name "string" on the site, and the decor as built.
+
 - **Rope joints: two hinges, not a ball.** Each joint between segments is two hinges (about y,
   then z), the study's "Ru", instead of a ball joint ("R"). Both were measured equally stable (0
   resets in 40 Arena bouts, ends never more than 1.0024 m apart, ties within 7.0 mm against
