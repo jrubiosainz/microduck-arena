@@ -731,8 +731,8 @@ def test_a_job_that_ended_without_a_clip_is_launched_again_then_failed(tmp_path)
 
 
 def test_a_match_clip_job_outlasts_the_longest_matchs_render_budget(tmp_path):
-    """A job HF ends writes no file, and a match's is launched again at once: its render's own
-    deadline must come first, so that it fails with a reason the cup worker relaunches spaced."""
+    """A job HF ends writes no file, and its clip fails with only the job's last word: its render's
+    own deadline must come first, so that it fails with its own reason."""
     api = FakeJobs()
     jobs = jobs_for(LocalStore(tmp_path), api)
     jobs.enqueue("R1")
@@ -744,17 +744,22 @@ def test_a_match_clip_job_outlasts_the_longest_matchs_render_budget(tmp_path):
     assert MATCH_JOB_TIMEOUT == "209m"
 
 
-def test_a_match_clip_job_is_launched_again_however_often_the_machine_ends_it(tmp_path):
+def test_a_match_clip_job_the_machine_ends_is_failed_at_once_for_the_cup_worker_to_relaunch(tmp_path):
+    """Owed again at once, it would be launched every tick the machine ends it: failed, it is the cup worker's to
+    launch again, CLIP_RETRY apart, for as long as it takes."""
     store, mid = LocalStore(tmp_path), "tug-of-war-0001-000"
     store.mark_clip_pending(mid, "arena", "tug-of-war", "2026-10-30T15:01:00Z")
     api = FakeJobs()
+    api.message["J1"] = "out of memory"
     jobs = jobs_for(store, api)
     jobs.enqueue(mid)
-    for attempt in range(1, JOB_TRIES + 3):
-        jobs.tick()
-        api.stage[f"J{attempt}"] = "ERROR"
     jobs.tick()
-    assert len(api.launched) == JOB_TRIES + 3 and store.clip_state(mid) == ("pending", None)
+    api.stage["J1"] = "ERROR"
+    jobs.tick()
+    jobs.tick()
+    state, failed = store.clip_state(mid)
+    assert len(api.launched) == 1 and state == "failed" and failed["reason"] == "job J1 ended ERROR: out of memory"
+    assert jobs.progress(mid) is None
 
 
 def test_a_boot_takes_over_the_jobs_a_previous_process_left_running(tmp_path):

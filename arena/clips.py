@@ -45,7 +45,7 @@ JOB_TIMEOUT = "30m"
 MATCH_FRAMES = 5828
 # A match's job outlives the render's own budget for the longest match by the quarter of an hour a
 # run's job has over a race's: the render's deadline comes first and writes why it failed. A job HF
-# ends writes nothing, and a match's would be launched again at once, every time.
+# ends writes nothing, and its clip fails with no more than the job's last word.
 MATCH_JOB_TIMEOUT = f"{math.ceil((budget_for(RENDER_BUDGET_S, MATCH_FRAMES) + 15 * 60) / 60)}m"
 # How often the Space looks at its jobs and at the list.
 POLL_S = 10.0
@@ -338,12 +338,12 @@ class ClipJobs:
             # Neither file: the machine ended the job, not the render.
             why = f"job {flight['job']} ended {stage}" + (f": {message}" if message else "")
             self._tries[run_id] += 1
-            # A match's clip is never given up on: a cup cannot premiere with a hole, and the
-            # cup worker spaces the relaunches of failed renders.
-            if is_match_id(run_id) or self._tries[run_id] < JOB_TRIES:
+            # A match's clip is failed at once and never given up on: a cup cannot premiere with
+            # a hole, and the cup worker launches a failed one again, CLIP_RETRY apart.
+            if not is_match_id(run_id) and self._tries[run_id] < JOB_TRIES:
                 self.log(f"clip: {run_id} owed again ({why})")
                 self.enqueue(run_id, flight["priority"])
             else:
                 self.store.fail_clip(run_id, _now(), why)
-                self.log(f"clip: {run_id} failed ({why}, {JOB_TRIES} jobs)")
+                self.log(f"clip: {run_id} failed ({why}, {self._tries[run_id]} jobs)")
         self.landed(run_id)

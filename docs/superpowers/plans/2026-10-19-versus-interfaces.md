@@ -512,7 +512,9 @@ segment carries no clip version (the live adds `clip` from `clip_state` when it 
 
 Clips of matches: the clip id is the match id. `mark_clip_pending(match_id, "arena", event_id,
 queued_at)`. `record_run(origin, clip_id, …)` opens `clip.html?match=<id>` when
-`is_match_id(clip_id)`. `ClipJobs` never gives up on a match id (`JOB_TRIES` is for runs).
+`is_match_id(clip_id)`. `ClipJobs` never gives up on a match id (`JOB_TRIES` is for runs): a match job
+that ends with nothing written fails its clip at once, and the cup worker launches a failed match clip
+again every `CLIP_RETRY`.
 `ArenaConfig.reveal_all` (set by `arena clip`, never on the Space) lets the job's loopback app read
 unrevealed matches. A match clip's `clip.json` layout `timing` carries
 `bouts: [{"k", "tape_start_s", "tape_end_s"}]` (where each bout's timed trace sits in the mp4).
