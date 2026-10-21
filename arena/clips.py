@@ -41,7 +41,7 @@ JOB_FLAVOR = "t4-small"
 # Past this a job is stuck rather than slow, and HF ends it: what one may cost.
 JOB_TIMEOUT = "30m"
 # The longest match's clip in frames: five full 45 s bouts with their settles, between the title
-# and the outro (app/src/clip/match.js matchPlan, whose test pins its 233.12 s).
+# and the outro (app/src/clip/match.js matchPlan); a test ties it to the tug's [bout] and [start].
 MATCH_FRAMES = 5828
 # A match's job outlives the render's own budget for the longest match by the quarter of an hour a
 # run's job has over a race's: the render's deadline comes first and writes why it failed. A job HF
