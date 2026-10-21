@@ -1,6 +1,7 @@
 // Views chosen by the hash. Everything else lives in its view.
 
 import { getEvents } from "./api.js";
+import { renderCup } from "./cup.js";
 import { renderHome } from "./home.js";
 import { renderLive } from "./live.js";
 import { renderPlayer } from "./player.js";
@@ -51,6 +52,12 @@ async function show() {
       await renderVote(root, { event, state });
     } else if (route.view === "run") {
       await renderRun(root, route.runId, state);
+    } else if (route.view === "cup") {
+      if (!(await events()).some((e) => e.id === route.eventId)) {
+        location.hash = "#/";
+        return;
+      }
+      await renderCup(root, route.eventId, route.number, state);
     } else if (route.view === "live") {
       await renderLive(root, state);
     } else if (route.view === "player") {

@@ -203,6 +203,10 @@ span.round-card__cta { z-index: auto; }
 .round-card:active .round-card__cta { translate: 4px 4px; box-shadow: 0 0 0 var(--ink); }
 a.round-card__cta:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 
+/* A versus card's next cup, pinned in the corner as the workshop pins its
+   trainings (.ws-running): a way of its own, so above the card's cover. */
+.round-card__cup { position: absolute; top: 18px; right: -10px; rotate: 6deg; z-index: 4; }
+
 .round-card__holo {
   position: absolute;
   inset: 0;

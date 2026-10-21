@@ -7,6 +7,8 @@ import {
   getBoutSettle,
   getBoutTrace,
   getBroadcast,
+  getCup,
+  getCups,
   getLeaderboard,
   getLive,
   getMatch,
@@ -180,6 +182,15 @@ describe("the channel", () => {
     expect(clipUrl("01ABC", "clip.mp4", "20260922T151828Z")).toBe(
       "/api/runs/01ABC/clip/clip.mp4?v=20260922T151828Z",
     );
+  });
+});
+
+describe("a cup", () => {
+  it("reads an event's cups and one cup under the event", async () => {
+    respondWith({ body: {} });
+    await getCups("tug-of-war");
+    await getCup("tug-of-war", 3);
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/api/events/tug-of-war/cups", "/api/events/tug-of-war/cups/3"]);
   });
 });
 

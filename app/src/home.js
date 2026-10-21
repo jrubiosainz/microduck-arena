@@ -4,7 +4,8 @@
 // are the events, each carrying the course, its facts and who holds it. The
 // race pages behind the cards are unchanged — this page is the way in.
 
-import { getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
+import { getCups, getEvents, getLeaderboard, getMe, getStandings } from "./api.js";
+import { cupCorner } from "./cup.js";
 import { FLOCK, MICRODUCK, MICRODUCK_RL, STORE } from "./links.js";
 import { renderLive } from "./live.js";
 import { roundCard } from "./roundcard.js";
@@ -257,6 +258,16 @@ export function liveFrame() {
   return tv;
 }
 
+/** A versus card's corner: its next cup, or the one on now, and how soon, as the way to its page. Nothing when the
+ * cups did not answer. */
+function cupSticker(event, cups) {
+  if (!cups) return null;
+  const { text, href } = cupCorner(event.id, cups, Date.now());
+  const sticker = el("a", "sticker sticker-lime round-card__cup", text);
+  sticker.href = href;
+  return sticker;
+}
+
 export async function renderHome(root, state) {
   const identity = getMe();
   const [events, standings] = await Promise.all([getEvents(), getStandings()]);
@@ -304,12 +315,15 @@ export async function renderHome(root, state) {
   // with it.
   renderLive(tv.querySelector(".tv-stage"), state, { framed: true }).catch(() => {});
 
-  const boards = await Promise.all(
-    events.map((event) => getLeaderboard(event.id).catch(() => ({ rows: [] }))),
-  );
+  const [boards, cups] = await Promise.all([
+    Promise.all(events.map((event) => getLeaderboard(event.id).catch(() => ({ rows: [] })))),
+    Promise.all(events.map((event) => (event.category === "versus" ? getCups(event.id).catch(() => null) : null))),
+  ]);
   const rounds = el("section", "chapter chapter--wall fx-scanlines");
   const wall = el("div", "round-cards");
-  wall.append(...events.map((event, i) => roundCard(event, boards[i].rows, { number: i + 1 })));
+  wall.append(...events.map((event, i) => roundCard(event, boards[i].rows, {
+    number: i + 1, corner: cupSticker(event, cups[i]),
+  })));
   rounds.append(el("h3", "eyebrow", "Pick your round"), wall);
   hall.append(chequer("chapter-checker"), rounds);
 

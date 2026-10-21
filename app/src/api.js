@@ -126,6 +126,12 @@ export async function getBroadcast(id) {
 // cached for a year as immutable, so a clip rendered again is a new URL.
 export const clipUrl = (runId, name, version) => `/api/runs/${runId}/clip/${name}?v=${version}`;
 
+/** An event's cups, newest first, and the next one: when it closes, when it premieres, who has entered. */
+export const getCups = (eventId) => json(`/api/events/${eventId}/cups`);
+
+/** One cup as far as it has aired: the field before the show, then its groups and bracket match by match. */
+export const getCup = (eventId, number) => json(`/api/events/${eventId}/cups/${number}`);
+
 /** A cup's match: its two entrants, its bouts and how it ended. */
 export const getMatch = (matchId) => json(`/api/matches/${matchId}`);
 

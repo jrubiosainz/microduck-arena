@@ -1,10 +1,10 @@
-/* The club: the home and player pages.
+/* The club: the home, player and cup pages.
  *
  * Every colour, size and face is a token from design/tokens.css; every object
  * (eyebrow, mono label, signage, sticker, flyer tape and title, marquee title)
  * is design/components.css's; the strip over the door and the column under it
  * are shell.css's, now that the race pages wear them too. This file places
- * what is left, which is the front and a player's page. */
+ * what is left, which is the front, a player's page and a cup's. */
 
 /* Grain and scanlines cover the WHOLE window, as the charter asks — hung on
    the content column they stopped at 1120px and left the cover and the band
@@ -1069,3 +1069,174 @@
 .profile-results a.withdrawn { color: var(--ink-70); background: var(--warm-paper); }
 .profile-date { color: var(--ink-70); font-size: 0.85rem; }
 
+/* ── A cup: the countdown and the field, then the groups and the bracket ───── */
+
+/* On a player's ground: warm paper, sheets of paper laid on it. */
+.cup { display: grid; gap: var(--space-title-to-grid-min); max-width: 1100px; margin-inline: auto; }
+.cup .eyebrow { margin-bottom: 10px; }
+
+.cup-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-gutter-min) clamp(1rem, 4vw, 3rem); }
+.cup-title { flex: 1 1 24rem; min-width: 0; }
+.cup-title .marquee-title { margin: 0; overflow-wrap: anywhere; }
+/* A label, not a control: it does not press. */
+.cup-pill { font-size: clamp(0.9rem, 2vw, 1.2rem); cursor: default; }
+.cup-pill:active { translate: none; box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink); }
+.cup-nav { display: flex; gap: var(--space-gutter-min); }
+.cup-nav a {
+  font-family: var(--type-mono-label-family);
+  font-weight: var(--type-mono-label-weight);
+  font-size: var(--type-mono-label-size);
+  letter-spacing: var(--type-mono-label-tracking);
+  text-transform: uppercase;
+  color: var(--orange-inked);
+}
+.cup-prev::before { content: "\2190\00a0"; }
+.cup-next::after { content: "\00a0\2192"; }
+
+/* Before the show: the clock and how to enter on the left, the field on the right. */
+.cup-before {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-gutter-max);
+  align-items: start;
+}
+.cup-intro { display: grid; gap: var(--space-gutter-min); justify-items: start; }
+.cup-when { margin: 0; color: var(--ink-70); }
+.cup-clock { box-shadow: var(--shadow-card-min) var(--shadow-card-min) var(--shadow-blur) var(--orange); }
+.cup-enter { margin: 0; max-width: 46ch; }
+.cup-enter a { color: var(--orange-inked); }
+.cup-enter code {
+  padding: 0.1em 0.4em;
+  background: var(--deep-ink);
+  color: var(--sky);
+  font-family: var(--mono);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+/* The field as the home's ladder hangs: one rung a duck, its policy over its player. */
+.cup-field {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: var(--shadow-card-min) var(--shadow-card-min) var(--shadow-blur) var(--ink);
+}
+.cup-entrant {
+  display: grid;
+  grid-template-columns: 2.5ch minmax(0, 1fr) auto;
+  grid-template-areas: "rank policy rating" "rank handle rating";
+  align-items: center;
+  column-gap: var(--space-gutter-min);
+  padding: 6px var(--space-card-padding-min);
+  border-top: 3px solid var(--ink);
+}
+.cup-entrant:first-child { border-top: 0; }
+.cup-rank, .cup-rating { font-family: var(--type-card-title-family); font-size: var(--type-lede-size); line-height: 1; }
+.cup-rank { grid-area: rank; }
+.cup-rating { grid-area: rating; }
+.cup-policy { grid-area: policy; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.cup-handle { grid-area: handle; justify-self: start; }
+
+/* A player's handle beside their duck: small, in the mono face, never rewritten. */
+.cup-handle, .cup-duck small {
+  font-family: var(--mono);
+  font-size: var(--type-mono-label-size);
+  letter-spacing: 0.04em;
+  color: var(--ink-70);
+  overflow-wrap: anywhere;
+}
+.cup-handle:hover { color: var(--orange-inked); }
+.cup-duck { display: inline-flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.5em; min-width: 0; }
+.cup-duck small { font-weight: 400; }
+
+/* From the show. */
+.cup-show { display: grid; gap: var(--space-gutter-min); }
+.cup-live { justify-self: start; font-size: clamp(0.9rem, 2vw, 1.2rem); }
+.cup-champion {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0 0 var(--space-gutter-min);
+  padding: var(--space-card-padding-min) var(--space-card-padding-max);
+  background: var(--yellow);
+  border: 3px solid var(--ink);
+  box-shadow: var(--shadow-card-max) var(--shadow-card-max) var(--shadow-blur) var(--ink);
+  font-size: var(--type-lede-size);
+}
+.cup-champion .symbol { flex: none; width: 1.6em; height: 1.6em; }
+.cup-champion b { font-family: var(--display); font-weight: 400; text-transform: uppercase; }
+
+.cup-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  gap: var(--space-gutter-max);
+  margin-bottom: var(--space-gutter-min);
+}
+.cup-group {
+  min-width: 0;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  box-shadow: var(--shadow-card-min) var(--shadow-card-min) var(--shadow-blur) var(--ink);
+}
+.cup-group table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.cup-group caption { padding: 10px 12px 0; text-align: left; }
+.cup-group th {
+  padding: 4px 8px;
+  font-family: var(--type-mono-label-family);
+  font-size: var(--type-mono-label-size);
+  font-weight: var(--type-mono-label-weight);
+  color: var(--ink-70);
+  text-align: center;
+}
+.cup-group td { padding: 6px 8px; border-top: 2px solid var(--ink); text-align: center; white-space: nowrap; }
+.cup-group th:first-child, .cup-group td:first-child { padding-left: 12px; text-align: left; white-space: normal; }
+/* Through to the knockout: lime, the charter's go. */
+.cup-q { background: var(--lime); }
+.cup-results { display: grid; gap: 2px; padding: 8px 12px 10px; border-top: 3px solid var(--ink); }
+.cup-result { color: var(--ink); font-size: 0.9rem; text-decoration: none; }
+.cup-result:hover { color: var(--orange-inked); text-decoration: underline; }
+
+/* The knockout, one column a round, each match centred on the two it follows. */
+.cup-bracket {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(12rem, 1fr);
+  gap: var(--space-gutter-max);
+  padding: 0 14px 14px 0;
+  overflow-x: auto;
+}
+.cup-round { display: flex; flex-direction: column; min-width: 0; }
+.cup-ties { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: var(--space-gutter-min); }
+.cup-tie {
+  position: relative;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--ink);
+}
+.cup-side { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 30px 6px 10px; }
+.cup-side + .cup-side { border-top: 2px solid var(--ink); }
+.cup-won { font-weight: 700; }
+.cup-wins { font-family: var(--display); font-size: 1.15rem; line-height: 1; }
+.cup-tie:has(.cup-tbd) { background: transparent; border-style: dashed; box-shadow: none; }
+.cup-tbd { display: block; padding: 18px 10px; color: var(--ink-70); text-align: center; }
+/* The way to the match, on the box's edge: the orange of the action. */
+.cup-play {
+  position: absolute;
+  top: 50%;
+  right: -14px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  translate: 0 -50%;
+  background: var(--orange);
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+.cup-play:hover { background: var(--yellow); }
+.cup-play:focus-visible, .cup-result:focus-visible, .cup-nav a:focus-visible,
+.cup-handle:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
