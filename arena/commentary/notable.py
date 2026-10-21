@@ -257,8 +257,8 @@ def notable_facts(s: Situation) -> list[Fact]:
     return sorted(found, key=lambda f: -f.score)
 
 
-def _season(user: str, s: Situation, ladder: dict) -> str:
-    runs = [r for r in s.runs if r.user == user]
+def season(user: str, runs, ladder: dict) -> str:
+    runs = [r for r in runs if r.user == user]
     events = len({r.event_id for r in runs})
     card = ladder[user]
     return (f"{card.points} points this season, rank {card.rank} of {len(ladder)} on the points "
@@ -271,7 +271,7 @@ def profiles(s: Situation, earned: list[Receipt]) -> list[Fact]:
     ahead of them, or the runner-up behind. Offered with every run, beside the picked angles,
     so the booth can give a player's numbers when it chooses to."""
     ladder = {card.user: card for card in standings(earned)}
-    facts = [Fact("notable#/profile", f"@{s.user} has {_season(s.user, s, ladder)}.", "notable",
+    facts = [Fact("notable#/profile", f"@{s.user} has {season(s.user, s.runs, ladder)}.", "notable",
                   ("profile",))]
     board = s.board() if s.timed else []
     others = [row.record.user for row in board if row.record.user != s.user]
@@ -279,7 +279,7 @@ def profiles(s: Situation, earned: list[Receipt]) -> list[Fact]:
         rival = others[0]
         place = "who leads" if board[0].record.user == rival else "next on"
         facts.append(Fact(f"notable#/profile/{rival}", f"@{rival}, {place} this board, has "
-                          f"{_season(rival, s, ladder)}.", "notable", ("profile",)))
+                          f"{season(rival, s.runs, ladder)}.", "notable", ("profile",)))
     return facts
 
 
