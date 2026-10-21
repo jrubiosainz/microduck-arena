@@ -34,7 +34,7 @@ def test_the_opening_knows_the_field_and_the_draw():
     assert ("This is the Tug of War Cup #1, 6 players: 2 groups where everyone meets everyone, then a knockout "
             "between the top two of each. A match is first to 2 bouts, the ducks swapping sides after each; a duck "
             "that drops into the pit loses the bout, and at the time limit the duck the marker moved away from "
-            "loses.") in opening
+            "loses. Level after 5 bouts, the higher rating goes through.") in opening
     assert "Group A: puller 0 (@p0), puller 2 (@p2) and puller 4 (@p4), no match played yet." in opening
     assert ("Ratings against the reference duck, at the top: puller 0 (@p0) 50.0 cm, puller 1 (@p1) 45.0 cm, "
             "puller 2 (@p2) 40.0 cm; at the bottom: puller 5 (@p5) 25.0 cm.") in opening
@@ -70,10 +70,10 @@ def test_two_close_ducks_are_too_close_to_call():
 
 def test_after_the_final_the_champion_and_the_next_cup():
     over = texts(CUP, 9)
-    assert "puller 0 (@p0) wins the Tug of War Cup #1, beating puller 1 (@p1) 2-0 in the final." in over
+    assert "puller 0 (@p0) wins the Tug of War Cup #1, beating puller 1 (@p1) 2–0 in the final." in over
     assert "Cup #2 premieres on Friday 6 November at 18:00, Europe/Paris time." in over
-    assert ("puller 0 (@p0)'s cup: Group A against puller 4 (@p4), won 2-0; Group A against puller 2 (@p2), "
-            "won 2-0; semi-final against puller 3 (@p3), won 2-0; final against puller 1 (@p1), won 2-0.") in over
+    assert ("puller 0 (@p0)'s cup: Group A against puller 4 (@p4), won 2–0; Group A against puller 2 (@p2), "
+            "won 2–0; semi-final against puller 3 (@p3), won 2–0; final against puller 1 (@p1), won 2–0.") in over
     view = screen_view(CUP, 9, MANIFEST)
     assert (view["champion"], view["stage"], view["next"]) == ("puller 0", "Champion", None)
 
@@ -94,7 +94,7 @@ def test_a_second_cup_knows_the_first():
     facts = cup_facts(CUP2, 6, [CUP], MANIFEST)
     said = [fact.text for fact in facts]
     assert "@p0 won Cup #1 and defends the title." in said
-    assert "@p0 and @p3 have met before, in Cup #1's semi-final (1 of 2): @p0 won 2-0." in said
+    assert "@p0 and @p3 have met before, in Cup #1's semi-final (1 of 2): @p0 won 2–0." in said
     assert "@p0 has won their last 6 cup matches." in said
     assert not any(fact.ref == "cup#/streak/p3" for fact in facts)
 
@@ -102,19 +102,44 @@ def test_a_second_cup_knows_the_first():
 def test_a_match_decided_by_rating_is_never_a_bare_score():
     tied = replace(CUP, matches=tuple(
         replace(m, wins=(1, 1), decided_by="rating", bouts=m.bouts[:2]) if m.index == 0 else m for m in CUP.matches))
-    assert "In the last match, group round 1 of 3 in Group A, puller 2 (@p2) went through on rating after 1–1 " \
+    assert "In the last match, group round 1 of 3 in Group A, puller 2 (@p2) won on rating after 1–1 " \
            "against puller 4 (@p4)." in texts(tied, 1)
-    assert ("Group round 1 results: puller 2 (@p2) went through on rating after 1–1 against puller 4 (@p4); "
-            "puller 3 (@p3) beat puller 5 (@p5) 2-1.") in texts(tied, 2)
+    assert ("Group round 1 results: puller 2 (@p2) won on rating after 1–1 against puller 4 (@p4); "
+            "puller 3 (@p3) beat puller 5 (@p5) 2–1.") in texts(tied, 2)
+
+
+def test_a_knockout_tie_sends_one_duck_through():
+    tied = replace(CUP, matches=tuple(
+        replace(m, wins=(1, 1), decided_by="rating", bouts=m.bouts[:2]) if m.index == 6 else m for m in CUP.matches))
+    assert ("In the last match, the semi-final (1 of 2), puller 0 (@p0) went through on rating after 1–1 "
+            "against puller 3 (@p3).") in texts(tied, 7)
+    assert "semi-final against puller 3 (@p3), went through on rating after 1–1;" in texts(tied, 9)[-2]
+
+
+def test_a_champion_who_lost_a_group_match_says_so():
+    upset = played_cup(upsets=frozenset({2}))
+    assert upset.matches[2].winner == 4 and upset.matches[-1].winner == 0
+    assert "Group A against puller 4 (@p4), lost 2–0" in " ".join(texts(upset, 9))
+
+
+def test_a_cup_whose_last_champion_left_says_who_won():
+    newcomers = replace(CUP2, entrants=tuple(replace(e, user=f"q{k}") for k, e in enumerate(CUP2.entrants)))
+    assert "Cup #1 was won by @p0, who is not in this cup." in texts(newcomers, 0, [CUP])
+
+
+def test_a_streak_ends_with_a_loss():
+    upset = played_cup(number=2, upsets=frozenset({2}))
+    facts = cup_facts(upset, 6, [CUP], MANIFEST)
+    assert not any(fact.ref == "cup#/streak/p0" for fact in facts)
 
 
 def test_the_last_match_names_how_its_last_bout_ended():
     marker = replace(CUP, matches=tuple(
         replace(m, bouts=(*m.bouts[:-1], replace(m.bouts[-1], how="marker"))) if m.index == 0 else m
         for m in CUP.matches))
-    assert ("In the last match, group round 1 of 3 in Group A, puller 2 (@p2) beat puller 4 (@p4) 2-0, "
+    assert ("In the last match, group round 1 of 3 in Group A, puller 2 (@p2) beat puller 4 (@p4) 2–0, "
             "the last bout decided on the marker.") in texts(marker, 1)
-    assert ("In the last match, group round 1 of 3 in Group A, puller 2 (@p2) beat puller 4 (@p4) 2-0, "
+    assert ("In the last match, group round 1 of 3 in Group A, puller 2 (@p2) beat puller 4 (@p4) 2–0, "
             "the last bout ending in the pit.") in texts(CUP, 1)
 
 

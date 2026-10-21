@@ -99,25 +99,32 @@ def _cm(value: float) -> str:
 
 
 def _score(match: MatchRecord) -> str:
-    """The winner's first; a match decided by rating is a tie, written with the dash it is told with."""
-    return f"{max(match.wins)}{'–' if match.decided_by == 'rating' else '-'}{min(match.wins)}"
+    """The winner's first."""
+    return f"{max(match.wins)}–{min(match.wins)}"
 
 
 def _loser(match: MatchRecord) -> int:
     return match.b if match.winner == match.a else match.a
 
 
+def _on_rating(match: MatchRecord, won: bool) -> str:
+    """A group loss puts no duck out; a knockout tie does."""
+    if match.group:
+        return "won" if won else "lost"
+    return "went through" if won else "went out"
+
+
 def _beat(cup: Cup, match: MatchRecord) -> str:
     winner, loser = duck(cup.entrants[match.winner]), duck(cup.entrants[_loser(match)])
     if match.decided_by == "rating":
-        return f"{winner} went through on rating after {_score(match)} against {loser}"
+        return f"{winner} {_on_rating(match, True)} on rating after {_score(match)} against {loser}"
     return f"{winner} beat {loser} {_score(match)}"
 
 
 def _verdict(match: MatchRecord, won: bool) -> str:
     """How a match ended for one of its sides."""
     if match.decided_by == "rating":
-        return f"went {'through' if won else 'out'} on rating after {_score(match)}"
+        return f"{_on_rating(match, won)} on rating after {_score(match)}"
     return f"{'won' if won else 'lost'} {_score(match)}"
 
 
@@ -128,12 +135,15 @@ def _opening(cup: Cup, manifest: Manifest) -> Fact:
     return _fact("cup#/cup", f"This is the {manifest.title} Cup #{cup.number}, {len(cup.entrants)} players: {shape}. "
                  f"A match is first to {manifest.bout.bouts_to_win} bouts, the ducks swapping sides after each; a duck "
                  "that drops into the pit loses the bout, and at the time limit the duck the marker moved away from "
-                 "loses.")
+                 f"loses. Level after {manifest.bout.max_bouts} bouts, the higher rating goes through.")
 
 
 def _rating_line(cup: Cup) -> Fact:
     ranked = sorted(cup.entrants, key=lambda e: (-e.rating, e.user))
-    line = lambda ducks: ", ".join(f"{duck(e)} {_cm(e.rating)}" for e in ducks)
+
+    def line(ducks: Sequence[Entrant]) -> str:
+        return ", ".join(f"{duck(e)} {_cm(e.rating)}" for e in ducks)
+
     if len(ranked) <= 4:
         return _fact("cup#/ratings", f"Ratings against the reference duck: {line(ranked)}.")
     return _fact("cup#/ratings", f"Ratings against the reference duck, at the top: {line(ranked[:3])}; "
@@ -246,8 +256,9 @@ def _ending_facts(cup: Cup, manifest: Manifest) -> list[Fact]:
     title = f"{manifest.title} Cup #{cup.number}"
     crowned = (f"going through on rating after {_score(final)} against {runner_up}" if final.decided_by == "rating"
                else f"beating {runner_up} {_score(final)}")
-    steps = [f"{f'Group {m.group}' if m.group else m.round} against {duck(cup.entrants[_loser(m)])}, "
-             f"{_verdict(m, True)}" for m in cup.matches if final.winner in (m.a, m.b)]
+    steps = [f"{f'Group {m.group}' if m.group else m.round} against "
+             f"{duck(cup.entrants[m.b if m.a == final.winner else m.a])}, {_verdict(m, m.winner == final.winner)}"
+             for m in cup.matches if final.winner in (m.a, m.b)]
     premiere = cup_times(manifest.cup, cup.number + 1)[1].astimezone(ZoneInfo(manifest.cup.timezone))
     return [
         _fact("cup#/champion", f"{champion} wins the {title}, {crowned} in the final."),
