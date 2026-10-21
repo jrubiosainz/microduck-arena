@@ -38,9 +38,7 @@ export function createReplay(stage, { onRefused }) {
     const action = correction(video.currentTime, offsetMs / 1000, ranges(video.buffered), force);
     if (action.time !== undefined) video.currentTime = action.time;
     video.playbackRate = action.rate;
-    // A forced alignment that found nothing buffered is not spent: keep
-    // forcing until a seek lands.
-    aligned = !force || action.time !== undefined;
+    aligned = true;
   }
 
   /** Make `slot` the active video, loading it if nothing prepared it. */

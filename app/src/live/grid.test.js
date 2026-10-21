@@ -35,9 +35,11 @@ describe("correction", () => {
     expect(correction(10, 12, buffered)).toEqual({ rate: 1, time: 12 });
   });
 
-  it("seeks when forced, and only into buffered media", () => {
+  it("seeks into buffered media only, unless forced", () => {
     expect(correction(10, 10.2, buffered, true)).toEqual({ rate: 1, time: 10.2 });
     expect(correction(10, 40, buffered)).toEqual({ rate: 1 });
+    // A screen joining a match clip 50 s in: the browser has buffered its first seconds only.
+    expect(correction(0, 50, [[0, 13.4]], true)).toEqual({ rate: 1, time: 50 });
   });
 });
 
