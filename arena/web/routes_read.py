@@ -365,7 +365,8 @@ def run_detail(run_id: str, request: Request) -> dict:
         # Podium receipts are HELD, so this list can change between two reads.
         "receipts": [
             {"act": r.act, "points": r.points}
-            for r in receipts(runs, withdrawn, _ballots(request, rules, now), rules, now, cups=all_cups(store))
+            # No cup: its receipts are paid to the matches that decided them, never to a run.
+            for r in receipts(runs, withdrawn, _ballots(request, rules, now), rules, now)
             if r.source_id == record.run_id
         ],
         "seen": record.run_id in store.seen(),

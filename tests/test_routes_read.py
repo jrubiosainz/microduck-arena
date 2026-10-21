@@ -630,6 +630,13 @@ def test_a_run_detail_carries_its_place_its_receipts_and_its_event(client):
     assert "frames" not in body
 
 
+def test_a_run_page_reads_no_cup(client, monkeypatch):
+    """A cup's receipts are paid to its deciding matches, never to a run: the run page has nothing to read there."""
+    api, app = client
+    monkeypatch.setattr("arena.web.routes_read.all_cups", lambda store: pytest.fail("the run page read the cups"))
+    assert api.get(f"/api/runs/{record_run(app).run_id}").status_code == 200
+
+
 def test_a_player_page_and_the_ladder_count_the_cups(client):
     api, app = client
     store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
