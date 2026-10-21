@@ -386,7 +386,7 @@ export async function createViewer(
   let stage = null;
   // While a tug plays: the string drawn, and its points, a frame each, in step with the ducks.
   let tug = null;
-  // A tug's own venue round its ring.
+  // A tug's own venue round its ring, whose ropes and posts are the served ones, the physics' own.
   let venue = null;
   // The stadium's crowd, rebuilt with the course: posed in draw, disposed
   // with the course in clearScene.

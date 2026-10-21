@@ -12,20 +12,16 @@ import {
   SpotLight, SRGBColorSpace, TorusGeometry, Vector2, Vector3,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { toThree } from "./tug.js";
 import { sponsorTexture } from "./gym-branding.js";
 import { buildJudges } from "./judges.js";
 import { crowd } from "./stadium.js";
 
 // The ring at a duck's scale (a wrestler's ring stands 1.2 m for 1.8 m wrestlers; a duck is 25 cm):
-// RING from rope to rope, room enough for two ducks to pull (the owner's call: the lane under them is
-// still the event's length), its canvas RING_RISE over the hall's floor, its apron APRON past the
-// ropes, its ropes at ROPES.
-const RING = 3;
+// its size, ropes and posts are the physics' own, served with the event; its canvas stands RING_RISE
+// over the hall's floor, its apron APRON past the ropes.
 const RING_RISE = 0.14;
-const APRON = 0.1;
-const ROPES = [0.06, 0.12, 0.18];
-const ROPE_RADIUS = 0.006;
-const POST_RADIUS = 0.022;
+export const APRON = 0.1;
 // The ringside floor between the apron and the barricade, the barricade's height and thickness.
 const RINGSIDE = 0.9;
 const BARRICADE = [0.13, 0.03];
@@ -70,12 +66,13 @@ function skirtPrint(length, height, mark) {
 }
 
 /**
- * The venue round a tug, its ring RING square, crossed by the pit from rope to rope.
+ * The venue round a tug, its ring `ring_m` square, crossed by the pit from rope to rope, its ropes
+ * and posts the served capsules.
  * `clearance` is how far out on +z the near stand may start, behind the chase camera and its
  * opening travel (viewer.js). Returns the group, the crowd for the viewer to cull, `pose` for the
  * crowd and the jury, and `dispose`; the shared models (spectators, Reachy) are left alone.
  */
-export function buildTugVenue({ pit_m, pit_depth_m }, spectators, reachy, branding, clearance) {
+export function buildTugVenue({ ring_m, pit_m, pit_depth_m, ropes, posts }, spectators, reachy, branding, clearance) {
   const group = new Group();
   group.name = "course";
   const geometries = new Set();
@@ -106,7 +103,7 @@ export function buildTugVenue({ pit_m, pit_depth_m }, spectators, reachy, brandi
     return geometry.translate(...from.add(to).multiplyScalar(0.5).toArray());
   };
 
-  const half = RING / 2;
+  const half = ring_m / 2;
   const edge = half + APRON;
   const floor = -RING_RISE;
   const black = surface(0x0b0c10, 0, 0.7);
@@ -125,17 +122,19 @@ export function buildTugVenue({ pit_m, pit_depth_m }, spectators, reachy, brandi
     const plane = new PlaneGeometry(edge * 2, RING_RISE).translate(0, floor / 2, edge + 0.002).rotateY(turn);
     mesh(plane, skirt, "skirt");
   }
-  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => [x * half, z * half]);
-  merged(corners.flatMap(([x, z], i) => {
-    const [nx, nz] = corners[(i + 1) % 4];
-    return ROPES.map((y) => strut([x, y, z], [nx, y, nz], ROPE_RADIUS, 8));
-  }), surface(0xf2f2f4, 0, 0.45), "ropes");
-  const top = ROPES.at(-1);
-  merged(corners.map(([x, z]) => new CylinderGeometry(POST_RADIUS, POST_RADIUS, top + 0.05 - floor, 12)
-    .translate(x, (top + 0.05 + floor) / 2, z)), black, "posts");
+  merged(ropes.map(({ from, to, radius }) => strut(toThree(from), toThree(to), radius, 8)), surface(0xf2f2f4, 0, 0.45), "ropes");
+  // The posts, from the hall's floor up to the physics' top; the canvas hides what is below it.
+  const top = Math.max(...ropes.map(({ from }) => from[2]));
+  merged(posts.map(({ from, to, radius }) => {
+    const [x, , z] = toThree(from);
+    return new CylinderGeometry(radius, radius, to[2] - floor, 12).translate(x, (to[2] + floor) / 2, z);
+  }), black, "posts");
   // The turnbuckles' pads, one tall pad on each post's side facing the ring's middle.
-  merged(corners.map(([x, z]) => new BoxGeometry(0.05, top + 0.03, 0.05).rotateY(Math.PI / 4)
-    .translate(x - Math.sign(x) * 0.03, (top + 0.03) / 2 + 0.01, z - Math.sign(z) * 0.03)), surface(0xff7a2f, 0, 0.6), "pads");
+  merged(posts.map(({ from }) => {
+    const [x, , z] = toThree(from);
+    return new BoxGeometry(0.05, top + 0.03, 0.05).rotateY(Math.PI / 4)
+      .translate(x - Math.sign(x) * 0.03, (top + 0.03) / 2 + 0.01, z - Math.sign(z) * 0.03);
+  }), surface(0xff7a2f, 0, 0.6), "pads");
   // Steel steps up to the apron, by the near west corner.
   merged([1, 2, 3].map((step) => box(0.3, (RING_RISE * step) / 3, 0.08, [-half + 0.25, floor + (RING_RISE * step) / 6, edge + (3 - step) * 0.08 + 0.04])),
     surface(0x9aa1ab, 0.8, 0.35), "steps");

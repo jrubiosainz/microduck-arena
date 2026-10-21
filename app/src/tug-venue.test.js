@@ -3,9 +3,21 @@ import { Box3, BoxGeometry, Matrix4, Raycaster, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { meshNames } from "./rig.js";
-import { buildTugVenue } from "./tug-venue.js";
+import { APRON, buildTugVenue } from "./tug-venue.js";
 
-const TUG = { ring_m: 3, pit_m: 0.3, pit_depth_m: 0.3 };
+// The served ring (Task 2): twelve rope capsules, three a side, and four posts, in world metres, z up.
+const widerRing = (event, ring) => {
+  const h = ring / 2;
+  const sides = {
+    west: [[-h, -h], [-h, h]], east: [[h, -h], [h, h]], north: [[-h, h], [h, h]], south: [[-h, -h], [h, -h]],
+  };
+  const ropes = Object.entries(sides).flatMap(([side, [[x0, y0], [x1, y1]]]) =>
+    [0.06, 0.12, 0.18].map((z, i) => ({ name: `rope_${side}_${i}`, from: [x0, y0, z], to: [x1, y1, z], radius: 0.006 })));
+  const posts = [["nw", -h, h], ["ne", h, h], ["sw", -h, -h], ["se", h, -h]]
+    .map(([corner, x, y]) => ({ name: `post_${corner}`, from: [x, y, 0], to: [x, y, 0.23], radius: 0.022 }));
+  return { ...event, ring_m: ring, ropes, posts };
+};
+const TUG = widerRing({ pit_m: 0.3, pit_depth_m: 0.3 }, 3);
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
 const spectators = () => ({ kinematics, geometries: new Map(meshNames(kinematics).map((name) => [name, new BoxGeometry(0.01, 0.01, 0.01)])) });
 const image = { naturalWidth: 2, naturalHeight: 1 };
@@ -36,11 +48,21 @@ describe("the tug's venue", () => {
     expect([down(0, 0), down(0.14, -1.45)]).toEqual([at("pit_floor", -0.3), at("pit_floor", -0.3)]);
   });
 
-  it("squares the ring 3 m from rope to rope, inside the lane's 4 m: three white ropes a side, the top one at a duck's chest", () => {
-    const ropes = new Box3().setFromObject(venue().group.getObjectByName("ropes"));
-    [ropes.min.x, ropes.min.z].forEach((v) => expect(v).toBeCloseTo(-1.5, 1));
-    [ropes.max.x, ropes.max.z].forEach((v) => expect(v).toBeCloseTo(1.5, 1));
-    expect(ropes.max.y).toBeCloseTo(0.18, 1);
+  it("draws the ring's ropes and posts where the physics has them", () => {
+    const built = venue();
+    const box = (name) => new Box3().setFromObject(built.group.getObjectByName(name));
+    expect(box("ropes").max.y).toBeCloseTo(0.18 + 0.006, 6);
+    expect(box("ropes").min.y).toBeCloseTo(0.06 - 0.006, 6);
+    expect(box("ropes").max.x).toBeCloseTo(1.5 + 0.006, 3);
+    expect(box("posts").max.y).toBeCloseTo(0.23, 6);
+    expect(box("ring").max.x).toBeCloseTo(1.5 + APRON, 6);
+    built.dispose();
+  });
+
+  it("follows a ring of another size", () => {
+    const built = buildTugVenue(widerRing(TUG, 3.6), spectators(), reachy, branding, 2.5);
+    expect(new Box3().setFromObject(built.group.getObjectByName("ropes")).max.x).toBeCloseTo(1.8 + 0.006, 3);
+    built.dispose();
   });
 
   it("seats a crowd on all four sides, the near one beyond the camera's clearance, the others behind the barricade", () => {
