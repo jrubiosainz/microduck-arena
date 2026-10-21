@@ -41,7 +41,10 @@ export function postText(run, { origin, network }) {
       : `On ${run.event.title} ${troupe ? "they" : "it"} gave a ${run.score.toFixed(2)} s performance${points}.`;
   } else if (run.seeds_finished === 0) {
     const fell = run.per_seed.some((s) => s.status === "fall");
-    result = `On ${run.event.title} it finished 0/${total} seeds on its feet — ${fell ? "it ate the floor" : "it ran out of time"}.`;
+    // Red light, green light ends a run that moves under a red: standing, so no fall, and early, so no clock.
+    const caught = run.per_seed.some((s) => s.status === "caught");
+    const why = fell ? "it ate the floor" : caught ? "it got caught moving on a red light" : "it ran out of time";
+    result = `On ${run.event.title} it finished 0/${total} seeds on its feet — ${why}.`;
   } else {
     const place = run.on_board && !run.withdrawn ? `, #${run.rank} on the board` : "";
     result = `On ${run.event.title} it finished ${run.seeds_finished}/${total} seeds in ${run.score.toFixed(3)} s${place}${points}.`;

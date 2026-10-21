@@ -44,6 +44,7 @@ import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js"
 import { attachStadium } from "./stadium.js";
 import { isStage } from "./format.js";
 import { buildJudges } from "./judges.js";
+import { buildCaller } from "./caller.js";
 import { buildTalentStage, stageCameraPose, placeStageDuck, stageCameraTarget } from "./talent-stage.js";
 import { loadGymBranding } from "./gym-branding.js";
 import { stadiumDirection } from "./clip/direction.js";
@@ -396,6 +397,10 @@ export async function createViewer(
   let course = null;
   let gym = null;
   let judges = null;
+  // Red light, green light's caller, on a race with lights, and how far into the replay its race
+  // clock starts: a clip's lanes lead in with their settle.
+  let caller = null;
+  let callerLead = 0;
   let stage = null;
   // The stadium's crowd, rebuilt with the course: posed in draw, disposed
   // with the course in clearScene.
@@ -422,6 +427,8 @@ export async function createViewer(
     stage = null;
     judges?.dispose();
     judges = null;
+    caller?.dispose();
+    caller = null;
     gym?.dispose();
     gym = null;
     for (const lane of lanes) {
@@ -480,6 +487,11 @@ export async function createViewer(
       scene.add(gym.group);
       judges = buildJudges(reachy, courseLength, Math.max(1, entries.length) * spacing / 2, gym.sponsorMaps, roller ? 3 : 4);
       scene.add(judges.group);
+      if (event.lights) {
+        caller = buildCaller(reachy, event.lights, courseLength, Math.max(1, entries.length) * spacing / 2);
+        scene.add(caller.group);
+        callerLead = Math.max(0, ...entries.map((entry) => entry.lead ?? 0)) * CTRL_DT;
+      }
       if (!slopeDeg) {
         ground.material.dispose();
         ground.material = gym.floorMaterial(width, height);
@@ -627,6 +639,7 @@ export async function createViewer(
       lane.rig.bodies.get("trunk_base").getWorldPosition(lane.gazeTarget),
     );
     judges?.pose(seconds, subjects);
+    caller?.pose(player.time - callerLead);
     stage?.pose(seconds, subjects, mood);
 
     if (chase && course) {

@@ -94,7 +94,8 @@ async function main() {
         colour: LANE_COLORS[i % LANE_COLORS.length],
         opacity: 1,
         name: `@${lane.user}`,
-        ...(stage ? { ducks } : { trace: replays[i] }),
+        // A race's light keeps the race's clock, which starts after the settle (caller.js).
+        ...(stage ? { ducks } : { trace: replays[i], lead: settle }),
       }))
       // The camera stands beyond the last lane: reversed, the author's duck is
       // the one in the foreground, still in the colour its page gives it.
