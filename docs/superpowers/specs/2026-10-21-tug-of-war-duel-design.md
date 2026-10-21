@@ -85,10 +85,10 @@ under "Left to the owner". This PR is what can be built and measured before thos
 | **The harness is on the trunk** | Every rig has a trunk, and every policy feels the trunk's motion in its observation. Rules out tying the rope to a leg or the head. |
 | **Back to the pit, 0.25 m from its edge** | Walking straight on is pulling, so a walker needs no new command to play. From 0.25 m, a duck pulled off balance goes in: 38 of the 60 bouts measured end in the pit. From 1.0 m (with a 30 s bell), 28 of 30 bouts went to the bell. |
 | **Walls along the decks' sides** | Without them, 3 of 18 bouts measured between leaders ended with a duck off the side of its deck, at 1.7–12.6 s. With the walls, the same three ended as a fall into the pit, a win at the bell and a draw at the bell. A bout is then lost to the pull rather than to a drift sideways. |
-| **Each seed from both decks** | The decks are not alike: each duck draws its start perturbation and its servo delays from its own slot's random streams (`arena.runner._streams`). The reference against itself ends seed 2 with the rope's middle 4 cm towards deck 0. Playing every seed twice, the policies swapping decks, leaves neither with the luckier slot. |
+| **Each seed from both decks** | The decks are not alike: each duck draws its start perturbation and its servo delays from its own slot's random streams (`arena.runner._streams`). The reference against itself ends seed 2 with the rope's middle 4 cm towards deck 0 on the Mac, and seed 1 with it 10.2 cm towards deck 1 on Linux-x86_64: a win at the bell for whoever stands on deck 1. Playing every seed twice, the policies swapping decks, leaves neither with the luckier slot: the reference against itself scores 3–3 on both platforms. |
 | **A void bout is a draw** | A simulation that MuJoCo had to reset leaves nothing to judge, and nobody can say whose fault it was. None of the 60 bouts measured was void. |
 | **Points by the bout** | The table counts bouts (won, drawn, lost) rather than matches, so a 4–2 and a 6–0 are not worth the same. |
-| **A 20 s bell and a 5 cm margin** | The last of the leaders' falls came at 14.9 s. At the bell, the reference against itself ends within 4 cm of the middle. Between leaders, the bouts drawn at the bell ended within 3.8 cm of the middle, and the bouts won at the bell 5.3 cm or more from it. |
+| **A 20 s bell and a 5 cm margin** | The last of the leaders' falls on the Mac came at 14.9 s, and one on Linux-x86_64 at 17.8 s. On the Mac, the bouts between leaders drawn at the bell ended within 3.8 cm of the middle, and those won at the bell 5.3 cm or more from it. The reference against itself ends within 4 cm of the middle on the Mac, but 4.6–10.2 cm from it on Linux-x86_64: there the margin alone does not draw the mirror match, and the swap of decks is what levels it at 3–3. |
 
 ## What was measured
 
@@ -148,9 +148,20 @@ sprint-a 2.5–3.5 hill-b
 | The reference asked 0.3 m/s against itself asked 0.4 m/s | The faster won 4, the slower 1, and 1 was drawn. |
 | The reference asked 0.3 m/s against itself asked 0.5 m/s | The faster won 5, and 1 was drawn. |
 
+**On Linux-x86_64, MuJoCo 3.10.0** (the Space's platform, on a cloud VM), four matches were played
+again:
+
+| Match | On the Mac | On Linux-x86_64 |
+| --- | --- | --- |
+| reference – sprint-a | 0–6, every bout in the pit at 0.32–0.48 s | 0–6, the same falls at the same times |
+| reference – hill-a | 0–6, every bout in the pit at 0.30–0.42 s | 0–6, every bout in the pit at 0.30–0.42 s |
+| sprint-a – hill-a | 3.5–2.5: sprint-a won 2 in the pit and hill-a 1, at 1.8–13.9 s; 3 drawn at the bell | 4–2: sprint-a won 3 in the pit, at 13.1–17.8 s; hill-a won 1 at the bell; 2 drawn at the bell |
+| reference – reference | 3–3: six draws at the bell, the rope's middle 2.1–4.0 cm off centre | 3–3: deck 1 won both bouts of seed 1 at the bell (10.2 cm) and deck 0 both of seed 2 (6.4 cm); seed 3 drawn (4.6 cm) |
+
 Physics on two platforms part ways within a few seconds, as `arena/golden.py` records for the
-sprint. So these numbers are per platform. A board would play all its matches on one platform, the
-Space's.
+sprint. The reference's falls come sooner, and are the same on both. The bouts between leaders are
+not, though sprint-a beats hill-a on both. So these numbers are per platform. A board would play all
+its matches on one platform, the Space's.
 
 ## Design
 
@@ -251,7 +262,8 @@ ways.
 - **Whether falling over on your own deck loses.** Today only the pit counts: a duck lying on its
   deck is still in the bout, to be dragged in or not.
 - **The rope and the start.** A softer rope (a longer time constant) or one with some give, a lower
-  or higher harness, a longer setback (more bouts decided on points), or a longer bell.
+  or higher harness, a longer setback (more bouts decided on points), or a longer bell: on
+  Linux-x86_64 a bout between leaders went into the pit at 17.8 s.
 - **Tie-breaks.** By name today; head-to-head, the rope's middle or a play-off would be fairer.
 - **Integration.** `compile_duel` beside `compile_stage` in `arena/course.py`, and the bout beside
   `run_stage` in `arena/runner.py`, with a two-duck trace (a stage's trace already records several
