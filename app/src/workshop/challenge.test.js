@@ -20,7 +20,7 @@ const TALENT_CHALLENGE = { event: { id: "got-a-talent", title: "MicroDuck Got a 
   metric: "votes", rig: "legs", time_limit_s: 20, vote: { ballot_min: 2 } }, folder: "got_a_talent", task: "T",
   recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, knobs: [], running: 0 };
 const TUG_CHALLENGE = { event: { id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug",
-  metric: "mean_ground_cm", rig: "legs", length_m: 4, pit_m: 0.3, bout: { time_limit_s: 45 }, vote: null }, folder: "tug_of_war",
+  metric: "mean_ground_cm", rig: "legs", ring_m: 3, pit_m: 0.3, bout: { time_limit_s: 45 }, vote: null }, folder: "tug_of_war",
   task: "W", recipe: { num_envs: 4096, max_iterations: 3000, seed: 1 }, knobs: [], running: 0 };
 const account = { get: () => ({ phase: "in", user: "alice", canPay: true }), logIn: vi.fn(), check: vi.fn() };
 const TICKET = { id: "first", name: "first", where: "hf-jobs", state: "running", progress: null,

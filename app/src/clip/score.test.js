@@ -7,7 +7,7 @@ const event = { id: "sprint-2m", length_m: 2, clip: { sounds: ["crowd", "horn", 
 const trace = new Float32Array(200 * 21);
 for (let i = 0; i < 200; i++) trace[i * 21] = i / 100; // x from 0 to 2 m
 const TUG = {
-  id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_ground_cm", length_m: 4,
+  id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_ground_cm", ring_m: 3,
   clip: { sounds: ["crowd", "verdict"], tape_max_s: 30 },
 };
 const tugRun = {

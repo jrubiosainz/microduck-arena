@@ -71,12 +71,10 @@ class Stage:
 
 @dataclass(frozen=True)
 class Tug:
-    """A lane cut by a pit, for a duck that pulls on a string."""
+    """A ring cut by a pit, for a duck that pulls on a string."""
 
-    length_m: float  # the walled length, centred on the pit: walls span x in [-length/2, length/2]
-    width_m: float
-    wall_height_m: float
-    pit_m: float  # the pit's width along x, centred on x = 0, across the whole lane
+    ring_m: float  # rope to rope: the field is the square inside the ring's ropes, centred on the pit
+    pit_m: float  # the pit's width along x, centred on x = 0, across the whole ring
     pit_depth_m: float
     string_m: float  # neck base to neck base, taut at the start
     kind: str = "tug"
@@ -349,9 +347,17 @@ def _stage(raw: dict) -> Stage:
 
 
 def _tug(raw: dict) -> Tug:
-    _refuse_unknown(raw, {"kind", "length_m", "width_m", "wall_height_m", "pit_m", "pit_depth_m", "string_m"}, "[course]")
-    return Tug(**{key: float(_require(raw, key, "[course]"))
-                  for key in ("length_m", "width_m", "wall_height_m", "pit_m", "pit_depth_m", "string_m")})
+    keys = ("ring_m", "pit_m", "pit_depth_m", "string_m")
+    _refuse_unknown(raw, {"kind", *keys}, "[course]")
+    course = Tug(**{key: float(_require(raw, key, "[course]")) for key in keys})
+    if min(course.ring_m, course.pit_m, course.pit_depth_m, course.string_m) <= 0:
+        raise ManifestError(f"[course]: a tug's ring_m, pit_m, pit_depth_m and string_m must all be positive: {course}")
+    if not course.pit_m < course.string_m < course.ring_m:
+        raise ManifestError(
+            "[course]: a tug's pit must be narrower than its string and its string shorter than its ring: "
+            f"pit_m {course.pit_m}, string_m {course.string_m}, ring_m {course.ring_m}"
+        )
+    return course
 
 
 def _rating(raw: dict, path: Path) -> Rating:

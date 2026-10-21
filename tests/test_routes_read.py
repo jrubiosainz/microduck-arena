@@ -30,10 +30,11 @@ def test_a_tug_serves_its_course_and_its_bouts(client):
     api, _ = client
     tug = next(e for e in api.get("/api/events").json()["events"] if e["id"] == "tug-of-war")
     assert (tug["course"], tug["category"], tug["metric"]) == ("tug", "versus", "mean_ground_cm")
-    assert [tug[k] for k in ("length_m", "width_m", "string_m", "pit_m", "pit_depth_m")] == [4.0, 0.8, 1.0, 0.3, 0.3]
+    assert [tug[k] for k in ("ring_m", "string_m", "pit_m", "pit_depth_m")] == [3.0, 1.0, 0.3, 0.3]
     assert tug["bout"] == {"time_limit_s": 45.0, "bouts_to_win": 2, "max_bouts": 5}
-    assert [w["name"] for w in tug["walls"]] == ["wall_left", "wall_right"]
-    assert [p["name"] for p in tug["pit"]] == ["platform_west", "platform_east", "pit_floor"]
+    assert tug["ropes"][0] == {"name": "rope_west_0", "from": [-1.5, -1.5, 0.06], "to": [-1.5, 1.5, 0.06], "radius": 0.006}
+    assert len(tug["ropes"]) == 12 and tug["posts"][3]["name"] == "post_se"
+    assert not {"length_m", "width_m", "walls", "pit"} & tug.keys()
     assert tug["string_offset"] == [0.026, 0.0145, 0.0324215]
     assert "sweep_lo" not in tug and "size_m" not in tug and "winch" not in tug and "bench" not in tug
 

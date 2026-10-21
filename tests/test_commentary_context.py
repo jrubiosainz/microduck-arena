@@ -227,7 +227,7 @@ def test_a_rated_run_states_its_ground_its_wins_and_its_gap_in_centimetres():
     mine = run("alice", 1.2, "2026-09-11T10:00:00Z", event="tug-of-war", run_id="R1", per_seed=RATED)
     facts = {f.ref: f for f in result_facts(mine, manifest, [leader, mine], [])}
     assert facts["run#/event"].text == ("The event is the Tug of War, a pulling contest against the Arena's reference duck: "
-                                        "the two are tied by a string across a pit and each pulls by walking backwards.")
+                                        "the two are tied by a string across a pit in a wrestling ring and each pulls by walking backwards.")
     assert facts["run#/participant"].text == "The participant is @alice, pulling with a policy named alice-v1."
     assert facts["run#/result"].text == (
         "The rating is 1.2 cm: the ground the duck won from the reference duck in 5 bouts, on average, 100 cm more "

@@ -61,7 +61,7 @@ def nature(manifest: Manifest) -> tuple[str, tuple[str, ...]]:
         return "a performance on a stage decided by the public's votes", ("vote",)
     if manifest.course.kind == "tug":
         return ("a pulling contest against the Arena's reference duck: the two are tied by a string "
-                "across a pit and each pulls by walking backwards"), ("tug",)
+                "across a pit in a wrestling ring and each pulls by walking backwards"), ("tug",)
     length = f"{manifest.course.length_m:g} m"
     if manifest.course.slope_deg > 0:
         return f"a {length} climb up an {manifest.course.slope_deg:g} degree slope", ("hill",)

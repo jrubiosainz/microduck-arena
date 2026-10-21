@@ -55,7 +55,7 @@ describe("renderEventFacts: the caveat under the facts", () => {
   });
 
   it("a tug's caveat speaks of ratings", () => {
-    const TUG = { id: "tug-of-war", course: "tug", rig: "legs", length_m: 4, pit_m: 0.3, bout: { time_limit_s: 45 } };
+    const TUG = { id: "tug-of-war", course: "tug", rig: "legs", ring_m: 3, pit_m: 0.3, bout: { time_limit_s: 45 } };
     const root = document.createElement("div");
     root.innerHTML = '<dl id="facts"></dl>';
     expect(renderEventFacts(root, TUG).textContent).toBe(

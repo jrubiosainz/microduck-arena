@@ -12,7 +12,7 @@ import {
 
 const TUG = {
   id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug", metric: "mean_ground_cm", rig: "legs", vote: null,
-  length_m: 4, pit_m: 0.3, bout: { time_limit_s: 45, bouts_to_win: 2, max_bouts: 5 },
+  ring_m: 3, pit_m: 0.3, bout: { time_limit_s: 45, bouts_to_win: 2, max_bouts: 5 },
 };
 
 describe("formatScore", () => {
@@ -132,7 +132,7 @@ describe("the tug of war counts in centimetres", () => {
   });
   it("tells its course, its bout and its rig", () => {
     expect(formatEventFacts(TUG)).toEqual([
-      { label: "course", value: "4 m lane, 0.3 m pit" },
+      { label: "course", value: "3 m ring, 0.3 m pit" },
       { label: "bout", value: "up to 45 s" },
       { label: "rig", value: "legs" },
     ]);

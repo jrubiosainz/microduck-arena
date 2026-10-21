@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { meshNames } from "./rig.js";
 import { buildTugVenue } from "./tug-venue.js";
 
-const TUG = { length_m: 4, width_m: 0.8, pit_m: 0.3, pit_depth_m: 0.3 };
+const TUG = { ring_m: 3, pit_m: 0.3, pit_depth_m: 0.3 };
 const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
 const spectators = () => ({ kinematics, geometries: new Map(meshNames(kinematics).map((name) => [name, new BoxGeometry(0.01, 0.01, 0.01)])) });
 const image = { naturalWidth: 2, naturalHeight: 1 };

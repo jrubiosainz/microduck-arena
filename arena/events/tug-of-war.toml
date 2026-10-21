@@ -10,12 +10,10 @@ seeds        = [1, 2, 3, 4, 5]
 
 [course]
 kind          = "tug"
-length_m      = 4.0
-width_m       = 0.8
-wall_height_m = 0.15
+ring_m        = 3.00          # rope to rope: the field is the square inside the ring's ropes
 pit_m         = 0.30
 pit_depth_m   = 0.30
-string_m      = 1.00
+string_m      = 1.00          # neck base to neck base, straight at the start
 
 [command]                     # every duck, every bout: walk backwards
 vel  = [-0.30, 0.0, 0.0]

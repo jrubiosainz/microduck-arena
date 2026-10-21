@@ -136,7 +136,8 @@ def _opening(cup: Cup, manifest: Manifest) -> Fact:
     # The course in numbers: told to open on "the course as the event fact describes it", a desk given none
     # made the pit "50 centimetres wide".
     course = (f"Two ducks tied by a {manifest.course.string_m:.1f} m string pull across a pit "
-              f"{manifest.course.pit_m * 100:.0f} cm wide, walking backwards. ")
+              f"{manifest.course.pit_m * 100:.0f} cm wide in a {manifest.course.ring_m:g} m wrestling ring, "
+              "walking backwards. ")
     return _fact("cup#/cup", f"This is the {manifest.title} Cup #{cup.number}, {len(cup.entrants)} players: {shape}. "
                  f"{course}A match is first to {manifest.bout.bouts_to_win} bouts, the ducks swapping sides after "
                  "each; a duck that drops into the pit loses the bout, and at the time limit the duck the marker "

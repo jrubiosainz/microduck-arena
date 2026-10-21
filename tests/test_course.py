@@ -12,14 +12,16 @@ from arena.course import (
     build_course_xml,
     compile_course,
     compile_stage,
+    backstops,
     compile_tug,
     duck_prefix,
     pit_boxes,
     ramp_dir,
     ramp_normal,
+    ring_posts,
+    ring_ropes,
     string_offset,
     tug_layout,
-    tug_walls,
 )
 from arena.manifest import load_event
 from arena.runner import _Addresses
@@ -328,22 +330,43 @@ def _standing(model):
     return data
 
 
-def test_the_course_geometry_of_the_tug():
-    assert string_offset("legs") == (0.026, 0.0145, 0.0324215)
-    assert names(tug_walls(TUG.course)) == ["wall_left", "wall_right"]
-    assert numbers(tug_walls(TUG.course)) == pytest.approx([0, 0.425, 0.075, 2.0, 0.025, 0.075, 0, -0.425, 0.075, 2.0, 0.025, 0.075])
-    assert names(pit_boxes(TUG.course)) == ["platform_west", "platform_east", "pit_floor"]
-    assert numbers(pit_boxes(TUG.course)) == pytest.approx([-11.075, 0, -0.175, 10.925, 20.45, 0.175,
-                                                            11.075, 0, -0.175, 10.925, 20.45, 0.175, 0, 0, -0.325, 0.15, 20.45, 0.025])
+def test_the_ring_is_three_ropes_a_side_post_to_post_with_a_backstop_behind():
+    ropes = ring_ropes(TUG.course)
+    assert names(ropes) == [f"rope_{s}_{k}" for s in ("west", "east", "north", "south") for k in (0, 1, 2)]
+    assert ropes[0] == ("rope_west_0", (-1.5, -1.5, 0.06), (-1.5, 1.5, 0.06))
+    assert ropes[11] == ("rope_south_2", (-1.5, -1.5, 0.18), (1.5, -1.5, 0.18))
+    assert ring_posts(TUG.course)[0] == ("post_nw", (-1.5, 1.5, 0.0), (-1.5, 1.5, 0.23))
+    assert names(backstops(TUG.course)) == [f"backstop_{s}" for s in ("west", "east", "north", "south")]
+    assert numbers(backstops(TUG.course))[:6] == pytest.approx([-1.531, 0, 0.093, 0.025, 1.556, 0.093])
+    assert numbers(backstops(TUG.course))[12:18] == pytest.approx([0, 1.531, 0.093, 1.556, 0.025, 0.093])
+    assert string_offset("legs") == pytest.approx((0.026, 0.0145, 0.0324215))   # kept from the replaced lane test
+    assert numbers(pit_boxes(TUG.course)) == pytest.approx([-10.825, 0, -0.175, 10.675, 21.55, 0.175,
+                                                            10.825, 0, -0.175, 10.675, 21.55, 0.175, 0, 0, -0.325, 0.15, 21.55, 0.025])
 
 
-def test_a_tug_has_platforms_a_pit_and_walls_but_no_floor_plane():
+def test_a_tug_is_a_ring_on_platforms_over_a_pit_and_no_floor_plane():
     model = compile_course(TUG)
     with pytest.raises(KeyError):
         model.geom("floor")
-    top = lambda name: model.geom(name).pos[2] + model.geom(name).size[2]
-    assert [top(n) for n in ("platform_west", "platform_east", "pit_floor")] == pytest.approx([0.0, 0.0, -0.3])
-    assert model.geom("wall_left").id >= 0
+    with pytest.raises(KeyError):
+        model.geom("wall_left")
+    rope = model.geom("rope_west_1")
+    assert rope.type[0] == mujoco.mjtGeom.mjGEOM_CAPSULE and rope.size[:2] == pytest.approx([0.006, 1.5])
+    assert model.geom("post_se").size[:2] == pytest.approx([0.022, 0.115])
+
+
+def test_a_duck_thrown_at_the_ropes_stays_in_the_ring():
+    """Both ducks moved 1.35 m north, 15 cm from the north ropes, thrown at them at 1.5 m/s, limp (no servo is
+    driven): no trunk crosses y = 1.5 and none drops below the floor outside the pit."""
+    model = compile_tug(TUG)
+    data = _standing(model)
+    for j in np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_FREE):   # the ducks; from Task 3 the string's root
+        data.qpos[model.jnt_qposadr[j] + 1] += 1.35
+        data.qvel[model.jnt_dofadr[j] + 1] = 1.5
+    for _ in range(round(1.0 / model.opt.timestep)):
+        mujoco.mj_step(model, data)
+        trunks = [data.xpos[model.body(p + "trunk_base").id] for p in ("", "duck1/")]
+        assert max(t[1] for t in trunks) < 1.5 and min(t[2] for t in trunks) > -0.05
 
 
 def test_a_tug_is_two_ducks_neck_to_neck_and_nothing_else():

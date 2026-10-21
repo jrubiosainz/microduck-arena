@@ -16,7 +16,7 @@ const HELD = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seed
 
 const TUG = {
   id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug", metric: "mean_ground_cm", rig: "legs", vote: null,
-  length_m: 4, pit_m: 0.3, bout: { time_limit_s: 45 },
+  ring_m: 3, pit_m: 0.3, bout: { time_limit_s: 45 },
 };
 
 const cells = (card) => [...card.querySelectorAll(".round-card__stat")].map((cell) => cell.textContent);

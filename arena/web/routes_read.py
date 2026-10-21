@@ -14,7 +14,14 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
 from .. import votes
-from ..course import pit_boxes, string_offset, tug_walls, wall_boxes
+from ..course import (
+    RING_POST_RADIUS_M,
+    RING_ROPE_RADIUS_M,
+    ring_posts,
+    ring_ropes,
+    string_offset,
+    wall_boxes,
+)
 from ..cup import reached
 from ..cupworker import all_cups
 from ..evaluate import seed_row
@@ -30,6 +37,10 @@ router = APIRouter(prefix="/api")
 
 def _boxes(boxes) -> list[dict]:
     return [{"name": name, "pos": list(pos), "half": list(half)} for name, pos, half in boxes]
+
+
+def _capsules(capsules, radius: float) -> list[dict]:
+    return [{"name": name, "from": list(start), "to": list(end), "radius": radius} for name, start, end in capsules]
 
 
 def event_summary(manifest: Manifest) -> dict:
@@ -92,15 +103,14 @@ def event_summary(manifest: Manifest) -> dict:
         }
     else:
         summary |= {
-            "length_m": manifest.course.length_m,
-            "width_m": manifest.course.width_m,
+            "ring_m": manifest.course.ring_m,
             "string_m": manifest.course.string_m,
             "pit_m": manifest.course.pit_m,
             "pit_depth_m": manifest.course.pit_depth_m,
-            # The boxes the physics compiles and the string's ends, as for a lane's walls: the
-            # page draws what the ducks stand on and pull, never a second arithmetic of it.
-            "walls": _boxes(tug_walls(manifest.course)),
-            "pit": _boxes(pit_boxes(manifest.course)),
+            # The capsules the physics compiles and the string's ends: the page draws what the ducks
+            # bounce off and pull, never a second arithmetic of it.
+            "ropes": _capsules(ring_ropes(manifest.course), RING_ROPE_RADIUS_M),
+            "posts": _capsules(ring_posts(manifest.course), RING_POST_RADIUS_M),
             "string_offset": list(string_offset(manifest.rig)),
             "bout": {
                 "time_limit_s": manifest.bout.time_limit_s,

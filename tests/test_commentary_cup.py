@@ -32,8 +32,8 @@ def test_a_match_s_stage_reads_like_a_broadcast():
 def test_the_opening_knows_the_field_and_the_draw():
     opening = texts(CUP, 0)
     assert ("This is the Tug of War Cup #1, 6 players: 2 groups where everyone meets everyone, then a knockout "
-            "between the top two of each. Two ducks tied by a 1.0 m string pull across a pit 30 cm wide, walking "
-            "backwards. A match is first to 2 bouts, the ducks swapping sides after each; a duck "
+            "between the top two of each. Two ducks tied by a 1.0 m string pull across a pit 30 cm wide in a 3 m "
+            "wrestling ring, walking backwards. A match is first to 2 bouts, the ducks swapping sides after each; a duck "
             "that drops into the pit loses the bout, and at the time limit the duck the marker moved away from "
             "loses. Level after 5 bouts, the higher rating goes through.") in opening
     assert "Group A: puller 0 (@p0), puller 2 (@p2) and puller 4 (@p4), no match played yet." in opening

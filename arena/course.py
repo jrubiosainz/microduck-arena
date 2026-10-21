@@ -11,7 +11,7 @@ model disagree on purpose.
 
 A stage holds a troupe (`compile_stage`): one robot per duck in one model, so
 they share one physics and can push each other. A tug of war (`compile_tug`) is
-a troupe on a lane cut by a pit, tied by a string at the neck: to the other
+a troupe in a ring cut by a pit, tied by a string at the neck: to the other
 duck in a bout.
 """
 
@@ -41,7 +41,12 @@ WALL_THICKNESS_M = 0.05
 
 STRING_SITE = "string_end"  # on each duck's trunk_base (prefixed for duck 1), at the neck's base
 STRING = "string"  # the spatial tendon
-PLATFORM_OVERRUN_M = 20.0  # the platforms run this far past the walls: nobody walks off the world
+PLATFORM_OVERRUN_M = 20.0  # the platforms run this far past the ring: nobody walks off the world
+
+RING_ROPES_M = (0.06, 0.12, 0.18)  # the ropes' axes over the canvas, bottom to top
+RING_ROPE_RADIUS_M = 0.006
+RING_POST_RADIUS_M = 0.022
+RING_POST_TOP_M = 0.23
 
 
 def wall_boxes(course) -> list[tuple[str, tuple[float, float, float], tuple[float, float, float]]]:
@@ -74,15 +79,45 @@ def string_offset(rig: str = "legs") -> tuple[float, float, float]:
     return x, y, z
 
 
-def tug_walls(course) -> list[tuple[str, tuple[float, float, float], tuple[float, float, float]]]:
-    """A tug's two side walls, `(name, pos, half_extents)` as `wall_boxes`: centred on the pit,
-    spanning x in [-length/2, length/2]."""
-    half_t = WALL_THICKNESS_M / 2
-    half_h = course.wall_height_m / 2
-    y_off = course.width_m / 2 + half_t
+def ring_ropes(course) -> list[tuple[str, tuple[float, float, float], tuple[float, float, float]]]:
+    """A tug's ring ropes, `(name, from, to)` in MJCF coordinates: west, east, north, south, each
+    bottom to top (`rope_<side>_<k>`), a side running post to post at the ring's edge."""
+    h = course.ring_m / 2
+    sides = {
+        "west": ((-h, -h), (-h, h)),
+        "east": ((h, -h), (h, h)),
+        "north": ((-h, h), (h, h)),
+        "south": ((-h, -h), (h, -h)),
+    }
     return [
-        (name, (0.0, y, half_h), (course.length_m / 2, half_t, half_h))
-        for name, y in (("wall_left", y_off), ("wall_right", -y_off))
+        (f"rope_{side}_{k}", (*start, z), (*end, z))
+        for side, (start, end) in sides.items()
+        for k, z in enumerate(RING_ROPES_M)
+    ]
+
+
+def ring_posts(course) -> list[tuple[str, tuple[float, float, float], tuple[float, float, float]]]:
+    """A tug's four corner posts, `(name, from, to)` as `ring_ropes`: from the canvas up to
+    RING_POST_TOP_M at the ring's corners."""
+    h = course.ring_m / 2
+    corners = {"nw": (-h, h), "ne": (h, h), "sw": (-h, -h), "se": (h, -h)}
+    return [(f"post_{corner}", (x, y, 0.0), (x, y, RING_POST_TOP_M)) for corner, (x, y) in corners.items()]
+
+
+def backstops(course) -> list[tuple[str, tuple[float, float, float], tuple[float, float, float]]]:
+    """A tug's four backstops, `(name, pos, half_extents)` as `wall_boxes`: a wall flush behind each
+    side's ropes, up to the top rope. It closes the 5.4 cm under the bottom rope and the 4.8 cm
+    between two, which a duck's foot or hand would slip through. The four overlap at the corners."""
+    h = course.ring_m / 2
+    r = RING_ROPE_RADIUS_M
+    t = WALL_THICKNESS_M
+    top = RING_ROPES_M[-1] + r
+    reach, along = h + r + t / 2, h + r + t
+    return [
+        ("backstop_west", (-reach, 0.0, top / 2), (t / 2, along, top / 2)),
+        ("backstop_east", (reach, 0.0, top / 2), (t / 2, along, top / 2)),
+        ("backstop_north", (0.0, reach, top / 2), (along, t / 2, top / 2)),
+        ("backstop_south", (0.0, -reach, top / 2), (along, t / 2, top / 2)),
     ]
 
 
@@ -90,11 +125,11 @@ def pit_boxes(course) -> list[tuple[str, tuple[float, float, float], tuple[float
     """The ground of a tug, `(name, pos, half_extents)`: a platform either side of the pit, top
     face at z = 0, and the pit's floor, top face at z = -pit_depth_m.
 
-    No infinite plane: the pit must be a hole. The platforms run PLATFORM_OVERRUN_M past the
-    walls on every side, so a duck that climbs out of the lane still stands on something.
+    No infinite plane: the pit must be a hole. The platforms still run PLATFORM_OVERRUN_M out
+    past the ring, so no duck is ever below the floor but in the pit.
     """
-    half_y = course.width_m / 2 + WALL_THICKNESS_M + PLATFORM_OVERRUN_M
-    x_out = course.length_m / 2 + PLATFORM_OVERRUN_M
+    half_y = course.ring_m / 2 + WALL_THICKNESS_M + PLATFORM_OVERRUN_M
+    x_out = course.ring_m / 2 + PLATFORM_OVERRUN_M
     half_pit = course.pit_m / 2
     slab = course.pit_depth_m + WALL_THICKNESS_M
     platform = ((x_out - half_pit) / 2, half_y, slab / 2)
@@ -172,6 +207,18 @@ def _boxes(body: ET.Element, boxes) -> None:
         )
 
 
+def _capsules(body: ET.Element, capsules, radius: float) -> None:
+    for name, start, end in capsules:
+        _sub(
+            body,
+            "geom",
+            name=name,
+            type="capsule",
+            fromto=" ".join(str(v) for v in (*start, *end)),
+            size=radius,
+        )
+
+
 def _inject_course(root: ET.Element, manifest: Manifest) -> None:
     """The floor inside one static rotated body, plus a lane's two side walls.
 
@@ -180,8 +227,8 @@ def _inject_course(root: ET.Element, manifest: Manifest) -> None:
     pinned to zero, a policy that pulls to one side scrubs speed against them, so
     straightness is part of the time rather than a separate rule. A stage is the
     same floor with nothing else: an open space to perform in. A tug has no
-    plane at all, since its pit must be a hole: its ground is `pit_boxes`, walled
-    by `tug_walls`.
+    plane at all, since its pit must be a hole: its ground is `pit_boxes`, fenced by
+    the ring's ropes and posts with a backstop behind them.
     """
     course = manifest.course
     worldbody = root.find("worldbody")
@@ -192,7 +239,9 @@ def _inject_course(root: ET.Element, manifest: Manifest) -> None:
     pitch = -math.radians(_slope_deg(course))
     body = _sub(worldbody, "body", name="course", euler=f"0 {pitch} 0")
     if course.kind == "tug":
-        _boxes(body, pit_boxes(course) + tug_walls(course))
+        _boxes(body, pit_boxes(course) + backstops(course))
+        _capsules(body, ring_ropes(course), RING_ROPE_RADIUS_M)
+        _capsules(body, ring_posts(course), RING_POST_RADIUS_M)
         return
 
     _sub(body, "geom", name="floor", type="plane", size="0 0 0.05", pos="0 0 0")

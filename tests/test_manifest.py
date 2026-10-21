@@ -497,7 +497,7 @@ RATING = '[rating]\nreference="tug-reference-t7-250.onnx"\npit_bonus_cm=100.0\n'
 
 TUG = {
     "root": GOOD["root"].replace('category="race"', 'category="versus"').replace('"mean_finish_time"', '"mean_ground_cm"'),
-    "course": '[course]\nkind="tug"\nlength_m=4.0\nwidth_m=0.8\nwall_height_m=0.15\npit_m=0.3\npit_depth_m=0.3\nstring_m=1.0\n',
+    "course": '[course]\nkind="tug"\nring_m=3.0\npit_m=0.3\npit_depth_m=0.3\nstring_m=1.0\n',
     "sweep": RATING + '[bout]\ntime_limit_s=10.0\nbouts_to_win=2\nmax_bouts=5\n',
     "clip": CUP,
 }
@@ -505,7 +505,7 @@ TUG = {
 
 def test_the_tug_of_war_loads(tmp_path):
     m = load_event("tug-of-war")
-    assert m.course == Tug(4.0, 0.8, 0.15, 0.3, 0.3, 1.0)
+    assert m.course == Tug(3.0, 0.3, 0.3, 1.0)
     assert m.rating == Rating("tug-reference-t7-250.onnx", 100.0)
     assert m.bout == BoutRules(45.0, 2, 5)
     assert (m.category, m.metric, m.rig, m.time_limit_s, m.clip.tape_max_s) == ("versus", "mean_ground_cm", "legs", 45.0, 45.0)
@@ -528,6 +528,9 @@ def test_the_tug_of_war_loads(tmp_path):
     ({"sweep": TUG["sweep"] + "[vote]\nballot_min=2\nballot_max=4\nwindow_days=7\nper_day=3\n"}, r"no \[vote\]"),
     ({"root": TUG["root"].replace('rig="legs"', 'rig="rollers"')}, "rig 'legs'"),
     ({"course": TUG["course"] + "slope_deg=0.0\n"}, "unknown keys"),
+    ({"course": TUG["course"] + "length_m=4.0\n"}, "unknown keys"),
+    ({"course": TUG["course"].replace("pit_m=0.3", "pit_m=1.2")}, r"pit must be narrower than its string"),
+    ({"course": TUG["course"].replace("string_m=1.0", "string_m=3.5")}, r"shorter than its ring"),
     ({"sweep": TUG["sweep"] + "draws=1\n"}, "unknown keys"),
     ({"sweep": TUG["sweep"].replace("max_bouts=5", "max_bouts=2")}, r"probe\.toml: \[bout\] max_bouts"),
     ({"sweep": TUG["sweep"].replace("time_limit_s=10.0\nbouts", "time_limit_s=0.01\nbouts")}, r"probe\.toml: \[bout\] time_limit_s"),

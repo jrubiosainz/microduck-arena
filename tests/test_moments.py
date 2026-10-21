@@ -3,9 +3,7 @@ import numpy as np
 from arena.manifest import Tug
 from arena.moments import Moment, moments
 
-COURSE = Tug(
-    length_m=4.0, width_m=0.8, wall_height_m=0.15, pit_m=0.30, pit_depth_m=0.30, string_m=1.0
-)
+COURSE = Tug(ring_m=3.0, pit_m=0.30, pit_depth_m=0.30, string_m=1.0)
 ZERO = (0.0, 0.0, 0.0)  # string ends on the trunks: the marker is their midpoint
 START = Moment(0.0, "start", None)
 

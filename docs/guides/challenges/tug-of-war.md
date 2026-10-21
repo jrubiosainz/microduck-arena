@@ -1,11 +1,13 @@
 # Tug of War
 
-Two ducks are tied neck to neck by a 1 m string, over a 0.3 m pit. Drag the other duck into the pit.
+Two ducks are tied neck to neck by a 1 m string, over a 0.3 m pit, in a 3 m wrestling ring. Drag the other duck into the pit.
 
 ## The bout
 
 Each duck pulls by walking backwards: the Arena sends every duck the same fixed command,
 `[-0.30, 0, 0]`. There is no speed sweep.
+
+The ring's ropes are the field's edges: a duck that backs into them bounces off. The string is a real rope: it sags, and a duck can step or lie on it.
 
 **Only the pit decides.** A duck that falls, sits or lies down stays in play and can still be
 dragged in. The first duck in the pit loses the bout. If nobody is in after **45 seconds**, the red

@@ -72,7 +72,7 @@ export function formatEventFacts(event) {
   }
   if (isTug(event)) {
     return [
-      { label: "course", value: `${event.length_m} m lane, ${event.pit_m} m pit` },
+      { label: "course", value: `${event.ring_m} m ring, ${event.pit_m} m pit` },
       { label: "bout", value: `up to ${event.bout.time_limit_s} s` },
       { label: "rig", value: event.rig },
     ];

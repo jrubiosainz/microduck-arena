@@ -1,7 +1,7 @@
 # Versus — shared interfaces and constraints for the four plans
 
 **Spec:** `docs/superpowers/specs/2026-10-19-versus-tug-of-war-design.md` (approved by the owner
-2026-10-19, amended 2026-10-20 night). Six plans implement it and all build against the names below:
+2026-10-19, amended 2026-10-20 night). Eight plans implement it and all build against the names below:
 
 | Plan | File | What it builds | Repo / branch |
 |---|---|---|---|
@@ -11,6 +11,8 @@
 | D | `2026-10-19-versus-d-cup-show.md` | the show: running order with the desk, play-by-play, tournament-aware writer, desk screen | arena, branch `versus` |
 | E | `2026-10-20-versus-e-reference-bouts.md` | the rating by five bouts against the reference duck, 45 s bouts, the winch removed | arena, branch `versus` |
 | F | `2026-10-20-versus-f-opponent-training.md` | training against a frozen opponent duck, the reference first; the publish line in cm | microduck-challenges, branch `tug-of-war`; microduck_rl, branch `tug-publish-line` |
+| G | `2026-10-21-versus-g-ring-and-rope.md` | the 3 m wrestling ring whose ropes are the field's edges, the physical string, the judge on its middle, the string recorded, served and drawn, the venue bound to the ring | arena, branch `versus` |
+| H | `2026-10-21-versus-h-upright-on-the-ring.md` | the recipe on the ring and the string, the "stay upright" knob, the upright reference | microduck-challenges, branch `tug-of-war` |
 
 A section's names are owned by the plan that introduces them; a later plan uses them as written
 here. If a plan must change a name, it changes this file in the same commit.
@@ -35,7 +37,10 @@ here. If a plan must change a name, it changes this file in the same commit.
   Tasks 2–8 (Task 7: trainings t8/t9 on HF Jobs, in the background) → while they train, Plan C
   Tasks 8–14 → Plan D → Plan F Task 9 at release. E's Tasks 2 and 4 bring the challenges' pins along
   in the same sitting (`BOUT_S = 45.0`; `compile_tug(EVENT)`, `tug_layout(EVENT.course)`), so F's
-  Tasks 2–9 call the one-argument forms.
+  Tasks 2–9 call the one-argument forms. **From 2026-10-21:** Plan G Task 1 any time first; G2 → G3 → G4
+  back to back (from G2's commit the challenges' parity tests are red, until Plan H Task 2; nothing
+  trains in between); Plan H Tasks 1–5 after G4, G5–G8 beside them; G9 with Plan H Task 6, in one
+  sitting; Plan H Task 7 after G9.
 - **Settled by the owner (2026-10-20), no question to ask:** only the pit decides
   (a fall no longer loses: the earlier "a fall loses" ruling of the same day was reversed that
   evening, a downed duck stays in play and can be dragged in); HF Jobs trainings stay on l4x1; the first candidate's repo is
@@ -128,7 +133,7 @@ here. If a plan must change a name, it changes this file in the same commit.
   `test_hub_store.py FakeHub`; the walker `arena/assets/policies/BEST_alpha_walking.onnx` via
   `load_policy`; `_ZeroPolicy` style fakes (`act(obs) -> np.zeros(14, float32)`).
 
-## Plan A — names (as Plan E leaves them)
+## Plan A — names (as Plan G leaves them)
 
 ```python
 # arena/manifest.py
@@ -139,12 +144,10 @@ HIGHER_WINS = frozenset({"mean_ground_cm"})     # every other metric: lower is b
 
 @dataclass(frozen=True)
 class Tug:
-    length_m: float       # the walled length, centred on the pit: walls span x in [-length/2, length/2]
-    width_m: float
-    wall_height_m: float
-    pit_m: float          # the pit's width along x, centred on x = 0, across the whole lane
+    ring_m: float         # rope to rope: the field is the square inside the ring's ropes, centred on the pit
+    pit_m: float          # the pit's width along x, centred on x = 0, across the whole ring
     pit_depth_m: float
-    string_m: float       # neck base to neck base, taut at the start
+    string_m: float       # neck base to neck base, straight at the start
     kind: str = "tug"
 
 @dataclass(frozen=True)
@@ -165,7 +168,8 @@ def higher_wins(event_id: str) -> bool   # cached; True iff the event's TOML exi
 
 Validation: `course.kind == "tug"` ⇔ `category == "versus"` ⇔ `metric == "mean_ground_cm"`; a tug
 requires `[rating]` and `[bout]` (its `time_limit_s` equal to `[bout]`'s), refuses `[sweep]` and
-`[vote]`, requires `rig = "legs"`, refuses unknown keys in its `[course]`, `[rating]`, `[bout]`;
+`[vote]`, requires `rig = "legs"`, refuses unknown keys in its `[course]`, `[rating]`, `[bout]`; its
+`[course]` values are all positive and `pit_m < string_m < ring_m`;
 any other event refuses `[rating]` and `[bout]`.
 
 `arena/events/tug-of-war.toml` (Plan A creates it; Plan C adds `[cup]`; Plan B may retune
@@ -184,12 +188,10 @@ seeds        = [1, 2, 3, 4, 5]
 
 [course]
 kind          = "tug"
-length_m      = 4.0
-width_m       = 0.8
-wall_height_m = 0.15
+ring_m        = 3.00          # rope to rope: the field is the square inside the ring's ropes
 pit_m         = 0.30
 pit_depth_m   = 0.30
-string_m      = 1.00
+string_m      = 1.00          # neck base to neck base, straight at the start
 
 [command]                     # every duck, every bout: walk backwards
 vel  = [-0.30, 0.0, 0.0]
@@ -225,31 +227,46 @@ sounds     = ["crowd", "verdict"]
 ```python
 # arena/course.py
 STRING_SITE = "string_end"   # on each duck's trunk_base (prefixed for duck 1), at the neck's base
-STRING = "string"            # the spatial tendon
-PLATFORM_OVERRUN_M = 20.0    # the platforms run this far past the walls: nobody walks off the world
+PLATFORM_OVERRUN_M = 20.0    # the platforms run this far past the ring: nobody walks off the world
+WALL_THICKNESS_M = 0.05      # a backstop is that thick
+RING_ROPES_M = (0.06, 0.12, 0.18)   # the ropes' axes over the canvas, bottom to top
+RING_ROPE_RADIUS_M = 0.006
+RING_POST_RADIUS_M = 0.022
+RING_POST_TOP_M = 0.23
+STRING = "string/"           # the prefix of the string's bodies `string/seg{k}`, joints `string/root`,
+                             # `string/j{k}y`, `string/j{k}z`, geoms `string/cap{k}`, sites `string/p{k}`
+STRING_SEGMENTS = 16         # 17 points; STRING_RADIUS_M = 0.004, STRING_MASS_KG = 0.080, STRING_END_MASS_KG = 0.015,
+                             # STRING_DAMPING = 0.003, STRING_ARMATURE = 1e-6, STRING_TIE_SOLREF = (0.01, 1.0),
+                             # STRING_FRICTION = (1.0, 0.005, 0.0001): the measured ones, never lowered
 
 def string_offset(rig: str = "legs") -> tuple[float, float, float]   # the `neck` body's pos in `trunk_base`, read from the rig's MJCF
-def tug_walls(course: Tug) -> list[tuple[str, tuple, tuple]]          # ("wall_left"|"wall_right", pos, half), x in [-length/2, length/2]
-def pit_boxes(course: Tug) -> list[tuple[str, tuple, tuple]]          # "platform_west", "platform_east" (top face z = 0), "pit_floor" (top face z = -pit_depth_m)
+def ring_ropes(course: Tug) -> list[tuple[str, tuple, tuple]]        # (`rope_<side>_<k>`, from, to): west, east, north, south, each bottom to top, a side post to post
+def ring_posts(course: Tug) -> list[tuple[str, tuple, tuple]]        # `post_nw`, `post_ne`, `post_sw`, `post_se`: z 0 to RING_POST_TOP_M at (±ring_m/2, ±ring_m/2)
+def backstops(course: Tug) -> list[tuple[str, tuple, tuple]]         # (`backstop_<side>`, pos, half): flush behind the side's ropes, up to the top rope
+def pit_boxes(course: Tug) -> list[tuple[str, tuple, tuple]]         # "platform_west", "platform_east" (top face z = 0), "pit_floor" (top face z = -pit_depth_m), sized on ring_m
 def tug_layout(course: Tug, rig: str = "legs") -> list[Start]  # [west yaw 0, east yaw 180]; both string ends on y = 0, string_m apart, centred on x = 0
+def string_sites(model) -> np.ndarray                          # the string's 17 site ids, west to east
 def compile_tug(manifest: Manifest) -> mujoco.MjModel
-# two ducks: STRING between "string_end" and "duck1/string_end", limited, range (0, string_m)
-# _inject_course gets a "tug" branch: no infinite plane, pit_boxes + tug_walls instead.
+# two ducks tied by the string: 16 capsule segments, a free root on `string/seg8`, each joint two hinges (y then z),
+# a `connect` tie from `string_end` to `string/p0` and from `duck1/string_end` to `string/p16`; no tendon.
+# _inject_course gets a "tug" branch: no infinite plane, pit_boxes + backstops, then the rope and post capsules.
 # compile_stage is split into helpers it shares with compile_tug; compile_stage stays bit-identical.
+# Gone: tug_walls, the geoms wall_left and wall_right (a tug has none), the tendon STRING.
 ```
 
 ```python
 # arena/tug.py — new
 PIT_DROP_M = 0.05      # a trunk below z = -PIT_DROP_M is in the pit
 
-def string_ends(trace: np.ndarray, offset) -> np.ndarray   # (ducks, frames, 21) -> (ducks, frames, 3), from trunk pos + quat
-def marker_x(trace: np.ndarray, offset) -> np.ndarray     # (2, frames, 21) -> (frames,), midpoint x of the two string ends
+STRING_POINTS = 17     # the string's recorded points, west to east
+MIDDLE = 8             # the marker: the string's middle point
+def marker_x(string: np.ndarray) -> np.ndarray             # (frames, 17, 3) -> (frames,), the middle point's x
 def in_pit(frame: np.ndarray) -> bool                       # frame (21,): trunk z < -PIT_DROP_M
 SIDES = ("west", "east")
 def reference_duck(manifest: Manifest) -> Policy            # load_policy(ASSET_ROOT / "policies" / manifest.rating.reference)
 def entry_side(seed: int) -> int                            # 0 (west) on an odd seed, 1 (east) on an even one
 def bout_status(outcome: BoutOutcome, entry: int) -> str    # "won" | "lost" | "pit_won" | "pit_lost" | "draw"
-def bout_score_cm(outcome: BoutOutcome, entry: int, pit_bonus_cm: float, offset) -> float
+def bout_score_cm(outcome: BoutOutcome, entry: int, pit_bonus_cm: float) -> float
 
 # Only the pit decides (owner, 2026-10-20 evening): a duck is OUT when, after a control step, its
 # trunk is in the pit (in_pit of its last frame, z < -PIT_DROP_M). A duck knocked over, sitting or
@@ -264,9 +281,11 @@ class BoutOutcome:
     time_s: float          # when it was decided
     trace: np.ndarray      # (2, frames, 21), west first; stops at the deciding step
     settle: np.ndarray     # (2, settle + 1, 21)
+    string: np.ndarray     # (frames, 17, 3), float32: the string's points, one frame per trace frame
+    string_settle: np.ndarray   # (settle + 1, 17, 3)
 
 def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutcome
-# the first duck in the pit loses; marker rule: marker_x < 0 (pulled to the west) -> east loses; > 0 -> west loses; == 0 -> draw
+# the first duck in the pit loses; marker rule (the string's middle point): marker_x < 0 (pulled to the west) -> east loses; > 0 -> west loses; == 0 -> draw
 ```
 
 ```python
@@ -287,7 +306,7 @@ class BoutResult:
 @dataclass(frozen=True)
 class MatchOutcome:
     bouts: tuple[BoutResult, ...]
-    traces: tuple[tuple[np.ndarray, np.ndarray], ...]   # (trace, settle) per bout, west first
+    traces: tuple[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray], ...]   # (trace, settle, string, string_settle) per bout, west first
     wins: tuple[int, int]                               # (a, b)
     winner: str                                         # "a" | "b"
     decided_by: str                                     # "bouts" | "rating"
@@ -306,6 +325,14 @@ def seed_row(result: SeedResult) -> dict                  # seed, status, time_s
 # a tug: one run_bout per seed, the entry on entry_side(seed), reference_duck opposite; trace seed = lower median by
 # (score_cm, seed), its (2, frames, 21) trace and settle; no record field (a page places the entry by trace_seed)
 
+# arena/trace.py: encode(trace, settle=None, string=None, string_settle=None); the npz of a tug also holds
+# `string` (frames, 17, 3) and `string_settle` (settle + 1, 17, 3), float16; decode_string(blob) -> (string_settle, string),
+# float32, ValueError("this trace holds no string") without one. Evaluation.string / .string_settle: None but on a tug.
+# arena/moments.py: moments(trace, string, course).
+# Wire: GET /api/runs/{id}/string and GET /api/matches/{id}/bouts/{k}/string: little-endian float32, the settle's
+# frames then the timed frames, 51 floats a frame; headers X-Frame-Count (timed), X-Settle-Frame-Count,
+# X-Point-Count: 17, Cache-Control: no-store; 404 "run {id} has no string" without one.
+
 # arena/store.py: a seed's `score_cm` is written only when set, so every stored race and
 # performance serialises as today.
 
@@ -323,9 +350,10 @@ pinned by sha256 in `tests/test_assets.py`, recorded in `arena/assets/PROVENANCE
 `f"seed {s}: {SIDES[entry_side(s)]:<4} {status:<8} {score_cm:+7.1f} cm at {time_s:.2f} s"`, then
 `f"rating: {score:.1f} cm · replay from seed {n}"` (a minus sign when negative).
 
-API (Plan A): `event_summary` of a tug adds `course: "tug"`, `length_m`, `width_m`, `string_m`,
-`pit_m`, `pit_depth_m`, `walls: [{name, pos, half}]`, `pit: [{name, pos, half}]`,
-`string_offset: [x, y, z]`, `bout: {time_limit_s, bouts_to_win, max_bouts}`. `per_seed` items
+API: `event_summary` of a tug adds `course: "tug"`, `ring_m`, `string_m`, `pit_m`, `pit_depth_m`,
+`ropes: [{name, from, to, radius}]` (12), `posts: [{name, from, to, radius}]` (4),
+`bout: {time_limit_s, bouts_to_win, max_bouts}`, and `string_offset: [x, y, z]` until Plan G Task 6;
+never `length_m`, `width_m`, `walls` or `pit`. `per_seed` items
 carry `score_cm`; every board row carries `trace_seed`; a player's publications carry `metric`. `POST /api/events/{id}/submit` answers with the event's `metric` (every
 event; the publish CLI reads it, Plan B's Task 13).
 
@@ -335,31 +363,42 @@ export const isTug = (event) => event?.course === "tug";
 export function formatScore(value, { finished, metric } = {})   // "12.3 cm" for "mean_ground_cm"; seconds otherwise, as today
 // app/src/tug.js — new (mirrors arena/tug.py; MJCF coordinates in, three.js out)
 export function toThree([x, y, z])                  // [x, z, -y]
-export function stringEnd(frame, offset)            // [x, y, z]
+export const STRING_WIDTH = 51, MIDDLE = 8          // floats a frame (17 points × 3), the marker's point
+export function stringAt(string, f)                 // frame f's 51 floats
+export function tugString(entry, lead)              // a lane's string from where its ducks stand: its settle's last `lead` frames, then its trace
 export const SIDES, BOUT_WORDS; export function entrySide(seed)   // mirror tug.py's SIDES, entry_side; REFERENCE (module-private) = {livery: "charcoal", name: "Reference"}
-export function ratingLane(traces, settles, {traceSeed, livery, name})   // the entry's bout lane; the Reference wears "classic" when the entry wears "charcoal"
+export function ratingLane(traces, settles, string, {traceSeed, livery, name})   // the entry's bout lane, its `string: {trace, settle?}`; the Reference wears "classic" when the entry wears "charcoal"
 export function tugDucks(entry)                     // a tug lane -> [{trace, lead, livery, name}], a settle led in
-export function tugEnds(event, frames)              // MJCF [a, b]: the two ducks' string ends
 export function tugSpan(frames)
-export function buildTugCourse(event)               // Group "course": platforms, pit, the served walls, the centre line
-export function buildString()                       // { group, update(endA, endB) }: the string and its red marker
+export function buildTugVenue(event, spectators, reachy, branding, clearance)   // app/src/tug-venue.js: the ring drawn from the served ropes and posts
+export function buildString()                       // { group, update(points), dispose() }: a Catmull-Rom tube of radius 0.004 m through the 17 points, the red ribbon at point 8
+export function getString(runId), getBoutString(matchId, k)   // app/src/api.js: Promise<{settle: Float32Array, trace: Float32Array}>
 // app/src/clip/score.js
 export function clipVerdict(run)                    // {stamp, pass}: stamps a tug's traced status; `clip/plan.js stampLane(run, laneCount)`
 ```
 
 A tug lane handed to `viewer.setLanes` (one per call) is only
-`{tug: "bout", ducks: [{trace, settle?, livery, name}, {…}]}` (west first; a duck's trace is in
-world coordinates, so it needs no start; an optional `settle` plays before `trace`).
+`{tug: "bout", ducks: [{trace, settle?, livery, name}, {…}], string: {trace, settle?}}` (west first; a
+duck's trace is in world coordinates, so it needs no start; an optional `settle` plays before `trace`;
+the string is the recorded one).
 
-## Plan B — cross-repo names
+## Plan B — cross-repo names (as Plan G leaves them)
 
 Plan B copies these Arena names into `microduck-challenges` (its job cannot import the Arena) and
-pins each one with a parity test; the Arena must not change them without Plan B's copy:
-`platform_west`, `platform_east`, `pit_floor`, `wall_left`, `wall_right` (geom names),
-`STRING_SITE`, `STRING`, `SPAWN_HEIGHT_M`, `WALL_THICKNESS_M`,
+pins each one with a parity test; the Arena must not change them without Plan B's copy. Plan H
+makes the copies the ring and the string need: the lane's names (`wall_left`, `wall_right`,
+`WALL_HEIGHT_M`, `LENGTH_M`, `WIDTH_M`) and the tendon's (`STRING` as the tendon, the tendon's range)
+go out; in come the geoms `platform_west`, `platform_east`, `pit_floor`, `backstop_<side>`,
+`rope_<side>_<k>`, `post_nw`, `post_ne`, `post_sw`, `post_se`; the ring's constants `RING_M`,
+`RING_ROPES_M`, `RING_ROPE_RADIUS_M`, `RING_POST_RADIUS_M`, `RING_POST_TOP_M`; the string's
+`STRING` (the prefix `"string/"`), `STRING_SEGMENTS`, `STRING_RADIUS_M`, `STRING_MASS_KG`,
+`STRING_END_MASS_KG`, `STRING_DAMPING`, `STRING_ARMATURE`, `STRING_TIE_SOLREF`, `STRING_FRICTION`,
+`MIDDLE`, and the names the string is built from (`string_sites` and `marker_x(string)`: the string's
+middle point's x); and still `STRING_SITE`, `SPAWN_HEIGHT_M`, `WALL_THICKNESS_M`,
 `PLATFORM_OVERRUN_M`, `string_offset("legs")`, `PIT_DROP_M`, `tug_layout`'s two starts,
 `manifest.termination` (summaries only), the tug's `[course]`, `[command]`, `[start]`, `[bout]`,
-`[rating]` and the reference duck's bytes.
+`[rating]` and the reference duck's bytes. From Plan G Task 2's commit until Plan H Task 2 the
+challenges' parity tests are red, by design.
 
 A retune of `[command]`, `[bout]` or `[rating]` by Plan B is, in one sitting: a commit on the arena `versus`
 branch (`arena/events/tug-of-war.toml`, its two Python suite calls green), the challenges'

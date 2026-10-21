@@ -28,7 +28,7 @@ BOOTH_CONTEXT = (
     "race is a handful of attempts, called seeds; a duck that falls or runs out of time does "
     "not finish, and the mean time counts. A performance on the stage is a single turn the "
     "public votes on: never timed, nothing to finish, and its length is the only time it has. "
-    "In the tug of war two ducks tied by a string across a pit each pull by walking backwards; "
+    "In the tug of war two ducks tied by a string across a pit in a wrestling ring each pull by walking backwards; "
     "a duck's rating is the ground it wins from the Arena's reference duck over five bouts, in "
     "centimetres, a drop into the pit counting far more, and the higher the better. "
     "The ducks are "
