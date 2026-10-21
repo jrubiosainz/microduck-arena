@@ -98,8 +98,8 @@ def _cm(value: float) -> str:
     return f"{value:.1f} cm"
 
 
-def _score(match: MatchRecord) -> str:
-    """The winner's first."""
+def score_text(match: MatchRecord) -> str:
+    """A match's bouts won, the winner's first."""
     return f"{max(match.wins)}–{min(match.wins)}"
 
 
@@ -117,15 +117,15 @@ def _on_rating(match: MatchRecord, won: bool) -> str:
 def _beat(cup: Cup, match: MatchRecord) -> str:
     winner, loser = duck(cup.entrants[match.winner]), duck(cup.entrants[_loser(match)])
     if match.decided_by == "rating":
-        return f"{winner} {_on_rating(match, True)} on rating after {_score(match)} against {loser}"
-    return f"{winner} beat {loser} {_score(match)}"
+        return f"{winner} {_on_rating(match, True)} on rating after {score_text(match)} against {loser}"
+    return f"{winner} beat {loser} {score_text(match)}"
 
 
 def _verdict(match: MatchRecord, won: bool) -> str:
     """How a match ended for one of its sides."""
     if match.decided_by == "rating":
-        return f"{_on_rating(match, won)} on rating after {_score(match)}"
-    return f"{'won' if won else 'lost'} {_score(match)}"
+        return f"{_on_rating(match, won)} on rating after {score_text(match)}"
+    return f"{'won' if won else 'lost'} {score_text(match)}"
 
 
 def _opening(cup: Cup, manifest: Manifest) -> Fact:
@@ -254,8 +254,8 @@ def _ending_facts(cup: Cup, manifest: Manifest) -> list[Fact]:
     final = cup.matches[-1]
     champion, runner_up = duck(cup.entrants[final.winner]), duck(cup.entrants[_loser(final)])
     title = f"{manifest.title} Cup #{cup.number}"
-    crowned = (f"going through on rating after {_score(final)} against {runner_up}" if final.decided_by == "rating"
-               else f"beating {runner_up} {_score(final)}")
+    crowned = (f"going through on rating after {score_text(final)} against {runner_up}" if final.decided_by == "rating"
+               else f"beating {runner_up} {score_text(final)}")
     steps = [f"{f'Group {m.group}' if m.group else m.round} against "
              f"{duck(cup.entrants[m.b if m.a == final.winner else m.a])}, {_verdict(m, m.winner == final.winner)}"
              for m in cup.matches if final.winner in (m.a, m.b)]

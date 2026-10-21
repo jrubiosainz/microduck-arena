@@ -1,6 +1,7 @@
 """A cup's show written ahead; only the router and the plan page are faked."""
 
 import json
+import logging
 import random
 import re
 from dataclasses import replace
@@ -10,7 +11,7 @@ import pytest
 
 from arena.commentary.context import Fact
 from arena.commentary.cup import cup_facts, screen_view
-from arena.commentary.generator import Rejected
+from arena.commentary.generator import Rejected, directed
 from arena.commentary.lore import load
 from arena.commentary.show import DESK_ANGLES, DESK_PLAYERS, TRIES, show_outline, thin, write_show
 from arena.match import BoutResult
@@ -39,16 +40,19 @@ FOOTAGE = footage(CUP)
 
 class Router:
     """A desk prompt gets three turns citing fact 0; a call, one line per moment from the speaker
-    the prompt names first, in turn."""
+    the prompt names first, in turn. The asks numbered in `refused` get an answer that is no JSON."""
 
-    def __init__(self, down_at=None):
+    def __init__(self, down_at=None, refused=()):
         self.down_at = down_at
+        self.refused = refused
         self.asked = []
 
     def __call__(self, messages, max_tokens):
         self.asked.append(messages)
         if len(self.asked) == self.down_at:
             raise httpx.ConnectError("router down")
+        if len(self.asked) in self.refused:
+            return reply(None, content="not json")
         user = json.loads(messages[1]["content"])
         if "moments" not in user:
             return reply(DESK)
@@ -150,7 +154,7 @@ def test_a_bout_s_lines_are_written_from_that_bout_alone():
     assert not any("@" in what for moments in calls for what in whats(moments))
 
 
-def test_a_bout_cut_short_by_a_reset_never_hears_time_is_up():
+def test_a_bout_stopped_by_a_reset_is_called_a_draw_at_its_end_and_never_time_up():
     reset = BoutResult(0, 0, "west", None, "draw", 12.0)
     limit = BoutResult(1, 1, "east", "a", "marker", 45.0)
     first = replace(CUP.matches[0], bouts=(reset, limit, BoutResult(2, 2, "west", "a", "pit", 6.5)))
@@ -161,9 +165,13 @@ def test_a_bout_cut_short_by_a_reset_never_hears_time_is_up():
     bouts[1].update(seconds=45.0,
                     moments=[STEPS[0], Moment(4.0, "lead", "east"), Moment(45.0, "time", "east")])
     router = Router()
-    show(router, cup=cup, tape=tape)
+    written = show(router, cup=cup, tape=tape)
     cut, full = (whats(moments) for moments in router.calls()[:2])
-    assert cut[-1] == "puller 2 pulls the marker over to their side of the pit. Nobody wins the bout."
+    assert cut[-1] == "The bout is stopped and called a draw."
+    assert not any("Nobody wins" in what or "Time is up" in what for what in cut)
+    assert cut[1] == "puller 2 pulls the marker over to their side of the pit."
+    # the draw is said at the bout's end: its 12 s are taped from 2 s to 10 s
+    assert [line["at_ms"] for line in written["calls"][first.match_id]["lines"]][:3] == [2000, 4667, 10000]
     assert full[-1] == ("Time is up with the marker on puller 2's side. puller 2 wins the bout; "
                         "the score is puller 2 1, puller 4 0.")
 
@@ -171,19 +179,21 @@ def test_a_bout_cut_short_by_a_reset_never_hears_time_is_up():
 def test_a_match_level_after_its_bouts_goes_to_the_rating_on_air():
     final = CUP.matches[-1]
     bouts = (BoutResult(0, 0, "west", "a", "pit", 6.5), BoutResult(1, 1, "east", "b", "pit", 6.5),
-             *(BoutResult(k, k, ("west", "east")[k % 2], None, "draw", 45.0) for k in (2, 3, 4)))
+             BoutResult(2, 2, "west", None, "draw", 45.0), BoutResult(3, 3, "east", None, "draw", 45.0),
+             BoutResult(4, 4, "west", None, "draw", 20.0))  # the last one stopped by a reset
     level = replace(final, bouts=bouts, wins=(1, 1), decided_by="rating")
     cup = replace(CUP, matches=(*CUP.matches[:-1], level))
     tape = footage(cup)
     tape[level.match_id]["duration_ms"] = 50000
-    for bout in tape[level.match_id]["bouts"][2:]:
-        bout.update(seconds=45.0, moments=[STEPS[0], Moment(45.0, "time", None)])
+    for bout, taped in zip(bouts[2:], tape[level.match_id]["bouts"][2:]):
+        taped.update(seconds=bout.time_s, moments=[STEPS[0], Moment(bout.time_s, "time", None)])
     router = Router()
     show(router, cup=cup, tape=tape)
     told = [whats(moments) for moments in router.calls()[-5:]]
     winner = cup.entrants[level.winner].name
-    assert told[-1][-1] == ("Time is up with the marker dead centre. Nobody wins the bout. "
-                            f"After 5 bouts without two wins, the match goes to {winner} on the rating.")
+    assert told[-2][-1] == "Time is up with the marker dead centre. Nobody wins the bout."
+    assert told[-1][-1] == ("The bout is stopped and called a draw. "
+                            f"After 5 bouts without 2 wins, the match goes to {winner} on the rating.")
     assert not any("1–1" in what or "wins the match" in what for bout in told for what in bout)
 
 
@@ -228,7 +238,32 @@ def test_a_show_cut_off_by_the_router_resumes_where_it_stopped():
     assert (len(done["desk"]), len(done["calls"])) == (15, 9)
 
 
-def test_a_segment_refused_three_times_holds_the_show():
+def test_a_show_cut_off_during_the_calls_keeps_the_matches_it_called():
+    done = {"desk": {}, "calls": {}}
+    with pytest.raises(httpx.ConnectError):
+        show(Router(down_at=15 + 2 + 2), done)  # the desk, match 0's two bouts, match 1's first
+    called = dict(done["calls"])
+    assert (len(done["desk"]), list(called)) == (15, [IDS[0]])
+    router = Router()
+    show(router, done)
+    assert len(router.asked) == 22 - 2
+    assert done["calls"][IDS[0]] is called[IDS[0]]
+    assert [len(router.calls()[0]), len(done["calls"][IDS[1]]["lines"])] == [3, 9]
+    assert list(done["calls"]) == IDS
+
+
+def test_a_refused_answer_is_asked_again_with_a_fresh_direction(caplog):
+    router = Router(refused={1})
+    with caplog.at_level(logging.WARNING, logger="arena.commentary.show"):
+        written = show(router)
+    assert len(router.asked) == 38
+    drawn = written["desk"]["opening"]["dialogue"]["brief"]["direction"]
+    assert directed(drawn) in router.asked[1][0]["content"]
+    assert router.asked[0][0]["content"] != router.asked[1][0]["content"]
+    assert caplog.messages == ["show: opening refused (model answer is not JSON)"]
+
+
+def test_a_segment_refused_three_times_holds_the_show(caplog):
     asked = []
 
     def refusing(messages, max_tokens):
@@ -236,7 +271,8 @@ def test_a_segment_refused_three_times_holds_the_show():
         return reply(None, content="not json")
 
     done = {"desk": {}, "calls": {}}
-    with pytest.raises(Rejected):
+    with caplog.at_level(logging.WARNING, logger="arena.commentary.show"), pytest.raises(Rejected):
         show(refusing, done)
     assert len(asked) == TRIES
     assert done["desk"] == {}
+    assert caplog.messages == ["show: opening refused (model answer is not JSON)"] * TRIES

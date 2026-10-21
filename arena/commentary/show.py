@@ -2,22 +2,25 @@
 
 A desk segment is told the cup as it stood before the match it airs ahead of (cup.py), never
 anything later; a bout is called from its own moments alone, its result told only in its last
-one. Nothing here reads the prose back: an answer the booth cannot play is asked for again,
-TRIES times in all, and then the show waits.
+one, a bout a MuJoCo reset stopped included. Nothing here reads the prose back: an answer the
+booth cannot play is logged and asked for again, TRIES times in all, and then the show waits.
 """
 
+import logging
 import random
 from collections.abc import Mapping, Sequence
-from contextlib import suppress
 
+from ..constants import CTRL_DT
 from ..cup import Cup, Entrant, MatchRecord
 from ..manifest import Manifest
 from ..match import BoutResult
 from ..moments import GROUND_M, Moment
 from .context import Fact
-from .cup import _score, cup_facts, group_round, screen_view
+from .cup import cup_facts, group_round, score_text, screen_view
 from .generator import NO_CALLBACK, Rejected, direction, write, write_call
 from .lore import Lore
+
+logger = logging.getLogger(__name__)
 
 CALL_GAP_S = 4.0  # between a bout's start and its end, a moment is called this long after the last
 TRIES = 3  # answers asked for one desk segment or one bout before the show waits
@@ -117,9 +120,13 @@ def _desk_dialogue(facts: list[Fact], kind: str, recent: list[dict], *, lore: Lo
     return drawn, write(facts, drawn, lore=lore, provider=provider, model=model)
 
 
-def _told(cup: Cup, match: MatchRecord, bout: BoutResult, aired: Sequence[Moment]) -> list[dict]:
+def _told(cup: Cup, manifest: Manifest, match: MatchRecord, bout: BoutResult,
+          aired: Sequence[Moment]) -> list[dict]:
     """A bout's moments as its call is told them, every duck by its on-air name: the last one
     adds the bout's result, and the deciding bout's the match's."""
+    # A draw before the time limit is a step MuJoCo had to reset: its last moment, the trace's
+    # last frame, is no time up.
+    reset = bout.how == "draw" and bout.time_s < manifest.bout.time_limit_s - CTRL_DT / 2
     a, b = cup.entrants[match.a].name, cup.entrants[match.b].name
     west, east = (a, b) if bout.a_side == "west" else (b, a)
     ducks = {"west": west, "east": east}
@@ -134,6 +141,8 @@ def _told(cup: Cup, match: MatchRecord, bout: BoutResult, aired: Sequence[Moment
         if moment.kind == "start":
             whats.append(f"Bout {bout.k + 1} starts, {west} on the west side and {east} on the "
                          f"east; {score(bout.k)}")
+        elif moment.kind == "time" and reset:
+            whats.append("The bout is stopped and called a draw.")
         elif moment.kind == "time":
             whats.append(f"Time is up with the marker on {duck}'s side." if duck
                          else "Time is up with the marker dead centre.")
@@ -141,23 +150,27 @@ def _told(cup: Cup, match: MatchRecord, bout: BoutResult, aired: Sequence[Moment
             whats.append(WHATS[moment.kind].format(duck))
     if bout.winner:
         whats[-1] += f" {a if bout.winner == 'a' else b} wins the bout; {score(bout.k + 1)}"
-    else:
+    elif not reset:
         whats[-1] += " Nobody wins the bout."
     if bout is match.bouts[-1]:
         winner = cup.entrants[match.winner].name
-        whats[-1] += (f" After {len(match.bouts)} bouts without two wins, the match goes to "
-                      f"{winner} on the rating." if match.decided_by == "rating"
-                      else f" {winner} wins the match {_score(match)}.")
+        whats[-1] += (f" After {len(match.bouts)} bouts without {manifest.bout.bouts_to_win} wins, "
+                      f"the match goes to {winner} on the rating." if match.decided_by == "rating"
+                      else f" {winner} wins the match {score_text(match)}.")
     return [{"index": i, "second": moment.at_s, "what": what}
             for i, (moment, what) in enumerate(zip(aired, whats))]
 
 
-def _tried(writer, *args, **kwargs):
-    """The writer's answer, asked again on a refusal: TRIES in all, the last refusal raised."""
-    for _ in range(TRIES - 1):
-        with suppress(Rejected):
+def _tried(what: str, writer, *args, **kwargs):
+    """The writer's answer, asked again on a refusal: TRIES in all, each refusal logged, the last
+    one raised."""
+    for attempt in range(1, TRIES + 1):
+        try:
             return writer(*args, **kwargs)
-    return writer(*args, **kwargs)
+        except Rejected as why:
+            logger.warning("show: %s refused (%s)", what, why)
+            if attempt == TRIES:
+                raise
 
 
 def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lore, provider,
@@ -172,8 +185,8 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
             continue
         facts = _desk_facts(cup, segment, history, manifest, profiles)
         recent = [one["dialogue"]["brief"]["direction"] for one in reversed(show["desk"].values())]
-        drawn, written = _tried(_desk_dialogue, facts, segment["kind"], recent, lore=lore,
-                                provider=provider, model=model, rng=rng)
+        drawn, written = _tried(segment["id"], _desk_dialogue, facts, segment["kind"], recent,
+                                lore=lore, provider=provider, model=model, rng=rng)
         plan = tab.prepare({"run_id": f"{cup.event_id}-{cup.number:04d}-{segment['id']}",
                             "turns": written["turns"]})
         show["desk"][segment["id"]] = {
@@ -190,10 +203,9 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
         facts += _profiles(profiles, [cup.entrants[match.a], cup.entrants[match.b]])
         taped, lines, first = footage[match.match_id], [], "peter"
         for bout, tape in zip(match.bouts, taped["bouts"], strict=True):
-            # A bout a MuJoCo reset cut short ends drawn before its time limit: no time is up.
-            aired = thin([moment for moment in tape["moments"]
-                          if moment.kind != "time" or bout.time_s >= manifest.bout.time_limit_s])
-            written = _tried(write_call, facts, _told(cup, match, bout, aired), first, lore=lore,
+            aired = thin(tape["moments"])
+            written = _tried(f"{match.match_id} bout {bout.k + 1}", write_call, facts,
+                             _told(cup, manifest, match, bout, aired), first, lore=lore,
                              provider=provider, model=model)
             start, end, seconds = tape["tape_start_s"], tape["tape_end_s"], tape["seconds"]
             lines += [{"at_ms": round(1000 * (start + (end - start) * moment.at_s / seconds)), **line}
