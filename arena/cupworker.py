@@ -325,7 +325,7 @@ class CupWorker:
             from .commentary.generator import Rejected
 
             if isinstance(exc, Rejected):
-                self._refused[key] = now
+                self._refused[key] = self.now()  # writing can take minutes: wait from the refusal
             self.log(f"cups: the show of {title} waits ({type(exc).__name__}: {exc})")
             return None
         if len(show["calls"]) < len(cup.matches):

@@ -391,6 +391,28 @@ def test_a_show_refused_every_time_is_asked_again_ten_minutes_later_not_every_ti
     assert load_cup(store, "tug-of-war", 1).order is not None
 
 
+def test_a_refusal_waits_from_when_it_came_not_from_when_the_tick_began(tmp_path, no_physics):
+    """Writing the desk can take twenty minutes: a refusal at its end still waits SHOW_RETRY."""
+    store, began, given = ready_cup(tmp_path), datetime(2026, 10, 23, 15, tzinfo=UTC), []
+    clock = Clock(began)
+
+    def write(cup, done):
+        given.append(clock.at)
+        if len(given) == 1:
+            clock.at = began + timedelta(minutes=20)   # the router took its time, then refused
+            raise Rejected("model answer is not JSON")
+        return written_show(cup)
+
+    cups = worker(store, clock, show=write)
+    cups.tick()
+    clock.at = began + timedelta(minutes=20, seconds=30)
+    cups.tick()
+    assert given == [began]
+    clock.at = began + timedelta(minutes=20) + SHOW_RETRY
+    cups.tick()
+    assert given[1] == began + timedelta(minutes=20) + SHOW_RETRY
+
+
 class Stale:
     """A store whose snapshot misses show.json on its first read, as a Hub slow to show its last commit."""
     def __init__(self, store): self.store, self.reads = store, 0
