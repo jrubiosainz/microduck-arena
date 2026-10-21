@@ -6,7 +6,6 @@ one, a bout a MuJoCo reset stopped included. Nothing here reads the prose back: 
 booth cannot play is logged and asked for again, TRIES times in all, and then the show waits.
 """
 
-import logging
 import random
 from collections.abc import Mapping, Sequence
 
@@ -20,7 +19,6 @@ from .cup import cup_facts, group_round, score_text, screen_view
 from .generator import NO_CALLBACK, Rejected, direction, write, write_call
 from .lore import Lore
 
-logger = logging.getLogger(__name__)
 
 CALL_GAP_S = 4.0  # between a bout's start and its end, a moment is called this long after the last
 TRIES = 3  # answers asked for one desk segment or one bout before the show waits
@@ -161,21 +159,21 @@ def _told(cup: Cup, manifest: Manifest, match: MatchRecord, bout: BoutResult,
             for i, (moment, what) in enumerate(zip(aired, whats))]
 
 
-def _tried(what: str, writer, *args, **kwargs):
+def _tried(log, what: str, writer, *args, **kwargs):
     """The writer's answer, asked again on a refusal: TRIES in all, each refusal logged, the last
     one raised."""
     for attempt in range(1, TRIES + 1):
         try:
             return writer(*args, **kwargs)
         except Rejected as why:
-            logger.warning("show: %s refused (%s)", what, why)
+            log(f"show: {what} refused ({why})")
             if attempt == TRIES:
                 raise
 
 
 def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lore, provider,
                model: str, tab, rng: random.Random, profiles: Mapping[str, Fact],
-               footage: Mapping[str, dict], done: dict | None = None) -> dict:
+               footage: Mapping[str, dict], done: dict | None = None, log=print) -> dict:
     """Every desk segment, then every match's call, each put into `done` the moment it is timed, so
     a show cut off by the router resumes where it stopped. `footage[match_id]` is where the
     match's clip tapes each bout and the bout's moments."""
@@ -185,7 +183,7 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
             continue
         facts = _desk_facts(cup, segment, history, manifest, profiles)
         recent = [one["dialogue"]["brief"]["direction"] for one in reversed(show["desk"].values())]
-        drawn, written = _tried(segment["id"], _desk_dialogue, facts, segment["kind"], recent,
+        drawn, written = _tried(log, segment["id"], _desk_dialogue, facts, segment["kind"], recent,
                                 lore=lore, provider=provider, model=model, rng=rng)
         plan = tab.prepare({"run_id": f"{cup.event_id}-{cup.number:04d}-{segment['id']}",
                             "turns": written["turns"]})
@@ -204,7 +202,7 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
         taped, lines, first = footage[match.match_id], [], "peter"
         for bout, tape in zip(match.bouts, taped["bouts"], strict=True):
             aired = thin(tape["moments"])
-            written = _tried(f"{match.match_id} bout {bout.k + 1}", write_call, facts,
+            written = _tried(log, f"{match.match_id} bout {bout.k + 1}", write_call, facts,
                              _told(cup, manifest, match, bout, aired), first, lore=lore,
                              provider=provider, model=model)
             start, end, seconds = tape["tape_start_s"], tape["tape_end_s"], tape["seconds"]

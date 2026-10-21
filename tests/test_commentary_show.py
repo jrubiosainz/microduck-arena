@@ -1,7 +1,6 @@
 """A cup's show written ahead; only the router and the plan page are faked."""
 
 import json
-import logging
 import random
 import re
 from dataclasses import replace
@@ -80,10 +79,10 @@ class FakeTab:
         return {"duration_ms": call["duration_ms"], "captions": [], "notes": [], "gestures": []}
 
 
-def show(provider, done=None, *, cup=CUP, tape=FOOTAGE, tab=None):
+def show(provider, done=None, *, cup=CUP, tape=FOOTAGE, tab=None, log=print):
     return write_show(cup, manifest=MANIFEST, history=(), lore=LORE, provider=provider,
                       model="fake/model", tab=tab or FakeTab(), rng=random.Random(7),
-                      profiles=PROFILES, footage=tape, done=done)
+                      profiles=PROFILES, footage=tape, done=done, log=log)
 
 
 def whats(moments):
@@ -252,27 +251,26 @@ def test_a_show_cut_off_during_the_calls_keeps_the_matches_it_called():
     assert list(done["calls"]) == IDS
 
 
-def test_a_refused_answer_is_asked_again_with_a_fresh_direction(caplog):
-    router = Router(refused={1})
-    with caplog.at_level(logging.WARNING, logger="arena.commentary.show"):
-        written = show(router)
+def test_a_refused_answer_is_asked_again_with_a_fresh_direction():
+    router, logged = Router(refused={1}), []
+    written = show(router, log=logged.append)
     assert len(router.asked) == 38
     drawn = written["desk"]["opening"]["dialogue"]["brief"]["direction"]
     assert directed(drawn) in router.asked[1][0]["content"]
     assert router.asked[0][0]["content"] != router.asked[1][0]["content"]
-    assert caplog.messages == ["show: opening refused (model answer is not JSON)"]
+    assert logged == ["show: opening refused (model answer is not JSON)"]
 
 
-def test_a_segment_refused_three_times_holds_the_show(caplog):
-    asked = []
+def test_a_segment_refused_three_times_holds_the_show():
+    asked, logged = [], []
 
     def refusing(messages, max_tokens):
         asked.append(messages)
         return reply(None, content="not json")
 
     done = {"desk": {}, "calls": {}}
-    with caplog.at_level(logging.WARNING, logger="arena.commentary.show"), pytest.raises(Rejected):
-        show(refusing, done)
+    with pytest.raises(Rejected):
+        show(refusing, done, log=logged.append)
     assert len(asked) == TRIES
     assert done["desk"] == {}
-    assert caplog.messages == ["show: opening refused (model answer is not JSON)"] * TRIES
+    assert logged == ["show: opening refused (model answer is not JSON)"] * TRIES
