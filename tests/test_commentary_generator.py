@@ -336,6 +336,12 @@ def test_a_call_names_a_duck_never_its_player():
     assert "Name a duck exactly as the moments print its name, never by its player's handle or name" in CALL_STYLE
 
 
+def test_a_call_line_says_what_only_its_moment_has():
+    # Each bout written alone, "And we're off!" and "Time expires with the marker favoring X." came back
+    # bout after bout: 5.8 % of a rehearsal show's sentences were repeats.
+    assert "so no stock line: each line says what only this moment has" in CALL_STYLE
+
+
 def test_a_call_starts_with_peter_or_ray():
     with pytest.raises(ValueError, match="peter or ray"):
         write_call(FACTS, [], "bob", lore=LORE, provider=None, model="m")

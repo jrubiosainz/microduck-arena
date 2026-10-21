@@ -62,7 +62,8 @@ CALL_STYLE = (
     'Shape: [{"speaker":"peter","text":"..."},{"speaker":"ray","text":"..."}]. text: English, '
     "1-80 printable characters, no markup, no speaker prefix. Each line is said as its moment "
     "happens, in the present tense, about that moment: short and live, most lines four to eight "
-    "words. Say only what the moment and the facts say: a duck drops or slips only when a moment "
+    "words. Every bout of the cup is called this way, so no stock line: each line says what only "
+    "this moment has, its duck, its side, the score or the stage of the cup. Say only what the moment and the facts say: a duck drops or slips only when a moment "
     "says so, and a number is spoken only as a fact or a moment prints it. Name a "
     "duck exactly as the moments print its name, never by its player's handle or name, and use "
     "they/their. Nothing after the "
