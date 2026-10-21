@@ -404,14 +404,6 @@ describe("attachStadium", () => {
     }
   });
 
-  it("lays no rail and no cones round a roped course: a tug's ring is its own barrier", () => {
-    const course = buildCourse({ length_m: LENGTH }, 1);
-    attachStadium(course, spectators(), 0, true);
-    const names = course.getObjectByName("stadium").children.map((child) => child.name);
-    expect(names.filter((name) => ["rail", "cones"].includes(name))).toEqual([]);
-    expect(names.filter((name) => name === "stand")).toHaveLength(2);
-  });
-
   it("keeps the stands and crowd level while the course slopes", () => {
     const course = buildCourse({ length_m: LENGTH, slope_deg: 8 }, 1);
     attachStadium(course, spectators(), 0);

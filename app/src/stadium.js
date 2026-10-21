@@ -353,11 +353,10 @@ function fused(kinematics, geometries, shell, frame = SIT) {
  * drew — so a wider arena pushes it out, without a second
  * copy of either sum. `clearance` is how far out on +z, the camera's side, the
  * near stand may start; its rail and cones keep their places in front of it.
- * The stadium's own distance is kept wherever it already clears. A `roped`
- * course (a tug's ring) is its own barrier: no rail, no cones. Returns the
+ * The stadium's own distance is kept wherever it already clears. Returns the
  * crowd, for the render loop to pose and the next re-race to dispose.
  */
-export function attachStadium(course, { kinematics, geometries }, clearance, roped = false) {
+export function attachStadium(course, { kinematics, geometries }, clearance) {
   const { width, height: span } = course.getObjectByName("ground").geometry.parameters;
   const length = width - OVERRUN * 2;
   const edge = { [-1]: span / 2, [1]: Math.max(span / 2, clearance - GAP) };
@@ -368,7 +367,7 @@ export function attachStadium(course, { kinematics, geometries }, clearance, rop
   course.add(stadium);
   const placed = [];
   for (const side of [-1, 1]) {
-    if (!roped) stadium.add(buildRail(length, edge[side], side), buildCones(length, edge[side], side));
+    stadium.add(buildRail(length, edge[side], side), buildCones(length, edge[side], side));
     const inner = edge[side] + (side === -1 ? JURY_APRON : GAP);
     stadium.add(buildStand(length, inner, side));
     placed.push(...seats(length, inner, side));

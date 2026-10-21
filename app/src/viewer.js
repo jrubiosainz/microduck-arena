@@ -52,9 +52,8 @@ import { buildRollerHall } from "./roller-hall.js";
 import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
-import {
-  RING_RISE, buildString, buildTugCourse, cutPit, disposeTugCourse, floorUnder, openRing, tugDucks, tugEnds, tugPose, tugSpan,
-} from "./tug.js";
+import { buildString, floorUnder, tugDucks, tugEnds, tugPose, tugSpan } from "./tug.js";
+import { buildTugVenue } from "./tug-venue.js";
 import { SWEEP_TURN, sweepAt } from "./sweep.js";
 
 // The sun supplies shape and the shadows; the room only soft reflections. Much
@@ -408,8 +407,8 @@ export async function createViewer(
   let stage = null;
   // While a tug plays: its event and the string.
   let tug = null;
-  // A tug's course, which clearScene frees with the string on it.
-  let tugCourse = null;
+  // A tug's own venue round its ring.
+  let venue = null;
   // The stadium's crowd, rebuilt with the course: posed in draw, disposed
   // with the course in clearScene.
   let audience = null;
@@ -427,13 +426,15 @@ export async function createViewer(
   // Whichever set is up, its crowd draws only the seats the camera about to
   // render can see — the chase camera's and each roller-hall screen feed's
   // alike — and has them all back once that render is done (stadium.js crowd).
-  const crowds = () => [audience, gym, stage].map((set) => set?.crowd).filter(Boolean);
+  const crowds = () => [audience, gym, stage, venue].map((set) => set?.crowd).filter(Boolean);
   scene.onBeforeRender = (_renderer, _scene, view) => crowds().forEach((one) => one.cull(view));
   scene.onAfterRender = () => crowds().forEach((one) => one.restore());
 
   function clearScene() {
     stage?.dispose();
     stage = null;
+    venue?.dispose();
+    venue = null;
     judges?.dispose();
     judges = null;
     gym?.dispose();
@@ -445,6 +446,7 @@ export async function createViewer(
       if (lane.plate) scene.remove(lane.plate.sprite);
     }
     lanes = [];
+    tug?.rope.dispose();
     tug = null;
     if (course) {
       audience?.dispose();
@@ -452,8 +454,6 @@ export async function createViewer(
       scene.remove(course);
       course = null;
     }
-    if (tugCourse) disposeTugCourse(tugCourse);
-    tugCourse = null;
   }
 
   // The chase over `lead`; on a tug, moved out or in until the `span` it must hold fits the frame as
@@ -471,41 +471,45 @@ export async function createViewer(
     // A tug plays one lane: a bout's two ducks, every one drawn solid.
     if (tugged) entries = entries.length ? tugDucks(entries[0]).map((duck) => ({ ...duck, opacity: 1 })) : [];
     const laneCount = tugged ? 1 : entries.length;
-    raceLights.forEach(light => { light.visible = !talent; });
-    scene.background.set(talent ? 0x050716 : 0xb8dce7);
-    scene.environmentIntensity = talent ? STAGE_ENV_INTENSITY : ENV_INTENSITY;
+    // The stage and a tug's venue are indoors, in the dark, lit by their own rigs.
+    const dark = talent || tugged;
+    raceLights.forEach(light => { light.visible = !dark; });
+    scene.background.set(dark ? 0x050716 : 0xb8dce7);
+    scene.environmentIntensity = dark ? STAGE_ENV_INTENSITY : ENV_INTENSITY;
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(laneCount, spacing);
     slopeDeg = event?.slope_deg ?? 0;
     const courseLength = event?.length_m ?? 2;
     // A tug's course is centred on its pit.
     middle = tugged ? 0 : courseLength / 2;
+    // The near stand starts a stride beyond where the chase camera stands,
+    // clip travel included, so the lens is never inside it: on a tug, where
+    // its fit stands over the ducks' first frame.
+    const start = tugged && entries.length ? tugSpan(entries.map((entry) => frameAt(entry.trace, 0))) : null;
+    const chase = (start ? chasePose((start[0] + start[1]) / 2, 0, start[1] - start[0]) : chasePose(0, 0, null)).position[2];
+    const clearance = chase * TRAVEL_REACH + STAND_CLEARANCE;
     if (talent) {
       slopeDeg = 0;
       stage = buildTalentStage(event, spectators, reachy, entries.length);
       course = stage.group;
       scene.add(course);
-    } else if (event) {
-      course = tugged
-        ? buildTugCourse(event)
-        : attachCourse(scene, event, Math.max(1, laneCount), entries.map((entry) => entry.colour));
-      if (tugged) {
-        scene.add(course);
-        tugCourse = course;
+    } else if (tugged) {
+      venue = buildTugVenue(event, spectators, reachy, branding, clearance);
+      course = venue.group;
+      scene.add(course);
+      if (entries.length) {
+        tug = { event, rope: buildString() };
+        course.add(tug.rope.group);
       }
-      // The near stand starts a stride beyond where the chase camera stands,
-      // clip travel included, so the lens is never inside it: on a tug, where
-      // its fit stands over the ducks' first frame.
-      const start = tugged && entries.length ? tugSpan(entries.map((entry) => frameAt(entry.trace, 0))) : null;
-      const chase = (start ? chasePose((start[0] + start[1]) / 2, 0, start[1] - start[0]) : chasePose(0, 0, null)).position[2];
-      const clearance = chase * TRAVEL_REACH + STAND_CLEARANCE;
+    } else if (event) {
+      course = attachCourse(scene, event, Math.max(1, laneCount), entries.map((entry) => entry.colour));
       const ground = course.getObjectByName("ground");
       const { width, height } = ground.geometry.parameters;
       const roller = event.id === "roller-sprint-2m";
       if (roller) {
         gym = buildRollerHall(courseLength, height, branding, spectators);
       } else {
-        audience = attachStadium(course, spectators, clearance, tugged);
+        audience = attachStadium(course, spectators, clearance);
         course.updateMatrixWorld(true);
         const stadiumBounds = new Box3().setFromObject(course);
         gym = buildGym(courseLength, stadiumBounds.min.z, stadiumBounds.max.z, branding, height);
@@ -513,16 +517,7 @@ export async function createViewer(
       scene.add(gym.group);
       judges = buildJudges(reachy, courseLength, Math.max(1, laneCount) * spacing / 2, gym.sponsorMaps, roller ? 3 : 4);
       scene.add(judges.group);
-      if (tugged) {
-        // The stadium, the hall and the jury are built for a course from 0 to its length, on the
-        // floor the ducks stand on: the ring's canvas stands RING_RISE over theirs.
-        for (const set of [audience, gym, judges]) set.group.position.add(new Vector3(-event.length_m / 2, -RING_RISE, 0));
-        cutPit(gym.group.getObjectByName("parquet"), event);
-        if (entries.length) {
-          tug = { event, rope: buildString() };
-          course.add(tug.rope.group);
-        }
-      } else if (!slopeDeg) {
+      if (!slopeDeg) {
         ground.material.dispose();
         ground.material = gym.floorMaterial(width, height);
       }
@@ -688,6 +683,7 @@ export async function createViewer(
     );
     judges?.pose(seconds, subjects);
     stage?.pose(seconds, subjects, mood);
+    venue?.pose(seconds, subjects, mood);
 
     if (chase && course) {
       // Follow the leader along +x, the direction of travel, from behind and
@@ -703,7 +699,6 @@ export async function createViewer(
       else camera.lookAt(_target);
     }
     controls?.update();
-    if (tugCourse) openRing(tugCourse, camera);
     gym?.renderScreens?.(renderer, scene, seconds, lead);
     // Racers, judges and spectators move: their shadows are redrawn for every
     // picture, once, here — a roller hall's screen feeds reuse the last one.

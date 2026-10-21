@@ -19,9 +19,6 @@ export const PALETTE = {
   stand: [0.227, 0.227, 0.275],
   paper: [0.98, 0.973, 0.949],
   ink: [0.063, 0.063, 0.094],
-  magenta: [1, 0.184, 0.659],
-  // The ring's canvas: it comes out sky blue on a floor in the sun, where sky's own triple is white.
-  canvas: [0.16, 0.28, 0.42],
   // The crowd's duck: Pollen orange face, beak yellow feet, warm paper frame,
   // ink for what little of the mechanics shows.
   face: 0xff7a2f,
