@@ -27,8 +27,8 @@ describe("a match page", () => {
     expect(page.querySelector(".match-score").textContent).toBe("2–1");
     expect(page.querySelector(".stamp").textContent).toBe("Tank wins");
     expect([...page.querySelectorAll(".match-bout")].map((b) => b.textContent)).toEqual([
-      "Bout 1 · Tank wins · Lean in the pit · 8.42 s", "Bout 2 · Lean wins · the marker on their side · 45.00 s",
-      "Bout 3 · a draw · 45.00 s", "Bout 4 · Tank wins · Lean in the pit · 3.10 s"]);
+      "Bout 1 · Tank wins · Lean in the pit · 8.42\u00a0s", "Bout 2 · Lean wins · the marker on their side · 45.00\u00a0s",
+      "Bout 3 · a draw · 45.00\u00a0s", "Bout 4 · Tank wins · Lean in the pit · 3.10\u00a0s"]);
     expect(page.querySelector(".match-clip video").getAttribute("src")).toBe("/api/matches/tug-of-war-0001-008/clip/landscape.mp4?v=v1");
   });
 
@@ -44,9 +44,13 @@ describe("a match page", () => {
     expect(page.querySelector(".match-clip")).toBeNull();
   });
 
+  it("keeps a bout's time with its unit, so a narrow column never strands the \"s\" on a line of its own", () => {
+    expect(boutLine(match, match.bouts[1])).toMatch(/ 45\.00\u00a0s$/);
+  });
+
   it("names the pit's victim whichever side won the bout", () => {
-    expect(boutLine(match, match.bouts[1])).toBe("Bout 2 · Lean wins · the marker on their side · 45.00 s");
-    expect(boutLine(match, { k: 4, winner: "b", how: "pit", time_s: 5 })).toBe("Bout 5 · Lean wins · Tank in the pit · 5.00 s");
+    expect(boutLine(match, match.bouts[1])).toBe("Bout 2 · Lean wins · the marker on their side · 45.00\u00a0s");
+    expect(boutLine(match, { k: 4, winner: "b", how: "pit", time_s: 5 })).toBe("Bout 5 · Lean wins · Tank in the pit · 5.00\u00a0s");
   });
 });
 

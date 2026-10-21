@@ -22,11 +22,11 @@ const HOW = {
   marker: () => "the marker on their side",
 };
 
-/** One bout in a line: who won it, how, and when. */
+/** One bout in a line: who won it, how, and when, the time held to its unit by a no-break space. */
 export function boutLine(match, bout) {
   const loser = match[bout.winner === "a" ? "b" : "a"].name;
   const verdict = bout.winner ? `${match[bout.winner].name} wins · ${HOW[bout.how](loser)}` : "a draw";
-  return `Bout ${bout.k + 1} · ${verdict} · ${bout.time_s.toFixed(2)} s`;
+  return `Bout ${bout.k + 1} · ${verdict} · ${bout.time_s.toFixed(2)} s`;
 }
 
 /** The page's frame for `match`, as a detached element, as runHall is the run page's. */
