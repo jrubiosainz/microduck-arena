@@ -3,6 +3,7 @@ only says which part of it to serve."""
 
 import hashlib
 import json
+import random
 import shutil
 from collections import Counter
 from dataclasses import replace
@@ -796,6 +797,9 @@ def test_the_cup_worker_gets_the_show_writer_only_with_the_booth_on(tmp_path, mo
     assert (store, cup, kwargs["tab"]) == (app.state.store, "the cup", app.state.commentary.tab)
     assert kwargs["done"] is done
     assert kwargs["log"] is app.state.cups.log
+    assert kwargs["model"] == app.state.config.commentary_model
+    assert kwargs["provider"] is not None and kwargs["lore"] is not None
+    assert type(kwargs["rng"]) is random.Random   # its own draws, not the module's shared state
 
     monkeypatch.setenv("ARENA_COMMENTARY", "0")
     assert create_app(ArenaConfig.from_env(store_dir=tmp_path / "off", frontend_dir=bundle)).state.cups.show is None
