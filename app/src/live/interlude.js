@@ -67,6 +67,9 @@ export async function createInterlude(stage, { audio }) {
   }
 
   function stop() {
+    // Nothing of this file is drawn at the offset of the next slot while that
+    // one's file is still on its way.
+    current = null;
     canvas.hidden = true;
     captions.hide();
     const sound = audio();

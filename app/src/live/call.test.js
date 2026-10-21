@@ -18,11 +18,14 @@ const plan = { version: 2, run_id: "tug-of-war-0001-003", duration_ms: 20000, ca
 const called = { kind: "replay", at_ms: 0, duration_ms: 20000, run_id: "tug-of-war-0001-003", clip: "v", media: "match", call: true };
 
 describe("createCall", () => {
-  let stage, replay, voice, call, context;
+  let stage, replay, voice, call, context, clock, now;
   beforeEach(() => {
     // jsdom draws no 2D canvas: the captions measure nothing and show each line whole, as jsdom's own null would,
     // without its notice in every test.
     context = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    // The page's clock stands still unless a test moves it.
+    clock = 0;
+    now = vi.spyOn(performance, "now").mockImplementation(() => clock);
     stage = document.createElement("div");
     replay = {
       prepare: vi.fn(), show: vi.fn(), play: vi.fn(async () => {}), seek: vi.fn(), stop: vi.fn(),
@@ -33,6 +36,7 @@ describe("createCall", () => {
   });
   afterEach(() => {
     context.mockRestore();
+    now.mockRestore();
     state.calls.clear();
     vi.clearAllMocks();
   });
@@ -79,6 +83,18 @@ describe("createCall", () => {
     expect(voice.stop).toHaveBeenCalled();
     expect(replay.stop).toHaveBeenCalled();
     expect(replay.volume).toHaveBeenLastCalledWith(1);
+  });
+
+  it("voices a call fetched as the screen joins from where the match has got to once it lands", async () => {
+    getCall.mockImplementationOnce(async () => {
+      clock += 400; // the round trip
+      return { lines: [], plan };
+    });
+    clock = 1000;
+    await call.play(called, 3000);
+    expect(replay.play).toHaveBeenCalledWith(called, 3000);
+    expect(voice.start).toHaveBeenCalledWith(plan, 3400);
+    expect(text()).toBe("The marker slides west!");
   });
 
   it("ducks the clip's own sound about 10 dB while a line is voiced, and restores it between lines", () => {

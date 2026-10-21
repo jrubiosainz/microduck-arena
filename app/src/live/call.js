@@ -19,7 +19,7 @@ export function clipGain(plan, offsetMs) {
 export function createCall(stage, { replay, audio }) {
   const captions = createCaptions(stage);
   const calls = new Map(); // match id -> its call's fetch, ahead of its slot
-  let current = null; // { slot, call }: the match playing, and its call once it is in
+  let current = null; // the match playing, as { call } once its call is in
 
   const callFor = (slot) => {
     if (!calls.has(slot.run_id)) calls.set(slot.run_id, getCall(slot.run_id).catch(() => null));
@@ -48,7 +48,8 @@ export function createCall(stage, { replay, audio }) {
       replay.show(slot);
     },
     async play(slot, offsetMs) {
-      const playing = (current = { slot, call: null });
+      const began = performance.now();
+      const playing = (current = { call: null });
       replay.play(slot, offsetMs);
       if (!slot.call) return;
       const call = await callFor(slot);
@@ -56,8 +57,11 @@ export function createCall(stage, { replay, audio }) {
       // clip that failed to load: the shutter's panel holds over its slot.
       if (current !== playing || !call || replay.failed) return;
       playing.call = call;
-      audio()?.voice.start(call.plan, offsetMs);
-      follow(offsetMs);
+      // A call fetched as the screen joined lands a round trip later: it starts
+      // where the match has got to by then.
+      const at = offsetMs + performance.now() - began;
+      audio()?.voice.start(call.plan, at);
+      follow(at);
     },
     seek(offsetMs) {
       replay.seek(offsetMs);

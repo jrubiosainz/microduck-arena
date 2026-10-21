@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { SAMPLE_RATE, prepare, synthesize } from "./score.js";
+import { SAMPLE_RATE, VOICES, prepare, prepareCall } from "./score.js";
 import { createVoice, loadCalls, loadSynth, windGust } from "./voice.js";
 
 const wasm = async (url) => ({ ok: url === "/sound/microduck-voice.wasm", arrayBuffer: async () => readFileSync(`public${url}`) });
@@ -131,6 +131,20 @@ describe("windGust", () => {
   });
 });
 
+/** The whole plan sung into one interleaved stereo buffer, as the live page did
+ * before it sang by caption: the reference the voice must still sound like. */
+function wholePlan(plan, sing) {
+  const audio = new Float32Array((plan.duration_ms * SAMPLE_RATE) / 1000 * 2);
+  for (const note of plan.notes) {
+    const samples = sing(VOICES[note.speaker].seed, note);
+    const start = note.start_ms * 48;
+    for (let i = 0; i < samples.length; i++) {
+      audio[(start + i) * 2] = audio[(start + i) * 2 + 1] = samples[i] * note.emphasis;
+    }
+  }
+  return audio;
+}
+
 describe("createVoice", () => {
   const voice = loadSynth(wasm);
   const plan = prepare({
@@ -140,55 +154,115 @@ describe("createVoice", () => {
       { speaker: "ray", text: "It is a number, Peter." },
     ],
   });
-  /** A context whose buffers are planar arrays and whose sources record every start. */
+  // A match's call: lines far apart over a long clip, one of them long enough for two captions.
+  const call = prepareCall({
+    id: "tug-of-war-0001-003",
+    duration_ms: 60000,
+    lines: [
+      { at_ms: 2000, speaker: "peter", text: "The marker slides west, and it keeps on sliding, Ray, all the way to the edge of the pit!" },
+      { at_ms: 30000, speaker: "ray", text: "Into the pit." },
+      { at_ms: 58000, speaker: "peter", text: "Time is nearly up, and nobody has let go of the rope yet!" },
+    ],
+  });
+  /** A context whose buffers are planar arrays and whose sources record every start and stop. */
   const fakeContext = () => {
     const starts = [];
+    const stopped = [];
     return {
       starts,
+      stopped,
+      currentTime: 3,
       destination: {},
       createGain: () => ({ gain: { value: 1 }, connect() {} }),
       createBuffer(channels, length, sampleRate) {
         const data = Array.from({ length: channels }, () => new Float32Array(length));
         return {
-          length, sampleRate,
+          length, sampleRate, numberOfChannels: channels,
           getChannelData: (channel) => data[channel],
           copyToChannel: (samples, channel) => data[channel].set(samples),
         };
       },
       createBufferSource() {
         const source = {
-          buffer: null, connect() {}, stop() {}, disconnect() {},
+          buffer: null, connect() {}, disconnect() {},
           start(when, offset) { starts.push({ buffer: source.buffer, when, offset }); },
+          stop() { stopped.push(source.buffer); },
         };
         return source;
       },
     };
   };
 
-  it("sings the plan's stereo samples from the join offset, plus the time it took to sing them", async () => {
+  it("sings each caption in mono, all on the context's clock from one instant, from the join offset plus the time it took to sing", async () => {
     const context = fakeContext();
     const sing = await voice;
     const began = performance.now();
     createVoice(context, sing).start(plan, 1234);
     const took = performance.now() - began;
-    const [{ buffer, when, offset }] = context.starts;
-    expect(when).toBe(0);
-    expect(offset).toBeGreaterThan(1.234);
-    expect(offset).toBeLessThanOrEqual(1.234 + took / 1000);
-    expect(buffer.sampleRate).toBe(SAMPLE_RATE);
-    expect(buffer.length).toBe((plan.duration_ms * SAMPLE_RATE) / 1000);
-    const pcm = synthesize(plan, sing);
-    for (const channel of [0, 1]) {
-      const planar = buffer.getChannelData(channel);
-      expect(planar.findIndex((sample, i) => sample !== pcm[i * 2 + channel])).toBe(-1);
+    expect(context.starts).toHaveLength(plan.captions.length);
+    for (const [{ buffer, when, offset }, caption] of context.starts.map((start, i) => [start, plan.captions[i]])) {
+      expect(buffer.numberOfChannels).toBe(1);
+      expect(buffer.sampleRate).toBe(SAMPLE_RATE);
+      expect(buffer.length).toBe(((caption.end_ms - caption.start_ms) * SAMPLE_RATE) / 1000);
+      if (caption.start_ms <= 1234) {
+        // The caption the screen joins inside starts now, from the join.
+        expect(when).toBe(3);
+        expect(offset).toBeGreaterThan((1234 - caption.start_ms) / 1000);
+        expect(offset).toBeLessThanOrEqual((1234 + took - caption.start_ms) / 1000);
+      } else {
+        expect(offset).toBe(0);
+        expect(when).toBeGreaterThanOrEqual(3 + (caption.start_ms - 1234 - took) / 1000);
+        expect(when).toBeLessThan(3 + (caption.start_ms - 1234) / 1000);
+      }
     }
-    expect(buffer.getChannelData(0).some((sample) => sample !== 0)).toBe(true);
+    // One instant for every caption: the gaps between them are the plan's own.
+    const [first, second] = context.starts;
+    expect(second.when - first.when + first.offset).toBeCloseTo((plan.captions[1].start_ms - plan.captions[0].start_ms) / 1000, 9);
   });
 
-  it("clamps a join past the plan's end to the end", async () => {
+  it("sounds exactly as the whole plan sung at once, the booth's and a match's call alike", async () => {
+    const sing = await voice;
+    for (const sung of [plan, call]) {
+      const context = fakeContext();
+      createVoice(context, sing).start(sung, 0);
+      const whole = wholePlan(sung, sing);
+      const heard = new Float32Array(sung.duration_ms * 48);
+      for (const [{ buffer }, caption] of context.starts.map((start, i) => [start, sung.captions[i]])) {
+        heard.set(buffer.getChannelData(0), caption.start_ms * 48);
+      }
+      expect(heard.findIndex((sample, i) => sample !== whole[i * 2] || sample !== whole[i * 2 + 1])).toBe(-1);
+      expect(heard.some((sample) => sample !== 0)).toBe(true);
+    }
+  });
+
+  it("holds only the speech: a long call with three lines is sung into no more than its captions", async () => {
     const context = fakeContext();
-    createVoice(context, await voice).start(plan, 99999);
-    expect(context.starts[0].offset).toBe(plan.duration_ms / 1000);
+    createVoice(context, await voice).start(call, 0);
+    const held = context.starts.reduce((sum, { buffer }) => sum + buffer.length, 0);
+    const spoken = call.captions.reduce((sum, c) => sum + (c.end_ms - c.start_ms) * 48, 0);
+    expect(held).toBe(spoken);
+    expect(held).toBeLessThan((call.duration_ms * 48) / 4);
+  });
+
+  it("sings nothing of a caption already over, and nothing at all for a join past the plan's end", async () => {
+    const sing = await voice;
+    const context = fakeContext();
+    createVoice(context, sing).start(call, 31000);
+    expect(context.starts.map(({ buffer }) => buffer.length)).toEqual(
+      call.captions.filter((c) => c.end_ms > 31000).map((c) => (c.end_ms - c.start_ms) * 48));
+    const late = fakeContext();
+    createVoice(late, sing).start(plan, 99999);
+    expect(late.starts).toEqual([]);
+  });
+
+  it("stops every caption it scheduled, sung or still to come", async () => {
+    const context = fakeContext();
+    const speaker = createVoice(context, await voice);
+    speaker.start(call, 0);
+    speaker.stop();
+    expect(context.stopped).toEqual(context.starts.map(({ buffer }) => buffer));
+    speaker.stop();
+    expect(context.stopped).toHaveLength(context.starts.length);
   });
 
   it("breathes the wind twice across the shutter", async () => {

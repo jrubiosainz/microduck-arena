@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The booth needs WebGL, which jsdom has not: stood in with a bare recorder,
 // as in live.test.js. The fetches are stood in too, keyed on the broadcast id
@@ -32,7 +32,14 @@ const segment = {
 };
 
 describe("createInterlude", () => {
+  let context;
+  beforeEach(() => {
+    // jsdom draws no 2D canvas: the captions measure nothing and show each line whole, as jsdom's own null would,
+    // without its notice in every test.
+    context = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  });
   afterEach(() => {
+    context.mockRestore();
     state.booths.length = 0;
     state.broadcasts.clear();
     state.shows.clear();
@@ -94,5 +101,32 @@ describe("createInterlude", () => {
     expect(voice.start).toHaveBeenCalledWith(segment.plan, 7000);
     expect(order).toEqual(["booth", "voice"]);
     expect(booth.draw).toHaveBeenLastCalledWith(7000);
+  });
+
+  it("draws nothing of the last desk at the next one's offset while the next one's file is on its way", async () => {
+    state.shows.set("tug-of-war/1/intro-tug-of-war-0001-002", segment);
+    const stage = document.createElement("div");
+    const interlude = await createInterlude(stage, { audio: () => null });
+    const booth = state.booths[0];
+    booth.draw.mockReturnValue({ name: "Peter Duckry", text: "Group B, Ray." });
+    await interlude.play(desk, 1000);
+    expect(booth.draw).toHaveBeenLastCalledWith(1000);
+
+    // Straight on to the next desk, its file not in yet.
+    const next = { ...desk, at_ms: 12000, show: { ...desk.show, segment: "intro-tug-of-war-0001-003" } };
+    const following = { ...segment, dialogue: { turns: [{ speaker: "ray", text: "Group C now." }] } };
+    let land;
+    getShow.mockImplementationOnce(() => new Promise((resolve) => { land = resolve; }));
+    interlude.stop();
+    const playing = interlude.play(next, 0);
+    booth.draw.mockClear();
+    interlude.seek(100);
+    expect(booth.draw).not.toHaveBeenCalled();
+    expect(stage.querySelector(".live-caption").hidden).toBe(true);
+
+    land(following);
+    await playing;
+    expect(booth.prepare).toHaveBeenLastCalledWith(following, null);
+    expect(booth.draw).toHaveBeenLastCalledWith(0);
   });
 });

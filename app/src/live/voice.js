@@ -1,8 +1,9 @@
-// The booth's sound: the plan's notes sung by the microduck's own synthesiser
-// into one buffer, started at the join offset so every screen sings the same
-// sample at the same instant; and the shutter's wind, made in the page.
+// The booth's sound: the plan's notes sung by the microduck's own synthesiser,
+// one mono buffer per caption, each started on the context's clock from the
+// join offset so every screen sings the same sample at the same instant; and
+// the shutter's wind, made in the page.
 
-import { SAMPLE_RATE, synthesize } from "./score.js";
+import { SAMPLE_RATE, singCaption } from "./score.js";
 
 const BREATHS_S = [0, 1.16];
 
@@ -85,31 +86,42 @@ export function windGust(random = Math.random, rate = SAMPLE_RATE) {
 export function createVoice(context, sing) {
   const gain = context.createGain();
   gain.connect(context.destination);
-  let source = null;
+  let sources = [];
   const wind = context.createBuffer(1, Math.round(0.36 * SAMPLE_RATE), SAMPLE_RATE);
   wind.copyToChannel(windGust(), 0);
 
   function stop() {
-    source?.stop();
-    source?.disconnect();
-    source = null;
+    for (const source of sources) {
+      source.stop();
+      source.disconnect();
+    }
+    sources = [];
   }
 
   return {
     start(plan, offsetMs) {
       stop();
-      // Singing the plan takes a moment; it starts that much further in, so it stays on the clock.
+      // Only what is still to be said is sung, a caption at a time, straight
+      // into the buffer it plays from: the memory held is the speech, not the
+      // plan's length. A call voices a whole match.
       const began = performance.now();
-      const pcm = synthesize(plan, sing);
-      const buffer = context.createBuffer(2, pcm.length / 2, SAMPLE_RATE);
-      for (let channel = 0; channel < 2; channel++) {
-        const data = buffer.getChannelData(channel);
-        for (let i = 0; i < data.length; i++) data[i] = pcm[i * 2 + channel];
+      const sung = plan.captions.filter((caption) => caption.end_ms > offsetMs).map((caption) => {
+        const buffer = context.createBuffer(1, ((caption.end_ms - caption.start_ms) * SAMPLE_RATE) / 1000, SAMPLE_RATE);
+        singCaption(plan, caption, sing, buffer.getChannelData(0));
+        return { caption, buffer };
+      });
+      // Singing takes a moment; the voice starts that much further in, so it
+      // stays on the clock, every caption from the same instant.
+      const at = offsetMs + performance.now() - began;
+      const now = context.currentTime;
+      for (const { caption, buffer } of sung) {
+        if (caption.end_ms <= at) continue;
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(gain);
+        source.start(now + Math.max(0, caption.start_ms - at) / 1000, Math.max(0, at - caption.start_ms) / 1000);
+        sources.push(source);
       }
-      source = context.createBufferSource();
-      source.buffer = buffer;
-      source.connect(gain);
-      source.start(0, Math.min(offsetMs + performance.now() - began, plan.duration_ms) / 1000);
     },
     stop,
     muted(flag) {

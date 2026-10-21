@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { SAMPLE_RATE, VOICES, poseAt, prepare, prepareCall, synthesize } from "./score.js";
+import { SAMPLE_RATE, VOICES, poseAt, prepare, prepareCall, singCaption } from "./score.js";
 import { loadSynth } from "./voice.js";
 
 const round3 = (value) => Math.round(value * 1000) / 1000;
@@ -220,21 +220,22 @@ describe("poseAt", () => {
   });
 });
 
-describe("synthesize", () => {
+describe("singCaption", () => {
   const voice = loadSynth(async () => ({ ok: true, arrayBuffer: async () => readFileSync("public/sound/microduck-voice.wasm") }));
 
-  it("fills exactly the plan's duration in stereo at 48 kHz, silent outside the notes", async () => {
+  it("sings a caption's own notes in mono at 48 kHz, from the caption's start, silent outside them", async () => {
     const plan = prepare(dialogue);
-    const pcm = synthesize(plan, await voice);
-    expect(pcm.length).toBe(plan.duration_ms * 96);
-    expect(pcm[0]).toBe(0);
-    expect(pcm[pcm.length - 1]).toBe(0);
-    const note = plan.notes[0];
-    const at = Math.round(((note.start_ms + note.end_ms) / 2) * 48) * 2;
-    expect(pcm[at]).not.toBe(0);
-    expect(pcm[at]).toBe(pcm[at + 1]);
-    expect(pcm[(note.start_ms * 48 - 1) * 2]).toBe(0);
-    expect(pcm.reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0)).toBeLessThanOrEqual(0.5);
+    const [caption] = plan.captions;
+    const out = new Float32Array((caption.end_ms - caption.start_ms) * 48);
+    singCaption(plan, caption, await voice, out);
+    const notes = plan.notes.filter((n) => caption.start_ms <= n.start_ms && n.start_ms < caption.end_ms);
+    expect(notes.length).toBeGreaterThan(0);
+    expect(notes.every((n) => n.end_ms <= caption.end_ms)).toBe(true);
+    const [note] = notes;
+    expect(out[Math.round(((note.start_ms + note.end_ms) / 2 - caption.start_ms) * 48)]).not.toBe(0);
+    expect(out.slice(0, (note.start_ms - caption.start_ms) * 48).every((sample) => sample === 0)).toBe(true);
+    expect(out.slice((notes.at(-1).end_ms - caption.start_ms) * 48).every((sample) => sample === 0)).toBe(true);
+    expect(out.reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0)).toBeLessThanOrEqual(0.5);
   });
 
   it("sings the two commentators in two different voices", async () => {

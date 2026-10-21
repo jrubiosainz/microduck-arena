@@ -625,6 +625,9 @@ PREFETCH`; 404 before, and for anything the show does not hold. Slots:
 ```js
 // app/src/live/score.js
 export function prepareCall({ id, lines, duration_ms })   // a plan whose captions start at each line's at_ms
+export function singCaption(plan, caption, sing, out)     // replaces synthesize: one caption's notes, mono 48 kHz, into `out`
+// app/src/live/voice.js: start(plan, offsetMs) sings one mono AudioBuffer per caption still to come, each started on
+//   the context's clock from one instant (memory held = the speech, not the plan's length); stop() stops them all
 // app/src/api.js
 export function getShow(eventId, number, segment)   // {dialogue, plan, screen}, null on a 404; never cached
 export function getCall(matchId)                    // {lines, plan}, null on a 404; never cached

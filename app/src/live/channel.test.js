@@ -99,6 +99,16 @@ describe("createChannel", () => {
     expect(shutter.draw).toHaveBeenLastCalledWith(800, null);
   });
 
+  it("silences a segment that fails while it plays, under the panel that holds over it", () => {
+    now = 2000;
+    channel.tick();
+    expect(replay.stop).not.toHaveBeenCalled();
+    replay.failed = true;
+    channel.tick();
+    expect(replay.stop).toHaveBeenCalled();
+    expect(shutter.draw).toHaveBeenLastCalledWith(800, null);
+  });
+
   it("is off air with no slot, halts and resumes, and rejoins after a refusal", () => {
     channel.update({ slots: [] });
     channel.tick();

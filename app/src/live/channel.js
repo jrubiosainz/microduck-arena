@@ -98,8 +98,10 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
       } else {
         const segment = segmentFor(slot);
         if (segment.failed) {
-          // A clip withdrawn between two grid reads: the panel holds, still
-          // announcing it, until the next slot's scheduled time.
+          // A clip withdrawn between two grid reads, or one that failed while
+          // it played: the panel holds, still announcing it, until the next
+          // slot's scheduled time, and nothing of the segment goes on under it.
+          segment.stop();
           shutter.draw(800, announcing);
         } else {
           shutter.hide();

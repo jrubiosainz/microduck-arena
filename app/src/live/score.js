@@ -346,16 +346,16 @@ export function poseAt(plan, speaker, ms) {
   return pose;
 }
 
-/** Sample-accurate stereo PCM; identical channels keep the two timbres apart
- * in mono. `sing(seed, note)` is the microduck synthesiser (voice.js). */
-export function synthesize(plan, sing) {
-  const audio = new Float32Array((plan.duration_ms * SAMPLE_RATE) / 1000 * 2);
+/** One caption's speech, sample-accurate mono PCM at 48 kHz written into `out`
+ * from the caption's start: its notes, each sung where it falls. Every note of a
+ * plan falls inside its caption, so a plan sung caption by caption is the whole
+ * plan sung, and silence between captions is nothing held in memory.
+ * `sing(seed, note)` is the microduck synthesiser (voice.js). */
+export function singCaption(plan, caption, sing, out) {
   for (const note of plan.notes) {
+    if (note.start_ms < caption.start_ms || note.start_ms >= caption.end_ms) continue;
     const samples = sing(VOICES[note.speaker].seed, note);
-    const start = note.start_ms * 48;
-    for (let i = 0; i < samples.length; i++) {
-      audio[(start + i) * 2] = audio[(start + i) * 2 + 1] = samples[i] * note.emphasis;
-    }
+    const start = ((note.start_ms - caption.start_ms) * SAMPLE_RATE) / 1000;
+    for (let i = 0; i < samples.length; i++) out[start + i] = samples[i] * note.emphasis;
   }
-  return audio;
 }
