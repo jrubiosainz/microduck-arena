@@ -338,8 +338,9 @@ def test_a_call_names_a_duck_never_its_player():
 
 def test_a_call_line_says_what_only_its_moment_has():
     # Each bout written alone, "And we're off!" and "Time expires with the marker favoring X." came back
-    # bout after bout: 5.8 % of a rehearsal show's sentences were repeats.
-    assert "so no stock line: each line says what only this moment has" in CALL_STYLE
+    # bout after bout: 5.8 % of a rehearsal show's sentences were repeats. Asked for all of the moment's
+    # particulars at once, a line ran past 80 characters.
+    assert "so no stock line: each line says one thing only this moment has" in CALL_STYLE
 
 
 def test_a_call_starts_with_peter_or_ray():
