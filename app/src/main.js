@@ -4,6 +4,7 @@ import { getEvents } from "./api.js";
 import { renderCup } from "./cup.js";
 import { renderHome } from "./home.js";
 import { renderLive } from "./live.js";
+import { renderMatch } from "./match.js";
 import { renderPlayer } from "./player.js";
 import { renderRace } from "./race.js";
 import { renderRun } from "./run.js";
@@ -58,6 +59,8 @@ async function show() {
         return;
       }
       await renderCup(root, route.eventId, route.number, state);
+    } else if (route.view === "match") {
+      await renderMatch(root, route.matchId, state);
     } else if (route.view === "live") {
       await renderLive(root, state);
     } else if (route.view === "player") {

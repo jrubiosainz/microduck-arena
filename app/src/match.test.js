@@ -1,0 +1,41 @@
+import { describe, expect, it } from "vitest";
+import { boutLine, matchHall } from "./match.js";
+
+const match = { match_id: "tug-of-war-0001-008", cup: 1, round: "final", group: null, title: "Final · Tank vs Lean",
+  event: { id: "tug-of-war", title: "Tug of War", rig: "legs" }, a: { user: "ann", policy_name: "Tank", name: "Tank", livery: "blue" },
+  b: { user: "bob", policy_name: "Lean", name: "Lean", livery: "classic" }, wins: [2, 1], winner: "a", decided_by: "bouts", clip: "v1",
+  bouts: [
+    { k: 0, a_side: "west", winner: "a", how: "pit", time_s: 8.42 }, { k: 1, a_side: "east", winner: "b", how: "marker", time_s: 45 },
+    { k: 2, a_side: "west", winner: null, how: "draw", time_s: 45 }, { k: 3, a_side: "east", winner: "a", how: "pit", time_s: 3.1 }] };
+
+describe("a match page", () => {
+  it("names the cup, the round and both sides, gives the score, the bouts and the clip", () => {
+    const page = matchHall(match);
+    expect(page.querySelector("#title").getAttribute("href")).toBe("#/c/tug-of-war/1");
+    expect(page.querySelector("#title").textContent).toBe("Tug of War Cup #1");
+    expect(page.querySelector(".eyebrow").textContent).toBe("Final");
+    expect(page.querySelector(".match-score").textContent).toBe("2–1");
+    expect(page.querySelector(".stamp").textContent).toBe("Tank wins");
+    expect([...page.querySelectorAll(".match-bout")].map((b) => b.textContent)).toEqual([
+      "Bout 1 · Tank wins · Lean in the pit · 8.42 s", "Bout 2 · Lean wins · the marker on their side · 45.00 s",
+      "Bout 3 · a draw · 45.00 s", "Bout 4 · Tank wins · Lean in the pit · 3.10 s"]);
+    expect(page.querySelector(".match-clip video").getAttribute("src")).toBe("/api/matches/tug-of-war-0001-008/clip/landscape.mp4?v=v1");
+  });
+
+  it("links each side's player and names its policy in the byline", () => {
+    const byline = matchHall(match).querySelector("#byline");
+    expect(byline.textContent).toBe("@ann · Tank vs @bob · Lean");
+    expect([...byline.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual(["#/p/ann", "#/p/bob"]);
+  });
+
+  it("calls a group match by its group and has no clip until one is ready", () => {
+    const page = matchHall({ ...match, round: "group", group: "A", clip: null });
+    expect(page.querySelector(".eyebrow").textContent).toBe("Group A");
+    expect(page.querySelector(".match-clip")).toBeNull();
+  });
+
+  it("names the pit's victim whichever side won the bout", () => {
+    expect(boutLine(match, match.bouts[1])).toBe("Bout 2 · Lean wins · the marker on their side · 45.00 s");
+    expect(boutLine(match, { k: 4, winner: "b", how: "pit", time_s: 5 })).toBe("Bout 5 · Lean wins · Tank in the pit · 5.00 s");
+  });
+});

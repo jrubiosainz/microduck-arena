@@ -1284,3 +1284,22 @@ table.board .withdraw:focus-visible,
   text-transform: uppercase;
   color: var(--paper);
 }
+
+/* ── a cup's match: the run page's frame, its bouts and clip in the score column ── */
+
+.match-score { font: 400 clamp(1.4rem, 2.6vw, 2.2rem)/1 var(--display); letter-spacing: 0.04em; }
+.match-bouts { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.match-bout {
+  width: 100%;
+  padding: 6px 10px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.match-bout:hover { background: var(--warm-paper); }
+.match-bout[aria-current] { background: var(--ink); color: var(--paper); }
+.match-clip { min-height: 0; }
+.match-clip video { display: block; width: 100%; max-height: 100%; border: 2px solid var(--ink); background: var(--ink); }

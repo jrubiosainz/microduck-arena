@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { byEvent, noProfile, profile } from "./player.js";
+import { byEvent, noProfile, profile, reachedLabel } from "./player.js";
 
 const ann = {
   user: "ann",
@@ -249,5 +249,18 @@ describe("the tug's best row", () => {
       ],
     };
     expect(profile(player).querySelector(".profile-results a").textContent).toContain("#1 · 12.3 cm");
+  });
+
+  it("lists the cups a player played and how far they went, each the way to its page", () => {
+    const el = profile({ ...ann, cups: [{ event_id: "tug-of-war", event_title: "Tug of War", number: 3, starts_at: "2026-11-13T17:00:00Z", reached: "semi-final" }] });
+    const cup = el.querySelector(".profile-cups a");
+    expect(cup.getAttribute("href")).toBe("#/c/tug-of-war/3");
+    expect(cup.textContent).toBe("Tug of War Cup #3Semi-finalist2026-11-13");
+    expect(profile(ann).querySelector(".profile-cups")).toBeNull();
+  });
+
+  it("words how far a cup went", () => {
+    expect(["champion", "final", "quarter-final", "round of 16", "group"].map(reachedLabel)).toEqual([
+      "Champion", "Finalist", "Quarter-finalist", "Round of 16", "Group stage"]);
   });
 });

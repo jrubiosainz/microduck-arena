@@ -87,3 +87,6 @@ export function formatEventFacts(event) {
     },
   ];
 }
+
+/** `words` with its first letter in capitals. */
+export const capitalised = (words) => words[0].toUpperCase() + words.slice(1);
