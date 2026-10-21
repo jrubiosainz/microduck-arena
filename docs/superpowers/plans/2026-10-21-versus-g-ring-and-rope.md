@@ -31,7 +31,7 @@
 1. **A string other than the measured one** (a mass, the armature, a ball joint): Task 3's `test_the_string_is_the_measured_one` and 40-bout check.
 2. **A duck threading out of the ring, or "in the pit" outside it**: Task 2's `test_a_duck_thrown_at_the_ropes_stays_in_the_ring`.
 3. **The verdict read off the wrong point or sign**: Task 4's `test_the_judge_reads_the_pit_then_the_strings_middle`.
-4. **A bout stored without its string** (a writer missed): Task 4's `test_a_tug_entry_stores_its_bout_and_string`, `test_a_matchs_bout_file_holds_its_string`.
+4. **A bout stored without its string** (a writer missed): Task 4's `test_a_tug_entry_is_rated_in_bouts_against_the_reference` (extended), `test_a_matchs_bout_file_holds_its_string`.
 5. **The string out of step with the ducks** (a cut settle): Task 6's `tugString keeps its settle's last frames…`.
 
 ---
@@ -50,7 +50,7 @@
 
 ### Task 2: The tug is fought in a 3 m ring, its ropes the field's edges
 
-**Files:** Modify `arena/manifest.py`, `arena/events/tug-of-war.toml`, `arena/course.py`, `arena/web/routes_read.py`, `arena/commentary/context.py`, `arena/commentary/cup.py`, `arena/commentary/generator.py`, `docs/guides/challenges/tug-of-war.md`, `docs/superpowers/plans/2026-10-19-versus-interfaces.md`, `app/src/format.js`; tests `tests/test_manifest.py`, `test_course.py`, `test_moments.py`, `test_routes_read.py`, `test_commentary_context.py`, `test_commentary_cup.py`, `test_commentary_generator.py`, `app/src/format.test.js`, and every front fixture that gives a tug `length_m`, `width_m` or `walls` (`clip/score.test.js`, `race.test.js`, `roundcard.test.js`, `tug.test.js`, `workshop/challenge.test.js`).
+**Files:** Modify `arena/manifest.py`, `arena/events/tug-of-war.toml`, `arena/course.py`, `arena/web/routes_read.py`, `arena/commentary/context.py`, `arena/commentary/cup.py`, `arena/commentary/generator.py`, `docs/guides/challenges/tug-of-war.md`, `docs/superpowers/plans/2026-10-19-versus-interfaces.md`, `app/src/format.js`; tests `tests/test_manifest.py`, `test_course.py`, `test_moments.py`, `test_routes_read.py`, `test_commentary_context.py`, `test_commentary_cup.py`, `test_commentary_generator.py`, `app/src/format.test.js`, and every front fixture that gives a tug `length_m`, `width_m` or `walls` (`clip/score.test.js`, `race.test.js`, `roundcard.test.js`, `tug.test.js`, `tug-venue.test.js`, `workshop/challenge.test.js`).
 
 **Interfaces:**
 - Produces in `manifest.py`: `Tug(ring_m, pit_m, pit_depth_m, string_m, kind="tug")`.
@@ -67,8 +67,10 @@ def test_the_ring_is_three_ropes_a_side_post_to_post_with_a_backstop_behind():
     assert ropes[0] == ("rope_west_0", (-1.5, -1.5, 0.06), (-1.5, 1.5, 0.06))
     assert ropes[11] == ("rope_south_2", (-1.5, -1.5, 0.18), (1.5, -1.5, 0.18))
     assert ring_posts(TUG.course)[0] == ("post_nw", (-1.5, 1.5, 0.0), (-1.5, 1.5, 0.23))
-    assert backstops(TUG.course)[0] == pytest.approx(("backstop_west", (-1.531, 0.0, 0.093), (0.025, 1.556, 0.093)))
-    assert backstops(TUG.course)[2] == pytest.approx(("backstop_north", (0.0, 1.531, 0.093), (1.556, 0.025, 0.093)))
+    assert names(backstops(TUG.course)) == [f"backstop_{s}" for s in ("west", "east", "north", "south")]
+    assert numbers(backstops(TUG.course))[:6] == pytest.approx([-1.531, 0, 0.093, 0.025, 1.556, 0.093])
+    assert numbers(backstops(TUG.course))[12:18] == pytest.approx([0, 1.531, 0.093, 1.556, 0.025, 0.093])
+    assert string_offset("legs") == pytest.approx((0.026, 0.0145, 0.0324215))   # kept from the replaced lane test
     assert numbers(pit_boxes(TUG.course)) == pytest.approx([-10.825, 0, -0.175, 10.675, 21.55, 0.175,
                                                             10.825, 0, -0.175, 10.675, 21.55, 0.175, 0, 0, -0.325, 0.15, 21.55, 0.025])
 
@@ -109,14 +111,14 @@ def test_a_duck_thrown_at_the_ropes_stays_in_the_ring():
   - The guide: the first line `Two ducks are tied neck to neck by a 1 m string, over a 0.3 m pit, in a 3 m wrestling ring. Drag the other duck into the pit.`; "## The bout" gains, after its first paragraph, `The ring's ropes are the field's edges: a duck that backs into them bounces off. The string is a real rope: it sags, and a duck can step or lie on it.`
   - The contract: the plans table gains G (arena `versus`) and H (challenges `tug-of-war`); the order of execution gains this plan's Order; "Plan A — names" becomes "(as Plan G leaves them)", written once now with every name the Interfaces blocks of Tasks 2–6 produce or remove, and a tug lane `{tug: "bout", ducks, string: {trace, settle?}}`; "Plan B — cross-repo names" lists Plan H's copies: the lane's and the tendon's names out, the ring's and the string's constants and names, `string_sites` and `marker_x(string)` in.
 - [ ] **Step 4:** Step 2's commands → PASS; SUITE.
-- [ ] **Step 5:** `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus && rtk proxy grep -rnI "length_m\|width_m\|wall_height\|tug_walls\|\.walls" arena/tug.py arena/match.py arena/moments.py arena/commentary arena/web/routes_read.py app/src/tug.js app/src/tug-venue.js` prints only `routes_read.py`'s race summary lines.
-- [ ] **Step 6:** commit the 11 sources and the tests: `"The Tug of War is fought in a 3 m ring: its ropes are the field's edges, a backstop behind them, the pit across it from rope to rope"`. Tell the controller: the challenges' parity tests are red until Plan H Task 2.
+- [ ] **Step 5:** `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus && rtk proxy grep -rnI "length_m\|width_m\|wall_height\|tug_walls\|\.walls" arena/tug.py arena/match.py arena/moments.py arena/commentary arena/web/routes_read.py app/src/tug.js app/src/tug-venue.js` prints only `routes_read.py`'s race summary lines and `arena/commentary/context.py`'s race branch of `nature` (`length_m`).
+- [ ] **Step 6:** commit the 10 sources and the tests: `"The Tug of War is fought in a 3 m ring: its ropes are the field's edges, a backstop behind them, the pit across it from rope to rope"`. Tell the controller: the challenges' parity tests are red until Plan H Task 2.
 
 ---
 
 ### Task 3: The string is a rope: sixteen segments tied neck to neck
 
-**Files:** Modify `arena/course.py`; tests `tests/test_course.py`, `tests/test_tug.py` (the tendon's tests). Scratch: `SCRATCH/g-stability.py`.
+**Files:** Modify `arena/course.py`; tests `tests/test_course.py` (`test_the_string_is_the_measured_one`, beside `_standing`), `tests/test_tug.py` (`test_a_bout_on_the_string_holds_together` and its helper `_string_bout(manifest, west, east, seed) -> (gaps, ties)`: per timed step, the ends' distance and the larger of the two tie errors, read as Step 5's script reads them). Scratch: `SCRATCH/g-stability.py`.
 
 **Interfaces:**
 - Consumes: the study's `rope.py add_rope` (`attach="mid"`, `joint="universal"`) as the reference implementation, Task 2's course.
@@ -136,6 +138,7 @@ def test_the_string_is_the_measured_one():
     dofs = [d for d in range(model.nv) if model.body(model.dof_bodyid[d]).name.startswith("string/")]
     assert len(dofs) == 36 and set(model.dof_armature[dofs]) == {1e-6}
     assert set(model.dof_damping[[d for d in dofs if model.dof_jntid[d] != model.joint("string/root").id]]) == {0.003}
+    assert not model.dof_damping[[d for d in dofs if model.dof_jntid[d] == model.joint("string/root").id]].any()   # the root: armature only, as measured
     cap = model.geom("string/cap0")
     assert (cap.size[0], cap.size[1], cap.contype[0], cap.conaffinity[0], cap.priority[0]) == pytest.approx((0.004, 0.03125, 0, 1, 1))
     assert list(cap.friction) == pytest.approx([1.0, 0.005, 0.0001])
@@ -149,7 +152,7 @@ def test_the_string_is_the_measured_one():
     assert np.linalg.norm(np.diff(points, axis=0), axis=1) == pytest.approx([0.0625] * 16)
 
 def test_a_bout_on_the_string_holds_together():
-    """The reference against itself, 4 s (the settle's yank included): no reset, ends never past 1.005 m, ties within 1 cm."""
+    """The reference against itself, 4 s of timed steps: no reset, ends never past 1.005 m, ties within 1 cm."""
     gaps, ties = _string_bout(SHORT, reference_duck(TUG), reference_duck(TUG), 1)   # _start + sim.step as run_bout, each step read off data
     assert max(gaps) <= 1.005 and max(ties) <= 0.01
 ```
@@ -157,9 +160,9 @@ def test_a_bout_on_the_string_holds_together():
   - `test_tug.py`: `test_the_string_never_stretches_past_its_length` and `test_string_ends_are_where_the_physics_puts_the_sites` stay green as they are (the marker is still the ends' midpoint until Task 4).
 - [ ] **Step 2:** `PYTEST tests/test_course.py tests/test_tug.py` → FAIL.
 - [ ] **Step 3: Implement** `_add_string` from the study's `add_rope` (`mid`, `universal`) with the Pinned names and constants; `compile_tug`: `a`, `b` the two `string_end` sites at the STAND pose (`(w.x + ox, w.y + oy, SPAWN_HEIGHT_M + oz)`, `(e.x - ox, e.y - oy, SPAWN_HEIGHT_M + oz)`); after compile the string's key qpos is its `qpos0` (left zero, its free joint's quaternion would be invalid), then `_posed`. Docstrings: why each number (the study's table, a line each), never lowered.
-- [ ] **Step 4:** Step 2's command → PASS; SUITE.
+- [ ] **Step 4:** Step 2's command → PASS; SUITE. A test that pins a bout's physical outcome (`test_evaluate.py::test_the_reference_against_itself_wins_no_ground_to_speak_of`, `test_tug.py`'s outcome tests) and goes red on the rope is never edited or loosened: report its bouts (score, how, time per seed) and the controller rules.
 - [ ] **Step 5: Stability, the study's 40 bouts.** Write `SCRATCH/g-stability.py`: the bout loop of `run_bout` (`runner._start`, `sim.step`, `runner._reset_by_mujoco`, `tug._verdict` on the ducks' frames) recording per step the ends' distance (`string_end`/`duck1/string_end`), both tie errors (`string_end`↔`string/p0`, `duck1/string_end`↔`string/p16`) and any reset; one JSON line per bout. Bouts: entry against `reference_duck(TUG)`, west on odd seeds: `reference`, `ONNX/t10-500.onnx`, `ONNX/t9r-1000.onnx`, `ONNX/t9r-500.onnx` × seeds 1–5; `ONNX/t1-0.onnx`, `t4-1000`, `t11-750`, `t12-500`, `t6-500` × seeds 1–4. Run it (`cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus && uv run --no-config --frozen python SCRATCH/g-stability.py`, foreground, ~4 min). Expected: 0 resets, max gap ≤ 1.0030 m, max tie error ≤ 0.010 m (study: 1.0024 m, 7.0 mm). A miss stops the task: report, never retune.
-- [ ] **Step 6:** commit `arena/course.py` and the two tests: `"The string is a real rope: sixteen 6 mm capsules, 80 g, tied neck to neck, sagging, stepped on, never through a body"`.
+- [ ] **Step 6:** commit `arena/course.py` and the two tests: `"The string is a real rope: sixteen capsules 8 mm thick, 80 g, tied neck to neck, sagging, stepped on, never through a body"`.
 
 ---
 
@@ -205,18 +208,19 @@ def test_a_bout_records_its_string_every_step_and_the_settle_before():
   - `test_tug.py`: the score and status tests build `BoutOutcome(..., trace, settle, straight(trace), np.zeros((26, 17, 3)))`, call `bout_score_cm(outcome, e, 100.0)`, same numbers; the explosion test asserts `out.string.shape == (10, 17, 3)`; the stretch test reads `out.string[:, 0]`, `[:, 16]`; the `string_ends` tests go; `test_course.py` gains `test_the_strings_ends_sit_on_the_necks_at_the_start` (in `_standing`, `string/p0`, `string/p16` on `string_end`, `duck1/string_end` within 1e-9).
   - `test_trace.py`: `test_a_tugs_string_round_trips_beside_its_ducks` (shapes (2,5,21), (2,26,21), (5,17,3), (26,17,3); `decode_string` gives back `(string_settle, string)` to float16 accuracy); `test_a_trace_without_a_string_says_so` (`pytest.raises(ValueError, match="no string")`).
   - `test_evaluate.py`: the fake `run_bout` returns `straight(bout_trace(x, pit))` strings and 26-frame settles; `result.string.shape == (1, 17, 3)` and `result.string_settle.shape == (26, 17, 3)` for the traced seed 4; a race's `result.string is None`.
-  - `test_routes_submit.py::test_a_tug_entry_stores_its_bout_and_string` and `test_cli.py`'s tug test: the stored blob's `decode_string` has `string.shape[1:] == (17, 3)` and as many frames as `decode(blob).shape[1]`.
+  - `test_routes_submit.py::test_a_tug_entry_is_rated_in_bouts_against_the_reference` (extended) and `test_cli.py`'s tug test: the stored blob's `decode_string` has `string.shape[1:] == (17, 3)` and as many frames as `decode(blob).shape[1]`.
   - `test_match.py::test_a_real_match_plays_the_same_twice` compares all four arrays per bout; `test_cupworker.py::test_a_matchs_bout_file_holds_its_string`: `decode_string(files["bouts/<id>-0.npz"])[1].shape[1:] == (17, 3)`.
+  - Also red until updated: `test_tug.py`'s `marker_x(out.trace[:, -1:], OFFSET)` → `marker_x(out.string[-1:])`; Task 3's `_string_bout` unpacks `_start`'s 3-tuple; `test_cupworker.py`'s `fake_play` returns 4-tuples and `store_cup` encodes a `straight(...)` string per bout (its `booth()` tests reach `match_footage` → `decode_string`, and Task 5's match route reads it).
   - `test_moments.py` passes `straight(t)` (the trunks' midpoint is the old `ZERO`-offset marker: same expected moments; `ZERO` goes); `test_commentary_show.py`'s stored bouts carry `straight(...)` strings.
 - [ ] **Step 2:** `PYTEST tests/test_tug.py tests/test_trace.py tests/test_evaluate.py tests/test_routes_submit.py tests/test_cli.py tests/test_match.py tests/test_cupworker.py tests/test_moments.py tests/test_commentary_show.py tests/test_course.py` → FAIL.
 - [ ] **Step 3: Implement.**
-  - `runner.py`: `_start` records `sites` into `settle_points` beside `settle`; `_Sim.points(out)` = `out[:] = data.site_xpos[sites]`; a lone duck and a stage pass none (bit-identical).
+  - `runner.py`: `_start` records `sites` into `settle_points` beside `settle`; `_Sim.points(out)` = `out[:] = data.site_xpos[sites]`; a lone duck and a stage pass none and record no points (bit-identical; `data.site_xpos[()]` would be every site, so `points` is only called with sites).
   - `tug.py`: `run_bout` passes `string_sites(model)`, records `sim.points(string[step])` after `sim.record`, cuts `string` as `frames` (a reset leaves its frame out of both); `_verdict` and `bout_score_cm` read `marker_x(string[-1:])[0]`; `string_ends` goes; the docstring: the string is a rope, the marker its middle point.
   - `trace.py`: `encode` validates `string`/`string_settle` as `(frames, 17, 3)` (`ValueError(f"{name} must be (frames, 17, 3), got {shape}")`) and writes them float16 when given; `decode_string` per Interfaces. Module docstring: a tug's file carries its string; the key is the version, races and performances are as they were.
   - `evaluate.py`: `Evaluation.string`, `.string_settle` (defaults `None`); `_evaluate_rating` fills them from the traced bout; `bout_score_cm` without offset. The three writers (`routes_submit.py`, `cli.py`, `recover.py`) encode `result.string, result.string_settle`.
   - `match.py`: `traces.append((outcome.trace, outcome.settle, outcome.string, outcome.string_settle))`; its type comment. `cupworker.py`: `encode(*frames)`.
   - `moments.py`: `moments(trace, string, course)`, `x = marker_x(string)`; `show.py` `match_footage`: `_, string = decode_string(blob)`, `moments(trace, string, manifest.course)`, the `string_offset` import goes.
-- [ ] **Step 4:** Step 2's command → PASS; SUITE; `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus && rtk proxy grep -rnI "string_ends\|string_offset" arena` prints only `course.py` (the site and `tug_layout`).
+- [ ] **Step 4:** Step 2's command → PASS; SUITE (Task 3 Step 4's rule for physical-outcome tests holds); `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus && rtk proxy grep -rnI "string_ends\|string_offset" arena` prints only `course.py` (the site, `tug_layout`, `compile_tug`) and `routes_read.py`'s served `string_offset` (it goes in Task 6).
 - [ ] **Step 5 (indicative):** `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-arena/.claude/worktrees/versus && uv run --no-config --frozen arena score ONNX/t10-500.onnx --event tug-of-war` → five bout lines, `rating: X.X cm · replay from seed n` (any value: the format is the check).
 - [ ] **Step 6:** commit the 11 sources and 10 tests: `"The marker is the string's middle point, and every bout keeps the string's seventeen points, settle included, beside its ducks"`. Tell the controller: Plan H may start.
 
@@ -267,12 +271,14 @@ it("draws the string through its points, the ribbon on point 8", () => {
   const points = new Float32Array(51).map((_, i) => (i % 3 === 0 ? -0.5 + (i / 3) / 16 : i % 3 === 2 ? 0.1 : 0));
   s.update(points);
   const rope = s.group.getObjectByName("string"), ribbon = s.group.getObjectByName("marker");
-  expect(ribbon.position.toArray()).toEqual(toThree([0, 0, 0.1]));
+  expect(ribbon.position.toArray()).toEqual(toThree([0, 0, Math.fround(0.1)]));
   rope.geometry.computeBoundingBox();
-  expect(rope.geometry.boundingBox.min.x).toBeCloseTo(-0.504, 3);
-  expect(rope.geometry.boundingBox.max.x).toBeCloseTo(0.504, 3);
+  expect(rope.geometry.boundingBox.min.x).toBeCloseTo(-0.5, 3);   // a tube has no end caps
+  expect(rope.geometry.boundingBox.max.x).toBeCloseTo(0.5, 3);
+  expect(rope.geometry.boundingBox.max.z).toBeCloseTo(0.004, 6);  // the 4 mm radius: an 8 mm rope
   s.dispose();   // geometry and material freed, the group off its parent
 });
+// the existing `update(a, b)` stretch test and the `radiusTop` "4 mm rope" test go: the tube replaces them
 // ratingLane: the existing cases gain a string `{ trace: "st" }` → lane.string === { trace: "st" }; with settles given and string.settle "ss" → { trace: "st", settle: "ss" }
 // bouts.test.js: boutLane(match, k, traces, settles, { trace: "st", settle: "ss" }).string deep-equals it
 // cast.test.js: replayLane(TUG, …, { ...lane, traceSeed: 4 }, { trace: "st" }).string deep-equals { trace: "st" }
@@ -280,7 +286,7 @@ it("draws the string through its points, the ribbon on point 8", () => {
 ```
 - [ ] **Step 2:** `VITEST src/tug.test.js src/bouts.test.js src/cast.test.js src/match.test.js src/workshop/job.test.js` → FAIL.
 - [ ] **Step 3: Implement.**
-  - `tug.js`: `buildString` keeps the ink material, a `CatmullRomCurve3` through `toThree` of the 17 points, a new `TubeGeometry(curve, 64, 0.004, 6)` per `update`, the old one disposed; the ribbon at point 8; the header comment (the string as recorded, not a line between two necks). `tugString` per Interfaces.
+  - `tug.js`: `buildString` keeps the ink material, a `CatmullRomCurve3` through `toThree` of the 17 points, a new `TubeGeometry(curve, 64, 0.004, 6)` per `update`, the old one disposed; the ribbon at point 8; the header comment (the string as recorded, not a line between two necks). `tugString` cuts the settle to its last `lead` frames and calls replay.js's `leadIn` at `STRING_WIDTH`: `leadIn` gains a `width` parameter (its existing callers pass `TRACE_WIDTH`), one lead-in rule for the ducks and the string.
   - `viewer.js`: a tug's `tug = { event, rope: buildString(), string: tugString(entries[0], ducks[0].lead) }` (the raw entry, before `tugDucks` maps it); `draw` updates `tug.rope` with `stringAt(tug.string, i)` at the frame index the ducks are drawn at (the same clamp); `tugEnds` goes.
   - `routes_read.py`: the tug summary drops `string_offset` (`test_a_tug_serves_its_course_and_its_bouts` asserts it absent).
   - Callers fetch and pass the string: `run.js` and `race.js` (`getString(id)` beside `getTrace(id)`, cached alike; a page passes `{trace}` only, as it passes no settles), `match.js` (`getBoutString` beside the bout's trace and settle; settle passed), `clip/main.js` (rated run: `getString(run_id)` with its settle; match: `getBoutString` per bout), `workshop/job.js` (`{trace: body.string}`).
@@ -299,7 +305,7 @@ it("draws the string through its points, the ribbon on point 8", () => {
 
 ```js
 it("draws the ring's ropes and posts where the physics has them", () => {
-  const venue = buildTugVenue(TUG, spectators, reachy, branding, 2.5);
+  const venue = buildTugVenue(TUG, spectators(), reachy, branding, 2.5);
   const box = (name) => new Box3().setFromObject(venue.group.getObjectByName(name));
   expect(box("ropes").max.y).toBeCloseTo(0.18 + 0.006, 6);
   expect(box("ropes").min.y).toBeCloseTo(0.06 - 0.006, 6);
@@ -309,13 +315,13 @@ it("draws the ring's ropes and posts where the physics has them", () => {
   venue.dispose();
 });
 it("follows a ring of another size", () => {
-  const venue = buildTugVenue(widerRing(TUG, 3.6), spectators, reachy, branding, 2.5);   // ring_m 3.6, ropes and posts moved out
+  const venue = buildTugVenue(widerRing(TUG, 3.6), spectators(), reachy, branding, 2.5);   // ring_m 3.6, ropes and posts moved out
   expect(new Box3().setFromObject(venue.group.getObjectByName("ropes")).max.x).toBeCloseTo(1.8 + 0.006, 3);
 });
 ```
   (`APRON` is exported for the test; `widerRing(event, ring)` in the test file rebuilds the served `ropes` and `posts` for another `ring_m` with Task 2's arithmetic.)
 - [ ] **Step 2:** `VITEST src/tug-venue.test.js` → FAIL.
-- [ ] **Step 3: Implement:** the canvas `ring_m + 2 * APRON` square, its pit cut `pit_m` × `ring_m`; the merged `ropes` from the served capsules (each a `strut(from, to, radius, 8)` in three.js coordinates via `toThree`); the posts and their pads at the served posts; the header comment drops "the lane under them is still the event's length".
+- [ ] **Step 3: Implement:** the canvas `ring_m + 2 * APRON` square, its pit cut `pit_m` × `ring_m`; the merged `ropes` from the served capsules (each a `strut(from, to, radius, 8)` in three.js coordinates via `toThree`); the posts and their pads at the served posts, each post drawn from the hall floor (`-RING_RISE`) up to its served top (the physics has it from the canvas up; below is decor), the pads' height from the served ropes' highest `from[2]`; the header comment drops "the lane under them is still the event's length".
 - [ ] **Step 4:** VITEST; `npm run build` in `app`.
 - [ ] **Step 5:** commit the 3 files: `"The venue draws the ring's ropes and posts where the physics puts them, the canvas as wide as the ring"`.
 
@@ -346,7 +352,7 @@ it("follows a ring of another size", () => {
 
 - [ ] **Step 1: Failing test:** `test_the_tug_reference_duck_is_<run>_<N>_byte_for_byte` replaces the t7-250 one, the new name and sha.
 - [ ] **Step 2:** `PYTEST tests/test_assets.py` → FAIL.
-- [ ] **Step 3:** `cp` the hand-over ONNX into `arena/assets/policies/`; `GIT rm` the t7-250 file; the toml's `[rating] reference`; `PROVENANCE.md`'s reference table (repo, checkpoint, recipe commit, sha256, date; "trained upright on the ring and the rope, warm-started from t7-250 and against it; replaces t7-250, owner 2026-10-21: every rating changed"); the guide's "## Rating": `…a frozen policy that stays on its feet, walks backwards and pulls the string taut.`; the contract's reference name.
+- [ ] **Step 3:** `cp` the hand-over ONNX into `arena/assets/policies/`; `GIT rm` the t7-250 file; the toml's `[rating] reference`; `PROVENANCE.md`'s reference table (repo, checkpoint, recipe commit, sha256, date; "trained upright on the ring and the rope, warm-started from t7-250 and against it; replaces t7-250, owner 2026-10-21: every rating changed"); the guide's "## Rating": `…a frozen policy that stays on its feet, walks backwards and pulls the string taut.`; the contract's reference name; `test_manifest.py`'s sweep refusal (`TUG["sweep"].replace("t7-250", …)`) names the new file.
 - [ ] **Step 4:** `rtk proxy grep -rnI "t7-250\|t7_250" arena tests app/src docs/guides` prints only PROVENANCE's history line; SUITE (tests that rated against the reference by value: their numbers are re-measured, never loosened).
 - [ ] **Step 5: Challenges sitting:** Plan H Task 6 Steps 2–5 (its `reference.onnx` = these bytes); CHALLENGES green.
 - [ ] **Step 6:** commit: `"The Tug of War's reference duck stays on its feet: <run>-<N>, trained upright on the ring and the rope, replaces t7-250 and every rating with it"`; `GIT lfs ls-files` lists the new file.

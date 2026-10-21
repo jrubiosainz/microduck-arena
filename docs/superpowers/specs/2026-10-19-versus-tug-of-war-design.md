@@ -132,8 +132,8 @@ players' ratings start negative, the name "string" on the site, and the decor as
   throughput decides.
 - **Rope numbers, as measured and never lowered** (each step down was unstable at the 5 ms step):
   16 capsules of 6.25 cm, radius 4 mm; 80 g, the two end pieces 15 g each, the 14 others
-  3.5714 g; joint damping 0.003 N·m·s/rad and armature 1e-6 on every rope degree of freedom (the
-  free root too); a free root at the middle segment, two chains of 8 out to the ends; each end
+  3.5714 g; joint damping 0.003 N·m·s/rad on every hinge and armature 1e-6 on every rope degree of
+  freedom (the free root too, which has no damping); a free root at the middle segment, two chains of 8 out to the ends; each end
   tied to its duck's `string_end` site by a site-to-site `connect` with solref 0.01; contacts
   contype 0 / conaffinity 1 / priority 1, friction 1 / 0.005 / 0.0001, default solref and
   solimp; each end piece excluded from the trunk it is tied to. The rope starts straight.
