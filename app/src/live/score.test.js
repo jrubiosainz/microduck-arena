@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { splitCaption } from "./captions.js";
 import { SAMPLE_RATE, VOICES, poseAt, prepare, prepareCall, singCaption } from "./score.js";
 import { loadSynth } from "./voice.js";
 
@@ -128,7 +129,6 @@ describe("prepare", () => {
     expect(() => prepare({ run_id: "x", turns: Array(7).fill(0).map((_, i) => turn(i % 2 ? "ray" : "peter", "Yes.")) })).toThrow("Invalid commentary");
     expect(() => prepare({ run_id: "x", turns: [turn("peter", "One."), turn("peter", "Two.")] })).toThrow("Invalid commentary turn");
     expect(() => prepare({ run_id: "x", turns: [turn("peter", "One."), turn("bob", "Two.")] })).toThrow("Invalid commentary turn");
-    expect(() => prepare({ run_id: "x", turns: [turn("peter", "x".repeat(43)), turn("ray", "Two.")] })).toThrow("Caption word is too long");
   });
 });
 
@@ -194,6 +194,17 @@ describe("prepareCall", () => {
     expect(plan.captions[2].start_ms).toBe(49040);
     expect(plan.captions[3].start_ms).toBe(66080);
     expect(plan.captions[4].end_ms).toBe(75040);
+  });
+
+  it("breaks a word too long for a caption line where the line ends, so a duck's long name is still said", () => {
+    // A policy name may be 80 characters, and a call names its duck exactly as printed.
+    const text = "tug-of-war-ppo-legs-reference-2026-10-20-seed3 pulls west!";
+    const plan = prepareCall({ ...call, lines: [{ at_ms: 2000, speaker: "peter", text }] });
+    expect(plan.captions.map((c) => c.text)).toEqual(["tug-of-war-ppo-legs-reference-2026-10-20-s eed3 pulls west!"]);
+    expect(splitCaption(plan.captions[0].text, (line) => line.length, 42)).toEqual([
+      "tug-of-war-ppo-legs-reference-2026-10-20-s", "eed3 pulls west!"]);
+    expect(prepare({ run_id: "x", turns: [{ speaker: "peter", text: "x".repeat(80) }, { speaker: "ray", text: "Two." }] })
+      .captions[0].text).toBe(`${"x".repeat(42)} ${"x".repeat(38)}`);
   });
 
   it("keeps every caption and note inside the clip", () => {

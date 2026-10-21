@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import httpx
 import numpy as np
 import pytest
 
@@ -335,14 +336,14 @@ def test_an_unwritten_show_holds_the_order_and_resumes_on_the_next_tick(tmp_path
         given.append((done, dict(done["desk"])))
         if len(given) == 1:
             done["desk"]["opening"] = {"kind": "opening"}
-            raise RuntimeError("router down")
+            raise httpx.ConnectError("router down")
         return written_show(cup)
 
     cups = worker(store, Clock(datetime(2026, 10, 23, 15, tzinfo=UTC)), show=write, log=said.append)
     cups.tick()
     assert load_cup(store, "tug-of-war", 1).order is None and store.cup_file("tug-of-war", 1, "show.json") is None
     assert said == ["cups: writing the show of Tug of War Cup #1",
-                    "cups: the show of Tug of War Cup #1 waits (RuntimeError: router down)"]
+                    "cups: the show of Tug of War Cup #1 waits (ConnectError: router down)"]
     cups.tick()
     assert given[1][0] is given[0][0] and (given[0][1], given[1][1]) == ({}, {"opening": {"kind": "opening"}})
     assert load_cup(store, "tug-of-war", 1).order is not None
@@ -411,6 +412,27 @@ def test_a_refusal_waits_from_when_it_came_not_from_when_the_tick_began(tmp_path
     clock.at = began + timedelta(minutes=20) + SHOW_RETRY
     cups.tick()
     assert given[1] == began + timedelta(minutes=20) + SHOW_RETRY
+
+
+def test_a_show_the_plan_page_cannot_time_is_not_bought_again_on_every_tick(tmp_path, no_physics):
+    """An answer is bought before the plan page times it: a page that throws over it would have it bought again on
+    every tick, for ever, and the cup would never air. Only a router that is down is asked again on the next tick."""
+    b = booth(tmp_path)
+
+    def broken(dialogue):
+        raise RuntimeError("Error: a plan page that throws")
+
+    b.tab.prepare = broken
+    b.cups.tick()
+    failed_at, bought = b.clock.at, len(b.router.asked)
+    assert bought == 1
+    for later in (timedelta(seconds=30), timedelta(seconds=60), SHOW_RETRY - timedelta(seconds=1)):
+        b.clock.at = failed_at + later
+        b.cups.tick()
+    assert len(b.router.asked) == bought
+    b.clock.at = failed_at + SHOW_RETRY
+    b.cups.tick()
+    assert len(b.router.asked) == bought + 1
 
 
 class Stale:

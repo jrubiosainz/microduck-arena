@@ -24,6 +24,7 @@ export const VOICES = Object.freeze({
 const TURNS = { min: 2, max: 6 };
 const CAPTION_CHARS = 84;
 const WORD_CHARS = 42;
+const LINE_PIECES = new RegExp(`.{1,${WORD_CHARS}}`, "g");
 const FRAME_MS = 40;
 // The steps a voice walks from one chirp to the next, in semitones: small ones most often.
 const STEPS = [-4, -3, -2, -2, -1, 1, 2, 2, 3, 4];
@@ -208,8 +209,8 @@ function speak(turn, start, random, captions, notes) {
     throw new Error("Invalid commentary turn");
   }
   const voice = VOICES[turn.speaker];
-  const words = turn.text.trim().split(/\s+/);
-  if (words.some((w) => w.length > WORD_CHARS)) throw new Error("Caption word is too long");
+  // A word longer than a caption line (a policy's name may be 80 characters) is broken where the line ends.
+  const words = turn.text.trim().split(/\s+/).flatMap((word) => word.match(LINE_PIECES));
   const chunks = [];
   for (const word of words) {
     if (!chunks.length || `${chunks.at(-1).join(" ")} ${word}`.length > CAPTION_CHARS) chunks.push([]);

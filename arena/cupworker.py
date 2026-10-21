@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from itertools import accumulate
 from pathlib import Path
 
+import httpx
 import numpy as np
 
 from .constants import NUM_JOINTS, RUNNER_VERSION
@@ -48,8 +49,8 @@ DRAW_GRACE = timedelta(seconds=60)
 LOAD_PATIENCE = timedelta(minutes=10)
 # A match clip that failed is launched again this often, as long as it stays failed.
 CLIP_RETRY = timedelta(minutes=10)
-# A show held by an answer the model refused every time is asked again this often: on the next tick it would most
-# likely be refused again, at TRIES router calls each time.
+# A show held by anything but the router (an answer refused every time, a plan page that cannot time one) is written
+# again this often: on the next tick it would most likely fail again, after buying its answers again.
 SHOW_RETRY = timedelta(minutes=10)
 TICK_S = 30
 
@@ -186,7 +187,7 @@ class CupWorker:
         self._relaunched: dict[str, datetime] = {}  # match id -> when its failed clip was last launched again
         self._tried: dict[tuple[str, int, str], datetime] = {}  # (event, number, "draw" | "play") -> first try here
         self._shows: dict[tuple[str, int], dict] = {}  # (event, number) -> the part of its show written so far
-        self._refused: dict[tuple[str, int], datetime] = {}  # (event, number) -> when its show was last refused
+        self._failed: dict[tuple[str, int], datetime] = {}  # (event, number) -> when its show last failed, not on the router
         self._stopped = threading.Event()
 
     def tick(self) -> None:
@@ -306,13 +307,13 @@ class CupWorker:
     def _written_show(self, manifest: Manifest, cup: Cup, now: datetime) -> dict | None:
         """The cup's show.json, stored once every match is called; until then each tick writes what it can of it,
         what it wrote kept to go on from. None while a clip is not ready or the writer fails: resumed on the next tick
-        when the router was down, SHOW_RETRY after a segment refused every time."""
+        when the router was down, SHOW_RETRY after any other failure."""
         key = (cup.event_id, cup.number)
         stored = self.store.cup_file(cup.event_id, cup.number, "show.json")
         if stored is not None:
             self._shows.pop(key, None)  # a write whose commit landed, though its call raised or a stale snapshot hid it
             return json.loads(stored)
-        if now - self._refused.get(key, now - SHOW_RETRY) < SHOW_RETRY:
+        if now - self._failed.get(key, now - SHOW_RETRY) < SHOW_RETRY:
             return None
         title = f"{manifest.title} Cup #{cup.number}"
         if key not in self._shows:  # once, not on every tick the clips render
@@ -321,11 +322,8 @@ class CupWorker:
         try:
             show = self.show(cup, self._shows[key])
         except Exception as exc:  # noqa: BLE001 — a show that cannot be written now is resumed later
-            # Not at the top: the commentary package imports this module.
-            from .commentary.generator import Rejected
-
-            if isinstance(exc, Rejected):
-                self._refused[key] = self.now()  # writing can take minutes: wait from the refusal
+            if not isinstance(exc, httpx.HTTPError):
+                self._failed[key] = self.now()  # writing can take minutes: wait from the failure
             self.log(f"cups: the show of {title} waits ({type(exc).__name__}: {exc})")
             return None
         if len(show["calls"]) < len(cup.matches):
