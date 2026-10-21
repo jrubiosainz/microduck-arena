@@ -58,6 +58,9 @@ def create_app(config: ArenaConfig) -> FastAPI:
     # reload after a deploy.
     app.state.programme = Programme(lambda: pool(app.state.store, datetime.now(UTC)), now_ms, app.state.broadcasts,
                                     cups=lambda: shows(app.state.store, datetime.now(UTC)))
+    # A cup's show.json, parsed the first time the live serves from it: it is
+    # written once, before the cup's running order, and never changed.
+    app.state.shows = {}
     index = config.frontend_dir / "index.html" if config.frontend_dir else None
     app.state.build = hashlib.sha256(index.read_bytes()).hexdigest()[:12] if index else "dev"
 

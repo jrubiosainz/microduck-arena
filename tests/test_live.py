@@ -13,7 +13,9 @@ import numpy as np
 from fastapi.testclient import TestClient
 
 from arena.broadcasts import BroadcastBook
-from arena.cup import ends_at, iso
+from arena.commentary.show import show_outline
+from arena.cup import ends_at, iso, parse_iso
+from arena.cupworker import running_order
 from arena.live import (
     BEHIND_MS,
     HEAD,
@@ -33,6 +35,7 @@ from arena.store import LocalStore, Withdrawal
 from arena.trace import encode
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
+from tests.show_cups import played_cup as show_cup
 from tests.test_cup_view import REVEAL, START, START_ISO
 from tests.test_cupworker import drawn_cup, played_cup, store_cup
 from tests.test_store import make_record
@@ -544,6 +547,123 @@ def test_a_cups_matches_join_the_shuffled_rest_and_the_newest_runs_still_open_th
         order = [e.run_id for e in cycle(entries, k)]
         assert order[:HEAD] == ["S4", "S3", "S2"]
         assert sorted(order) == sorted(e.run_id for e in entries)
+
+
+def written_show(cup):
+    """A show.json: every desk segment of the cup's outline 12 s long, every match called, each turn and line its own."""
+    return {"desk": {s["id"]: {"kind": s["kind"], "after": s["after"],
+                               "dialogue": {"turns": [{"speaker": "peter", "text": f"Cup #{cup.number}, {s['id']}."}]},
+                               "plan": {"duration_ms": 12000}, "screen": {"next": s["after"] + 1}}
+                     for s in show_outline(cup)},
+            "calls": {m.match_id: {"lines": [{"at_ms": 0, "speaker": "ray", "text": f"{m.match_id} is on."}],
+                                   "plan": {"duration_ms": 30000}} for m in cup.matches}}
+
+
+def with_its_show(cup):
+    """The cup and its show, its running order fixed from its premiere around 30 s match clips."""
+    show = written_show(cup)
+    order = running_order(cup, {m.match_id: 30.0 for m in cup.matches}, parse_iso(cup.premiere_at), show=show)
+    return replace(cup, order=order), show
+
+
+(CUP, WRITTEN), (CUP2, WRITTEN2) = with_its_show(show_cup()), with_its_show(show_cup(number=2))
+START_MS = int(START.timestamp() * 1000)
+
+
+def on_air(match):
+    """When one of CUP's matches airs and when it is revealed, in ms."""
+    segment = next(s for s in CUP.order["segments"] if s.get("match_id") == match.match_id)
+    return START_MS + segment["at_ms"], START_MS + segment["at_ms"] + segment["duration_ms"]
+
+
+def show_api(tmp_path, *shown, unwritten=()):
+    """The app over `shown` cups, each stored with its show.json, and `unwritten` ones stored with none."""
+    app = create_app(ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie"))
+    for cup, show in shown:
+        store_cup(app.state.store, cup)
+        app.state.store.put_cup_files(cup.event_id, cup.number, {"show.json": json.dumps(show).encode()})
+    for cup in unwritten:
+        store_cup(app.state.store, cup)
+    return TestClient(app)
+
+
+def at(monkeypatch, ms):
+    """The live's clock, which gates a desk segment, and the cups' clock, which gates a call (its match's), at `ms`."""
+    monkeypatch.setattr("arena.web.routes_live.now_ms", lambda: ms)
+    monkeypatch.setattr("arena.web.routes_cups.now", lambda: START + timedelta(milliseconds=ms - START_MS))
+
+
+def test_a_cup_with_its_show_lays_desk_slots_and_called_matches(tmp_path):
+    store = LocalStore(tmp_path)
+    store_cup(store, CUP)
+    [show] = shows(store, START - timedelta(hours=1))
+    first = CUP.matches[0].match_id
+    assert show.slots[:4] == (
+        {"kind": "desk", "at_ms": START_MS, "duration_ms": 12000,
+         "show": {"event": "tug-of-war", "number": 1, "segment": "opening"}},
+        {"kind": "desk", "at_ms": START_MS + 12000, "duration_ms": 12000,
+         "show": {"event": "tug-of-war", "number": 1, "segment": f"intro-{first}"}},
+        {"kind": "shutter", "at_ms": START_MS + 24000, "duration_ms": SHUTTER_MS,
+         "next": {"match_id": first, "title": "Group A"}},
+        {"kind": "replay", "at_ms": START_MS + 25600, "duration_ms": 30000, "run_id": first,
+         "clip": "20261030T152000Z", "media": "match", "call": True})
+    replays = [slot for slot in show.slots if slot["kind"] == "replay"]
+    assert len(replays) == len(CUP.matches) and all(slot["call"] for slot in replays)
+    recap = next(i for i, slot in enumerate(show.slots) if slot.get("show", {}).get("segment") == "recap-1")
+    assert show.slots[recap - 1]["kind"] == "shutter" and show.slots[recap - 1]["next"] is None
+    for a, b in pairwise(show.slots):
+        assert b["at_ms"] == a["at_ms"] + a["duration_ms"]
+    assert show.ends_ms == int(ends_at(CUP).timestamp() * 1000)
+
+
+def test_a_desk_segment_is_served_from_thirty_seconds_before_the_reveal_it_mentions(tmp_path, monkeypatch):
+    api = show_api(tmp_path, (CUP, WRITTEN))
+    opening = "/api/live/show/tug-of-war/1/opening"
+    at(monkeypatch, START_MS - 30_040)
+    assert api.get(opening).status_code == 404
+    at(monkeypatch, START_MS - 30_000)
+    answer = api.get(opening)
+    assert answer.status_code == 200 and answer.headers["cache-control"] == "no-store"
+    assert answer.json() == {key: WRITTEN["desk"]["opening"][key] for key in ("dialogue", "plan", "screen")}
+    m0, m1 = CUP.matches[:2]
+    intro = f"/api/live/show/tug-of-war/1/intro-{m1.match_id}"  # it may react to m0's result
+    at(monkeypatch, on_air(m0)[1] - 30_040)
+    assert api.get(intro).status_code == 404
+    at(monkeypatch, on_air(m0)[1] - 30_000)
+    assert api.get(intro).json()["dialogue"] == WRITTEN["desk"][f"intro-{m1.match_id}"]["dialogue"]
+
+
+def test_a_call_is_served_from_thirty_seconds_before_its_match_airs(tmp_path, monkeypatch):
+    api = show_api(tmp_path, (CUP, WRITTEN))
+    m3 = CUP.matches[3]
+    call = f"/api/live/call/{m3.match_id}"
+    at(monkeypatch, on_air(m3)[0] - 30_040)
+    assert api.get(call).status_code == 404
+    at(monkeypatch, on_air(m3)[0] - 30_000)
+    answer = api.get(call)
+    assert answer.status_code == 200 and answer.headers["cache-control"] == "no-store"
+    assert answer.json() == {"lines": WRITTEN["calls"][m3.match_id]["lines"], "plan": WRITTEN["calls"][m3.match_id]["plan"]}
+
+
+def test_what_the_show_does_not_hold_is_a_404(tmp_path, monkeypatch):
+    unordered = show_cup(number=2)
+    unwritten = with_its_show(show_cup(number=3))[0]
+    api = show_api(tmp_path, (CUP, WRITTEN), (unordered, written_show(unordered)), unwritten=[unwritten])
+    at(monkeypatch, int(ends_at(unwritten).timestamp() * 1000) + 86_400_000)
+    assert api.get("/api/live/show/tug-of-war/1/opening").status_code == 200
+    for path in ("/api/live/show/tug-of-war/1/nope", "/api/live/call/nope", "/api/live/call/tug-of-war-0001-099",
+                 "/api/live/show/tug-of-war/2/opening", f"/api/live/call/{unordered.matches[0].match_id}",
+                 "/api/live/show/tug-of-war/3/opening", f"/api/live/call/{unwritten.matches[0].match_id}"):
+        assert api.get(path).status_code == 404, path
+
+
+def test_two_cups_of_one_event_serve_their_own_show(tmp_path, monkeypatch):
+    api = show_api(tmp_path, (CUP, WRITTEN), (CUP2, WRITTEN2))
+    at(monkeypatch, int(ends_at(CUP2).timestamp() * 1000) + 86_400_000)
+    for number, show in ((1, WRITTEN), (2, WRITTEN2)):
+        answer = api.get(f"/api/live/show/tug-of-war/{number}/ceremony").json()
+        assert answer["dialogue"]["turns"][0] == show["desk"]["ceremony"]["dialogue"]["turns"][0]
+    assert WRITTEN["desk"]["ceremony"]["dialogue"] != WRITTEN2["desk"]["ceremony"]["dialogue"]
 
 
 def ready(app, run_id, user="alice", seconds=8.0):

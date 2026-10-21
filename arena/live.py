@@ -53,7 +53,9 @@ class Show:
     premiere_ms: int
     starts_ms: int | None  # None while the cup has no running order
     ends_ms: int | None
-    slots: tuple[dict, ...]  # each shutter, and each match as a replay slot with its clip version
+    # each shutter, each desk segment of the cup's show by its name, and each match as a replay slot with its clip
+    # version, called when the show has its call
+    slots: tuple[dict, ...]
     standby: dict  # {"title"}: what the screen waits for
 
 
@@ -121,13 +123,18 @@ def shows(store, now: datetime) -> list[Show]:
             at, duration = start + segment["at_ms"], segment["duration_ms"]
             if segment["kind"] == "shutter":
                 slots.append({"kind": "shutter", "at_ms": at, "duration_ms": duration, "next": segment["next"]})
+            elif segment["kind"] == "desk":
+                # Peter and Ray at the desk: the screens fetch the segment from the cup's show by its name.
+                slots.append({"kind": "desk", "at_ms": at, "duration_ms": duration, "show": {
+                    "event": cup.event_id, "number": cup.number, "segment": segment["segment"]}})
             else:
                 # The order carries each clip's length, not its render: that is read here. A clip
                 # deleted to be rendered again has none: its media fail to load, and the screens hold
                 # the shutter's panel over its slot, as over a withdrawn run's.
                 state, clip = store.clip_state(segment["match_id"])
                 slots.append({"kind": "replay", "at_ms": at, "duration_ms": duration, "run_id": segment["match_id"],
-                              "clip": clip_version(clip) if state == "ready" else None, "media": "match"})
+                              "clip": clip_version(clip) if state == "ready" else None, "media": "match",
+                              **({"call": True} if segment.get("call") else {})})
         laid.append(Show(premiere, start, slots[-1]["at_ms"] + slots[-1]["duration_ms"], tuple(slots), standby))
     return sorted(laid, key=lambda show: show.premiere_ms)
 
