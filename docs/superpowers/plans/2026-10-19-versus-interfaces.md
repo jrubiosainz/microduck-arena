@@ -94,8 +94,9 @@ here. If a plan must change a name, it changes this file in the same commit.
   `_compiled`, `compile_course`, `duck_prefix(k)` (`""` / `"duck{k}/"`), `compile_stage(manifest,
   layout)` (duck 0 from `build_course_xml`, others attached on a frame, keyframe patched after
   compile). `arena/runner.py`: `_Addresses.of`, `_streams(event_id, seed, k)`, `_start(manifest,
-  model, policies, yaws_deg, seed, commands) -> (_Sim, settle)`, `_Sim.step/record`, `run_once`,
-  `run_stage`; `run_once` stops on the fall rule (trunk gravity z above `fall_gravity_z` for
+  model, policies, yaws_deg, seed, commands, sites=()) -> (sim, settle, settle_points)` (`settle_points`:
+  (settle steps + 1, len(sites), 3); `run_once` and `run_stage` take `sim, settle, _`), `_Sim(model, data,
+  ducks, sites=())`, `_Sim.step/record/points(out)`, `run_once`, `run_stage`; `run_once` stops on the fall rule (trunk gravity z above `fall_gravity_z` for
   `fall_hold_s`), and `arena/stage.py fell_at(trace, termination)` reads the same rule off a
   `(frames, 21)` trace. The legs robot's `neck` body sits in `trunk_base` at `pos="0.026 0.0145 0.0324215"`
   (`arena/assets/robot/legs/robot_allcollisions.xml:181`); there is no site there today.
@@ -124,8 +125,8 @@ here. If a plan must change a name, it changes this file in the same commit.
   Nothing is said during a replay today.
 - Front: hash router `app/src/router.js` (`parseRoute`, `*Href`, `themeFor`, `dress`),
   `main.js show()`, `api.js` (fetch wrappers; traces are float32 with `X-Duck-Count`),
-  `format.js` (`formatScore(seconds, {finished})`, `isStage`), `course.js` (`buildCourse`; the
-  served `walls` are not drawn today), `viewer.js createViewer(...).setLanes(entries, event, opts)`,
+  `format.js` (`formatScore(seconds, {finished})`, `isStage`), `course.js` (`buildCourse`; a lane's
+  served `walls` are not drawn today; a tug's served `ropes` and `posts` are drawn by `tug-venue.js`), `viewer.js createViewer(...).setLanes(entries, event, opts)`,
   `replay.js applyFrame`, `rig.js`, `run.js`, `race.js`, `home.js` + `roundcard.js
   roundCard(event, rows, {number, corner})`, `player.js`. vitest + jsdom, no WebGL in tests.
 - Tests: `tests/test_store.py make_record(**overrides)`; `test_routes_read.py client(tmp_path)` →
@@ -373,6 +374,8 @@ export function tugSpan(frames)
 export function buildTugVenue(event, spectators, reachy, branding, clearance)   // app/src/tug-venue.js: the ring drawn from the served ropes and posts
 export function buildString()                       // { group, update(points), dispose() }: a Catmull-Rom tube of radius 0.004 m through the 17 points, the red ribbon at point 8
 export function getString(runId), getBoutString(matchId, k)   // app/src/api.js: Promise<{settle: Float32Array, trace: Float32Array}>
+// app/src/workshop/api.js: getCheckpoint returns `string` (Float32Array) when the body holds `string_b64`
+// a tug checkpoint's body (arena/workshop/evaluations.py, FORMAT = 3) gains `string_b64`: the timed string, little-endian float32
 // app/src/clip/score.js
 export function clipVerdict(run)                    // {stamp, pass}: stamps a tug's traced status; `clip/plan.js stampLane(run, laneCount)`
 ```
@@ -565,6 +568,7 @@ API (Plan C, `arena/web/routes_cups.py`, `now()` read per request, patched by te
 - `GET /api/events/{id}/cups/{number}` → `{"event", "open", "min_entrants", **cup_view(cup, now)}`
 - `GET /api/matches/{match_id}` → the match once revealed (404 before): `{match_id, event, cup, round, group, title, a, b, bouts, wins, winner, decided_by, clip}` (`a`/`b` are `Entrant.view()`, `winner` `"a"`/`"b"`)
 - `GET /api/matches/{match_id}/bouts/{k}/trace`, `…/settle` (float32, `X-Duck-Count: 2`) — 404 before the reveal.
+- `GET /api/matches/{match_id}/bouts/{k}/string` (the string's wire, see Plan A; Plan G Task 5) — 404 before the reveal.
 - `GET /api/matches/{match_id}/clip/{name}` (a clip file) — 404 before `airs_at − PREFETCH`. No route says where a
   match's clip stands: the match page reads `clip` off the match, the live off its slot.
 
@@ -593,10 +597,12 @@ Points: `receipts(…, cups: Sequence[Cup] = (), now)`; acts `cup_champion` 250,
 export function cupHref(eventId, number); export function matchHref(matchId)
 // app/src/api.js
 export function getCups(eventId); export function getCup(eventId, number); export function getMatch(matchId)
-export function getBoutTrace(matchId, k); export function getBoutSettle(matchId, k)
+export function getBoutTrace(matchId, k); export function getBoutSettle(matchId, k); export function getBoutString(matchId, k)   // the last: Promise<{settle: Float32Array, trace: Float32Array}>
 export function matchClipUrl(matchId, name, version)
 // app/src/bouts.js
-export function boutLane(match, k, traces, settles)   // {tug: "bout", ducks: [west, east]}, each {trace, settle, livery, name} (the entrant's on-air name), a/b placed by bouts[k].a_side
+export function boutLane(match, k, traces, settles, string)   // {tug: "bout", ducks: [west, east], string: {trace, settle?}}, each duck {trace, settle, livery, name} (the entrant's on-air name), a/b placed by bouts[k].a_side
+// app/src/replay.js (Plan G Task 6): leadIn gains a `width` parameter (TRACE_WIDTH for the ducks, STRING_WIDTH for the string)
+// app/src/cast.js: replayLane(event, cast, traces, lane, string)
 // app/src/clip/match.js: matchPlan(bouts), boutAt(plan, i), scoreAt(plan, match, i), matchWords(match);
 //   BOUT_HOLD_S = 6: each bout's last pose holds this long, its result on the bug, before the next bout or the outro
 // app/src/format.js: countdown(ms); app/src/cup.js: cupPage, renderCup, cupCorner(eventId, cups, nowMs)
@@ -621,7 +627,7 @@ class Moment:
     kind: str            # "start" | "lead" | "ground" | "edge" | "slip" | "pit" | "time"
     side: str | None     # "west" | "east"
 
-def moments(trace: np.ndarray, course: Tug, offset) -> list[Moment]
+def moments(trace: np.ndarray, string: np.ndarray, course: Tug) -> list[Moment]   # the marker is the string's middle point
 #   "time" only when nobody went into the pit
 ```
 
