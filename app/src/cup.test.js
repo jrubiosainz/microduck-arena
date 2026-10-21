@@ -76,4 +76,10 @@ describe("the home card's cup corner", () => {
     expect(cupCorner("tug-of-war", cups([{ number: 1, state: "drawn", premiere_at: "2026-10-30T17:00:00Z" }]), at("2026-10-30T17:05:00Z")).text).toBe("Cup #1 · starting soon");
     expect(cupCorner("tug-of-war", cups([{ number: 1, state: "aired" }]), at("2026-11-06T13:30:00Z")).text).toBe("Cup #2 · in 3h 30m");
   });
+
+  it("points to the oldest cup not yet aired: a late cup airs before the one closed after it", () => {
+    const late = { next: { number: 3 }, cups: [{ number: 2, state: "drawn", premiere_at: "2026-11-06T17:00:00Z" },
+      { number: 1, state: "drawn", premiere_at: "2026-10-30T17:00:00Z" }] };
+    expect(cupCorner("tug-of-war", late, Date.parse("2026-11-06T16:00:00Z"))).toEqual({ text: "Cup #1 · starting soon", href: "#/c/tug-of-war/1" });
+  });
 });

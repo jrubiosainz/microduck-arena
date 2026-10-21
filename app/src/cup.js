@@ -268,9 +268,10 @@ export async function renderCup(root, eventId, number, state) {
   settleIdentity(root, await identity);
 }
 
-/** What a versus card's corner says: the cup on now or next, and how soon. */
+/** What a versus card's corner says: the cup on now or next, and how soon. `cups` come newest first, and the
+ * oldest not yet aired is the next on air: a late cup airs before the one closed after it. */
 export function cupCorner(eventId, { next, cups }, nowMs) {
-  const cup = cups.find((c) => ["drawn", "ready", "airing"].includes(c.state)) ?? next;
+  const cup = cups.findLast((c) => ["drawn", "ready", "airing"].includes(c.state)) ?? next;
   return { text: `Cup #${cup.number} · ${soon(cup, nowMs)}`, href: cupHref(eventId, cup.number) };
 }
 
