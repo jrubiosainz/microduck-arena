@@ -73,7 +73,8 @@ def test_after_the_final_the_champion_and_the_next_cup():
     over = texts(CUP, 9)
     assert "puller 0 (@p0) wins the Tug of War Cup #1, beating puller 1 (@p1) 2–0 in the final." in over
     assert "Cup #2 premieres on Friday 6 November at 18:00, Europe/Paris time." in over
-    assert ("puller 0 (@p0)'s cup: Group A against puller 4 (@p4), won 2–0; Group A against puller 2 (@p2), "
+    assert ("puller 0 (@p0)'s cup, 4 of 4 matches won, 8 bouts won and 0 lost: Group A against puller 4 (@p4), "
+            "won 2–0; Group A against puller 2 (@p2), "
             "won 2–0; semi-final against puller 3 (@p3), won 2–0; final against puller 1 (@p1), won 2–0.") in over
     view = screen_view(CUP, 9, MANIFEST)
     assert (view["champion"], view["stage"], view["next"]) == ("puller 0", "Champion", None)
@@ -121,6 +122,7 @@ def test_a_champion_who_lost_a_group_match_says_so():
     upset = played_cup(upsets=frozenset({2}))
     assert upset.matches[2].winner == 4 and upset.matches[-1].winner == 0
     assert "Group A against puller 4 (@p4), lost 2–0" in " ".join(texts(upset, 9))
+    assert "puller 0 (@p0)'s cup, 3 of 4 matches won, 6 bouts won and 2 lost: " in " ".join(texts(upset, 9))
 
 
 def test_a_cup_whose_last_champion_left_says_who_won():

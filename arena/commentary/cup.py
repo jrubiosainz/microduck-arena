@@ -260,13 +260,20 @@ def _ending_facts(cup: Cup, manifest: Manifest) -> list[Fact]:
     title = f"{manifest.title} Cup #{cup.number}"
     crowned = (f"going through on rating after {score_text(final)} against {runner_up}" if final.decided_by == "rating"
                else f"beating {runner_up} {score_text(final)}")
+    path = [m for m in cup.matches if final.winner in (m.a, m.b)]
     steps = [f"{f'Group {m.group}' if m.group else m.round} against "
              f"{duck(cup.entrants[m.b if m.a == final.winner else m.a])}, {_verdict(m, m.winner == final.winner)}"
-             for m in cup.matches if final.winner in (m.a, m.b)]
+             for m in path]
+    # Counted here: asked to look back on the cup, the desk counts the path itself ("four matches, eight
+    # bouts") into numbers no fact prints.
+    won = sum(m.winner == final.winner for m in path)
+    bouts = [m.wins if m.a == final.winner else m.wins[::-1] for m in path]
+    tally = (f"{won} of {len(path)} matches won, {sum(w for w, _ in bouts)} bouts won and "
+             f"{sum(lost for _, lost in bouts)} lost")
     premiere = cup_times(manifest.cup, cup.number + 1)[1].astimezone(ZoneInfo(manifest.cup.timezone))
     return [
         _fact("cup#/champion", f"{champion} wins the {title}, {crowned} in the final."),
-        _fact("cup#/path", f"{champion}'s cup: {'; '.join(steps)}."),
+        _fact("cup#/path", f"{champion}'s cup, {tally}: {'; '.join(steps)}."),
         _fact("cup#/next-cup", f"Cup #{cup.number + 1} premieres on {premiere:%A %-d %B at %H:%M}, "
               f"{manifest.cup.timezone} time."),
     ]
