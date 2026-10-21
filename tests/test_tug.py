@@ -8,7 +8,7 @@ import pytest
 from arena import runner, tug
 from arena.assets import ASSET_ROOT
 from arena.constants import CTRL_DT
-from arena.course import compile_tug, string_offset
+from arena.course import compile_tug, string_offset, string_sites
 from arena.manifest import BoutRules, load_event
 from arena.policy import load_policy
 from arena.runner import _Addresses, _record
@@ -97,6 +97,28 @@ def test_the_string_never_stretches_past_its_length():
     ends = string_ends(run_bout(TUG, walker, walker, 1).trace, OFFSET)
     length = np.linalg.norm(ends[0] - ends[1], axis=1)
     assert TUG.course.string_m - 0.01 <= length.max() <= TUG.course.string_m + 0.01   # taut, never longer
+
+def _string_bout(manifest, west, east, seed):
+    """run_bout's timed steps, read off the physics after each: the distance between the two ducks'
+    string ends, and the larger of the two ties' errors (a duck's end to the string's own end)."""
+    model = compile_tug(manifest)
+    command = np.asarray(manifest.command, dtype=np.float64)
+    sim, _ = runner._start(manifest, model, [west, east], [0.0, 180.0], seed, [command, command])
+    ends = [model.site(name).id for name in ("string_end", "duck1/string_end")]
+    tips = string_sites(model)[[0, -1]]
+    gaps, ties = [], []
+    for _ in range(round(manifest.bout.time_limit_s / CTRL_DT)):
+        sim.step([command, command])
+        assert not runner._reset_by_mujoco(sim.data)
+        at = sim.data.site_xpos
+        gaps.append(float(np.linalg.norm(at[ends[0]] - at[ends[1]])))
+        ties.append(float(np.linalg.norm(at[ends] - at[tips], axis=1).max()))
+    return gaps, ties
+
+def test_a_bout_on_the_string_holds_together():
+    """The reference against itself, 4 s of timed steps: no reset, ends never past 1.005 m, ties within 1 cm."""
+    gaps, ties = _string_bout(SHORT, reference_duck(TUG), reference_duck(TUG), 1)   # _start + sim.step as run_bout, each step read off data
+    assert max(gaps) <= 1.005 and max(ties) <= 0.01
 
 def _explode_at(monkeypatch, bad_step):
     """MuJoCo resets the simulation on timed step `bad_step`, as the runner's own check would say."""

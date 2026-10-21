@@ -358,9 +358,11 @@ def test_a_tug_is_rated_by_one_bout_a_seed_against_the_reference(monkeypatch):
     assert (result.trace[:, :, 10] == 4).all()
 
 
-def test_the_reference_against_itself_wins_no_ground_to_speak_of():
+def test_the_reference_against_itself_gains_no_ground_on_the_marker():
+    """A pit may still happen: the string's weight hanging in it can draw a stalemate into the
+    pit (spec 2026-10-21). Every bout the marker decides stays within 10 cm of the centre line."""
     result = evaluate(TUG, reference_duck(TUG))
-    assert abs(result.score) < 10.0 and not [s for s in result.per_seed if s.status.startswith("pit")]
+    assert all(abs(s.score_cm) < 10.0 for s in result.per_seed if not s.status.startswith("pit"))
     assert result.trace.shape[0] == 2 and result.settle.shape == (2, 26, 21)
 
 

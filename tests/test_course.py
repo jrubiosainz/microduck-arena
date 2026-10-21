@@ -9,6 +9,7 @@ from arena.actuator import ARMATURE, FORCE_LIMIT, SOLIMP_FRICTION, SOLREF_FRICTI
 from arena.constants import DEFAULT_POSE, JOINT_NAMES, TIMESTEP
 from arena.course import (
     SPAWN_HEIGHT_M,
+    STRING_TIE_SOLIMP,
     build_course_xml,
     compile_course,
     compile_stage,
@@ -21,6 +22,7 @@ from arena.course import (
     ring_posts,
     ring_ropes,
     string_offset,
+    string_sites,
     tug_layout,
 )
 from arena.manifest import load_event
@@ -373,13 +375,36 @@ def test_a_tug_is_two_ducks_neck_to_neck_and_nothing_else():
     west, east = tug_layout(TUG.course)
     assert (west.x, west.y, west.yaw_deg, east.x, east.y, east.yaw_deg) == pytest.approx((-0.526, -0.0145, 0, 0.526, 0.0145, 180))
     model = compile_tug(TUG)
-    assert model.nu == 28 and model.ntendon == 1 and len(model.key("STAND").ctrl) == 28
-    string = model.tendon("string").id
-    assert model.tendon_limited[string] and list(model.tendon_range[string]) == [0.0, 1.0]
+    assert model.nu == 28 and len(model.key("STAND").ctrl) == 28
     data = _standing(model)
     np.testing.assert_allclose(data.site_xpos[model.site("string_end").id], [-0.5, 0, 0.1524215], atol=1e-9)
     np.testing.assert_allclose(data.site_xpos[model.site("duck1/string_end").id], [0.5, 0, 0.1524215], atol=1e-9)
-    assert data.ten_length[string] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_the_string_is_the_measured_one():
+    model = compile_tug(TUG)
+    segs = [model.body(f"string/seg{k}") for k in range(16)]
+    assert [round(float(s.mass[0]), 7) for s in segs] == [0.015] + [0.0035714] * 14 + [0.015]
+    assert model.joint("string/root").type[0] == mujoco.mjtJoint.mjJNT_FREE and model.body(model.joint("string/root").bodyid[0]).name == "string/seg8"
+    hinges = [model.joint(f"string/j{k}{a}") for k in range(16) if k != 8 for a in "yz"]
+    assert {int(j.type[0]) for j in hinges} == {mujoco.mjtJoint.mjJNT_HINGE} and len(hinges) == 30
+    assert [list(model.joint(f"string/j3{a}").axis) for a in "yz"] == [[0, 1, 0], [0, 0, 1]]
+    dofs = [d for d in range(model.nv) if model.body(model.dof_bodyid[d]).name.startswith("string/")]
+    assert len(dofs) == 36 and set(model.dof_armature[dofs]) == {1e-6}
+    assert set(model.dof_damping[[d for d in dofs if model.dof_jntid[d] != model.joint("string/root").id]]) == {0.003}
+    assert not model.dof_damping[[d for d in dofs if model.dof_jntid[d] == model.joint("string/root").id]].any()   # the root: armature only, as measured
+    cap = model.geom("string/cap0")
+    assert (cap.size[0], cap.size[1], cap.contype[0], cap.conaffinity[0], cap.priority[0]) == pytest.approx((0.004, 0.03125, 0, 1, 1))
+    assert list(cap.friction) == pytest.approx([1.0, 0.005, 0.0001])
+    ties = [model.eq(e) for e in range(model.neq)]
+    assert [(model.site(t.obj1id[0]).name, model.site(t.obj2id[0]).name) for t in ties] == [("string_end", "string/p0"), ("duck1/string_end", "string/p16")]
+    assert all(t.type[0] == mujoco.mjtEq.mjEQ_CONNECT and list(t.solref) == pytest.approx([0.01, 1.0]) for t in ties)
+    assert all(list(t.solimp) == pytest.approx(STRING_TIE_SOLIMP) for t in ties)   # MuJoCo's, not the duck MJCF's default
+    assert model.ntendon == 0 and model.nu == 28 and model.nexclude == 2
+    data = _standing(model)   # the STAND keyframe, forwarded
+    points = data.site_xpos[string_sites(model)]
+    np.testing.assert_allclose(points[[0, 8, 16]], [[-0.5, 0, 0.1524215], [0, 0, 0.1524215], [0.5, 0, 0.1524215]], atol=1e-9)
+    assert np.linalg.norm(np.diff(points, axis=0), axis=1) == pytest.approx([0.0625] * 16)
 
 
 def test_the_string_leaves_every_ducks_addresses_alone():

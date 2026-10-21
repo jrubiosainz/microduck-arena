@@ -40,7 +40,26 @@ RIG_XML = {
 WALL_THICKNESS_M = 0.05
 
 STRING_SITE = "string_end"  # on each duck's trunk_base (prefixed for duck 1), at the neck's base
-STRING = "string"  # the spatial tendon
+# The string's names: bodies seg{k}, joints root, j{k}y and j{k}z, geoms cap{k}, sites p{k}.
+STRING = "string/"
+# The string's numbers are the rope study's (2026-10-21), measured over 40 bouts at the 5 ms
+# step; each step down from them was unstable there, so none is ever lowered.
+STRING_SEGMENTS = 16  # capsules of 6.25 cm: 24 blew up once in 40 bouts, 10 drapes in 10 cm links
+STRING_RADIUS_M = 0.004  # an 8 mm string: twice as thick was no steadier
+# At 32 g the ties stretched 2 to 18 cm and bouts reset whatever the segment count: stability
+# follows each segment's mass.
+STRING_MASS_KG = 0.080
+# Each end piece of the 80 g (the 14 others 3.57 g): a tie is as stiff as the tip it holds is heavy.
+STRING_END_MASS_KG = 0.015
+STRING_DAMPING = 0.003  # N m s/rad a hinge: 1e-4 blew up in 1.4 s, 1e-3 overshot the length by 2 %
+# On every degree of freedom, the free root's too (which has no damping): without it, training's
+# float32 solve turned to NaN within half a second.
+STRING_ARMATURE = 1e-6
+# Two timesteps, the stiffest MuJoCo allows: the default 0.02 let the ends get 1.0108 m apart.
+STRING_TIE_SOLREF = (0.01, 1.0)
+# The study's, MuJoCo's default: the duck MJCF's stiffer equality default was never measured.
+STRING_TIE_SOLIMP = (0.9, 0.95, 0.001, 0.5, 2.0)
+STRING_FRICTION = (1.0, 0.005, 0.0001)  # 0.3 reset 2 bouts in 20, 0.1 reset 7
 PLATFORM_OVERRUN_M = 20.0  # the platforms run this far past the ring: nobody walks off the world
 
 RING_ROPES_M = (0.06, 0.12, 0.18)  # the ropes' axes over the canvas, bottom to top
@@ -407,14 +426,96 @@ def _posed(
     return model
 
 
+def string_sites(model: mujoco.MjModel) -> np.ndarray:
+    """The ids of the string's STRING_SEGMENTS + 1 points, its sites p{k}, west to east."""
+    return np.array([model.site(f"{STRING}p{k}").id for k in range(STRING_SEGMENTS + 1)])
+
+
+def _add_string(spec: mujoco.MjSpec, a, b) -> None:
+    """The string, straight from world point `a` to `b` due east of it (the two ducks'
+    STRING_SITE at the start): STRING_SEGMENTS capsules in one tree, rooted by a free joint at
+    the middle segment, two chains out to the ends. Rooted at one end, the far tie came out soft
+    (0.35 m off against 0.02 m): unfair between the sides. Each joint is two hinges, y then z: no
+    twist, which a round chain cannot show. Segment k carries the site p{k} at its west end, the
+    last one p{N} at its east end too. Each end is tied to its duck's STRING_SITE by a `connect`,
+    and each end piece is left out of the collisions with the trunk it is tied to. The string
+    never collides with itself (contype 0) and touches everything else, its own contact numbers
+    winning (priority 1; MuJoCo's default solref and solimp: stiffer ones blew up in 0.14 s)."""
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    n, mid = STRING_SEGMENTS, STRING_SEGMENTS // 2
+    seg = float(np.linalg.norm(b - a)) / n
+    inner = (STRING_MASS_KG - 2 * STRING_END_MASS_KG) / (n - 2)
+
+    def segment(parent: mujoco.MjsBody, k: int, pos, west: float) -> mujoco.MjsBody:
+        """Segment k at `pos` in `parent`, its capsule running east from `west` on its x."""
+        body = parent.add_body(name=f"{STRING}seg{k}", pos=list(pos))
+        if k == mid:
+            body.add_freejoint(name=f"{STRING}root").armature = STRING_ARMATURE
+        else:
+            for axis, direction in (("y", [0, 1, 0]), ("z", [0, 0, 1])):
+                body.add_joint(
+                    name=f"{STRING}j{k}{axis}",
+                    type=mujoco.mjtJoint.mjJNT_HINGE,
+                    axis=direction,
+                    damping=STRING_DAMPING,
+                    armature=STRING_ARMATURE,
+                )
+        body.add_geom(
+            name=f"{STRING}cap{k}",
+            type=mujoco.mjtGeom.mjGEOM_CAPSULE,
+            fromto=[west, 0, 0, west + seg, 0, 0],
+            size=[STRING_RADIUS_M, 0, 0],
+            mass=STRING_END_MASS_KG if k in (0, n - 1) else inner,
+            contype=0,
+            conaffinity=1,
+            priority=1,
+            friction=list(STRING_FRICTION),
+        )
+        body.add_site(name=f"{STRING}p{k}", pos=[west, 0, 0])
+        if k == n - 1:
+            body.add_site(name=f"{STRING}p{n}", pos=[west + seg, 0, 0])
+        return body
+
+    root = segment(spec.worldbody, mid, (a + b) / 2, 0.0)
+    parent = root
+    for k in range(mid + 1, n):  # the east half: each segment hangs from its west end
+        parent = segment(parent, k, (seg, 0, 0), 0.0)
+    parent = root
+    for k in range(mid - 1, -1, -1):  # the west half: each segment hangs from its east end
+        parent = segment(parent, k, (0 if k == mid - 1 else -seg, 0, 0), -seg)
+
+    for duck, tip in enumerate((0, n)):  # west to the first point, east to the last
+        spec.add_equality(
+            type=mujoco.mjtEq.mjEQ_CONNECT,
+            objtype=mujoco.mjtObj.mjOBJ_SITE,
+            name1=duck_prefix(duck) + STRING_SITE,
+            name2=f"{STRING}p{tip}",
+            solref=list(STRING_TIE_SOLREF),
+            # Explicit: duck 0's MJCF, this spec's root, makes its equalities' default stiffer.
+            solimp=list(STRING_TIE_SOLIMP),
+        )
+    for duck, piece in enumerate((0, n - 1)):
+        spec.add_exclude(
+            bodyname1=duck_prefix(duck) + "trunk_base", bodyname2=f"{STRING}seg{piece}"
+        )
+
+
 def compile_tug(manifest: Manifest) -> mujoco.MjModel:
-    """A tug's model: the two ducks of `tug_layout`, tied neck to neck by STRING, which goes slack
-    but never stretches past string_m."""
+    """A tug's model: the two ducks of `tug_layout`, tied neck to neck by the string
+    (`_add_string`), which starts straight and exactly string_m long between their STRING_SITEs
+    as they stand. The STAND keyframe holds the string where it was built (its qpos0): left at
+    zero, its free joint's quaternion would be invalid."""
     layout = [(manifest.rig, start) for start in tug_layout(manifest.course, manifest.rig)]
-    spec = _troupe(manifest, layout, string_offset(manifest.rig))
-    string = spec.add_tendon(name=STRING)
-    string.wrap_site(STRING_SITE)
-    string.limited = True
-    string.range = [0.0, manifest.course.string_m]
-    string.wrap_site(duck_prefix(1) + STRING_SITE)
-    return _posed(_compiled(spec), manifest, layout)
+    ox, oy, oz = string_offset(manifest.rig)
+    spec = _troupe(manifest, layout, (ox, oy, oz))
+    (_, west), (_, east) = layout  # east is turned 180 degrees: its offset points west
+    _add_string(
+        spec,
+        (west.x + ox, west.y + oy, SPAWN_HEIGHT_M + oz),
+        (east.x - ox, east.y - oy, SPAWN_HEIGHT_M + oz),
+    )
+    model = _compiled(spec)
+    # The string, built last, holds the end of qpos, from its free root on.
+    string = slice(int(model.joint(f"{STRING}root").qposadr[0]), model.nq)
+    model.key_qpos[model.key(manifest.start.keyframe).id, string] = model.qpos0[string]
+    return _posed(model, manifest, layout)
