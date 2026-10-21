@@ -132,10 +132,14 @@ def _opening(cup: Cup, manifest: Manifest) -> Fact:
     count = len(cup.groups)
     shape = ("one group where everyone meets everyone, then a final between its top two" if count == 1 else
              f"{count} groups where everyone meets everyone, then a knockout between the top two of each")
+    # The course in numbers: told to open on "the course as the event fact describes it", a desk given none
+    # made the pit "50 centimetres wide".
+    course = (f"Two ducks tied by a {manifest.course.string_m:.1f} m string pull across a pit "
+              f"{manifest.course.pit_m * 100:.0f} cm wide, walking backwards. ")
     return _fact("cup#/cup", f"This is the {manifest.title} Cup #{cup.number}, {len(cup.entrants)} players: {shape}. "
-                 f"A match is first to {manifest.bout.bouts_to_win} bouts, the ducks swapping sides after each; a duck "
-                 "that drops into the pit loses the bout, and at the time limit the duck the marker moved away from "
-                 f"loses. Level after {manifest.bout.max_bouts} bouts, the higher rating goes through.")
+                 f"{course}A match is first to {manifest.bout.bouts_to_win} bouts, the ducks swapping sides after "
+                 "each; a duck that drops into the pit loses the bout, and at the time limit the duck the marker "
+                 f"moved away from loses. Level after {manifest.bout.max_bouts} bouts, the higher rating goes through.")
 
 
 def _rating_line(cup: Cup) -> Fact:
