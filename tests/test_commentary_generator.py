@@ -331,6 +331,11 @@ def test_the_call_prompt_says_only_the_pit_puts_a_duck_out():
     assert "knocked over stays in it and can still be dragged" in CALL_CONTEXT and "45 seconds" in CALL_CONTEXT
 
 
+def test_a_call_names_a_duck_never_its_player():
+    # The profile facts print handles; a call once said "Bout to Nico."
+    assert "Name a duck exactly as the moments print its name, never by its player's handle or name" in CALL_STYLE
+
+
 def test_a_call_starts_with_peter_or_ray():
     with pytest.raises(ValueError, match="peter or ray"):
         write_call(FACTS, [], "bob", lore=LORE, provider=None, model="m")
