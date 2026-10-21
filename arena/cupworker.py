@@ -48,6 +48,9 @@ DRAW_GRACE = timedelta(seconds=60)
 LOAD_PATIENCE = timedelta(minutes=10)
 # A match clip that failed is launched again this often, as long as it stays failed.
 CLIP_RETRY = timedelta(minutes=10)
+# A show held by an answer the model refused every time is asked again this often: on the next tick it would most
+# likely be refused again, at TRIES router calls each time.
+SHOW_RETRY = timedelta(minutes=10)
 TICK_S = 30
 
 
@@ -182,6 +185,7 @@ class CupWorker:
         self._relaunched: dict[str, datetime] = {}  # match id -> when its failed clip was last launched again
         self._tried: dict[tuple[str, int, str], datetime] = {}  # (event, number, "draw" | "play") -> first try here
         self._shows: dict[tuple[str, int], dict] = {}  # (event, number) -> the part of its show written so far
+        self._refused: dict[tuple[str, int], datetime] = {}  # (event, number) -> when its show was last refused
         self._stopped = threading.Event()
 
     def tick(self) -> None:
@@ -286,7 +290,7 @@ class CupWorker:
             return
         show = None
         if self.show is not None:
-            show = self._written_show(manifest, cup)
+            show = self._written_show(manifest, cup, now)
             if show is None:
                 return
         # Read again: a show takes minutes to write, and the live relies on an order fixed ORDER_LEAD before it starts.
@@ -298,17 +302,26 @@ class CupWorker:
         self.store.put_cup_files(cup.event_id, cup.number, {"order.json": json.dumps(order, indent=2).encode()})
         self.log(f"cups: {cup.event_id} #{cup.number} airs from {order['starts_at']}")
 
-    def _written_show(self, manifest: Manifest, cup: Cup) -> dict | None:
-        """The cup's show.json, written now when it is missing; None while its writer fails (the router down, a
-        segment refused every time), what it wrote kept for the next tick to resume from."""
+    def _written_show(self, manifest: Manifest, cup: Cup, now: datetime) -> dict | None:
+        """The cup's show.json, written now when it is missing; None while its writer fails, what it wrote kept to
+        resume from: on the next tick when the router was down, SHOW_RETRY after a segment refused every time."""
+        key = (cup.event_id, cup.number)
         stored = self.store.cup_file(cup.event_id, cup.number, "show.json")
         if stored is not None:
+            self._shows.pop(key, None)  # a write whose commit landed, though its call raised or a stale snapshot hid it
             return json.loads(stored)
-        title, key = f"{manifest.title} Cup #{cup.number}", (cup.event_id, cup.number)
+        if now - self._refused.get(key, now - SHOW_RETRY) < SHOW_RETRY:
+            return None
+        title = f"{manifest.title} Cup #{cup.number}"
         self.log(f"cups: writing the show of {title}")
         try:
             show = self.show(cup, self._shows.setdefault(key, {"desk": {}, "calls": {}}))
-        except Exception as exc:  # noqa: BLE001 — a show that cannot be written now is resumed next tick
+        except Exception as exc:  # noqa: BLE001 — a show that cannot be written now is resumed later
+            # Not at the top: the commentary package imports this module.
+            from .commentary.generator import Rejected
+
+            if isinstance(exc, Rejected):
+                self._refused[key] = now
             self.log(f"cups: the show of {title} waits ({type(exc).__name__}: {exc})")
             return None
         self.store.put_cup_files(cup.event_id, cup.number,

@@ -14,11 +14,13 @@ import pytest
 
 import arena
 from arena import cupworker
+from arena.commentary.generator import Rejected
 from arena.commentary.show import show_outline
 from arena.constants import NUM_JOINTS, OBS_SIZE, RUNNER_VERSION
 from arena.cup import Cup, cup_times, draw_groups, ends_at, iso, match_label, parse_iso
 from arena.cupworker import (
     LOAD_PATIENCE,
+    SHOW_RETRY,
     CupWorker,
     Standing,
     all_cups,
@@ -359,6 +361,60 @@ def test_a_restarted_worker_reads_the_show_it_wrote(tmp_path, no_physics):
     assert asked == [] and said == ["cups: tug-of-war #1 airs from 2026-10-23T16:00:00Z"]
     assert load_cup(store, "tug-of-war", 1).order == running_order(
         cup, {m.match_id: 10.0 for m in cup.matches}, datetime(2026, 10, 23, 16, tzinfo=UTC), show=written_show(cup))
+
+
+def test_a_show_refused_every_time_is_asked_again_ten_minutes_later_not_every_tick(tmp_path, no_physics):
+    """The answer the model refused TRIES times would most likely be refused on the next tick too."""
+    store, refused_at, given, said = ready_cup(tmp_path), datetime(2026, 10, 23, 15, tzinfo=UTC), [], []
+    clock = Clock(refused_at)
+
+    def write(cup, done):
+        given.append((clock.at, dict(done["desk"])))
+        if len(given) == 1:
+            done["desk"]["opening"] = {"kind": "opening"}
+            raise Rejected("model answer is not JSON")
+        return written_show(cup)
+
+    cups = worker(store, clock, show=write, log=said.append)
+    cups.tick()
+    for later in (timedelta(seconds=30), timedelta(seconds=60), SHOW_RETRY - timedelta(seconds=1)):
+        clock.at = refused_at + later
+        cups.tick()
+    assert [at for at, _ in given] == [refused_at] and load_cup(store, "tug-of-war", 1).order is None
+    assert said == ["cups: writing the show of Tug of War Cup #1",
+                    "cups: the show of Tug of War Cup #1 waits (Rejected: model answer is not JSON)"]
+    clock.at = refused_at + SHOW_RETRY
+    cups.tick()
+    assert given[1] == (refused_at + SHOW_RETRY, {"opening": {"kind": "opening"}})
+    assert load_cup(store, "tug-of-war", 1).order is not None
+
+
+class Stale:
+    """A store whose snapshot misses show.json on its first read, as a Hub slow to show its last commit."""
+    def __init__(self, store): self.store, self.reads = store, 0
+    def __getattr__(self, name): return getattr(self.store, name)
+    def cup_file(self, event_id, number, name):
+        self.reads += name == "show.json"
+        return None if name == "show.json" and self.reads == 1 else self.store.cup_file(event_id, number, name)
+
+
+def test_a_show_found_stored_after_all_drops_what_was_written_of_it(tmp_path, no_physics):
+    """The commit of show.json landed but its call raised (a timeout), or the snapshot was stale: the next tick
+    finds it stored."""
+    store, clock, asked = ready_cup(tmp_path), Clock(datetime(2026, 10, 23, 15, tzinfo=UTC)), []
+    store.put_cup_files("tug-of-war", 1, {"show.json": json.dumps(written_show(load_cup(store, "tug-of-war", 1))).encode()})
+
+    def write(cup, done):
+        asked.append(cup)
+        done["desk"]["opening"] = {"kind": "opening"}
+        return written_show(cup)
+
+    cups = worker(Stale(store), clock, show=write)
+    cups.tick()  # writes it again, and the store refuses a second show.json
+    assert len(asked) == 1 and load_cup(store, "tug-of-war", 1).order is None
+    cups.tick()
+    assert len(asked) == 1 and load_cup(store, "tug-of-war", 1).order is not None
+    assert cups._shows == {}
 
 
 def test_the_draw_waits_a_minute_past_the_close_for_an_entry_stamped_before_it(tmp_path, no_physics):
