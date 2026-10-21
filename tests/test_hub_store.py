@@ -243,6 +243,20 @@ def test_cup_files_are_one_commit_and_never_written_twice(tmp_path):
     assert hub.head == 1
 
 
+def test_a_bout_trace_is_fetched_when_it_is_read_not_with_the_snapshot(tmp_path):
+    """A cup of 25 entrants has some 150 bout traces: a boot would download every cup's, for a match page or a clip
+    that reads a few."""
+    hub = FakeHub(tmp_path)
+    hub.put("cups/tug-of-war/0001/draw.json", b"{}")
+    hub.put("cups/tug-of-war/0001/bouts/tug-of-war-0001-000-0.npz", b"bout")
+    hub.commit()
+    store = HubStore("org/runs", api=hub)
+    assert store.cup_numbers("tug-of-war") == [1]
+    assert hub.downloads[-1] == ["cups/tug-of-war/0001/draw.json"]
+    assert store.cup_file("tug-of-war", 1, "bouts/tug-of-war-0001-000-0.npz") == b"bout"
+    assert hub.downloads[-1][-1] == "cups/tug-of-war/0001/bouts/tug-of-war-0001-000-0.npz"
+
+
 def test_a_stale_snapshot_never_lets_a_cup_file_be_written_twice(tmp_path):
     """A slow Hub keeps the last snapshot; the write-once check asks the Hub itself, so a second draw.json (a new
     secret over computed matches) never lands."""

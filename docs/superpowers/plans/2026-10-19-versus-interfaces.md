@@ -465,8 +465,8 @@ States: `"open"` (before close), `"drawn"` (closed, not ready),
 
 Store (Plan C), dataset layout `cups/{event_id}/{number:04d}/`: `draw.json` (everything but
 `matches` and `order`; written first, so a restart recomputes the same cup from its secret),
-`matches.json`, `bouts/{match_id}-{k}.npz` (`trace.encode`), `order.json`, and Plan D's
-`show.json`.
+`matches.json`, `bouts/{match_id}-{k}.npz` (`trace.encode`; `HubStore` leaves them out of its snapshot
+and `cup_file` fetches one when it is read), `order.json`, and Plan D's `show.json`.
 
 ```python
 # Store protocol, LocalStore, HubStore

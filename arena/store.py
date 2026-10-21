@@ -9,6 +9,7 @@ The leaderboard is never stored, only derived (see index.py).
 
 import json
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -30,6 +31,8 @@ _TAIL_BITS = 60  # 12 base32 chars
 # The files a ready clip holds beside its clip.json (arena/clips.py writes them,
 # routes_read.py serves them by these exact names).
 CLIP_MEDIA = ("landscape.mp4", "vertical.mp4", "poster.png")
+# A cup's bout traces in the dataset: the Hub store reads them one by one, never in its snapshot.
+_BOUT = re.compile(r"cups/[^/]+/\d{4}/bouts/")
 
 # The longest a vote's writer waits between two tries at the Hub.
 BALLOT_RETRY_CAP_S = 60.0
@@ -718,8 +721,10 @@ class HubStore:
         from huggingface_hub.hf_api import RepoFile
 
         # The clips' media stay out — a boot would otherwise download every video
-        # ever rendered; clip_file fetches one on demand. So do the votes: the
-        # store never reads them (HubBallots does), and each would be a download.
+        # ever rendered; clip_file fetches one on demand. So do the cups' bout
+        # traces, a hundred and more a cup, which cup_file fetches when one is
+        # read. So do the votes: the store never reads them (HubBallots does), and
+        # each would be a download.
         tree = {
             entry.path: entry.blob_id
             for entry in self.api.list_repo_tree(
@@ -727,6 +732,7 @@ class HubStore:
             )
             if isinstance(entry, RepoFile)
             and not entry.path.endswith((".mp4", ".png"))
+            and not _BOUT.match(entry.path)
             and not entry.path.startswith("votes/")
         }
         files = {
@@ -889,7 +895,14 @@ class HubStore:
         self.refresh()
 
     def cup_file(self, event_id: str, number: int, name: str) -> bytes | None:
-        return self.snapshot().cup_file(event_id, number, name)
+        snapshot = self.snapshot()
+        path = f"cups/{event_id}/{number:04d}/{name}"
+        if not _BOUT.match(path):
+            return snapshot.cup_file(event_id, number, name)
+        # Left out of the snapshot: fetched at its head, cached by the Hub cache.
+        return Path(
+            self.api.hf_hub_download(self.repo_id, path, repo_type="dataset", revision=self._commit)
+        ).read_bytes()
 
     def cup_numbers(self, event_id: str) -> list[int]:
         return self.snapshot().cup_numbers(event_id)
