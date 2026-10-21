@@ -1,7 +1,9 @@
 // Peter and Ray in their booth: two of the viewer's rigs in the STAND pose,
 // only neck and head moving, a beak on a pivot, on the booth's set, lit like
 // a studio. The set is authored z up under one root turned like the rig's
-// own; the camera and the lights are converted out of that frame.
+// own; the camera and the lights are converted out of that frame. One booth
+// serves the page: a run's airing puts the run's poster on the CRT, the cup's
+// desk stands the cup screen on the back wall in place of the pegboard.
 
 import {
   ACESFilmicToneMapping,
@@ -29,7 +31,8 @@ import { STAND, TRUNK_HEIGHT, attachMeshes, buildRigTree, jawPivot, setJoint } f
 import { loadAssets } from "../viewer.js";
 import { BOOTH_TURN, direct } from "./direction.js";
 import { poseAt } from "./score.js";
-import { booth as buildSet, checkerboard, token } from "./set.js";
+import { SCREEN_PX, drawCupScreen } from "./screen.js";
+import { booth as buildSet, checkerboard, standScreen, token } from "./set.js";
 
 // Which joint holds which index of a trace frame's fourteen angles. A glance's
 // yaw is signed so Peter looks toward Ray and Ray toward Peter.
@@ -98,7 +101,10 @@ export async function createBooth(canvas) {
   const root = new Group();
   root.rotation.x = -Math.PI / 2;
   scene.add(root);
-  const set = buildSet();
+  const screen = document.createElement("canvas");
+  [screen.width, screen.height] = SCREEN_PX;
+  const set = buildSet({ screen });
+  const screenMap = set.getObjectByName("cup screen").material[3].map;
   root.add(set);
   const floor = new Mesh(new PlaneGeometry(1.3, 0.9), new MeshLambertMaterial({ map: checkerboard() }));
   floor.rotation.z = BOOTH_TURN;
@@ -114,8 +120,8 @@ export async function createBooth(canvas) {
   // The CRT's glass shows the poster of the run under discussion. A box's
   // faces are +x, -x, +y, -y, +z, -z; the screen is the -y face, toward the desk.
   const glass = set.getObjectByName("CRT glass");
-  const screen = new MeshBasicMaterial({ color: token("deep-ink") });
-  glass.material = [glass.material, glass.material, glass.material, screen, glass.material, glass.material];
+  const crt = new MeshBasicMaterial({ color: token("deep-ink") });
+  glass.material = [glass.material, glass.material, glass.material, crt, glass.material, glass.material];
 
   const actors = Object.fromEntries(
     Object.entries(SEATS).map(([speaker, seat]) => {
@@ -137,21 +143,28 @@ export async function createBooth(canvas) {
   let poster = null;
 
   return {
+    /** A desk segment's commentary carries the cup screen's view; a run's airing, a poster. */
     prepare(commentary, posterUrl) {
       plan = commentary.plan;
       cameraAt = direct(plan);
+      if (commentary.screen) {
+        drawCupScreen(screen, commentary.screen);
+        screenMap.needsUpdate = true;
+      }
+      standScreen(set, Boolean(commentary.screen));
       poster?.dispose();
       poster = null;
-      screen.map = null;
-      screen.color.copy(token("deep-ink"));
-      screen.needsUpdate = true;
+      crt.map = null;
+      crt.color.copy(token("deep-ink"));
+      crt.needsUpdate = true;
+      if (!posterUrl) return;
       loader.loadAsync(posterUrl).then((texture) => {
         if (plan !== commentary.plan) return;
         texture.colorSpace = SRGBColorSpace;
         poster = texture;
-        screen.map = texture;
-        screen.color.set(0xffffff);
-        screen.needsUpdate = true;
+        crt.map = texture;
+        crt.color.set(0xffffff);
+        crt.needsUpdate = true;
       }).catch(() => {});
     },
     draw(ms) {

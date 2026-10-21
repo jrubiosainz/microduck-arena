@@ -632,5 +632,9 @@ export function clipGain(plan, offsetMs)      // DUCKED inside a caption of the 
 // app/src/live/replay.js: volume(gain) sets the playing clip's volume
 // app/src/live/screen.js — new
 export function drawCupScreen(canvas, view)   // groups, then the bracket, next match highlighted, ducks by their on-air name
-// app/src/live/set.js: booth({ screen }) swaps the pegboard for the cup screen
+// app/src/live/set.js: booth({ screen }) stands the cup screen (the canvas as a texture) ready, hidden, at the
+//   pegboard's place; standScreen(set, shown) stands it in place of the pegboard, or the pegboard back
+// app/src/live/booth.js: one booth on the live page (Ruling F): createBooth(canvas) owns a SCREEN_PX canvas;
+//   prepare(commentary, posterUrl | null) draws commentary.screen (a desk segment's view) and stands it, a
+//   commentary without one stands the pegboard back; a poster is loaded only when given one
 ```
