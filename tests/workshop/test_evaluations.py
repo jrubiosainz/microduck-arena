@@ -38,6 +38,7 @@ def test_a_checkpoint_is_exported_by_a_dry_run_publish_and_raced(workshop, fakes
     assert body["cast"] is None  # a race: one duck, nothing to place or hear
     assert body["checkpoint"] == 1 and body["score"] < 50
     assert len(base64.b64decode(body["trace_b64"])) % (4 * TRACE_WIDTH) == 0
+    assert "string_b64" not in body
     assert body["ducks"] == 1  # a race is one duck
     (publish,) = fakes.calls("publish")
     assert publish[3:7] == ["--run", str(run), "--checkpoint", "1"]
@@ -163,3 +164,5 @@ def test_a_tug_checkpoint_is_rated_against_the_reference(checkout, fakes, hub):
     assert all("score_cm" in seed for seed in body["per_seed"])
     assert "bench" not in body
     assert body["ducks"] == 2  # the entry's duck and the reference
+    frames = len(base64.b64decode(body["trace_b64"])) // (2 * TRACE_WIDTH * 4)
+    assert len(base64.b64decode(body["string_b64"])) == frames * 51 * 4 and body["format"] == 3

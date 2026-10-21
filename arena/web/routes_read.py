@@ -30,7 +30,7 @@ from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, revealed_final, standings
 from ..store import CLIP_MEDIA, RunRecord, clip_version
 from ..timeline import EDGE_MARGIN_M, MIN_SPACING_M
-from ..trace import decode, decode_settle
+from ..trace import decode, decode_settle, decode_string
 
 router = APIRouter(prefix="/api")
 
@@ -463,6 +463,33 @@ def run_settle(run_id: str, request: Request) -> Response:
     store = request.app.state.store
     _find_run(store, run_id)
     return frames_response(decode_settle(store.trace(run_id)))
+
+
+@router.get("/runs/{run_id}/string")
+def run_string(run_id: str, request: Request) -> Response:
+    """A tug's string, the settle's frames then the timed ones (`points_response`); a 404 for a run without one."""
+    store = request.app.state.store
+    _find_run(store, run_id)
+    try:
+        settle, string = decode_string(store.trace(run_id))
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"run {run_id} has no string") from None
+    return points_response(settle, string)
+
+
+def points_response(settle: np.ndarray, string: np.ndarray) -> Response:
+    """A string's (frames, 17, 3) points on the wire: little-endian float32, the settle's frames then the
+    timed ones. X-Frame-Count counts the timed frames, X-Settle-Frame-Count the settle's."""
+    return Response(
+        content=np.ascontiguousarray(np.concatenate([settle, string]), dtype="<f4").tobytes(),
+        media_type="application/octet-stream",
+        headers={
+            "X-Frame-Count": str(len(string)),
+            "X-Settle-Frame-Count": str(len(settle)),
+            "X-Point-Count": str(string.shape[1]),
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 def frames_response(ducks: np.ndarray) -> Response:

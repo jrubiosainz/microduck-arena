@@ -17,6 +17,7 @@ import {
   getStandings,
   getSettle,
   getShow,
+  getString,
   getTrace,
   matchClipUrl,
 } from "./api.js";
@@ -82,6 +83,15 @@ describe("the error contract", () => {
     const settles = await getSettle("01OK");
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/runs/01OK/settle");
     expect(settles.map((duck) => [...duck])).toEqual([[0.5], [0.25]]);
+  });
+});
+
+describe("a tug's string", () => {
+  it("is cut into its settle and its timed frames at the settle's count", async () => {
+    respondWith({ bytes: new Float32Array(5 * 51).buffer, headers: { "X-Frame-Count": "3", "X-Settle-Frame-Count": "2" } });
+    const { settle, trace } = await getString("R1");
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/runs/R1/string");
+    expect([settle.length, trace.length]).toEqual([102, 153]);
   });
 });
 

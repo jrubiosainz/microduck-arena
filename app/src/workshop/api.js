@@ -34,11 +34,12 @@ export const getTimeline = (event) => json(`${challengeUrl(event)}/timeline`);
 export const saveTimeline = (event, text) => post(`${challengeUrl(event)}/timeline`, { text });
 export const getPerformers = (event) => json(`${challengeUrl(event)}/performers`).then((body) => body.performers);
 
-/** A checkpoint's stored evaluation, its trace cut into one Float32Array per duck as the viewer takes them; `{checkpoint, error}` when it failed. */
+const floats = (encoded) => new Float32Array(Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0)).buffer);
+
+/** A checkpoint's stored evaluation, its trace cut into one Float32Array per duck as the viewer takes them, a tug's string beside them; `{checkpoint, error}` when it failed. */
 export async function getCheckpoint(event, id, n) {
   const body = await json(`${jobUrl(event, id)}/checkpoints/${n}`);
   if (body.error) return body;
-  const { trace_b64: encoded, ...evaluation } = body;
-  const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
-  return { ...evaluation, traces: splitDucks(new Float32Array(bytes.buffer), evaluation.ducks) };
+  const { trace_b64: trace, string_b64: string, ...evaluation } = body;
+  return { ...evaluation, traces: splitDucks(floats(trace), evaluation.ducks), ...(string && { string: floats(string) }) };
 }

@@ -55,6 +55,8 @@ export async function getMe() {
   }
 }
 
+const POINT_FLOATS = 17 * 3;
+
 async function frames(path) {
   const response = await fetch(path);
   // Same contract as every other call: the server's own sentence, not a status.
@@ -65,10 +67,21 @@ async function frames(path) {
   return splitDucks(new Float32Array(await response.arrayBuffer()), ducks);
 }
 
+/** A tug's string, 17 points a frame: the untimed settle's frames, then the timed ones. */
+async function points(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(await detailFrom(response));
+  const all = new Float32Array(await response.arrayBuffer());
+  const settled = Number(response.headers.get("X-Settle-Frame-Count")) * POINT_FLOATS;
+  return { settle: all.slice(0, settled), trace: all.slice(settled) };
+}
+
 /** A run's trace, one per duck, in duck order: a lane's is its one duck. */
 export function getTrace(runId) {
   return frames(`/api/runs/${runId}/trace`);
 }
+
+export const getString = (runId) => points(`/api/runs/${runId}/string`);
 
 /** The untimed settle before a run's trace, from the reset pose, one per duck; empty for a run stored before settles were recorded. */
 export function getSettle(runId) {
@@ -147,6 +160,7 @@ export const getMatch = (matchId) => json(`/api/matches/${matchId}`);
 /** Bout `k` of a match, both ducks, west first; and the untimed settle before it. */
 export const getBoutTrace = (matchId, k) => frames(`/api/matches/${matchId}/bouts/${k}/trace`);
 export const getBoutSettle = (matchId, k) => frames(`/api/matches/${matchId}/bouts/${k}/settle`);
+export const getBoutString = (matchId, k) => points(`/api/matches/${matchId}/bouts/${k}/string`);
 
 // Versioned by its render, as a run's clip files are (clipUrl).
 export const matchClipUrl = (matchId, name, version) => `/api/matches/${matchId}/clip/${name}?v=${version}`;
