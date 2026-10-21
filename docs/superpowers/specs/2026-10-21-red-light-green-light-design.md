@@ -24,7 +24,8 @@ and a duck it sees moving is caught. The lowest mean finish time wins, as on eve
 - The reference walker (`arena/assets/policies/BEST_alpha_walking.onnx`, the golden run's policy)
   finishes most seeds at the speed it walks best, 0.30 m/s, on both platforms: five of five on a
   Mac, four of five on the Space's (and 28 of 32 over more seeds).
-- Policies that win elsewhere by diving or charging do not finish it: it rewards another skill.
+- Policies that win elsewhere by diving or charging do not finish it, on either platform: it rewards
+  another skill.
 - Every other event is untouched: same steps, same traces, same golden run, same records.
 
 ## Scope guard: events with `[lights]` only
@@ -73,11 +74,17 @@ or is caught. That is the challenge: the reference walks, but it was never train
 | Policy | Command | Seeds | Score |
 | --- | --- | --- | --- |
 | The reference walker (`BEST_alpha_walking.onnx`) | 0.30 m/s | 4/5 finished, 39.08–40.18 s; seed 1 caught at 2.27 m | 43.596 s |
+| The same sprint-board policy | — | 0/5: caught on 2, fell on 3 | 60 |
+| The same hill-board policy | — | 0/5: fell on all five | 60 |
 
 The sweep's finalists there were 0.45, 0.35 and 0.30 m/s. Over 32 more seeds (0 to 31), the
 reference at 0.30 m/s finishes 28 (36.5–40.2 s), is caught on 3 and falls on 1. At 0.25 m/s it
 finishes none: it runs out of time at 1.8–2.2 m. At 0.35 m/s it finishes 5, is caught on 13 and
 falls on 14.
+
+The 3 cm is not what catches the reference. With 4 or 5 cm of drift allowed, the same 28 of those
+32 seeds finish and the same 3 are caught. With 5 cm, the event still scores the reference
+43.596 s, and the sprint-board policy is still caught on 2 seeds and falls on 3.
 
 Physics on the two platforms diverge after 1–3 s, as `arena/golden.py` records for the sprint, so
 the numbers above are per platform. The Space's are the ones that count.
