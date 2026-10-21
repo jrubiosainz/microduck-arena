@@ -245,7 +245,10 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
                 timeline_sha256=fetched.timeline_sha256,
                 cast=cast.record if cast else lone_cast(),
             )
-            store.append(record, trace_codec.encode(result.trace, result.settle))
+            store.append(
+                record,
+                trace_codec.encode(result.trace, result.settle, result.string, result.string_settle),
+            )
             restored.append(record)
             if on_event:
                 score = f"{result.score:.1f} cm" if higher_wins(event.id) else f"{result.score:.3f}s"

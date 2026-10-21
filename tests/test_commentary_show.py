@@ -25,14 +25,14 @@ from arena.commentary.show import (
     thin,
     write_show,
 )
-from arena.course import string_offset
 from arena.match import BoutResult
 from arena.moments import Moment, moments
 from arena.store import LocalStore
-from arena.trace import decode, encode
+from arena.trace import decode, decode_string, encode
 from tests.show_cups import MANIFEST, played_cup
 from tests.test_commentary_generator import reply
 from tests.test_moments import dragged
+from tests.test_tug import straight
 
 CUP = played_cup()
 IDS = [match.match_id for match in CUP.matches]
@@ -327,15 +327,21 @@ def taped_clip(ks, seconds=30.0):
         for k in ks]}}}}).encode()
 
 
+def stored_bout():
+    """A dragged bout's file as a match leaves it, its string laid straight between the trunks."""
+    trace, settle = dragged(), np.zeros((2, 3, 21), np.float32)
+    return encode(trace, settle, straight(trace), straight(settle))
+
+
 def test_match_footage_reads_each_bout_and_where_its_clip_tapes_it(tmp_path):
     store, first = LocalStore(tmp_path), CUP.matches[0]
-    blob = encode(dragged(), np.zeros((2, 3, 21), np.float32))  # its settle is no part of the bout
+    blob = stored_bout()  # its settle is no part of the bout
     store.put_cup_files("tug-of-war", 1, {f"bouts/{first.match_id}-0.npz": blob})
     store.put_clip(first.match_id, {"clip.json": taped_clip([0])})
     assert match_footage(store, replace(CUP, matches=CUP.matches[:2]), MANIFEST, {}) == {first.match_id: {
         "duration_ms": 30000, "bouts": [{"k": 0, "tape_start_s": 2.0, "tape_end_s": 10.02, "hold_end_s": 10.5,
                                          "seconds": 8.02,
-                                         "moments": moments(decode(blob), MANIFEST.course, string_offset("legs"))}]}}
+                                         "moments": moments(decode(blob), decode_string(blob)[1], MANIFEST.course)}]}}
     # the second match's clip is not ready: it is called on a later tick, as the first already is here
     assert match_footage(store, replace(CUP, matches=CUP.matches[:2]), MANIFEST, {first.match_id: {}}) == {}
 
@@ -345,7 +351,7 @@ def test_a_cup_s_show_is_composed_from_its_store_and_the_cups_before_it(tmp_path
     store.put_cup_files("tug-of-war", 1, {"draw.json": CUP.draw_json(), "matches.json": CUP.matches_json()})
     files = {"draw.json": second.draw_json(), "matches.json": second.matches_json()}
     for match in second.matches:
-        files.update({f"bouts/{match.match_id}-{bout.k}.npz": encode(dragged()) for bout in match.bouts})
+        files.update({f"bouts/{match.match_id}-{bout.k}.npz": stored_bout() for bout in match.bouts})
         store.put_clip(match.match_id, {"clip.json": taped_clip([bout.k for bout in match.bouts])})
     store.put_cup_files("tug-of-war", 2, files)
     done = {"desk": {}, "calls": {}}

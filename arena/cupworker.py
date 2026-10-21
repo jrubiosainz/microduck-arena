@@ -105,8 +105,8 @@ def compute_matches(manifest: Manifest, cup: Cup, load: Callable[[Entrant], obje
                 policies[i] = load(cup.entrants[i])
         seeds = [bout_seed(cup.secret, mid, k) for k in range(manifest.bout.max_bouts)]
         out = play_match(manifest, policies[a], policies[b], seeds, (ratings[a], ratings[b]), model=model)
-        for bout, (trace, settle) in zip(out.bouts, out.traces):
-            files[f"bouts/{mid}-{bout.k}.npz"] = encode(trace, settle)
+        for bout, frames in zip(out.bouts, out.traces):
+            files[f"bouts/{mid}-{bout.k}.npz"] = encode(*frames)
         winner = a if out.winner == "a" else b
         matches.append(MatchRecord(mid, len(matches), round_, group, a, b, out.bouts, out.wins, winner, out.decided_by))
         return winner

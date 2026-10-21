@@ -38,7 +38,8 @@ class BoutResult:
 @dataclass(frozen=True)
 class MatchOutcome:
     bouts: tuple[BoutResult, ...]
-    traces: tuple[tuple[np.ndarray, np.ndarray], ...]  # (trace, settle) per bout, west first
+    # (trace, settle, string, string_settle) per bout (arena/tug.py's BoutOutcome), west first
+    traces: tuple[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray], ...]
     wins: tuple[int, int]  # (a, b)
     winner: str  # "a" | "b"
     decided_by: str  # "bouts" | "rating"
@@ -57,7 +58,7 @@ def play_match(manifest: Manifest, a, b, seeds: Sequence[int], ratings: tuple[fl
         outcome = run_bout(manifest, *((a, b) if a_west else (b, a)), seed, model)
         winner = None if outcome.loser is None else ("a" if (outcome.loser == 1) == a_west else "b")
         bouts.append(BoutResult(k, seed, "west" if a_west else "east", winner, outcome.how, outcome.time_s))
-        traces.append((outcome.trace, outcome.settle))
+        traces.append((outcome.trace, outcome.settle, outcome.string, outcome.string_settle))
         if winner is not None:
             wins["ab".index(winner)] += 1
         if max(wins) >= rules.bouts_to_win:

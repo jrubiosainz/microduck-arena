@@ -10,13 +10,12 @@ import random
 from collections.abc import Collection, Mapping, Sequence
 
 from ..constants import CTRL_DT
-from ..course import string_offset
 from ..cup import Cup, Entrant, MatchRecord
 from ..cupworker import load_cup
 from ..manifest import Manifest, load_event
 from ..match import BoutResult
 from ..moments import GROUND_M, Moment, moments
-from ..trace import decode
+from ..trace import decode, decode_string
 from .context import Fact
 from .cup import cup_facts, group_round, player_profiles, score_text, screen_view
 from .generator import NO_CALLBACK, Rejected, direction, write, write_call
@@ -238,8 +237,8 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
 
 def match_footage(store, cup: Cup, manifest: Manifest, called: Collection[str]) -> dict:
     """Per match not yet `called` whose clip is ready, its clip's length and, per bout, where the
-    clip tapes it and holds its end, and its moments, read from its trace."""
-    offset, footage = string_offset(manifest.rig), {}
+    clip tapes it and holds its end, and its moments, read from its trace and its string."""
+    footage = {}
     for match in cup.matches:
         if match.match_id in called:
             continue
@@ -248,10 +247,10 @@ def match_footage(store, cup: Cup, manifest: Manifest, called: Collection[str]) 
             continue
         landscape, bouts = clip["layouts"]["landscape"], []
         for tape in landscape["timing"]["bouts"]:
-            trace = decode(store.cup_file(cup.event_id, cup.number,
-                                          f"bouts/{match.match_id}-{tape['k']}.npz"))
+            blob = store.cup_file(cup.event_id, cup.number, f"bouts/{match.match_id}-{tape['k']}.npz")
+            trace, (_, string) = decode(blob), decode_string(blob)
             bouts.append({**tape, "seconds": trace.shape[1] * CTRL_DT,
-                          "moments": moments(trace, manifest.course, offset)})
+                          "moments": moments(trace, string, manifest.course)})
         footage[match.match_id] = {"duration_ms": round(landscape["seconds"] * 1000), "bouts": bouts}
     return footage
 

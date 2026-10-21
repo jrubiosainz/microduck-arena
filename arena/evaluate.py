@@ -41,7 +41,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .constants import RUNNER_VERSION
-from .course import compile_course, compile_tug, string_offset
+from .course import compile_course, compile_tug
 from .manifest import Manifest
 from .runner import Performer, run_once, run_stage
 from .timeline import Start, constant_timeline
@@ -92,6 +92,10 @@ class Evaluation:
     settle: np.ndarray
     trace_seed: int
     runner_version: int
+    # A tug's traced bout's string, (frames, STRING_POINTS, 3), and its settle's, (settle + 1,
+    # STRING_POINTS, 3) (arena/tug.py); None but on a tug.
+    string: np.ndarray | None = None
+    string_settle: np.ndarray | None = None
 
 
 def mean_finish_time(per_seed: tuple[SeedResult, ...], time_limit_s: float) -> float:
@@ -283,14 +287,14 @@ def evaluate(manifest: Manifest, policy, cast: tuple[Performer, ...] | None = No
 def _evaluate_rating(manifest: Manifest, policy) -> Evaluation:
     """The entry in one bout a seed against the reference duck, west on odd seeds. A bout always
     ends with a score, so every seed counts as finished."""
-    model, reference, offset = compile_tug(manifest), reference_duck(manifest), string_offset(manifest.rig)
+    model, reference = compile_tug(manifest), reference_duck(manifest)
     outcomes, per_seed = {}, []
     for seed in manifest.seeds:
         entry = entry_side(seed)
         west, east = (policy, reference) if entry == 0 else (reference, policy)
         out = outcomes[seed] = run_bout(manifest, west, east, seed, model)
         per_seed.append(SeedResult(seed, bout_status(out, entry), out.time_s,
-                                   bout_score_cm(out, entry, manifest.rating.pit_bonus_cm, offset)))
+                                   bout_score_cm(out, entry, manifest.rating.pit_bonus_cm)))
     per_seed = tuple(per_seed)
     ranked = sorted(per_seed, key=lambda r: (r.score_cm, r.seed))
     traced = outcomes[ranked[(len(ranked) - 1) // 2].seed]
@@ -305,6 +309,8 @@ def _evaluate_rating(manifest: Manifest, policy) -> Evaluation:
         settle=traced.settle,
         trace_seed=traced.seed,
         runner_version=RUNNER_VERSION,
+        string=traced.string,
+        string_settle=traced.string_settle,
     )
 
 

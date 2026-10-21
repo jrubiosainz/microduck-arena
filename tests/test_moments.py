@@ -2,9 +2,9 @@ import numpy as np
 
 from arena.manifest import Tug
 from arena.moments import Moment, moments
+from tests.test_tug import straight
 
 COURSE = Tug(ring_m=3.0, pit_m=0.30, pit_depth_m=0.30, string_m=1.0)
-ZERO = (0.0, 0.0, 0.0)  # string ends on the trunks: the marker is their midpoint
 START = Moment(0.0, "start", None)
 
 
@@ -23,14 +23,15 @@ def tilt(trace, duck, degrees):
 
 
 def test_a_bout_nobody_pulls_is_its_start_and_the_time():
-    assert moments(bout(), COURSE, ZERO) == [START, Moment(10.0, "time", None)]
+    t = bout()
+    assert moments(t, straight(t), COURSE) == [START, Moment(10.0, "time", None)]
 
 
 def test_the_lead_changes_when_the_marker_crosses_lead_m():
     t = bout()
     t[:, 100:300, 0] -= 0.05
     t[:, 300:, 0] += 0.05
-    assert moments(t, COURSE, ZERO) == [
+    assert moments(t, straight(t), COURSE) == [
         START,
         Moment(2.02, "lead", "west"),
         Moment(6.02, "lead", "east"),
@@ -41,7 +42,7 @@ def test_the_lead_changes_when_the_marker_crosses_lead_m():
 def test_a_marker_wobbling_inside_lead_m_changes_nothing():
     t = bout()
     t[:, :400, 0] += 0.015 * np.sin(np.arange(400) / 8.0)
-    assert moments(t, COURSE, ZERO) == [START, Moment(10.0, "time", None)]
+    assert moments(t, straight(t), COURSE) == [START, Moment(10.0, "time", None)]
 
 
 def dragged():
@@ -55,7 +56,8 @@ def dragged():
 
 
 def test_a_duck_dragged_to_its_edge_then_into_the_pit():
-    assert moments(dragged(), COURSE, ZERO) == [
+    t = dragged()
+    assert moments(t, straight(t), COURSE) == [
         START,
         Moment(0.42, "lead", "east"),
         Moment(2.02, "ground", "east"),
@@ -69,7 +71,7 @@ def test_the_marker_pulled_ground_m_one_way_is_a_moment():
     d = 0.15 * np.arange(500) / 499
     t[0, :, 0] = -0.5 + d
     t[1, :, 0] = 0.5 + d
-    assert moments(t, COURSE, ZERO) == [
+    assert moments(t, straight(t), COURSE) == [
         START,
         Moment(1.36, "lead", "east"),
         Moment(6.68, "ground", "east"),
@@ -80,7 +82,7 @@ def test_the_marker_pulled_ground_m_one_way_is_a_moment():
 def test_a_tilt_past_slip_deg_is_one_slip():
     t = bout()
     tilt(t, 1, np.interp(np.arange(500), [100, 200, 300, 350, 400], [0, 48, 0, 0, 48]))
-    assert moments(t, COURSE, ZERO) == [
+    assert moments(t, straight(t), COURSE) == [
         START,
         Moment(3.48, "slip", "east"),
         Moment(10.0, "time", None),
@@ -90,7 +92,7 @@ def test_a_tilt_past_slip_deg_is_one_slip():
 def test_a_duck_tipped_flat_slips_and_stays_in_play():
     t = bout()
     tilt(t, 1, np.interp(np.arange(500), [100, 190], [0, 81]))
-    assert moments(t, COURSE, ZERO) == [
+    assert moments(t, straight(t), COURSE) == [
         START,
         Moment(2.8, "slip", "east"),
         Moment(10.0, "time", None),
@@ -100,7 +102,7 @@ def test_a_duck_tipped_flat_slips_and_stays_in_play():
 def test_both_ducks_in_the_pit_on_one_frame_are_two_drops():
     t = bout(300)
     t[:, 299, 2] = -0.1
-    assert moments(t, COURSE, ZERO) == [
+    assert moments(t, straight(t), COURSE) == [
         START,
         Moment(6.0, "pit", "west"),
         Moment(6.0, "pit", "east"),

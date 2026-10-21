@@ -350,7 +350,9 @@ async def _enter(request, manifest, user, repo_id, revision, name, livery, comma
         timeline_sha256=fetched.timeline_sha256,
         cast=cast.record if cast else lone_cast(),
     )
-    store.append(record, trace_codec.encode(result.trace, result.settle))
+    store.append(
+        record, trace_codec.encode(result.trace, result.settle, result.string, result.string_settle)
+    )
 
     clips = request.app.state.clips
     if clips.available:

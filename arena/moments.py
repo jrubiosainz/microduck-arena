@@ -33,13 +33,13 @@ def _first(flags: np.ndarray) -> int | None:
     return int(np.argmax(flags)) if flags.any() else None
 
 
-def moments(trace: np.ndarray, course: Tug, offset) -> list[Moment]:
-    """A bout's moments, (2, frames, 21) -> in order of time, then of kind, west before east.
-    Frame j is recorded after step j + 1, so it is at (j + 1) control steps. A bout nobody
-    dropped out of ends on a `time` moment at its last frame, whether it ran to the limit or a
-    reset stopped it."""
+def moments(trace: np.ndarray, string: np.ndarray, course: Tug) -> list[Moment]:
+    """A bout's moments, its trace (2, frames, 21) and its string (frames, STRING_POINTS, 3) ->
+    in order of time, then of kind, west before east. Frame j is recorded after step j + 1, so it
+    is at (j + 1) control steps. A bout nobody dropped out of ends on a `time` moment at its last
+    frame, whether it ran to the limit or a reset stopped it."""
     frames = trace.shape[1]
-    x = marker_x(trace, offset)
+    x = marker_x(string)
     found = [(0.0, "start", None)]
 
     def add(j: int, kind: str, side: str | None) -> None:

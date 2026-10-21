@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from arena.assets import ASSET_ROOT
 from arena.hub_fetch import FetchedPolicy
 from arena.timeline import SELF, Duck, Start, Timeline, Troupe, solo
+from arena.trace import decode, decode_string
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
 
@@ -672,4 +673,6 @@ def test_a_tug_entry_is_rated_in_bouts_against_the_reference(api):
     assert body["course"] == "tug" and body["seeds_total"] == 5 and all("score_cm" in s for s in body["per_seed"])
     assert body["metric"] == "mean_ground_cm"
     assert api.get(f"/api/runs/{body['run_id']}/trace").headers["X-Duck-Count"] == "2"
+    blob = api.app.state.store.trace(body["run_id"])
+    assert decode_string(blob)[1].shape == (decode(blob).shape[1], 17, 3)   # the string, frame by frame with the ducks
     assert submit(api, event="sprint-2m").json()["metric"] == "mean_finish_time"

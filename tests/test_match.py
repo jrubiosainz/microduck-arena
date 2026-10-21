@@ -14,7 +14,8 @@ def scripted(monkeypatch, winners):
         k = len(stood); stood.append((west, east, seed))
         loser = None if winners[k] is None else (1 if (winners[k] == "a") == (west == "A") else 0)
         return BoutOutcome(seed, loser, "draw" if loser is None else "pit", 3.0,
-                           np.full((2, 5, 21), k, np.float32), np.zeros((2, 26, 21), np.float32))
+                           np.full((2, 5, 21), k, np.float32), np.zeros((2, 26, 21), np.float32),
+                           np.zeros((5, 17, 3), np.float32), np.zeros((26, 17, 3), np.float32))
     monkeypatch.setattr("arena.match.run_bout", bout)
     return stood
 
@@ -53,4 +54,7 @@ def test_a_real_match_plays_the_same_twice():
     one, two = (play_match(quick, _ZeroPolicy(), _ZeroPolicy(), SEEDS, (1.0, 2.0)) for _ in range(2))
     assert one.bouts == two.bouts and 2 <= len(one.bouts) <= 5
     assert one.traces[0][0].shape[0] == 2 and one.traces[0][0].shape[1] <= 50   # the 1 s limit at the latest
-    np.testing.assert_array_equal(one.traces[-1][0], two.traces[-1][0])
+    for mine, theirs in zip(one.traces, two.traces):   # trace, settle, string and string_settle, bout by bout
+        assert len(mine) == 4
+        for a, b in zip(mine, theirs):
+            np.testing.assert_array_equal(a, b)

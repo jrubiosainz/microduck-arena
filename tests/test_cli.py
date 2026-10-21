@@ -4,6 +4,7 @@ import re
 from arena import cli
 from arena.assets import ASSET_ROOT
 from arena.cli import main
+from arena.trace import decode, decode_string
 
 REFERENCE = str(ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx")
 
@@ -286,6 +287,12 @@ def test_score_rates_a_tug_entry_and_the_board_says_rating(tmp_path, capsys):
     seed = r"^seed [1-5]: (west|east) +(won|lost|draw|pit_won|pit_lost) +[+-] *\d+\.\d cm at \d+\.\d\d s$"
     assert len(re.findall(seed, out, re.MULTILINE)) == 5
     assert len(re.findall(r"^rating: -?\d+\.\d cm · replay from seed [1-5]$", out, re.MULTILINE)) == 1
+    from arena.store import LocalStore
+
+    store = LocalStore(tmp_path)
+    [record] = store.runs("tug-of-war")
+    blob = store.trace(record.run_id)
+    assert decode_string(blob)[1].shape == (decode(blob).shape[1], 17, 3)   # the string, frame by frame with the ducks
     assert main(["board", "--event", "tug-of-war", "--store", str(tmp_path)]) == 0
     board = capsys.readouterr().out
     assert "rating" in board and " cm" in board and "cmd" not in board and "m/s" not in board  # the tug's command is no speed

@@ -19,7 +19,7 @@ from arena.manifest import load_event
 from arena.policy import load_policy
 from arena.runner import run_once
 from arena.tug import BoutOutcome, reference_duck
-from tests.test_tug import bout_trace
+from tests.test_tug import bout_trace, straight
 
 
 def _results(*pairs):
@@ -82,6 +82,7 @@ def test_evaluating_the_reference_policy_scores_and_carries_the_trace_seeds_repl
     )
     np.testing.assert_array_equal(result.trace, replay.trace)
     np.testing.assert_array_equal(result.settle, replay.settle)
+    assert result.string is None and result.string_settle is None   # a race has no string
 
 
 def test_evaluate_is_deterministic():
@@ -345,7 +346,7 @@ def test_a_tug_is_rated_by_one_bout_a_seed_against_the_reference(monkeypatch):
         loser, how, x, pit = bouts[seed]
         trace = bout_trace(x, pit)
         trace[:, :, 10] = seed   # a joint column marks the bout a trace comes from
-        return BoutOutcome(seed, loser, how, 45.0, trace, np.zeros((2, 26, 21)))
+        return BoutOutcome(seed, loser, how, 45.0, trace, np.zeros((2, 26, 21)), straight(trace), np.full((26, 17, 3), seed))
     monkeypatch.setattr("arena.evaluate.reference_duck", lambda manifest: reference)
     monkeypatch.setattr("arena.evaluate.compile_tug", lambda *args: "model")
     monkeypatch.setattr("arena.evaluate.run_bout", fake)
@@ -356,12 +357,15 @@ def test_a_tug_is_rated_by_one_bout_a_seed_against_the_reference(monkeypatch):
     assert (result.score, result.trace_seed, result.seeds_finished) == (pytest.approx(23.4), 4, 5)
     assert (result.command_vx, result.scan, result.trace.shape, result.settle.shape) == (-0.3, (), (2, 1, 21), (2, 26, 21))
     assert (result.trace[:, :, 10] == 4).all()
+    assert (result.string.shape, result.string_settle.shape) == ((1, 17, 3), (26, 17, 3))
+    assert result.string[0, 8, 0] == pytest.approx(0.02) and (result.string_settle == 4).all()   # the traced bout's
 
 
 def test_the_reference_against_itself_gains_no_ground_on_the_marker():
     """A pit may still happen: the string's weight hanging in it can draw a stalemate into the
     pit (spec 2026-10-21). Every bout the marker decides stays within 10 cm of the centre line."""
     result = evaluate(TUG, reference_duck(TUG))
+    assert any(s.status in ("won", "lost") for s in result.per_seed)   # at least one bout the marker decided
     assert all(abs(s.score_cm) < 10.0 for s in result.per_seed if not s.status.startswith("pit"))
     assert result.trace.shape[0] == 2 and result.settle.shape == (2, 26, 21)
 

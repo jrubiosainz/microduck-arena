@@ -381,6 +381,13 @@ def test_a_tug_is_two_ducks_neck_to_neck_and_nothing_else():
     np.testing.assert_allclose(data.site_xpos[model.site("duck1/string_end").id], [0.5, 0, 0.1524215], atol=1e-9)
 
 
+def test_the_strings_ends_sit_on_the_necks_at_the_start():
+    model = compile_tug(TUG)
+    data = _standing(model)
+    for end, neck in (("string/p0", "string_end"), ("string/p16", "duck1/string_end")):
+        np.testing.assert_allclose(data.site_xpos[model.site(end).id], data.site_xpos[model.site(neck).id], atol=1e-9)
+
+
 def test_the_string_is_the_measured_one():
     model = compile_tug(TUG)
     segs = [model.body(f"string/seg{k}") for k in range(16)]

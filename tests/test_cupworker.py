@@ -37,21 +37,24 @@ from arena.manifest import BoutRules, load_event
 from arena.match import BoutResult, MatchOutcome, bout_seed
 from arena.policy import load_policy
 from arena.store import LocalStore, Withdrawal
-from arena.trace import decode, encode
+from arena.trace import decode, decode_string, encode
 from tests.test_cup import entrant
 from tests.test_store import make_record
+from tests.test_tug import straight
 
 WALKER = Path(arena.__file__).parent / "assets/policies/BEST_alpha_walking.onnx"
 # Cup #1 pinned to 2026-10-30: the owner sets the shipped date at release, and no test moves with it.
 TUG = replace(load_event("tug-of-war"), cup=replace(load_event("tug-of-war").cup, first=date(2026, 10, 30)))
+# A bout as a match leaves it: two frames and a three-frame settle, then the string of each.
+TRACE, SETTLE = np.zeros((2, 2, 21), np.float32), np.zeros((2, 3, 21), np.float32)
+BOUT = (TRACE, SETTLE, straight(TRACE), straight(SETTLE))
 
 
 def fake_play(manifest, a, b, seeds, ratings, model=None):
     """No physics: the higher rating wins 2-0 on two-frame traces."""
     side = "a" if ratings[0] >= ratings[1] else "b"
     bouts = tuple(BoutResult(k, seeds[k], ("west", "east")[k], side, "pit", 4.0) for k in range(2))
-    trace = (np.zeros((2, 2, 21), np.float32), np.zeros((2, 3, 21), np.float32))
-    return MatchOutcome(bouts, (trace, trace), (2, 0) if side == "a" else (0, 2), side, "bouts")
+    return MatchOutcome(bouts, (BOUT, BOUT), (2, 0) if side == "a" else (0, 2), side, "bouts")
 
 
 def drawn_cup(n, number=1, secret="ab" * 16):
@@ -131,6 +134,12 @@ def test_groups_play_round_by_round_then_each_knockout_round(monkeypatch):
     assert decode(files["bouts/tug-of-war-0001-000-0.npz"]).shape == (2, 2, 21)
 
 
+def test_a_matchs_bout_file_holds_its_string():
+    with patch("arena.cupworker.play_match", fake_play), patch("arena.cupworker.compile_tug", lambda *_: None):
+        files = compute_matches(TUG, drawn_cup(4), lambda e: e.user)[1]
+    assert decode_string(files["bouts/tug-of-war-0001-000-0.npz"])[1].shape[1:] == (17, 3)
+
+
 def test_a_cup_plays_on_the_real_physics_and_replays_identically():
     manifest = replace(load_event("tug-of-war"), bout=BoutRules(time_limit_s=1.0, bouts_to_win=2, max_bouts=3))
     walker = load_policy(WALKER)
@@ -186,7 +195,7 @@ def clip_json(seconds=10.0):
 
 def store_cup(store, cup, seconds=10.0):
     """The cup as the worker leaves it, every match with a ready clip."""
-    files = {"draw.json": cup.draw_json(), **{f"bouts/{m.match_id}-{b.k}.npz": encode(np.zeros((2, 2, 21)), np.zeros((2, 3, 21)))
+    files = {"draw.json": cup.draw_json(), **{f"bouts/{m.match_id}-{b.k}.npz": encode(*BOUT)
                                                for m in cup.matches for b in m.bouts}}
     if cup.matches:
         files["matches.json"] = cup.matches_json()

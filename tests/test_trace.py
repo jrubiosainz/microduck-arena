@@ -86,3 +86,32 @@ def test_the_settle_round_trips_beside_the_trace():
 def test_a_trace_stored_before_settles_were_recorded_has_none():
     blob = codec.encode(np.zeros((5, TRACE_WIDTH), dtype=np.float32))
     assert codec.decode_settle(blob).shape == (1, 0, TRACE_WIDTH)
+
+
+def test_a_tugs_string_round_trips_beside_its_ducks():
+    rng = np.random.default_rng(5)
+    trace = rng.uniform(-3, 3, (2, 5, TRACE_WIDTH)).astype(np.float32)
+    settle = rng.uniform(-3, 3, (2, 26, TRACE_WIDTH)).astype(np.float32)
+    string = rng.uniform(-3, 3, (5, 17, 3)).astype(np.float32)
+    string_settle = rng.uniform(-3, 3, (26, 17, 3)).astype(np.float32)
+    blob = codec.encode(trace, settle, string, string_settle)
+    np.testing.assert_allclose(codec.decode(blob), trace, atol=3e-3)
+    np.testing.assert_allclose(codec.decode_settle(blob), settle, atol=3e-3)
+    restored_settle, restored = codec.decode_string(blob)
+    assert restored_settle.dtype == restored.dtype == np.float32
+    np.testing.assert_allclose(restored_settle, string_settle, atol=3e-3)
+    np.testing.assert_allclose(restored, string, atol=3e-3)
+    with np.load(io.BytesIO(blob)) as loaded:
+        assert loaded["string"].dtype == loaded["string_settle"].dtype == np.float16
+
+
+def test_a_trace_without_a_string_says_so():
+    blob = codec.encode(np.zeros((2, 5, TRACE_WIDTH)), np.zeros((2, 26, TRACE_WIDTH)))
+    with pytest.raises(ValueError, match="no string"):
+        codec.decode_string(blob)
+
+
+@pytest.mark.parametrize("shape", [(17, 3), (5, 16, 3), (5, 17, 2), (1, 5, 17, 3)])
+def test_a_string_that_is_not_seventeen_points_a_frame_is_refused(shape):
+    with pytest.raises(ValueError, match=r"string_settle must be \(frames, 17, 3\)"):
+        codec.encode(np.zeros((2, 5, TRACE_WIDTH)), string=np.zeros((5, 17, 3)), string_settle=np.zeros(shape))
