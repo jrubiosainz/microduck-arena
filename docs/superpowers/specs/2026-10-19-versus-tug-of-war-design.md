@@ -28,6 +28,8 @@ match like a real sports broadcast.
 - **Match**: first to win two bouts, sides swapped between bouts.
 - **Reference duck**: a frozen policy shipped with the Arena. Five bouts against it give a policy
   its **rating**, in centimetres of marker displacement (plus a pit bonus).
+- **Ring**: the tug's playing area, a square wrestling ring; its **ropes** are the field's edges.
+  The line between the two ducks is the **string** (a physical rope since 2026-10-21).
 - **Cup**: one weekly tournament of the event, numbered (#1, #2…): draw, groups, knockout,
   premiere.
 - **Premiere**: the scheduled moment the cup's results go public, as the live channel's show.
@@ -82,21 +84,131 @@ match like a real sports broadcast.
   (owner, 2026-10-12). Jokes must land for newcomers.
 - No dead code, no just-in-case generality.
 
+## Owner decisions, 2026-10-21 (after the local preview)
+
+The owner watched the game locally and decided three things. They change §1 (course, string,
+marker, venue), §2 (the reference duck) and §3 (training), updated in place below. Nothing is
+released, so every rating is simply computed again.
+
+1. **A real rope.** The string is no longer a tendon (a maximum distance, drawn as a straight
+   line, passing through bodies): it is a physical rope, exactly as prototyped and measured on
+   2026-10-21 (the rope study; its numbers are in §1). Same 1.00 m neck to neck, the ducks
+   starting where they start today, no extra slack. The owner chose the measured rope (16
+   segments, 80 g, normal friction) knowing that it does not prevent crawling (a prone duck lies
+   on its rope and pins it by friction) and that its weight hanging in the pit draws stalemates
+   into it. The marker is the rope's middle point. The rope's shape is recorded at every control
+   step, so the pages, the clips and the live draw it as it really was.
+2. **A wrestling ring.** The tug of war gets its own venue: a dark arena, a circular lighting
+   truss, LED screens, barricades, and a square ring 3 m × 3 m. The ring is the playing area: no
+   more 0.8 m lane and walls; the ring's ropes are the field's edges and the ducks bounce off
+   them; the 0.30 m pit crosses the ring in the middle from rope to rope (3 m long). Races and the
+   Got a Talent stage keep the daytime stadium. The dark halo under the robots' feet is removed
+   from every scene, each scene's lights casting the ducks' real shadows.
+3. **Upright ducks for the owner.** The reference duck (the rating's yardstick) and the owner's
+   candidates stay on their feet: leaning back like a tug-of-war puller is fine, crawling and
+   lying are not. Other players may crawl. An opt-in training knob, "stay upright", off in the
+   recipe users get, is on for the owner's trainings. A new upright reference, trained on the
+   ring and the rope, replaces t7-250 as the vendored reference (every rating changes); then the
+   owner's candidate is trained upright from it and picked as before (gates, round robin; warm
+   start wins, runs peak early and decay, so every 250 iterations is judged and the peak kept).
+
+Everything is re-rated and retrained. Plans C and D (cup, show) are unchanged except where they
+draw the string or read the course. Plan G (the Arena) and Plan H (the training) implement this.
+
+### My calls (2026-10-21)
+
+- **Rope joints: two hinges, not a ball.** Each joint between segments is two hinges (about y,
+  then z), the study's "Ru", instead of a ball joint ("R"). Both were measured equally stable (0
+  resets in 40 Arena bouts, ends never more than 1.0024 m apart, ties within 7.0 mm against
+  5.5 mm). Ru drops the twist, which a round capsule chain cannot show and which a contact barely
+  feels, and it costs less: an Arena bout ×1.38 instead of ×1.54, training throughput ×0.73 instead
+  of ×0.42–0.54, nv 76 instead of 91, +0.6 GB instead of +1.0 GB on the L4. It also removes the
+  twist inertia that turned mujoco_warp's float32 solve to NaN (2-hinge was NaN-free even without
+  armature); the armature stays as measured. Every training of this round runs on it, so the
+  throughput decides.
+- **Rope numbers, as measured and never lowered** (each step down was unstable at the 5 ms step):
+  16 capsules of 6.25 cm, radius 4 mm; 80 g, the two end pieces 15 g each, the 14 others
+  3.5714 g; joint damping 0.003 N·m·s/rad and armature 1e-6 on every rope degree of freedom (the
+  free root too); a free root at the middle segment, two chains of 8 out to the ends; each end
+  tied to its duck's `string_end` site by a site-to-site `connect` with solref 0.01; contacts
+  contype 0 / conaffinity 1 / priority 1, friction 1 / 0.005 / 0.0001, default solref and
+  solimp; each end piece excluded from the trunk it is tied to. The rope starts straight.
+- **The ring's edges**: three rigid capsules a side, radius 6 mm, their axes 6, 12 and 18 cm over
+  the canvas, post to post on the 3 m square; four corner posts, capsules of radius 2.2 cm, 23 cm
+  tall; and behind each side an invisible backstop box, flush behind its ropes, from the canvas to
+  the top rope's top. Why the backstop: rigid capsules alone leave 5.4 cm under the bottom rope and
+  4.8 cm between two ropes, where a foot, a head or a prone duck pushed sideways can thread through,
+  and a duck outside the ring with the string across a ring rope is a bout nobody can read. Behind
+  the ropes it changes nothing the viewer sees. The floor still runs 20 m past the ring at the
+  canvas's level, so no duck is ever below the floor but in the pit (the judge's "in the pit" is
+  a height).
+- **Upright, measured**: trunk height ≥ 7 cm and tilt ≤ 45°; a duck is **down** once it has not
+  been upright for 0.3 s straight (the fall rule's hold). From the robot: standing, the trunk
+  stands 11–12 cm; a sweep of the legs robot's poses with only its feet on the floor keeps it at
+  7.8 cm or more leaning back up to 45°; the leaning t10-500 sat at 5–6 cm, tilted 55° (its rear
+  on the floor: sitting); a lying duck sits at 3.6 cm. Tilt is the trunk's angle from vertical,
+  as `moments.py` reads it.
+- **The knob**: `stay_upright` in the recipe's `challenge.toml`, the cost of going down, in pits.
+  0, the users' default, lets a duck crouch, sit or lie as the Arena allows; above 0, going down
+  ends the training episode and costs that many pits (the owner trains at 1). The recipe's
+  existing reward knob labelled "Stay upright" is relabelled "Keep the trunk level", which is what
+  it pays.
+- **The new reference** is warm-started from t7-250 and trained against the frozen t7-250 (the
+  opponent as today), stay upright on. Not self-play: that is a non-goal and new machinery, and
+  t7-250 is the yardstick it replaces, so its rating against t7-250 on the new physics measures
+  it. Picked by: upright and pulling (gates U and R1), then the highest rating against t7-250,
+  a round robin deciding between ratings within 5 cm.
+- **The owner's candidate**: warm-started from the new reference, trained against it, stay upright
+  on; gates R1, R2 (rating ≥ +20 cm against the new reference), R3 (≥ 3 of 10 bouts dragging it
+  in, a target), plus U; the round robin picks.
+- **No slack phase** any more (the string slack until iteration 250): a rope has no limit to lift,
+  and every training now starts from a duck that already walks back (t11, taut from the first
+  step, passed the gates by 250).
+- **Taut**, for the judges: the string's ends at least 0.98 m apart. An 80 g rope sags: 0.98 m is
+  about 1.1 N of pull, the mean pull of two reference ducks on it; the tendon's 0.995 m would ask
+  about 2.5 N.
+- **Trace**: a tug's bout file gains `string`, (frames, 17, 3), and `string_settle`, (settle + 1,
+  17, 3), float16 like the ducks (0.24 mm off): a 45 s bout grows from 96 KB to 228 KB. The key's
+  presence is the version: every stored race and performance stays as it is; a tug trace always
+  carries its string (none exists in production; test fixtures are rebuilt with one).
+- **Names**: in code and on the site the line between the ducks keeps its name, the string
+  (`string_m`, `string_end`, `buildString`); "rope" in the owner's words is the string here, and
+  the ring's edges are the ropes. A tug's `[course]` is `ring_m`, `pit_m`, `pit_depth_m`,
+  `string_m`; `length_m`, `width_m` and `wall_height_m` go. The string's and the ring's numbers
+  are code constants (the measured, stable ones), not event data.
+- **Stability**: the Arena's string is checked again on the study's 40 bouts (0 resets, ends at
+  most 1.0030 m apart, ties within 1 cm) before anything trains on it; any later change of its
+  numbers repeats that check.
+- The venue mockup's open decor questions (the jury at ringside, the pads' colour, the screens, the
+  portrait clip's near rope, a wide establishing shot) stay as built; they block nothing.
+
 ## 1. The tug of war (owner-decided scene, builder-tuned numbers)
 
-**Course: the race lane, cut by a pit** (owner chose layout "A" over floating platforms and an
-open ring). The lane is the races' 0.8 m lane with its 0.15 m walls, with a pit across its whole
-width in the middle. The walls are there so that drift, which blind policies have, cannot decide a
-bout: only pulling does.
+**Course: a wrestling ring, cut by a pit** (owner, 2026-10-21; until then the race lane of layout
+"A", 0.8 m between walls). The ring, 3 m from rope to rope, is the whole playing area; its ropes,
+three a side, are the field's edges and the ducks bounce off them. The pit, 0.3 m wide, crosses the
+ring in the middle from rope to rope. The walls were there so that drift could not decide a bout;
+in the ring a drifting pair meets the ropes 1.5 m out, far more room than two ducks pulling use.
+
+**Venue** (owner, 2026-10-21): the tug of war has its own, a dark arena round the ring: a circular
+lighting truss over it, LED screens, barricades, the crowd on all four sides, the jury's desk at
+ringside. Races and the Got a Talent stage keep the daytime stadium. No scene draws a dark halo
+under the ducks' feet any more: each scene's lights cast their real shadows.
 
 **Ducks: face to face, like a real tug of war** (owner). Each pulls by walking backwards. The
 existing walking policies cannot compete; every entrant trains a new policy.
 
-**String**: from the base of one duck's neck to the base of the other's, taut at the start, with a
-red marker at its middle. Initial values, the builder tunes them on the first trained policy:
-string ≈ 1.0 m, pit 0.3 m wide and deep enough that a duck in it is unmistakably below the floor.
-A MuJoCo spatial tendon with a maximum length behaves as a string (it pulls only when taut). The
-string and the marker are drawn by the viewer from the trace.
+**String**: from the base of one duck's neck to the base of the other's, 1.00 m, straight at the
+start, with a red marker at its middle; pit 0.3 m wide and 0.3 m deep, so that a duck in it is
+unmistakably below the floor. Since 2026-10-21 (owner) the string is a physical rope, MuJoCo
+bodies rather than a tendon: 16 capsule segments tied to both necks (numbers in the 2026-10-21
+calls). It sags under its weight, touches the ducks, the floor, the pit and the ring's ropes, can
+be stepped and lain on, and never passes through a body. Measured: a prone duck lies on it and
+pins it by friction (so it does not stop crawling), and its weight hanging into the pit draws both
+ducks towards it (about 1 N), so even bouts end in a late pit more often; the owner took both. The
+**marker** is the rope's middle point (its x is what the judge reads; it agreed with the ends'
+midpoint to 0.55 cm on average and never flipped a verdict in the study). The rope's 17 points are
+recorded at every control step, settle included, and the viewer draws the string through them.
 
 **Command**: the Arena sends every duck the same fixed command, declared in the event's
 `[command]` like any event; its value is the one the training recipe uses. There is no speed
@@ -111,8 +223,8 @@ sweep in a versus.
   under the fall line and held by friction anyway; the owner's ruling is that going down to hold
   is a viable strategy, and the point of the game is to drag the opponent into the pit.
 - At the bout time limit (45 s, owner 2026-10-20 night: a 20 s bout never left time to drag anyone in), if nobody is in the pit, the duck the marker moved
-  away from loses: as in a real tug of war, the winner pulls the marker to their side of the pit's
-  centre line.
+  away from loses: as in a real tug of war, the winner pulls the marker (the string's middle
+  point) to their side of the pit's centre line.
 - Both in the pit on the same control step: the marker's side decides. A marker exactly back at the
   centre makes a drawn bout, which counts for nobody; the match goes on (at most five bouts), and a
   match still undecided after them goes to more bouts won, then the higher rating. (A rule that
@@ -133,19 +245,23 @@ another one.
 
 - **The reference duck**: a frozen policy shipped with the Arena (its ONNX vendored like the
   golden walker), first our own checkpoint that walks backwards and pulls the string taut (t7-250
-  of the tug recipe). Changing it later changes every rating, like a runner version.
+  of the tug recipe). Changing it later changes every rating, like a runner version. Owner,
+  2026-10-21: the reference stays on its feet. t7-250 dives prone in the first half second, so a
+  new reference, trained upright on the ring and the rope (§3), replaces it before the release;
+  every rating changes, none is released yet.
 - **Score per seed**: one bout (the tug's own physics, 45 s) between the entry and the reference,
   sides alternating with the seed. The score is the marker's displacement towards the entry at the
   end of the bout, in centimetres (negative when the reference pulled it away), plus a bonus when
   the reference is dragged into the pit (and the same malus when the entry is).
 - **Rating**: the mean over five seeds, in centimetres; higher is better.
 - **Clip**: the entry's median bout against the reference — a real tug of war, two ducks, the
-  string and the marker. Landscape and vertical, on the HF Job, like every run.
+  string as it lay and the marker, in the ring. Landscape and vertical, on the HF Job, like every run.
 - **What it is not**: one fixed opponent is not the whole field; the rating says how well a duck
   pulls against the reference; the cup says who wins.
 - The pit bonus is the builder's: 100 cm, since while the losing duck is out of the pit the marker
   stands at most 65 cm (half the string plus half the pit) towards the winner, so a pit finish
-  outweighs any marker margin.
+  outweighs any marker margin. The rope's middle point is never farther than half the string from
+  the loser's neck, so the bound holds.
 
 ## 3. Training, and the first candidate
 
@@ -160,6 +276,18 @@ another one.
   publishes it **under his own name (Nico-robot) as the first candidate**. The release does not
   wait for a strong one: the best duck available at release time is the first candidate, and the
   recipe keeps improving after.
+- (2026-10-20 night, measured) A learner warm-started from the reference beats one trained from
+  scratch; runs peak early and decay, so every 250 iterations is judged and the peak kept. The
+  recipe users get warm-starts from the reference.
+- (Owner, 2026-10-21) The training scene is the ring and the rope, the Arena's own. An opt-in
+  knob, **stay upright**, off in the recipe users get, ends a training episode when the learner
+  goes down (trunk under 7 cm or tilted past 45° for 0.3 s) and costs it a pit: the reference
+  and the owner's candidates train with it on, so they stay on their feet; other players may
+  crawl. Order: a new reference, warm-started from t7-250 and trained against the frozen t7-250
+  with the knob on, judged every 250 iterations (on its feet, pulling, its rating against t7-250
+  on the new physics), replaces t7-250 in the Arena and as the recipe's opponent; then the
+  owner's candidate, warm-started from the new reference and trained against it with the knob
+  on, picked by the gates and a round robin.
 
 ## 4. The weekly cup
 
@@ -269,7 +397,7 @@ Stages 2 and 3 do not wait for a good policy: they are developed and tested loca
 first training's intermediate checkpoints as stand-in entrants. Paid trainings on HF Jobs have no
 budget limit (owner).
 
-1. **The tug and its rating.** The course (lane + pit), the string, the rating by bouts against the reference duck (first built as a winch bench, replaced 2026-10-20 night), the event with
+1. **The tug and its rating.** The course (lane + pit; the ring + pit from 2026-10-21), the string, the rating by bouts against the reference duck (first built as a winch bench, replaced 2026-10-20 night), the event with
    its rating, board, clips and commentary; the `tug_of_war` challenge recipe; the first
    candidate trained and published by the owner. The match itself (two ducks, the judge) is built
    here too, since the cup and the rating both play it.
@@ -289,7 +417,7 @@ relock as usual, then the owner publishes the first candidate.
 - A dated tournament, draw, groups, then winners against winners (his idea); weekly.
 - A rating per model at publication, from the pulling bench, instead of a sparring match.
 - Face to face, pulling backwards; every entrant trains a new policy.
-- Course A: the race lane with walls, cut by a pit.
+- Course A: the race lane with walls, cut by a pit (superseded 2026-10-21 by the ring).
 - Publishing on the event enters the cup.
 - The show: Peter & Ray call every match like a live sport, the cup's state behind them,
   tournament-aware commentary; no time limit for now.
@@ -306,6 +434,14 @@ relock as usual, then the owner publishes the first candidate.
   opponent duck (first the reference, later a league of checkpoints and published models); the
   release does not wait for a strong trained duck.
 - A drawn cup is frozen: withdrawals after close change nothing in it.
+- 2026-10-21, after the local preview: the string is a physical rope as measured (16 segments,
+  80 g, normal friction), knowing it does not stop crawling and draws stalemates into the pit; the
+  marker is its middle point and its shape is recorded and drawn; the tug's own venue, a wrestling
+  ring 3 m square whose ropes are the field's edges, the pit across it from rope to rope (course A
+  superseded); the halo under the ducks' feet removed in every scene; the reference and the
+  owner's candidates stay on their feet (leaning back allowed) through an opt-in "stay upright"
+  training knob, off for users; a new upright reference replaces t7-250; everything re-rated and
+  retrained.
 
 ## My calls (the owner may object)
 
@@ -326,6 +462,8 @@ relock as usual, then the owner publishes the first candidate.
   never premieres before cup N.
 - The play-by-play lives in the page, not in the mp4.
 - After the premiere the cup's matches join the rotation until the next cup.
+- 2026-10-21: see "My calls (2026-10-21)" above (rope joints and numbers, the ring's edges,
+  upright thresholds, the knob, the reference's and the candidate's training, the trace, names).
 
 ## Left to the builder
 
