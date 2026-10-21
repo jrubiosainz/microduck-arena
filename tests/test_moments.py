@@ -46,13 +46,18 @@ def test_a_marker_wobbling_inside_lead_m_changes_nothing():
     assert moments(t, COURSE, ZERO) == [START, Moment(10.0, "time", None)]
 
 
-def test_a_duck_dragged_to_its_edge_then_into_the_pit():
+def dragged():
+    """The west duck dragged to the edge of the pit, then into it on the last of 401 frames."""
     t = bout(401)
     d = 0.4 * np.arange(401) / 399
     t[0, :, 0] = -0.5 + d
     t[1, :, 0] = 0.5 + d
     t[0, 400, 2] = -0.1
-    assert moments(t, COURSE, ZERO) == [
+    return t
+
+
+def test_a_duck_dragged_to_its_edge_then_into_the_pit():
+    assert moments(dragged(), COURSE, ZERO) == [
         START,
         Moment(0.42, "lead", "east"),
         Moment(2.02, "ground", "east"),

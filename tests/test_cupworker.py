@@ -4,6 +4,7 @@ import threading
 import time
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
+from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -13,8 +14,9 @@ import pytest
 
 import arena
 from arena import cupworker
+from arena.commentary.show import show_outline
 from arena.constants import NUM_JOINTS, OBS_SIZE, RUNNER_VERSION
-from arena.cup import Cup, cup_times, draw_groups, ends_at, iso, parse_iso
+from arena.cup import Cup, cup_times, draw_groups, ends_at, iso, match_label, parse_iso
 from arena.cupworker import (
     LOAD_PATIENCE,
     CupWorker,
@@ -200,8 +202,8 @@ def render(store, number=1, seconds=10.0):
             store.put_clip(m.match_id, {"clip.json": clip_json(seconds)})
 
 
-def worker(store, clock, clips=None, load=lambda e: e.user):
-    return CupWorker(store, clips or FakeClips(), events=[EARLY], load=load, now=clock, log=lambda _: None)
+def worker(store, clock, clips=None, load=lambda e: e.user, show=None, log=lambda _: None):
+    return CupWorker(store, clips or FakeClips(), events=[EARLY], load=load, now=clock, log=log, show=show)
 
 
 def gone(user):
@@ -246,6 +248,117 @@ def test_a_cup_goes_from_close_to_its_running_order(tmp_path, no_physics):
     clock.at = datetime(2026, 10, 23, 15, tzinfo=UTC)
     cups.tick()
     assert load_cup(store, "tug-of-war", 1).order["starts_at"] == "2026-10-23T16:00:00Z"
+
+
+def ready_cup(tmp_path):
+    """A cup drawn and played at T1, every match clip rendered since: all its order waits on now is its show."""
+    store = LocalStore(tmp_path)
+    enter(store, 6)
+    worker(store, Clock(T1)).tick()
+    render(store)
+    return store
+
+
+def written_show(cup):
+    """A show as the running order reads it: every desk segment of the cup's outline, each plan 12.04 s long."""
+    return {"desk": {s["id"]: {"kind": s["kind"], "after": s["after"], "plan": {"duration_ms": 12040}}
+                     for s in show_outline(cup)}, "calls": {}}
+
+
+def test_with_a_show_the_order_puts_the_desk_around_every_match():
+    from tests.show_cups import played_cup as show_cup  # show_cups reads this module's TUG
+
+    cup = show_cup()
+    order = running_order(cup, {m.match_id: 30.0 for m in cup.matches}, parse_iso(cup.premiere_at),
+                          show=written_show(cup))
+    segments = order["segments"]
+    assert order["starts_at"] == cup.premiere_at
+    recaps = (1, 3, 5)  # after each group round
+    assert [s["kind"] for s in segments] == ["desk"] + [
+        kind for i in range(len(cup.matches))
+        for kind in ["desk", "shutter", "match"] + (["shutter", "desk"] if i in recaps else [])
+    ] + ["shutter", "desk", "desk"]
+    assert segments[0] == {"kind": "desk", "at_ms": 0, "duration_ms": 12040, "segment": "opening", "after": -1}
+    desks = [s for s in segments if s["kind"] == "desk"]
+    assert [(s["segment"], s["after"]) for s in desks] == [(s["id"], s["after"]) for s in show_outline(cup)]
+    assert all(s["duration_ms"] == 12040 for s in desks)
+    played = {m.match_id: m for m in cup.matches}
+    for segment, following in pairwise(segments):
+        if segment["kind"] == "shutter":
+            match = played.get(following.get("match_id"))
+            assert segment["next"] == (None if match is None else
+                                       {"match_id": match.match_id, "title": match_label(cup, match)})
+    assert [(s["match_id"], s["duration_ms"], s["call"]) for s in segments if s["kind"] == "match"] == [
+        (m.match_id, 30000, True) for m in cup.matches]
+    assert all(after["at_ms"] == before["at_ms"] + before["duration_ms"] for before, after in pairwise(segments))
+    assert all(s["at_ms"] % 40 == 0 and s["duration_ms"] % 40 == 0 for s in segments)
+
+
+def test_the_worker_writes_the_show_once_then_fixes_the_order(tmp_path, no_physics):
+    store, asked, said = ready_cup(tmp_path / "on-time"), [], []
+
+    def write(cup, done):
+        asked.append(cup)
+        return written_show(cup)
+
+    cups = worker(store, Clock(datetime(2026, 10, 23, 15, tzinfo=UTC)), show=write, log=said.append)
+    cups.tick()
+    cups.tick()
+    cup = load_cup(store, "tug-of-war", 1)
+    assert asked == [replace(cup, order=None)]
+    assert json.loads(store.cup_file("tug-of-war", 1, "show.json")) == written_show(cup)
+    assert [s["segment"] for s in cup.order["segments"] if s["kind"] == "desk"] == list(written_show(cup)["desk"])
+    assert cup.order == running_order(cup, {m.match_id: 10.0 for m in cup.matches},
+                                      datetime(2026, 10, 23, 16, tzinfo=UTC), show=written_show(cup))
+    assert said == ["cups: writing the show of Tug of War Cup #1", "cups: the show of Tug of War Cup #1 is written",
+                    "cups: tug-of-war #1 airs from 2026-10-23T16:00:00Z"]
+
+    # A show takes minutes to write: one done past the premiere is still aired ORDER_LEAD after it is fixed.
+    late, clock = ready_cup(tmp_path / "late"), Clock(datetime(2026, 10, 23, 15, tzinfo=UTC))
+
+    def slow(cup, done):
+        clock.at = datetime(2026, 10, 23, 16, 5, 7, tzinfo=UTC)
+        return written_show(cup)
+
+    worker(late, clock, show=slow).tick()
+    assert load_cup(late, "tug-of-war", 1).order["starts_at"] == "2026-10-23T16:15:07Z"
+
+
+def test_an_unwritten_show_holds_the_order_and_resumes_on_the_next_tick(tmp_path, no_physics):
+    store, given, said = ready_cup(tmp_path), [], []
+
+    def write(cup, done):
+        given.append((done, dict(done["desk"])))
+        if len(given) == 1:
+            done["desk"]["opening"] = {"kind": "opening"}
+            raise RuntimeError("router down")
+        return written_show(cup)
+
+    cups = worker(store, Clock(datetime(2026, 10, 23, 15, tzinfo=UTC)), show=write, log=said.append)
+    cups.tick()
+    assert load_cup(store, "tug-of-war", 1).order is None and store.cup_file("tug-of-war", 1, "show.json") is None
+    assert said == ["cups: writing the show of Tug of War Cup #1",
+                    "cups: the show of Tug of War Cup #1 waits (RuntimeError: router down)"]
+    cups.tick()
+    assert given[1][0] is given[0][0] and (given[0][1], given[1][1]) == ({}, {"opening": {"kind": "opening"}})
+    assert load_cup(store, "tug-of-war", 1).order is not None
+
+
+def test_a_restarted_worker_reads_the_show_it_wrote(tmp_path, no_physics):
+    store, clock = ready_cup(tmp_path), Clock(datetime(2026, 10, 23, 15, tzinfo=UTC))
+    worker(Crashing(store, 2), clock, show=lambda cup, done: written_show(cup)).tick()  # the show lands, not the order
+    cup = load_cup(store, "tug-of-war", 1)
+    assert cup.order is None and json.loads(store.cup_file("tug-of-war", 1, "show.json")) == written_show(cup)
+    asked, said = [], []
+
+    def down(cup, done):
+        asked.append(cup)
+        raise RuntimeError("router down")
+
+    worker(store, clock, show=down, log=said.append).tick()
+    assert asked == [] and said == ["cups: tug-of-war #1 airs from 2026-10-23T16:00:00Z"]
+    assert load_cup(store, "tug-of-war", 1).order == running_order(
+        cup, {m.match_id: 10.0 for m in cup.matches}, datetime(2026, 10, 23, 16, tzinfo=UTC), show=written_show(cup))
 
 
 def test_the_draw_waits_a_minute_past_the_close_for_an_entry_stamped_before_it(tmp_path, no_physics):

@@ -97,10 +97,6 @@ def create_app(config: ArenaConfig) -> FastAPI:
         running=config.clip_jobs, enabled=config.clips_enabled, backfill=config.clip_backfill,
         landed=lambda run_id: app.state.programme.landed(),
     )
-    app.state.cups = CupWorker(
-        app.state.store, app.state.clips, events=[m for m in all_events() if m.cup],
-        load=lambda e: load_entrant(app.state.store, e),
-    )
     if config.clip_worker and app.state.clips.available:
         @app.on_event("startup")
         def _launch_owed_clips() -> None:
@@ -116,6 +112,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
         def _stop_the_cups() -> None:
             app.state.cups.stop()
 
+    from ..commentary.show import compose_show
     from ..commentary.stock import CommentaryStock
     from ..commentary.tab import PlanTab
     from ..recorder import find_chrome
@@ -142,6 +139,23 @@ def create_app(config: ArenaConfig) -> FastAPI:
             # its profile directory goes with it: neither outlives the process
             # that opened them.
             app.state.commentary.stop()
+
+    # Built once the tab is: a cup's show is written by the booth and timed
+    # on its tab. With no tab, the cup airs its matches alone.
+    show = None
+    if tab is not None:
+        show_rng = random.Random()  # not the reserve's: the two write on their own threads
+
+        def show(cup, done: dict) -> dict:
+            return compose_show(
+                app.state.store, cup, lore=lore, provider=provider, model=config.commentary_model,
+                tab=tab, rng=show_rng, done=done, log=app.state.cups.log,
+            )
+
+    app.state.cups = CupWorker(
+        app.state.store, app.state.clips, events=[m for m in all_events() if m.cup],
+        load=lambda e: load_entrant(app.state.store, e), show=show,
+    )
 
     @app.on_event("shutdown")
     def _commit_owed_votes() -> None:

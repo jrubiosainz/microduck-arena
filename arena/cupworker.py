@@ -123,13 +123,29 @@ def running_order(cup: Cup, clips: Mapping[str, float], starts_at: datetime, sho
     """Every match after the shutter that cuts into it, from `starts_at`; `clips` gives each match clip's seconds.
 
     The live serves its grid five minutes ahead, so a shutter names the stage, never a duck: who plays a knockout match
-    would tell who qualified. `show` is Plan D's.
+    would tell who qualified. With the cup's written `show`, Peter and Ray are at the desk around the matches, each
+    desk segment as long as its plan, in the show's order: the opening, an intro before every match, which is called,
+    a recap after each group round and, after the final, the ceremony and the close. A shutter that names nothing
+    cuts from a match into a recap or the ceremony.
     """
-    laid = []
-    for match in cup.matches:
-        laid += [{"kind": "shutter", "duration_ms": SHUTTER_MS,
-                  "next": {"match_id": match.match_id, "title": match_label(cup, match)}},
-                 {"kind": "match", "duration_ms": round(clips[match.match_id] * 1000), "match_id": match.match_id}]
+    def played(match: MatchRecord) -> list[dict]:
+        called = {} if show is None else {"call": True}
+        return [{"kind": "shutter", "duration_ms": SHUTTER_MS,
+                 "next": {"match_id": match.match_id, "title": match_label(cup, match)}},
+                {"kind": "match", "duration_ms": round(clips[match.match_id] * 1000), "match_id": match.match_id,
+                 **called}]
+
+    if show is None:
+        laid = [segment for match in cup.matches for segment in played(match)]
+    else:
+        laid = []
+        for segment_id, desk in show["desk"].items():
+            if desk["kind"] in ("recap", "ceremony"):
+                laid.append({"kind": "shutter", "duration_ms": SHUTTER_MS, "next": None})
+            laid.append({"kind": "desk", "duration_ms": desk["plan"]["duration_ms"], "segment": segment_id,
+                         "after": desk["after"]})
+            if desk["kind"] == "intro":
+                laid += played(cup.matches[desk["after"] + 1])
     starts = accumulate((segment["duration_ms"] for segment in laid), initial=0)
     return {"starts_at": iso(starts_at),
             "segments": [{"kind": segment["kind"], "at_ms": at, **segment} for segment, at in zip(laid, starts)]}
@@ -145,10 +161,12 @@ class Standing:
 class CupWorker:
     """Every cup of `events`, tick by tick, from close to its running order, each step read back from the store.
 
-    Close, then draw.json (with the secret), then matches.json and the bouts, then one clip owed per match, then
-    order.json once every match clip is ready and the event's previous cup has finished airing. Each write is one
-    store commit made once, so a restart at any point picks up where the dataset left off, with the same secret and
-    the same results. `show` is Plan D's writer; with None the order waits on the clips alone.
+    Close, then draw.json (with the secret), then matches.json and the bouts, then one clip owed per match, then, once
+    every match clip is ready, show.json (its calls are timed on the clips' tapes), then order.json once the event's
+    previous cup has finished airing. Each write is one store commit made once, so a restart at any point picks up
+    where the dataset left off, with the same secret and the same results. `show(cup, partial)` writes the show,
+    filling `partial` as it goes, so a write cut off resumes on the next tick; with no `show` (no booth) the cup airs
+    its matches alone.
     """
 
     def __init__(self, store, clips, *, events, load: Callable[[Entrant], object],
@@ -163,6 +181,7 @@ class CupWorker:
         self.show = show
         self._relaunched: dict[str, datetime] = {}  # match id -> when its failed clip was last launched again
         self._tried: dict[tuple[str, int, str], datetime] = {}  # (event, number, "draw" | "play") -> first try here
+        self._shows: dict[tuple[str, int], dict] = {}  # (event, number) -> the part of its show written so far
         self._stopped = threading.Event()
 
     def tick(self) -> None:
@@ -196,7 +215,7 @@ class CupWorker:
                 if cup is None:
                     continue
             if cup.order is None:
-                self._schedule(cup, now)
+                self._schedule(manifest, cup, now)
 
     def _load(self, manifest: Manifest, number: int, step: str, entrants: Iterable[Entrant],
               now: datetime) -> dict | None:
@@ -249,7 +268,7 @@ class CupWorker:
         self.log(f"cups: {manifest.id} #{cup.number} played, {len(cup.matches)} matches")
         return cup
 
-    def _schedule(self, cup: Cup, now: datetime) -> None:
+    def _schedule(self, manifest: Manifest, cup: Cup, now: datetime) -> None:
         seconds = {}
         for match in cup.matches:
             state, written = self.store.clip_state(match.match_id)
@@ -263,12 +282,40 @@ class CupWorker:
                 self.clips.enqueue(match.match_id)
             # A pending clip is the clip jobs' to follow (their drain at boot, their rescan): queued again every tick, it
             # would race a launch in progress into a second job.
-        if len(seconds) < len(cup.matches) or not self._previous_aired(cup, now):
+        if len(seconds) < len(cup.matches):
+            return
+        show = None
+        if self.show is not None:
+            show = self._written_show(manifest, cup)
+            if show is None:
+                return
+        # Read again: a show takes minutes to write, and the live relies on an order fixed ORDER_LEAD before it starts.
+        now = self.now()
+        if not self._previous_aired(cup, now):
             return
         starts_at = max(parse_iso(cup.premiere_at), (now + ORDER_LEAD).replace(microsecond=0))
-        order = running_order(cup, seconds, starts_at)
+        order = running_order(cup, seconds, starts_at, show=show)
         self.store.put_cup_files(cup.event_id, cup.number, {"order.json": json.dumps(order, indent=2).encode()})
         self.log(f"cups: {cup.event_id} #{cup.number} airs from {order['starts_at']}")
+
+    def _written_show(self, manifest: Manifest, cup: Cup) -> dict | None:
+        """The cup's show.json, written now when it is missing; None while its writer fails (the router down, a
+        segment refused every time), what it wrote kept for the next tick to resume from."""
+        stored = self.store.cup_file(cup.event_id, cup.number, "show.json")
+        if stored is not None:
+            return json.loads(stored)
+        title, key = f"{manifest.title} Cup #{cup.number}", (cup.event_id, cup.number)
+        self.log(f"cups: writing the show of {title}")
+        try:
+            show = self.show(cup, self._shows.setdefault(key, {"desk": {}, "calls": {}}))
+        except Exception as exc:  # noqa: BLE001 — a show that cannot be written now is resumed next tick
+            self.log(f"cups: the show of {title} waits ({type(exc).__name__}: {exc})")
+            return None
+        self.store.put_cup_files(cup.event_id, cup.number,
+                                 {"show.json": json.dumps(show, indent=2, ensure_ascii=False).encode()})
+        del self._shows[key]
+        self.log(f"cups: the show of {title} is written")
+        return show
 
     def _previous_aired(self, cup: Cup, now: datetime) -> bool:
         """One show at a time per event: a cup gets no order until the one before it has finished airing."""

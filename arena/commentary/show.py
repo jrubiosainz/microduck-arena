@@ -10,15 +10,17 @@ import random
 from collections.abc import Mapping, Sequence
 
 from ..constants import CTRL_DT
+from ..course import string_offset
 from ..cup import Cup, Entrant, MatchRecord
-from ..manifest import Manifest
+from ..cupworker import load_cup
+from ..manifest import Manifest, load_event
 from ..match import BoutResult
-from ..moments import GROUND_M, Moment
+from ..moments import GROUND_M, Moment, moments
+from ..trace import decode
 from .context import Fact
-from .cup import cup_facts, group_round, score_text, screen_view
+from .cup import cup_facts, group_round, player_profiles, score_text, screen_view
 from .generator import NO_CALLBACK, Rejected, direction, write, write_call
 from .lore import Lore
-
 
 CALL_GAP_S = 4.0  # between a bout's start and its end, a moment is called this long after the last
 TRIES = 3  # answers asked for one desk segment or one bout before the show waits
@@ -213,3 +215,39 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
                                  "duration_ms": taped["duration_ms"]})
         show["calls"][match.match_id] = {"lines": lines, "plan": plan}
     return show
+
+
+def match_footage(store, cup: Cup, manifest: Manifest) -> dict:
+    """Per match, its clip's length and, per bout, where the clip tapes it and its moments, read
+    from its trace; LookupError for a match whose clip is not ready."""
+    offset, footage = string_offset(manifest.rig), {}
+    for match in cup.matches:
+        state, clip = store.clip_state(match.match_id)
+        if state != "ready":
+            raise LookupError(f"the clip of {match.match_id} is {state}")
+        landscape, bouts = clip["layouts"]["landscape"], []
+        for tape in landscape["timing"]["bouts"]:
+            trace = decode(store.cup_file(cup.event_id, cup.number,
+                                          f"bouts/{match.match_id}-{tape['k']}.npz"))
+            bouts.append({**tape, "seconds": trace.shape[1] * CTRL_DT,
+                          "moments": moments(trace, manifest.course, offset)})
+        footage[match.match_id] = {"duration_ms": round(landscape["seconds"] * 1000), "bouts": bouts}
+    return footage
+
+
+def earlier_cups(store, cup: Cup) -> list[Cup]:
+    """The event's cups before this one that were played: what its show may recall."""
+    earlier = (load_cup(store, cup.event_id, number) for number in store.cup_numbers(cup.event_id)
+               if number < cup.number)
+    return [one for one in earlier if one.matches]
+
+
+def compose_show(store, cup: Cup, *, lore: Lore, provider, model: str, tab, rng: random.Random,
+                 done: dict, log=print) -> dict:
+    """The cup's show from the store: its event, the cups before it, its players' seasons and
+    its match clips, `done` filled as it is written."""
+    manifest = load_event(cup.event_id)
+    history = earlier_cups(store, cup)
+    return write_show(cup, manifest=manifest, history=history, lore=lore, provider=provider,
+                      model=model, tab=tab, rng=rng, profiles=player_profiles(store, cup, history),
+                      footage=match_footage(store, cup, manifest), done=done, log=log)

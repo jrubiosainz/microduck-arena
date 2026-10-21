@@ -655,6 +655,32 @@ def test_the_reserve_is_closed_when_the_app_stops(tmp_path, monkeypatch):
     assert app.state.commentary.stopped
 
 
+def test_the_cup_worker_gets_the_show_writer_only_with_the_booth_on(tmp_path, monkeypatch):
+    import arena.commentary as booth
+    from arena import recorder
+    from arena.commentary import show
+
+    bundle = tmp_path / "dist"
+    bundle.mkdir()
+    (bundle / "index.html").write_text("<!doctype html><title>arena</title>")
+    (bundle / "plan.html").write_text("<!doctype html><title>plan</title>")
+    monkeypatch.setenv("ARENA_COMMENTARY", "1")  # conftest turns the booth off
+    monkeypatch.setattr(booth, "hub_token", lambda config: "a token")
+    monkeypatch.setattr(recorder, "find_chrome", lambda: "/chrome")
+    asked = []
+    monkeypatch.setattr(show, "compose_show", lambda store, cup, **kwargs: asked.append((store, cup, kwargs)) or {})
+    app = create_app(ArenaConfig.from_env(store_dir=tmp_path / "store", frontend_dir=bundle))
+    done = {"desk": {}, "calls": {}}
+    app.state.cups.show("the cup", done)
+    [(store, cup, kwargs)] = asked
+    assert (store, cup, kwargs["tab"]) == (app.state.store, "the cup", app.state.commentary.tab)
+    assert kwargs["done"] is done
+    assert kwargs["log"] is app.state.cups.log
+
+    monkeypatch.setenv("ARENA_COMMENTARY", "0")
+    assert create_app(ArenaConfig.from_env(store_dir=tmp_path / "off", frontend_dir=bundle)).state.cups.show is None
+
+
 def test_the_reserve_is_not_available_when_writing_is_off(tmp_path, monkeypatch):
     monkeypatch.setenv("ARENA_COMMENTARY", "0")
     config = ArenaConfig.from_env(store_dir=tmp_path, dev_user="coralie")
