@@ -1,25 +1,31 @@
 // A cup's match on tape: a title over the waiting ducks, its bouts one after the other at speed, each
-// from its settle, and an outro on the winner. Pure, as plan.js, whose actAt and travelAt read this
-// plan as they read a run's.
+// from its settle and held on its end, and an outro on the winner. Pure, as plan.js, whose actAt and
+// travelAt read this plan as they read a run's.
 
 import { winLine } from "../bouts.js";
 import { CTRL_DT } from "../replay.js";
 import { FPS, INTRO_S, OUTRO_S, STRIDE, TRAVEL_S } from "./plan.js";
 
+/** How long a bout's last pose holds, its result on the bug, before the next bout or the outro: the
+ * booth says the result as it is seen, never before. */
+export const BOUT_HOLD_S = 4;
+
 const round3 = (seconds) => Math.round(seconds * 1000) / 1000;
 
 /**
  * `bouts` are the match's bouts in order, each `{k, settle, steps}`: the frames of its settle and of
- * its trace. Each `span` is a bout's clip frames, `from` up to `to`; each of `bouts` says where its
- * trace starts and ends on the tape, in seconds, after its settle.
+ * its trace. Each `span` is a bout's clip frames, `from` up to `to`, its tape up to `held` and its
+ * last pose held from there; each of `bouts` says where its trace starts and ends on the tape, in
+ * seconds, after its settle, and where its hold ends.
  */
 export function matchPlan(bouts) {
   const intro = FPS * INTRO_S;
   const spans = [];
   let from = intro;
   for (const { k, settle, steps } of bouts) {
-    const to = from + Math.ceil((settle + steps) / STRIDE);
-    spans.push({ k, from, to, settle, steps });
+    const held = from + Math.ceil((settle + steps) / STRIDE);
+    const to = held + FPS * BOUT_HOLD_S;
+    spans.push({ k, from, held, to, settle, steps });
     from = to;
   }
   const tapeEnd = from;
@@ -36,24 +42,25 @@ export function matchPlan(bouts) {
     tapeEnd,
     poster: intro + Math.floor((tapeEnd - intro) * 0.6),
     spans,
-    bouts: spans.map(({ k, from, settle, steps }) => {
+    bouts: spans.map(({ k, from, to, settle, steps }) => {
       const start = round3(from / FPS + settle * CTRL_DT);
-      return { k, tape_start_s: start, tape_end_s: round3(start + steps * CTRL_DT) };
+      return { k, tape_start_s: start, tape_end_s: round3(start + steps * CTRL_DT), hold_end_s: round3(to / FPS) };
     }),
   };
 }
 
 /** The bout clip frame `i` shows and its step, counted from the bout's settle: the first bout's
- * first step under the title, the last bout's last step through the outro. */
+ * first step under the title, each bout's last step through its hold, the last one's through the
+ * outro. */
 export function boutAt(plan, i) {
   if (i < plan.intro) return { bout: plan.spans[0].k, step: 0 };
   const span = plan.spans.find((one) => i < one.to) ?? plan.spans.at(-1);
   return { bout: span.k, step: Math.min((i - span.from) * plan.stride, span.settle + span.steps - 1) };
 }
 
-/** The bouts each side has won, [a, b], on the tapes ended by clip frame `i`. */
+/** The bouts each side has won, [a, b], on the tapes ended by clip frame `i`, a bout's from its hold. */
 export function scoreAt(plan, match, i) {
-  const winners = plan.spans.filter((span) => i >= span.to).map((span) => match.bouts[span.k].winner);
+  const winners = plan.spans.filter((span) => i >= span.held).map((span) => match.bouts[span.k].winner);
   return ["a", "b"].map((side) => winners.filter((winner) => winner === side).length);
 }
 

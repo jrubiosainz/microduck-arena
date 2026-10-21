@@ -169,8 +169,8 @@ describe("prepareCall", () => {
   });
 
   it("hears a bout's last line whole by its by_ms, so the next bout's first line starts on its moment", () => {
-    // The rehearsal's match 002: each bout ends on its tape's last frame, 520 ms before the next
-    // bout's tape and 2540 ms before the clip's end.
+    // The rehearsal's match 002 as first filmed, before the clip held a bout's end: each bout ended
+    // on its tape's last frame, 520 ms before the next bout's tape and 2540 ms before the clip's end.
     const rehearsal = {
       id: "tug-of-war-0001-002",
       duration_ms: 75040,

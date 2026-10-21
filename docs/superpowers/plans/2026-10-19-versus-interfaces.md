@@ -518,7 +518,8 @@ that ends with nothing written fails its clip at once, and the cup worker launch
 again every `CLIP_RETRY`.
 `ArenaConfig.reveal_all` (set by `arena clip`, never on the Space) lets the job's loopback app read
 unrevealed matches. A match clip's `clip.json` layout `timing` carries
-`bouts: [{"k", "tape_start_s", "tape_end_s"}]` (where each bout's timed trace sits in the mp4).
+`bouts: [{"k", "tape_start_s", "tape_end_s", "hold_end_s"}]` (where each bout's timed trace sits in the
+mp4, and where the 4 s hold on its last pose, `BOUT_HOLD_S` in `app/src/clip/match.js`, ends).
 
 API (Plan C, `arena/web/routes_cups.py`, `now()` read per request, patched by tests):
 - `GET /api/events/{id}/cups` → `{"next": {"number", "close_at", "premiere_at", "entrants": [...]}, "cups": [{"number", "premiere_at", "starts_at", "state", "champion"}]}`
@@ -557,7 +558,8 @@ export function getBoutTrace(matchId, k); export function getBoutSettle(matchId,
 export function matchClipUrl(matchId, name, version)
 // app/src/bouts.js
 export function boutLane(match, k, traces, settles)   // {tug: "bout", ducks: [west, east]}, each {trace, settle, livery, name} (the entrant's on-air name), a/b placed by bouts[k].a_side
-// app/src/clip/match.js: matchPlan(bouts), boutAt(plan, i), scoreAt(plan, match, i), matchWords(match)
+// app/src/clip/match.js: matchPlan(bouts), boutAt(plan, i), scoreAt(plan, match, i), matchWords(match);
+//   BOUT_HOLD_S = 4: each bout's last pose holds this long, its result on the bug, before the next bout or the outro
 // app/src/format.js: countdown(ms); app/src/cup.js: cupPage, renderCup, cupCorner(eventId, cups, nowMs)
 // app/src/live/standby.js: createStandby(stage)
 // app/src/live/channel.js
@@ -601,11 +603,11 @@ def show_outline(cup: Cup) -> list[dict]
 #    {"id": "recap-<group round>", "kind": "recap", "after": i}, {"id": "ceremony", …}, {"id": "close", …}]
 def write_show(cup: Cup, *, manifest, history, lore, provider, model, tab, rng,
                profiles: Mapping[str, Fact], footage: Mapping[str, dict], done: dict | None = None) -> dict
-#   footage[match_id] = {"duration_ms", "bouts": [{"k", "tape_start_s", "tape_end_s", "seconds", "moments": [Moment]}]}
+#   footage[match_id] = {"duration_ms", "bouts": [{"k", "tape_start_s", "tape_end_s", "hold_end_s", "seconds", "moments": [Moment]}]}
 #   returns, filling `done` in place as it goes (a run cut off resumes from it):
 #   {"desk": {id: {"kind", "after", "dialogue": {"turns", "brief"}, "plan", "screen"}},
 #    "calls": {match_id: {"lines": [{"at_ms", "speaker", "text"}], "plan"}}}
-#   a bout's last line also has "by_ms": the next bout's tape start, or the clip's end after the last bout
+#   a bout's last line also has "by_ms": its bout's hold_end_s (the clip holds the bout's end until then)
 #   one LLM call per desk segment and one per bout (the play-by-play); call lines name ducks by their on-air `name`
 # PlanTab gains prepare_call(call: dict) -> dict  (window.planCall in plan.html)
 ```

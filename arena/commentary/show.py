@@ -193,7 +193,7 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
     """Every desk segment, then the call of every match `footage` has, each put into `done` the
     moment it is timed, so a show cut off by the router resumes where it stopped and a match whose
     clip is not ready yet is called on a later write. `footage[match_id]` is where the match's
-    clip tapes each bout and the bout's moments."""
+    clip tapes each bout and holds its end, and the bout's moments."""
     show = {"desk": {}, "calls": {}} if done is None else done
     for segment in show_outline(cup):
         if segment["id"] in show["desk"]:
@@ -217,11 +217,7 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
                  if fact.ref in CALL_FACTS]
         facts += _profiles(profiles, [cup.entrants[match.a], cup.entrants[match.b]])
         taped, lines, first = footage[match.match_id], [], "peter"
-        # A bout ends on its tape's last frame, just before the next bout's tape or the clip's end:
-        # its last line is to be heard whole by then.
-        moves_on = ([round(1000 * tape["tape_start_s"]) for tape in taped["bouts"][1:]]
-                    + [taped["duration_ms"]])
-        for bout, tape, by_ms in zip(match.bouts, taped["bouts"], moves_on, strict=True):
+        for bout, tape in zip(match.bouts, taped["bouts"], strict=True):
             aired = thin(tape["moments"])
             written = _tried(log, f"{match.match_id} bout {bout.k + 1}", write_call, facts,
                              _told(cup, manifest, match, bout, aired), first, lore=lore,
@@ -229,7 +225,9 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
             start, end, seconds = tape["tape_start_s"], tape["tape_end_s"], tape["seconds"]
             lines += [{"at_ms": round(1000 * (start + (end - start) * moment.at_s / seconds)), **line}
                       for moment, line in zip(aired, written["lines"])]
-            lines[-1]["by_ms"] = by_ms
+            # A bout ends on its tape's last frame, and the clip holds it until the next bout or the
+            # outro: the line telling its result is heard whole by then.
+            lines[-1]["by_ms"] = round(1000 * tape["hold_end_s"])
             first = "ray" if lines[-1]["speaker"] == "peter" else "peter"
         plan = tab.prepare_call({"id": match.match_id, "lines": lines,
                                  "duration_ms": taped["duration_ms"]})
@@ -239,7 +237,7 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
 
 def match_footage(store, cup: Cup, manifest: Manifest, called: Collection[str]) -> dict:
     """Per match not yet `called` whose clip is ready, its clip's length and, per bout, where the
-    clip tapes it and its moments, read from its trace."""
+    clip tapes it and holds its end, and its moments, read from its trace."""
     offset, footage = string_offset(manifest.rig), {}
     for match in cup.matches:
         if match.match_id in called:

@@ -301,9 +301,9 @@ export function prepare(dialogue, seed = hash(dialogue?.run_id ?? "")) {
 
 /** A match's play-by-play as a plan: each line starts at its moment in the
  * clip (`at_ms`), a line that would overlap the one before waits for it, and
- * nothing runs past the clip. A line with `by_ms` (a bout's last: the clip moves
- * on to the next bout or ends just after its moment) starts early enough to be
- * heard whole by then, never over the line before. The match is on screen, so
+ * nothing runs past the clip. A line with `by_ms` (a bout's last: the clip holds
+ * the bout's end until then, and moves on) is heard whole by then: one longer
+ * than its hold starts that much early, never over the line before. The match is on screen, so
  * nothing draws the booth. */
 export function prepareCall({ id, lines, duration_ms }, seed = hash(id ?? "")) {
   if (

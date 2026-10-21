@@ -47,7 +47,8 @@ DESK = [{"speaker": speaker, "text": f"Desk line {i}.", "fact_refs": [0]}
 def footage(cup):
     return {m.match_id: {"duration_ms": 30000, "bouts": [
         {"k": bout.k, "tape_start_s": 2.0 + 9 * bout.k, "tape_end_s": 10.0 + 9 * bout.k,
-         "seconds": 8.0, "moments": list(STEPS)} for bout in m.bouts]} for m in cup.matches}
+         "hold_end_s": 10.5 + 9 * bout.k, "seconds": 8.0, "moments": list(STEPS)}
+        for bout in m.bouts]} for m in cup.matches}
 
 
 FOOTAGE = footage(CUP)
@@ -155,21 +156,22 @@ def test_every_desk_segment_and_every_call_is_written_and_timed():
     assert first["plan"]["duration_ms"] == 30000
 
 
-def test_a_bout_s_last_line_is_heard_before_the_clip_moves_on():
-    """The rehearsal's match 002: a bout ends on its tape's last frame, 0.52 s before the next
-    bout's tape and 2.54 s before the clip's end, so its last line must be heard by then."""
+def test_a_bout_s_last_line_is_heard_while_the_clip_holds_its_end():
+    """The rehearsal's match 002 as matchPlan now films it: a bout ends on its tape's last frame,
+    and the clip holds that pose, the result on the bug, until hold_end_s: the line telling the
+    result is said on its moment and heard whole by then."""
     first = CUP.matches[0]
     tape = footage(CUP)
-    tape[first.match_id] = {"duration_ms": 75040, "bouts": [
-        {"k": 0, "tape_start_s": 3.52, "tape_end_s": 48.52, "seconds": 45.0,
+    tape[first.match_id] = {"duration_ms": 83040, "bouts": [
+        {"k": 0, "tape_start_s": 3.52, "tape_end_s": 48.52, "hold_end_s": 52.52, "seconds": 45.0,
          "moments": [Moment(0.0, "start", None), Moment(3.62, "lead", "west"),
                      Moment(45.0, "time", "west")]},
-        {"k": 1, "tape_start_s": 49.04, "tape_end_s": 72.5, "seconds": 23.46,
+        {"k": 1, "tape_start_s": 53.04, "tape_end_s": 76.5, "hold_end_s": 80.52, "seconds": 23.46,
          "moments": [Moment(0.0, "start", None), Moment(17.04, "edge", "west"),
                      Moment(23.02, "slip", "west"), Moment(23.46, "pit", "west")]}]}
     lines = show(Router(), tape=tape)["calls"][first.match_id]["lines"]
     assert [(line["at_ms"], line.get("by_ms")) for line in lines] == [
-        (3520, None), (48520, 49040), (49040, None), (66080, None), (72500, 75040)]
+        (3520, None), (48520, 52520), (53040, None), (70080, None), (76500, 80520)]
 
 
 def test_a_bout_s_lines_are_written_from_that_bout_alone():
@@ -321,7 +323,8 @@ def test_a_segment_refused_three_times_holds_the_show():
 def taped_clip(ks, seconds=30.0):
     """A match clip's clip.json as Plan C's clip_manifest writes it: where each bout's tape starts and ends."""
     return json.dumps({"layouts": {"landscape": {"seconds": seconds, "timing": {"bouts": [
-        {"k": k, "tape_start_s": 2.0 + 9 * k, "tape_end_s": 10.02 + 9 * k} for k in ks]}}}}).encode()
+        {"k": k, "tape_start_s": 2.0 + 9 * k, "tape_end_s": 10.02 + 9 * k, "hold_end_s": 10.5 + 9 * k}
+        for k in ks]}}}}).encode()
 
 
 def test_match_footage_reads_each_bout_and_where_its_clip_tapes_it(tmp_path):
@@ -330,7 +333,8 @@ def test_match_footage_reads_each_bout_and_where_its_clip_tapes_it(tmp_path):
     store.put_cup_files("tug-of-war", 1, {f"bouts/{first.match_id}-0.npz": blob})
     store.put_clip(first.match_id, {"clip.json": taped_clip([0])})
     assert match_footage(store, replace(CUP, matches=CUP.matches[:2]), MANIFEST, {}) == {first.match_id: {
-        "duration_ms": 30000, "bouts": [{"k": 0, "tape_start_s": 2.0, "tape_end_s": 10.02, "seconds": 8.02,
+        "duration_ms": 30000, "bouts": [{"k": 0, "tape_start_s": 2.0, "tape_end_s": 10.02, "hold_end_s": 10.5,
+                                         "seconds": 8.02,
                                          "moments": moments(decode(blob), MANIFEST.course, string_offset("legs"))}]}}
     # the second match's clip is not ready: it is called on a later tick, as the first already is here
     assert match_footage(store, replace(CUP, matches=CUP.matches[:2]), MANIFEST, {first.match_id: {}}) == {}

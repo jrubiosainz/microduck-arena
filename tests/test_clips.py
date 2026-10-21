@@ -172,7 +172,7 @@ def test_the_manifest_carries_the_live_contract_per_layout():
 
 
 def test_a_match_clip_says_where_each_bout_sits():
-    run, bouts = rendered(), [{"k": 0, "tape_start_s": 3.52, "tape_end_s": 23.52}]
+    run, bouts = rendered(), [{"k": 0, "tape_start_s": 3.52, "tape_end_s": 23.52, "hold_end_s": 27.52}]
     land = run.layouts["landscape"]
     run.layouts["landscape"] = replace(land, plan={**land.plan, "bouts": bouts})
     manifest = clip_manifest("tug-of-war-0001-000", run, "2026-10-30T15:20:00Z")
@@ -754,14 +754,15 @@ def test_a_match_clip_job_outlasts_the_longest_matchs_render_budget(tmp_path):
     jobs.enqueue("tug-of-war-0001-000")
     jobs.tick()
     assert [job["timeout"] for job in api.launched] == [JOB_TIMEOUT, MATCH_JOB_TIMEOUT]
-    # Five full 45 s bouts are 5828 frames: budget_for gives them 11 630 s, and the job a run's
+    # Five full 45 s bouts with their holds are 6328 frames: budget_for gives them 12 628 s, and the job a run's
     # quarter of an hour more, rounded up to the minute.
-    assert MATCH_JOB_TIMEOUT == "209m"
+    assert MATCH_JOB_TIMEOUT == "226m"
 
 
 def test_the_longest_match_clip_is_five_full_bouts_of_the_tug():
     """MATCH_FRAMES through app/src/clip/match.js matchPlan: a 3 s title, each bout's settle and timed
-    steps at one frame per two, then a 2.5 s outro (Math.round: 63 frames), at 25 fps."""
+    steps at one frame per two and its 4 s hold (BOUT_HOLD_S), then a 2.5 s outro (Math.round: 63 frames),
+    at 25 fps."""
     from arena.constants import CTRL_DT
     from arena.manifest import load_event
 
@@ -769,7 +770,7 @@ def test_the_longest_match_clip_is_five_full_bouts_of_the_tug():
     settle, steps = round(tug.start.settle_s / CTRL_DT) + 1, round(tug.bout.time_limit_s / CTRL_DT)
     fps = 25
     stride = round(1 / fps / CTRL_DT)
-    assert MATCH_FRAMES == fps * 3 + tug.bout.max_bouts * math.ceil((settle + steps) / stride) + 63
+    assert MATCH_FRAMES == fps * 3 + tug.bout.max_bouts * (math.ceil((settle + steps) / stride) + fps * 4) + 63
 
 
 def test_a_match_clip_job_the_machine_ends_is_failed_at_once_for_the_cup_worker_to_relaunch(tmp_path):
