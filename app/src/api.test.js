@@ -7,6 +7,7 @@ import {
   getBoutSettle,
   getBoutTrace,
   getBroadcast,
+  getCall,
   getCup,
   getCups,
   getLeaderboard,
@@ -15,6 +16,7 @@ import {
   getPlayer,
   getStandings,
   getSettle,
+  getShow,
   getTrace,
   matchClipUrl,
 } from "./api.js";
@@ -173,6 +175,18 @@ describe("the channel", () => {
   it("gives nothing for a broadcast that is gone", async () => {
     globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({}) });
     expect(await getBroadcast("gone")).toBe(null);
+  });
+
+  it("reads a cup's desk segment and a match's call uncached, and nothing before they are served", async () => {
+    respondWith({ body: { plan: { duration_ms: 4000 } } });
+    expect(await getShow("tug-of-war", 1, "opening")).toEqual({ plan: { duration_ms: 4000 } });
+    await getCall("tug-of-war-0001-003");
+    expect(fetch.mock.calls).toEqual([
+      ["/api/live/show/tug-of-war/1/opening", { cache: "no-store" }],
+      ["/api/live/call/tug-of-war-0001-003", { cache: "no-store" }]]);
+    respondWith({ ok: false, status: 404, body: {} });
+    expect(await getShow("tug-of-war", 1, "opening")).toBe(null);
+    expect(await getCall("tug-of-war-0001-003")).toBe(null);
   });
 
   it("addresses a clip's files under the run, versioned by the render they belong to", () => {

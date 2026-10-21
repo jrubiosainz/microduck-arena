@@ -136,4 +136,9 @@ describe("createReplay", () => {
     await replay.play(B, 0);
     expect([...stage.querySelectorAll("video")].find((v) => !v.hidden).muted).toBe(true);
   });
+
+  it("sets the volume of its clips", () => {
+    replay.volume(0.3);
+    expect([...stage.querySelectorAll("video")].map((v) => v.volume)).toEqual([0.3, 0.3]);
+  });
 });

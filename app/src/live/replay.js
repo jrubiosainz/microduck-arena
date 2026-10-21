@@ -104,5 +104,9 @@ export function createReplay(stage, { onRefused }) {
       silent = flag;
       for (const video of videos) video.muted = flag;
     },
+    /** The clips' own sound, at `gain` of full. */
+    volume(gain) {
+      for (const video of videos) video.volume = gain;
+    },
   };
 }

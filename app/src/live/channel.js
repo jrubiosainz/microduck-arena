@@ -1,16 +1,16 @@
 // The conductor: on every frame, where the clock says we are in the grid,
 // and what that means for the segments. It enters a slot at its offset,
 // servos the one playing, keeps the last picture under a shutter's sweep,
-// uncovers the next segment at the shutter's midpoint, prefetches one slot
-// ahead, and is the one place a reload is allowed to happen.
+// uncovers the next segment at the shutter's midpoint, prepares the next
+// segment ahead, and is the one place a reload is allowed to happen.
 
 import { slotAfter, slotAt } from "./grid.js";
 import { shutterAt } from "./shutter.js";
 
 const FRESH_MS = 40; // a shutter entered within its first frame gets its wind
-// A cup match's clip is served from 30 s before it airs, and a video that
-// failed to load is never loaded again: a match slot is prepared from 25 s
-// before, which leaves a screen's clock 5 s of slack.
+// A cup's match clips, calls and desk segments are served from 30 s before
+// they air, and what failed to load is never asked for again: every slot is
+// prepared from 25 s before, which leaves a screen's clock 5 s of slack.
 export const PREFETCH_MS = 25_000;
 
 export function createChannel({ clock, segments, shutter, onState, onReload, gust }) {
@@ -24,7 +24,12 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
   let state = null; // what the page was last told, so it hears each state once
 
   const segmentFor = (slot) => (slot && slot.kind !== "shutter" ? segments[slot.kind] : null);
-  const due = (slot, ms) => slot.media !== "match" || slot.at_ms - ms <= PREFETCH_MS;
+
+  /** Prepare `slot`'s segment, or past a shutter the one it uncovers, from PREFETCH_MS before it starts. */
+  function prefetch(slot, ms) {
+    const ahead = slot?.kind === "shutter" ? slotAfter(slots, slot) : slot;
+    if (ahead && ahead.at_ms - ms <= PREFETCH_MS) segmentFor(ahead).prepare(ahead);
+  }
 
   function report(value) {
     if (state === value) return;
@@ -79,7 +84,7 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
       if (slot.kind === "shutter") {
         shutter.draw(offset, slot.next);
         if (!shutterAt(offset).destination) {
-          if (next && due(next, ms)) segmentFor(next)?.prepare(next);
+          prefetch(next, ms);
         } else if (!uncovered) {
           uncovered = true;
           stopPrevious();
@@ -100,8 +105,7 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
           shutter.hide();
           segment.seek(offset);
         }
-        const after = next && slotAfter(slots, next);
-        if (after && due(after, ms)) segmentFor(after)?.prepare(after);
+        prefetch(next, ms);
       }
       report("live");
     },

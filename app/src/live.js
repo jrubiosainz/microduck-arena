@@ -1,5 +1,6 @@
 // The channel. One stage every screen composes itself from the grid and the
-// shared clock: the clips in a <video>, the booth in three.js, the shutter
+// shared clock: the clips in a <video>, a cup's matches called over them, the
+// booth in three.js for a run's airing and for a cup's desk, the shutter
 // between them. This file owns the DOM, the polling, the sound the browser
 // may keep from starting until a click, and the page's states;
 // live/channel.js drives the segments from the clock.
@@ -7,6 +8,7 @@
 import { getLive } from "./api.js";
 import { dress, menuHref } from "./router.js";
 import { createAmbience } from "./live/ambience.js";
+import { createCall } from "./live/call.js";
 import { createChannel } from "./live/channel.js";
 import { createClock } from "./live/clock.js";
 import { shouldReload } from "./live/grid.js";
@@ -174,6 +176,7 @@ export async function renderLive(root, state, { api = { getLive }, synth = loadS
   const sound = createSound(synth);
   onTeardown(() => sound.close());
   let audio = null;
+  const call = createCall(stage, { replay, audio: () => audio });
   const interlude = await createInterlude(stage, { audio: () => audio });
   if (signal.aborted) {
     interlude.dispose();
@@ -181,7 +184,7 @@ export async function renderLive(root, state, { api = { getLive }, synth = loadS
   }
   onTeardown(() => interlude.dispose());
   const channel = createChannel({
-    clock, segments: { replay, booth: interlude, standby }, shutter, onState: setState,
+    clock, segments: { replay: call, booth: interlude, desk: interlude, standby }, shutter, onState: setState,
     onReload: () => location.reload(),
     gust: () => audio?.voice.gust(audio.context.currentTime),
   });
@@ -217,7 +220,7 @@ export async function renderLive(root, state, { api = { getLive }, synth = loadS
       }
       audio = opened;
       interlude.muted(isMuted());
-      replay.muted(isMuted());
+      call.muted(isMuted());
       // The button came up for a context that now runs; a clip the browser
       // still refuses raises it again on the rejoin.
       join.hidden = true;
@@ -239,7 +242,7 @@ export async function renderLive(root, state, { api = { getLive }, synth = loadS
   } else if (framed) {
     // A player on somebody else's page opens no sound of its own: the clips
     // play muted under the button, which is how the channel is asked for.
-    replay.muted(true);
+    call.muted(true);
     join.hidden = false;
   } else {
     admit();
@@ -261,6 +264,7 @@ export async function renderLive(root, state, { api = { getLive }, synth = loadS
     const width = page.clientWidth;
     page.style.setProperty("--stage-px", String(width));
     interlude.resize(width, page.clientHeight);
+    call.resize(width);
   });
   watcher.observe(page);
   onTeardown(() => watcher.disconnect());

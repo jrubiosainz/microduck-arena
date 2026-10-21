@@ -625,11 +625,17 @@ PREFETCH`; 404 before, and for anything the show does not hold. Slots:
 ```js
 // app/src/live/score.js
 export function prepareCall({ id, lines, duration_ms })   // a plan whose captions start at each line's at_ms
-// app/src/live/desk.js — new: the desk segment (interlude + the cup screen)
-// app/src/live/call.js — new: a replay segment that voices and captions its call plan
+// app/src/api.js
+export function getShow(eventId, number, segment)   // {dialogue, plan, screen}, null on a 404; never cached
+export function getCall(matchId)                    // {lines, plan}, null on a 404; never cached
+// No desk.js (Ruling F): app/src/live/interlude.js plays `booth` and `desk` slots on the one booth; a desk
+//   slot's file is getShow(show.event, show.number, show.segment), handed to booth.prepare(file, null)
+// app/src/live/call.js — new: createCall(stage, { replay, audio }), the replay segment, plus for a slot with
+//   `call` its getCall voiced and captioned from the offset the screen joins at
 export const DUCKED = 10 ** (-10 / 20)        // the clip's own sound while a call line is voiced (−10 dB)
 export function clipGain(plan, offsetMs)      // DUCKED inside a caption of the call's plan, else 1
-// app/src/live/replay.js: volume(gain) sets the playing clip's volume
+// app/src/live/replay.js: volume(gain) sets every clip's volume
+// app/src/live.js: segments { replay: call, booth: interlude, desk: interlude, standby }
 // app/src/live/screen.js — new
 export function drawCupScreen(canvas, view)   // groups, then the bracket, next match highlighted, ducks by their on-air name
 // app/src/live/set.js: booth({ screen }) stands the cup screen (the canvas as a texture) ready, hidden, at the

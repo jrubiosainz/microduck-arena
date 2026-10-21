@@ -15,17 +15,18 @@ const slots = [
 ];
 
 describe("createChannel", () => {
-  let now, replay, booth, shutter, onState, onReload, gust, channel;
+  let now, replay, booth, desk, shutter, onState, onReload, gust, channel;
   beforeEach(() => {
     now = 0;
     replay = segment();
     booth = segment();
+    desk = segment();
     shutter = { draw: vi.fn(), hide: vi.fn() };
     onState = vi.fn();
     onReload = vi.fn();
     gust = vi.fn();
     channel = createChannel({
-      clock: { position: () => now }, segments: { replay, booth }, shutter, onState, onReload, gust,
+      clock: { position: () => now }, segments: { replay, booth, desk }, shutter, onState, onReload, gust,
     });
     channel.update({ slots });
   });
@@ -141,6 +142,34 @@ describe("createChannel", () => {
     channel.tick();
     expect(replay.prepare).toHaveBeenCalledWith(cup[2]);
     expect(PREFETCH_MS).toBe(25_000);
+  });
+
+  it("prepares a segment no shutter stands before, within PREFETCH_MS of its start", () => {
+    // Peter and Ray at the desk straight after a match, with no shutter between.
+    const show = [
+      { kind: "replay", at_ms: 0, duration_ms: 40000, run_id: "m0", clip: "v", media: "match", call: true },
+      { kind: "desk", at_ms: 40000, duration_ms: 40000, show: { event: "tug-of-war", number: 1, segment: "intro-m1" } }];
+    channel.update({ slots: show });
+    now = 10000;
+    channel.tick();
+    expect(desk.prepare).not.toHaveBeenCalled();
+    now = 15000;
+    channel.tick();
+    expect(desk.prepare).toHaveBeenCalledWith(show[1]);
+  });
+
+  it("prepares the segment after a shutter no earlier than PREFETCH_MS before it", () => {
+    const airing = [
+      { kind: "replay", at_ms: 0, duration_ms: 40000, run_id: "A" },
+      { kind: "shutter", at_ms: 40000, duration_ms: 1600, next: null },
+      { kind: "booth", at_ms: 41600, duration_ms: 20000, run_id: "A", broadcast: "b1" }];
+    channel.update({ slots: airing });
+    now = 10000;
+    channel.tick();
+    expect(booth.prepare).not.toHaveBeenCalled();
+    now = 17000;
+    channel.tick();
+    expect(booth.prepare).toHaveBeenCalledWith(airing[2]);
   });
 
   it("says nothing before the first grid, then says a state once until it changes", () => {

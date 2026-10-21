@@ -114,13 +114,22 @@ export const getClip = (runId) => json(`/api/runs/${runId}/clip`);
 /** The channel's grid and the server's clock. Never cached: the clock is in it. */
 export const getLive = () => json("/api/live", { cache: "no-store" });
 
-/** A booth's dialogue and the plan that plays it, or null when it is gone. */
-export async function getBroadcast(id) {
-  const response = await fetch(`/api/live/broadcast/${id}`, { cache: "no-store" });
+/** What a live slot plays, never cached: null when it is gone, or not served yet. */
+async function onAir(path) {
+  const response = await fetch(path, { cache: "no-store" });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(await detailFrom(response));
   return response.json();
 }
+
+/** A booth's dialogue and the plan that plays it, or null when it is gone. */
+export const getBroadcast = (id) => onAir(`/api/live/broadcast/${id}`);
+
+/** A desk segment of a cup's show: its dialogue, its plan and the cup screen's view, served from shortly before it airs. */
+export const getShow = (eventId, number, segment) => onAir(`/api/live/show/${eventId}/${number}/${segment}`);
+
+/** A called match's lines and the plan that voices them over its clip, served with the clip's media. */
+export const getCall = (matchId) => onAir(`/api/live/call/${matchId}`);
 
 // `version` is the render the file belongs to (a slot's `clip`): the files are
 // cached for a year as immutable, so a clip rendered again is a new URL.
