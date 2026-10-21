@@ -14,4 +14,12 @@ describe("createStandby", () => {
     standby.stop();
     expect(card.hidden).toBe(true);
   });
+
+  it("gives no time for a cup late on its premiere: it has no start until its running order lands", () => {
+    const stage = document.createElement("div"), standby = createStandby(stage);
+    standby.play({ kind: "standby", at_ms: 0, duration_ms: 60_000, cup: { title: "Tug of War · Cup #1" }, late: true }, 0);
+    expect(stage.querySelector(".live-standby-time").textContent).toBe("");
+    standby.seek(30_000);
+    expect(stage.querySelector(".live-standby-time").textContent).toBe("");
+  });
 });

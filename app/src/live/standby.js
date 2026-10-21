@@ -1,6 +1,7 @@
 // The wait before a cup's show: the card, and the time left until it starts.
 // A segment like the others, though it plays no frames: the time is the slot's
-// own length less the offset the channel seeks it to.
+// own length less the offset the channel seeks it to. A cup late on its premiere
+// has no start until its running order lands: its card gives no time.
 
 import { countdown } from "../format.js";
 import { wordmark } from "../wordmark.js";
@@ -21,7 +22,7 @@ export function createStandby(stage) {
   let current = null;
 
   function seek(offsetMs) {
-    time.textContent = countdown(current.duration_ms - offsetMs);
+    time.textContent = current.late ? "" : countdown(current.duration_ms - offsetMs);
   }
 
   // No show() and no muted(): a standby never follows a shutter, and it has no sound.

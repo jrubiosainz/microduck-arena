@@ -4,6 +4,7 @@ only says which part of it to serve."""
 import hashlib
 import json
 from collections import Counter
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 
@@ -32,7 +33,7 @@ from arena.trace import encode
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
 from tests.test_cup_view import REVEAL, START, START_ISO
-from tests.test_cupworker import played_cup, store_cup
+from tests.test_cupworker import drawn_cup, played_cup, store_cup
 from tests.test_store import make_record
 from tests.test_withdraw import sign_in, spaced  # noqa: F401 — spaced is a fixture
 
@@ -424,8 +425,8 @@ def test_a_mark_that_cannot_be_written_does_not_take_the_grid_down(tmp_path, mon
     assert book.get(made.id).aired_at is None
 
 
-# A cup of one match: its shutter at 10 030 000, its clip until 10 041 600.
-SHOW = Show(10_030_000, 10_041_600, (
+# A cup of one match: its shutter at 10 030 000, its premiere, its clip until 10 041 600.
+SHOW = Show(10_030_000, 10_030_000, 10_041_600, (
     {"kind": "shutter", "at_ms": 10_030_000, "duration_ms": 1600, "next": {"match_id": "m", "title": "Final"}},
     {"kind": "replay", "at_ms": 10_031_600, "duration_ms": 10000, "run_id": "m", "clip": "v", "media": "match"}),
     {"title": "Cup #1"})
@@ -460,7 +461,7 @@ def test_shows_lay_a_cup_at_its_absolute_times(tmp_path):
     store_cup(store, cup)
     start = int(START.timestamp() * 1000)
     [show] = shows(store, START - timedelta(hours=1))
-    assert (show.starts_ms, show.ends_ms, len(show.slots)) == (start, start + 7 * 11600, 14)
+    assert (show.premiere_ms, show.starts_ms, show.ends_ms, len(show.slots)) == (start, start, start + 7 * 11600, 14)
     assert show.slots[0]["next"] == {"match_id": cup.matches[0].match_id, "title": "Group A"}
     assert show.slots[1] == {"kind": "replay", "at_ms": start + 1600, "duration_ms": 10000,
                              "run_id": cup.matches[0].match_id, "clip": "20261030T152000Z", "media": "match"}
@@ -477,6 +478,37 @@ def test_the_cycle_stands_by_for_a_show_then_plays_it_at_its_times(tmp_path):
     assert slots[6] == {"kind": "standby", "at_ms": 10_028_800, "duration_ms": 1200, "cup": SHOW.standby}
     assert slots[8] == SHOW.slots[1] and slots[9]["at_ms"] == 10_041_600
     for a, b in pairwise(slots):
+        assert b["at_ms"] == a["at_ms"] + a["duration_ms"]
+
+
+def test_a_cup_with_no_running_order_yet_is_a_show_with_no_start(tmp_path):
+    store, cup = LocalStore(tmp_path), played_cup(4)
+    store_cup(store, cup)
+    store_cup(store, replace(drawn_cup(3, number=2), groups=(), skipped=True))
+    premiere = int(START.timestamp() * 1000)
+    assert shows(store, START + timedelta(hours=1)) == [Show(premiere, None, None, (), {"title": f"{TITLE} · Cup #1"})]
+
+
+def test_a_cup_late_on_its_premiere_stands_by_until_its_order_lands_then_until_it_starts(tmp_path):
+    """From its premiere the channel airs the cup and nothing else: with no order it only says that the cup is
+    coming. The order is fixed at least ten minutes ahead, beyond the grid's reach, and the show airs at its start."""
+    start = 10_660_000  # the order lands at 10 060 000
+    late = Show(10_000_000, None, None, (), {"title": "Cup #1"})
+    ordered = Show(10_000_000, start, start + 11_600, tuple({**slot, "at_ms": slot["at_ms"] + start - SHOW.starts_ms}
+                                                             for slot in SHOW.slots), {"title": "Cup #1"})
+    clock, cups = Clock(10_020_000), [late]
+    programme = Programme(lambda: [entry("A"), entry("B")], clock, BroadcastBook(tmp_path), cups=lambda: cups)
+    first = programme.slots()
+    assert first[0]["at_ms"] == 10_020_000 and {(s["kind"], s.get("late")) for s in first} == {("standby", True)}
+    laid = {}
+    for now in range(10_020_000, start + 20_000, 10_000):
+        clock.ms, cups[:] = now, [late if now < 10_060_000 else ordered]
+        laid |= {slot["at_ms"]: slot for slot in programme.slots()}
+    laid = [laid[at] for at in sorted(laid)]
+    waiting = [slot for slot in laid if slot["at_ms"] < start]
+    assert {slot["kind"] for slot in waiting} == {"standby"} and "late" not in waiting[-1]
+    assert laid[len(waiting):len(waiting) + 2] == list(ordered.slots)
+    for a, b in pairwise(laid):
         assert b["at_ms"] == a["at_ms"] + a["duration_ms"]
 
 

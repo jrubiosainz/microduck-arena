@@ -27,6 +27,10 @@ KEEP_MS = 120_000  # slots older than this are forgotten
 # was playing — and cut into the middle of it.
 PROMISED_MS = 30_000
 HEAD = 3  # the newest runs open every cycle
+# A cup late on its premiere has no start until its running order lands: its standby
+# is laid a minute at a time. The order is fixed at least ten minutes ahead
+# (cupworker.ORDER_LEAD), beyond the grid's reach of HORIZON_MS and one of these.
+LATE_STANDBY_MS = 60_000
 
 
 @dataclass(frozen=True)
@@ -44,9 +48,11 @@ class Entry:
 
 @dataclass(frozen=True)
 class Show:
-    """A cup's running order on the grid: it airs at its own times, whatever the cycle is doing."""
-    starts_ms: int
-    ends_ms: int
+    """A cup on the grid. From its premiere the channel airs it and nothing else: its running order at
+    its own times, whatever the cycle is doing, and its standby until then, however late the order is."""
+    premiere_ms: int
+    starts_ms: int | None  # None while the cup has no running order
+    ends_ms: int | None
     slots: tuple[dict, ...]  # each shutter, and each match as a replay slot with its clip version
     standby: dict  # {"title"}: what the screen waits for
 
@@ -95,13 +101,19 @@ def pool(store, now: datetime) -> list[Entry]:
 
 
 def shows(store, now: datetime) -> list[Show]:
-    """Every cup with a running order that has not finished airing, by start."""
+    """Every cup that has not finished airing, by premiere; one with no running order yet, still
+    drawn, played or rendered, has no start and no end."""
     from .cupworker import all_cups  # not at the top: cupworker reads SHUTTER_MS from this module
 
     titles = {manifest.id: manifest.title for manifest in all_events()}
     laid = []
     for cup in all_cups(store):
-        if cup.order is None or ends_at(cup) <= now:
+        if cup.skipped or (cup.order is not None and ends_at(cup) <= now):
+            continue
+        premiere = int(parse_iso(cup.premiere_at).timestamp() * 1000)
+        standby = {"title": f"{titles[cup.event_id]} · Cup #{cup.number}"}
+        if cup.order is None:
+            laid.append(Show(premiere, None, None, (), standby))
             continue
         start = int(parse_iso(cup.order["starts_at"]).timestamp() * 1000)
         slots = []
@@ -113,9 +125,8 @@ def shows(store, now: datetime) -> list[Show]:
                 # The order carries each clip's length, not its render: that is read here.
                 slots.append({"kind": "replay", "at_ms": at, "duration_ms": duration, "run_id": segment["match_id"],
                               "clip": clip_version(store.clip_state(segment["match_id"])[1]), "media": "match"})
-        laid.append(Show(start, slots[-1]["at_ms"] + slots[-1]["duration_ms"], tuple(slots),
-                         {"title": f"{titles[cup.event_id]} · Cup #{cup.number}"}))
-    return sorted(laid, key=lambda show: show.starts_ms)
+        laid.append(Show(premiere, start, slots[-1]["at_ms"] + slots[-1]["duration_ms"], tuple(slots), standby))
+    return sorted(laid, key=lambda show: show.premiere_ms)
 
 
 def cycle(entries: list[Entry], k: int) -> list[Entry]:
@@ -171,7 +182,8 @@ class Programme:
     lands, from the slot playing now when a run is withdrawn — keeping its place
     in the cycle it is walking either way, so the rebuild carries on from there
     instead of opening a new cycle on the newest runs. A cup's show airs at its
-    running order's own times: the cycle stands by for it, then resumes."""
+    running order's own times: the cycle stands by for it, from its premiere at
+    the latest, then resumes."""
 
     def __init__(self, source, now_ms, book, cups=list):
         self._source = source
@@ -223,16 +235,19 @@ class Programme:
         # reached its start before the order is known, or its slots would
         # overlap what was laid there. The cup worker fixes an order at least
         # ORDER_LEAD (10 minutes) ahead, and the grid reaches no further than
-        # HORIZON_MS plus one entry.
+        # HORIZON_MS plus one entry, or one LATE_STANDBY_MS.
         claimed, shows = self._claimed(), None
         while self._cursor < until_ms:
             shows = self._cups() if shows is None else shows  # read once per extension that lays something
-            show = next((one for one in shows if one.ends_ms > self._cursor), None)
-            if show is not None and show.starts_ms <= self._cursor:
+            show = next((one for one in shows if one.ends_ms is None or one.ends_ms > self._cursor), None)
+            if show is not None and show.starts_ms is not None and show.starts_ms <= self._cursor:
                 # Inside a show: its slots at their own times. A restart in the
                 # middle of one joins the segment airing now.
                 self._slots.extend(slot for slot in show.slots if slot["at_ms"] + slot["duration_ms"] > self._cursor)
                 self._cursor = show.ends_ms
+                continue
+            if show is not None and show.premiere_ms <= self._cursor:
+                self._stand_by(show)  # past its premiere, the cup is all the channel waits for
                 continue
             if not self._pending and not self._take_up_the_cycle():
                 if show is None:
@@ -240,7 +255,7 @@ class Programme:
                 self._stand_by(show)
                 continue
             made = slots_for([self._pending[0]], self._cursor, self._book, claimed)
-            if show is not None and made[-1]["at_ms"] + made[-1]["duration_ms"] > show.starts_ms:
+            if show is not None and made[-1]["at_ms"] + made[-1]["duration_ms"] > show.premiere_ms:
                 self._stand_by(show)  # the entry waits for after the show
                 continue
             entry = self._pending.pop(0)
@@ -253,7 +268,13 @@ class Programme:
 
     def _stand_by(self, show: Show) -> None:
         """Fill to the show's start with its standby: the one slot of any
-        length, since it plays no frames."""
+        length, since it plays no frames. A cup with no running order has no
+        start: its standby is laid LATE_STANDBY_MS at a time, and gives no time."""
+        if show.starts_ms is None:
+            self._slots.append({"kind": "standby", "at_ms": self._cursor, "duration_ms": LATE_STANDBY_MS,
+                                "cup": show.standby, "late": True})
+            self._cursor += LATE_STANDBY_MS
+            return
         self._slots.append({"kind": "standby", "at_ms": self._cursor,
                             "duration_ms": show.starts_ms - self._cursor, "cup": show.standby})
         self._cursor = show.starts_ms

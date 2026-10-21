@@ -531,10 +531,13 @@ Live (Plan C): `pool(store, now)` (`now` required: the programme and the comment
 adds the matches of every cup that has finished airing, until the event's next cup starts; a match
 entry (`Entry.title` set) is announced by `{"match_id", "title"}`, plays its match clip and gets no
 booth broadcast, and `CommentaryStock` skips every `is_match_id` entry. `shows(store, now) ->
-list[Show]` gives every cup with an order that has not ended (`Show(starts_ms, ends_ms, slots,
-standby)`). `Programme(source, now_ms, book, cups=...)` lays a cup's segments at their absolute
-times; the cycle before it ends with a `standby` slot that fills to `starts_at`:
-`{"kind": "standby", "at_ms", "duration_ms", "cup": {"title"}}`.
+list[Show]` gives every cup not skipped that has not finished airing (`Show(premiere_ms, starts_ms,
+ends_ms, slots, standby)`; `starts_ms` and `ends_ms` are None while it has no order).
+`Programme(source, now_ms, book, cups=...)` lays a cup's segments at their absolute times; the cycle
+before it ends with a `standby` slot that fills to `starts_at`, from the premiere at the latest:
+`{"kind": "standby", "at_ms", "duration_ms", "cup": {"title"}}`. Past its premiere a cup with no
+order yet is "starting soon": standby slots of `LATE_STANDBY_MS` (60 s) carrying `"late": true`,
+whose card gives no time, until the order lands (at least `ORDER_LEAD` ahead, beyond the grid).
 A match segment is served as `{"kind": "replay", …, "run_id": <match id>, "clip", "media": "match"}`.
 
 Points: `receipts(…, cups: Sequence[Cup] = (), now)`; acts `cup_champion` 250, `cup_final` 150,
