@@ -31,7 +31,7 @@ from arena.manifest import BoutRules, load_event
 from arena.match import BoutResult, MatchOutcome, bout_seed
 from arena.policy import load_policy
 from arena.store import LocalStore, Withdrawal
-from arena.trace import decode
+from arena.trace import decode, encode
 from tests.test_cup import entrant
 from tests.test_store import make_record
 
@@ -176,6 +176,21 @@ def enter(store, n, at="2026-10-22T09:00:00Z"):
 
 def clip_json(seconds=10.0):
     return json.dumps({"rendered_at": "2026-10-23T14:30:00Z", "layouts": {"landscape": {"seconds": seconds}}}).encode()
+
+
+def store_cup(store, cup, seconds=10.0):
+    """The cup as the worker leaves it, every match with a ready clip."""
+    files = {"draw.json": cup.draw_json(), **{f"bouts/{m.match_id}-{b.k}.npz": encode(np.zeros((2, 2, 21)), np.zeros((2, 3, 21)))
+                                               for m in cup.matches for b in m.bouts}}
+    if cup.matches:
+        files["matches.json"] = cup.matches_json()
+    if cup.order:
+        files["order.json"] = json.dumps(cup.order).encode()
+    store.put_cup_files(cup.event_id, cup.number, files)
+    clip = {"rendered_at": "2026-10-30T15:20:00Z", "poster": "poster.png",
+            "layouts": {"landscape": {"file": "landscape.mp4", "width": 1920, "height": 1080, "seconds": seconds}}}
+    for m in cup.matches:
+        store.put_clip(m.match_id, {"clip.json": json.dumps(clip).encode(), "landscape.mp4": b"mp4", "poster.png": b"png"})
 
 
 def render(store, number=1, seconds=10.0):

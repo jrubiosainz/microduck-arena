@@ -18,6 +18,7 @@ from ..live import Programme, pool
 from ..manifest import all_events
 from .config import ArenaConfig
 from .routes_auth import router as auth_router
+from .routes_cups import router as cups_router
 from .routes_launcher import router as launcher_router
 from .routes_live import now_ms
 from .routes_live import router as live_router
@@ -189,6 +190,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
             threading.Thread(target=run, name="arena-recover", daemon=True).start()
 
     app.include_router(read_router)
+    app.include_router(cups_router)
     app.include_router(submit_router)
     app.include_router(auth_router)
     app.include_router(vote_router)
