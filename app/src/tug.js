@@ -3,7 +3,7 @@
 // points a frame, not a line between two necks; and how a tug is framed. Its venue is tug-venue.js.
 // Frames are MJCF (z up); `toThree` carries a point to the scene.
 
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, Group, Mesh, TubeGeometry, Vector3 } from "three";
+import { BufferGeometry, CatmullRomCurve3, CylinderGeometry, Group, Mesh, TubeGeometry, Vector3 } from "three";
 import { PALETTE, flat } from "./palette.js";
 import { TRACE_WIDTH, frameCount, leadIn } from "./replay.js";
 
@@ -73,19 +73,22 @@ export function tugString({ string: { settle, trace } }, lead) {
 // The marker's red: the site's recording dot (club.css).
 const RED = 0xff3b30;
 
+// A cylinder's axis, before it is turned along the string.
+const AXIS = new Vector3(0, 1, 0);
+
 /** The string, an 8 mm rope in ink (it reads against the ring's canvas and the stands behind it), with a
- * red ribbon hanging at its middle point; `update` lays it through one frame of its points (stringAt),
- * `dispose` frees it. */
+ * red ribbon tied round its middle point, along it and wider than it: it shows wherever the string lies,
+ * on the canvas too, where a ribbon hanging from it sank out of sight. `update` lays it through one frame
+ * of its points (stringAt), `dispose` frees it. */
 export function buildString() {
   const group = new Group();
   const rope = new Mesh(new BufferGeometry(), flat(PALETTE.ink));
   rope.name = "string";
-  const ribbon = new BoxGeometry(0.012, 0.05, 0.003);
-  ribbon.translate(0, -0.025, 0);
-  const marker = new Mesh(ribbon, flat(RED));
+  const marker = new Mesh(new CylinderGeometry(0.006, 0.006, 0.04, 12), flat(RED));
   marker.name = "marker";
   group.add(rope, marker);
   const knots = Array.from({ length: STRING_WIDTH / 3 }, () => new Vector3());
+  const along = new Vector3();
   return {
     group,
     update(points) {
@@ -93,6 +96,7 @@ export function buildString() {
       rope.geometry.dispose();
       rope.geometry = new TubeGeometry(new CatmullRomCurve3(knots), 64, 0.004, 6);
       marker.position.copy(knots[MIDDLE]);
+      marker.quaternion.setFromUnitVectors(AXIS, along.subVectors(knots[MIDDLE + 1], knots[MIDDLE - 1]).normalize());
     },
     dispose() {
       for (const part of [rope, marker]) {

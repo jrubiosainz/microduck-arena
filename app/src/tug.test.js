@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Vector3 } from "three";
+import { Box3, PerspectiveCamera, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { TRACE_WIDTH } from "./replay.js";
 import {
@@ -62,6 +62,21 @@ describe("the tug drawn", () => {
     expect(rope.geometry.boundingBox.max.x).toBeCloseTo(0.5, 3);
     expect(rope.geometry.boundingBox.max.z).toBeCloseTo(0.004, 6);  // the 4 mm radius: an 8 mm rope
     s.dispose();   // geometry and material freed, the group off its parent
+  });
+  it("ties the ribbon round the string's middle, along it and wider than it: it shows where the string lies on the canvas", () => {
+    const s = buildString();
+    // The string lying on the canvas, its axis a radius up, along MJCF x, then across the ring along MJCF y.
+    for (const along of [0, 1]) {
+      s.update(new Float32Array(51).map((_, i) => (i % 3 === along ? -0.5 + Math.floor(i / 3) / 16 : i % 3 === 2 ? 0.004 : 0)));
+      s.group.updateMatrixWorld(true);
+      const [rope, ribbon] = ["string", "marker"].map((name) => new Box3().setFromObject(s.group.getObjectByName(name)));
+      expect(ribbon.max.y).toBeGreaterThan(rope.max.y);   // proud of the string, not sunk under the canvas
+      expect(ribbon.min.y).toBeGreaterThan(-0.005);
+      const size = ribbon.getSize(new Vector3());
+      const [length, across] = along ? [size.z, size.x] : [size.x, size.z];
+      expect(length).toBeGreaterThan(2 * across);
+    }
+    s.dispose();
   });
   it("frees the string: every tube it drew, its ribbon's geometry, and their paint", () => {
     const string = buildString();
