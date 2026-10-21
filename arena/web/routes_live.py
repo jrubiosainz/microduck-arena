@@ -55,11 +55,11 @@ def desk(event_id: str, number: int, segment_id: str, request: Request) -> JSONR
     show = None if cup is None or cup.order is None else _written_show(request, event_id, number)
     segment = None if show is None else show["desk"].get(segment_id)
     if segment is None:
-        raise HTTPException(status_code=404, detail=f"no desk segment {segment_id!r}")
+        raise HTTPException(status_code=404, detail=f"no desk segment {segment_id!r}", headers=NO_STORE)
     after = segment["after"]
     opens = parse_iso(cup.order["starts_at"]) if after == -1 else revealed_at(cup, cup.matches[after].match_id)
     if now_ms() < (opens - PREFETCH).timestamp() * 1000:
-        raise HTTPException(status_code=404, detail=f"no desk segment {segment_id!r}")
+        raise HTTPException(status_code=404, detail=f"no desk segment {segment_id!r}", headers=NO_STORE)
     return JSONResponse({key: segment[key] for key in ("dialogue", "plan", "screen")}, headers=NO_STORE)
 
 
@@ -69,5 +69,5 @@ def call(match_id: str, request: Request) -> JSONResponse:
     _, cup, _ = _public_match(request, match_id, media=True)
     show = _written_show(request, cup.event_id, cup.number)
     if show is None:
-        raise HTTPException(status_code=404, detail=f"no call for {match_id!r}")
+        raise HTTPException(status_code=404, detail=f"no call for {match_id!r}", headers=NO_STORE)
     return JSONResponse(show["calls"][match_id], headers=NO_STORE)

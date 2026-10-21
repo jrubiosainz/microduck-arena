@@ -94,16 +94,16 @@ def _public_match(request: Request, match_id: str, media: bool = False) -> tuple
     """
     parsed = parse_match_id(match_id)
     if parsed is None:
-        raise HTTPException(status_code=404, detail=f"no match {match_id!r}")
+        raise HTTPException(status_code=404, detail=f"no match {match_id!r}", headers=NO_STORE)
     event_id, number, index = parsed
     manifest = _cups_event(event_id)
     cup = load_cup(request.app.state.store, event_id, number)
     if cup is None or index >= len(cup.matches):
-        raise HTTPException(status_code=404, detail=f"no match {match_id!r}")
+        raise HTTPException(status_code=404, detail=f"no match {match_id!r}", headers=NO_STORE)
     if not request.app.state.config.reveal_all:
         airs = airs_at(cup, match_id)  # None before there is a running order
         if airs is None or now() < (airs - PREFETCH if media else revealed_at(cup, match_id)):
-            raise HTTPException(status_code=404, detail=f"no match {match_id!r}")
+            raise HTTPException(status_code=404, detail=f"no match {match_id!r}", headers=NO_STORE)
     return manifest, cup, cup.matches[index]
 
 

@@ -621,7 +621,8 @@ def test_a_desk_segment_is_served_from_thirty_seconds_before_the_reveal_it_menti
     api = show_api(tmp_path, (CUP, WRITTEN))
     opening = "/api/live/show/tug-of-war/1/opening"
     at(monkeypatch, START_MS - 30_040)
-    assert api.get(opening).status_code == 404
+    early = api.get(opening)   # a 404 that turns 200 at a set time is never cached
+    assert early.status_code == 404 and early.headers["cache-control"] == "no-store"
     at(monkeypatch, START_MS - 30_000)
     answer = api.get(opening)
     assert answer.status_code == 200 and answer.headers["cache-control"] == "no-store"
@@ -639,7 +640,8 @@ def test_a_call_is_served_from_thirty_seconds_before_its_match_airs(tmp_path, mo
     m3 = CUP.matches[3]
     call = f"/api/live/call/{m3.match_id}"
     at(monkeypatch, on_air(m3)[0] - 30_040)
-    assert api.get(call).status_code == 404
+    early = api.get(call)
+    assert early.status_code == 404 and early.headers["cache-control"] == "no-store"
     at(monkeypatch, on_air(m3)[0] - 30_000)
     answer = api.get(call)
     assert answer.status_code == 200 and answer.headers["cache-control"] == "no-store"
