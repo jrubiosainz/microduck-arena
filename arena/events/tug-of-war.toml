@@ -33,7 +33,7 @@ fall_gravity_z = -0.5
 fall_hold_s    = 0.3
 
 [rating]                      # one bout a seed against the reference duck, the entry west on odd seeds
-reference    = "tug-reference-t7-250.onnx"   # in arena/assets/policies/
+reference    = "tug-reference-t15-250.onnx"   # in arena/assets/policies/
 pit_bonus_cm = 100.0          # a pit outweighs any marker margin: 65 cm at most
 
 [bout]

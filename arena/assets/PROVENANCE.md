@@ -23,14 +23,15 @@ match the kinematics' `geom.mesh` values.
 ## The tug's reference duck
 
 Every tug rating is five bouts against this duck (`[rating]` in `arena/events/tug-of-war.toml`).
-It walks back and pulls the string taut.
+It stays on its feet, walks back and pulls the string taut.
 
 | field | value |
 | --- | --- |
-| source | `Nico-robot/mjlab-tugofwar-microduck-t7`, checkpoint 250, exported to ONNX |
-| recipe | microduck-challenges `tug-of-war` at `370239a` |
-| sha256 | `0c4e8b0abc9223c51bc4a32bc78591a4dc72c92ff873b6de7cd894bfad4bc1a2` |
-| vendored | 2026-10-20 |
+| source | `Nico-robot/mjlab-tugofwar-microduck-t15`, checkpoint 250, exported to ONNX |
+| recipe | microduck-challenges `tug-of-war` at `b98694b` |
+| sha256 | `37459c463deec792712dcc7eaf960798bf0fc84d794019f04ba1abee7aeddbfa` |
+| vendored | 2026-10-22 |
+| history | trained upright on the ring and the string, warm-started from t7-250 and against it; replaces t7-250, owner 2026-10-21: every rating changed |
 
 It is frozen: replacing it changes every rating, so never without the owner's decision on the
 board.

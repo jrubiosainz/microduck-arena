@@ -493,7 +493,7 @@ def test_a_missing_kind_is_refused(tmp_path):
 
 CUP = '[cup]\nfirst="2026-10-30"\npremiere="18:00"\ntimezone="Europe/Paris"\nclose_before_h=2.0\nmin_entrants=4\n'
 
-RATING = '[rating]\nreference="tug-reference-t7-250.onnx"\npit_bonus_cm=100.0\n'
+RATING = '[rating]\nreference="tug-reference-t15-250.onnx"\npit_bonus_cm=100.0\n'
 
 TUG = {
     "root": GOOD["root"].replace('category="race"', 'category="versus"').replace('"mean_finish_time"', '"mean_ground_cm"'),
@@ -506,7 +506,7 @@ TUG = {
 def test_the_tug_of_war_loads(tmp_path):
     m = load_event("tug-of-war")
     assert m.course == Tug(3.0, 0.3, 0.3, 1.0)
-    assert m.rating == Rating("tug-reference-t7-250.onnx", 100.0)
+    assert m.rating == Rating("tug-reference-t15-250.onnx", 100.0)
     assert m.bout == BoutRules(45.0, 2, 5)
     assert (m.category, m.metric, m.rig, m.time_limit_s, m.clip.tape_max_s) == ("versus", "mean_ground_cm", "legs", 45.0, 45.0)
     assert m.sweep is None and m.vote is None and m.command[:3] == (-0.3, 0.0, 0.0)
@@ -519,7 +519,7 @@ def test_the_tug_of_war_loads(tmp_path):
     ({"course": GOOD["course"], "sweep": GOOD["sweep"]}, "goes with"),
     ({"sweep": TUG["sweep"].split("[bout]")[0]}, r"needs \[bout\]"),
     ({"sweep": "[bout]" + TUG["sweep"].split("[bout]")[1]}, r"needs \[rating\]"),
-    ({"sweep": TUG["sweep"].replace("t7-250", "t9")}, r"\[rating\] reference"),
+    ({"sweep": TUG["sweep"].replace("t15-250", "t9")}, r"\[rating\] reference"),
     ({"sweep": TUG["sweep"].replace('"tug-', '"../policies/tug-')}, r"\[rating\] reference"),
     ({"sweep": TUG["sweep"].replace("pit_bonus_cm=100.0", "pit_bonus_cm=0.0")}, r"\[rating\] pit_bonus_cm"),
     ({"sweep": TUG["sweep"].replace("pit_bonus_cm=100.0", "pit_bonus_cm=100.0\nopponent=1")}, "unknown keys"),

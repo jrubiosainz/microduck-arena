@@ -32,10 +32,10 @@ def test_reference_policy_present():
     assert (ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx").is_file()
 
 
-REFERENCE_SHA256 = "0c4e8b0abc9223c51bc4a32bc78591a4dc72c92ff873b6de7cd894bfad4bc1a2"
+REFERENCE_SHA256 = "37459c463deec792712dcc7eaf960798bf0fc84d794019f04ba1abee7aeddbfa"
 
 
-def test_the_tug_reference_duck_is_t7_250_byte_for_byte():
+def test_the_tug_reference_duck_is_t15_250_byte_for_byte():
     """Every tug rating is bouts against it: an LFS pointer or another checkpoint changes them all."""
-    blob = (ASSET_ROOT / "policies" / "tug-reference-t7-250.onnx").read_bytes()
+    blob = (ASSET_ROOT / "policies" / "tug-reference-t15-250.onnx").read_bytes()
     assert hashlib.sha256(blob).hexdigest() == REFERENCE_SHA256

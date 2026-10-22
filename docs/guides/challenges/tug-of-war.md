@@ -29,10 +29,11 @@ pull: train a new one. Enter it with **Publish and compete**, or from a shell wi
 ## Rating
 
 The board ranks a rating from five bouts against the Arena's **reference duck**, a frozen policy
-that walks backwards and pulls the string taut. Your duck plays the west end on odd starts and the
-east end on even ones. A bout scores the centimetres the marker moved towards your duck by its end
-(negative when the reference pulled it away), plus **100 cm** when the reference ends in the pit,
-or minus 100 cm when your duck does. The rating is the mean of the five bouts; the higher rating wins.
+that stays on its feet, walks backwards and pulls the string taut. Your duck plays the west end on
+odd starts and the east end on even ones. A bout scores the centimetres the marker moved towards
+your duck by its end (negative when the reference pulled it away), plus **100 cm** when the reference
+ends in the pit, or minus 100 cm when your duck does. The rating is the mean of the five bouts; the
+higher rating wins.
 
 For example, bouts of +12, +8 and −4 cm, one where the reference was dragged in with the marker
 30 cm your way (+130) and one where your duck was, 40 cm the other way (−140), rate **1.2 cm**.
