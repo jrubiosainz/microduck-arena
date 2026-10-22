@@ -289,12 +289,14 @@ is simply computed again.
     and never out for 0.3 s (the 15th step ends a training episode).
   - **S** (stepping): in at least 8 of the 10, at least 2 clear touch-downs a second and at most
     20 % of the foot travel in contact. A duck whose feet travel under 1 cm/s is standing still
-    and passes.
+    and passes. An S pass resting on "standing still" in more than 2 of the 10 bouts is not walking
+    (t21-250 was ruled out on this).
   - **R1**: no NaN, and at least 8 of 10 bouts backed +2 cm by 2 s.
   - **R2** and **R3**, for the candidate only: a rating of +20 cm or more against the new reference,
     and 3 of 10 pits as a target.
 
   The candidate must also pass U2 and S over every round-robin bout (Plan H's ruling).
+  The candidate's U2 is also a gate against a head-planter (t15-250), as the reference's is.
   - **The reference's U2, S and R1 are judged against the walker**, its training opponent. Its U2
     against t15-250, a planter, is also a gate (CHECK, 10 bouts, B the default): every player's
     replay shows the reference, so it must stay upright even when it loses.
