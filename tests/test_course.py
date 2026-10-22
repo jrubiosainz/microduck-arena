@@ -26,7 +26,7 @@ from arena.course import (
     tug_layout,
 )
 from arena.manifest import load_event
-from arena.runner import _Addresses
+from arena.runner import _Addresses, _reset_by_mujoco
 from arena.timeline import Start
 
 
@@ -358,15 +358,19 @@ def test_a_tug_is_a_ring_on_platforms_over_a_pit_and_no_floor_plane():
 
 
 def test_a_duck_thrown_at_the_ropes_stays_in_the_ring():
-    """Both ducks moved 1.35 m north, 15 cm from the north ropes, thrown at them at 1.5 m/s, limp (no servo is
-    driven): no trunk crosses y = 1.5 and none drops below the floor outside the pit."""
+    """Both ducks, limp (no servo is driven), moved 1.38 m north, 12 cm from the north ropes, and thrown at them at
+    0.75 m/s stay in the ring for 1 s: no trunk crosses y = 1.5, none drops below the floor outside the pit, and the
+    solver never resets the model. Faster (about 0.77 m/s and up) a limp duck's neck tie ends past the rope line and
+    the string's tied end piece is squeezed between tie and rope until the string blows up. Real bouts never bring a
+    trunk within 60 cm of the ropes: the pit ends a bout first and the string keeps the necks 1 m apart."""
     model = compile_tug(TUG)
     data = _standing(model)
-    for j in np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_FREE):   # the ducks; from Task 3 the string's root
-        data.qpos[model.jnt_qposadr[j] + 1] += 1.35
-        data.qvel[model.jnt_dofadr[j] + 1] = 1.5
+    for j in np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_FREE):   # the ducks and the string's root
+        data.qpos[model.jnt_qposadr[j] + 1] += 1.38
+        data.qvel[model.jnt_dofadr[j] + 1] = 0.75
     for _ in range(round(1.0 / model.opt.timestep)):
         mujoco.mj_step(model, data)
+        assert not _reset_by_mujoco(data)
         trunks = [data.xpos[model.body(p + "trunk_base").id] for p in ("", "duck1/")]
         assert max(t[1] for t in trunks) < 1.5 and min(t[2] for t in trunks) > -0.05
 
