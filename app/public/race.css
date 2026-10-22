@@ -385,14 +385,14 @@ table.board tr.dnf { color: var(--ink-70); }
 
 /* A voted board's one loud column, in the exact slot .time takes on a timed
    one -- the two never appear together, so they share the same weight. */
-table.board .votes {
+table.board .rate {
   width: 8.5rem;
   text-align: right;
   font: 400 1.7rem/1 var(--display);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
-table.board tbody tr:first-child .votes { color: var(--orange-inked); }
+table.board tbody tr:first-child .rate { color: var(--orange-inked); }
 
 .empty { color: var(--ink-70); margin-top: 22px; }
 /* Inside the frame it has no margin to sit on: the sheet's own padding is
@@ -413,7 +413,7 @@ table.board tbody tr:first-child .votes { color: var(--orange-inked); }
    the board (above) wear the same lane colour, and that is the whole key. */
 table.board tr.tier-ghost { color: var(--ink-70); }
 table.board tr.tier-ghost .time { color: var(--ink-70); }
-table.board tr.tier-ghost .votes { color: var(--ink-70); }
+table.board tr.tier-ghost .rate { color: var(--ink-70); }
 
 /* Download column. Quiet by default and orange on hover: it is an offer, not
    the point of the row. */
@@ -1158,7 +1158,7 @@ table.board .withdraw:focus-visible,
 .run-board table.board th { padding: 6px 10px 5px; }
 .run-board table.board td { padding: 5px 10px; }
 .run-board table.board .time,
-.run-board table.board .votes { font-size: 1.2rem; }
+.run-board table.board .rate { font-size: 1.2rem; }
 .run-board table.board .record { padding-left: 12px; }
 .run-board table.board tr.you td { background: var(--lime); }
 

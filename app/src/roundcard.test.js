@@ -84,17 +84,17 @@ describe("a voted round's card", () => {
     expect(vote.textContent).toBe("Vote");
   });
 
-  it("counts the week's votes in one cell, and who collected the most", () => {
+  it("counts the week's votes in one cell, and who is rated best", () => {
     const card = roundCard(TALENT, [
-      { user: "cdeplanne", votes: 1180, seeds_finished: 1 },
-      { user: "ann", votes: 43, seeds_finished: 1 },
+      { user: "cdeplanne", votes: 43, rate: 0.41, seeds_finished: 1 },
+      { user: "ann", votes: 1180, rate: 0.33, seeds_finished: 1 },
     ], { number: 2 });
     expect(cells(card)).toEqual(["Votes1.2K"]);
-    expect(card.querySelector(".round-card__score").textContent).toBe("1180 votes@cdeplanne");
+    expect(card.querySelector(".round-card__score").textContent).toBe("rated 41%@cdeplanne");
   });
 
   it("says so when nothing has been voted for yet", () => {
-    const card = roundCard(TALENT, [{ user: "cdeplanne", votes: 0, seeds_finished: 1 }], { number: 2 });
+    const card = roundCard(TALENT, [{ user: "cdeplanne", votes: 0, rate: 0.25, seeds_finished: 1 }], { number: 2 });
     expect(card.querySelector(".round-card__score").textContent).toBe("no votes yet@cdeplanne");
   });
 });

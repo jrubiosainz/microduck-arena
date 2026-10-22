@@ -424,6 +424,7 @@ def test_a_voted_events_publication_stands_where_its_votes_put_it(client):
     body = api.get(f"/api/runs/{bob.run_id}").json()
     assert (body["rank"], body["on_board"]) == (1, True)
     assert [(r["user"], r["votes"], r["you"]) for r in body["board"]] == [("bob", 1, True), ("ann", 0, False)]
+    assert body["board"][0]["rate"] > body["board"][1]["rate"]
 
 
 def test_an_older_performance_finds_its_place_off_the_board(client):
@@ -435,7 +436,7 @@ def test_an_older_performance_finds_its_place_off_the_board(client):
     assert [r["you"] for r in body["board"]] == [True]
 
 
-def test_a_voted_board_ranks_on_votes_and_still_reports_the_time(client):
+def test_a_voted_board_ranks_on_its_rate_and_still_reports_the_time(client):
     api, app = client
     ann = record_run(app, user="ann", event_id="got-a-talent", score=12.0)
     bob = record_run(app, user="bob", event_id="got-a-talent", score=40.0)
@@ -446,6 +447,7 @@ def test_a_voted_board_ranks_on_votes_and_still_reports_the_time(client):
         (1, "bob", 1, 1),
         (2, "ann", 0, 1),
     ]
+    assert rows[0]["rate"] > rows[1]["rate"]
     # The time is measured anyway, so it stays on the row — as a fact, not a rank.
     assert rows[0]["score"] == 40.0
 
@@ -460,12 +462,13 @@ def test_a_players_best_row_on_a_voted_event_carries_its_vote_count(client):
     cast(app, bob.run_id, [ann.run_id, bob.run_id])
 
     winner = api.get("/api/players/bob").json()
-    [talent] = [b for b in winner["publications"] if b["event_id"] == "got-a-talent"]
-    assert talent["votes"] == 1
+    [won] = [b for b in winner["publications"] if b["event_id"] == "got-a-talent"]
+    assert won["votes"] == 1
 
     runner_up = api.get("/api/players/ann").json()
-    [talent] = [b for b in runner_up["publications"] if b["event_id"] == "got-a-talent"]
-    assert talent["votes"] == 0
+    [lost] = [b for b in runner_up["publications"] if b["event_id"] == "got-a-talent"]
+    assert lost["votes"] == 0
+    assert won["rate"] > lost["rate"]
 
 
 def test_a_players_best_row_on_a_timed_event_carries_no_vote_count(client):
@@ -474,6 +477,7 @@ def test_a_players_best_row_on_a_timed_event_carries_no_vote_count(client):
     body = api.get("/api/players/ann").json()
     [sprint] = [b for b in body["publications"] if b["event_id"] == "sprint-2m"]
     assert sprint["votes"] is None
+    assert sprint["rate"] is None
 
 
 def test_a_vote_cast_days_ago_but_still_inside_the_window_counts(client):

@@ -314,7 +314,7 @@ export async function renderRun(root, runId, state) {
   };
   // Your own time only goes up on the board once the split-flap has rolled it.
   // A voted table has no `.time` cell.
-  const yourScore = yourRow.querySelector(".time, .votes");
+  const yourScore = yourRow.querySelector(".time, .rate");
   yourScore.classList.toggle("veiled", revealing);
   if (revealing) {
     // The board as it was before this run — you at the bottom, the rows under

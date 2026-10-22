@@ -61,8 +61,8 @@ def boards_by_user(
     three takes one place, not three.
 
     `voted` maps a votable event id to its rules. Those events are ranked on
-    votes instead of on time, which is what makes the podium bonus follow the
-    MicroDuck Got a Talent without a line of its own.
+    their rate of votes instead of on time, which is what makes the podium
+    bonus follow the MicroDuck Got a Talent without a line of its own.
     """
     if ballots and now is None:
         raise ValueError("a sliding window needs a `now`; this module never reads a clock")
@@ -113,11 +113,10 @@ def _podium_finishers(rows: list) -> list:
 
     A place reached without finishing isn't held — the timed board's own rule
     (`seeds_finished > 0`). On a voted board, a row with zero votes isn't held
-    either, PER ROW rather than per board: entries tied at zero votes are
-    ordered by `votes.standings`'s publication-time tie-break, so paying a
-    zero-vote row pays for seniority — exactly what a sliding window exists to
-    refuse. This is not the podium becoming a score converted into points:
-    `votes > 0` is a gate, not a rate, the same shape as `seeds_finished > 0`.
+    either, PER ROW rather than per board: its rate is nothing but
+    `votes.HEAD_START`, so paying it would pay for having been shown little.
+    This is not the podium becoming a score converted into points: `votes > 0`
+    is a gate, not a rate, the same shape as `seeds_finished > 0`.
     """
     return [
         row

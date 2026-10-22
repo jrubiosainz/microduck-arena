@@ -8,6 +8,11 @@ export function formatScore(seconds, { finished } = {}) {
   return `${seconds.toFixed(3)}s`;
 }
 
+/** A voted entry's rating: its votes per ballot shown on, with the server's head start. */
+export function formatRate(rate) {
+  return `${Math.round(rate * 100)}%`;
+}
+
 export function formatSeeds(finished, total) {
   return `${finished}/${total}`;
 }

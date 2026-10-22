@@ -77,7 +77,7 @@ describe("a player's profile", () => {
 });
 
 describe("a voted event's best row", () => {
-  it("says how many votes it earned, not a finish time", () => {
+  it("says how it is rated, not a finish time", () => {
     const player = {
       user: "ann",
       points: 100,
@@ -85,11 +85,11 @@ describe("a voted event's best row", () => {
       publications: [
         { event_id: "got-a-talent", event_title: "MicroDuck Got a Talent", rank: 1, score: 18.46,
           seeds_finished: 5, seeds_total: 5, policy_name: "talentbot", run_id: "r9",
-          submitted_at: "2026-09-10T10:00:00Z", votes: 43 },
+          submitted_at: "2026-09-10T10:00:00Z", votes: 43, rate: 0.392 },
       ],
     };
     const item = profile(player).querySelector(".profile-results a");
-    expect(item.textContent).toContain("#1 · 43 votes");
+    expect(item.textContent).toContain("#1 · rated 39%");
     expect(item.textContent).not.toContain("18.46");
   });
 
@@ -101,7 +101,7 @@ describe("a voted event's best row", () => {
       publications: [
         { event_id: "got-a-talent", event_title: "MicroDuck Got a Talent", rank: 2, score: 18.46,
           seeds_finished: 5, seeds_total: 5, policy_name: "talentbot", run_id: "r9",
-          submitted_at: "2026-09-10T10:00:00Z", votes: 0 },
+          submitted_at: "2026-09-10T10:00:00Z", votes: 0, rate: 0.2 },
       ],
     };
     const item = profile(player).querySelector(".profile-results a");

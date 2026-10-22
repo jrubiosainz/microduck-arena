@@ -185,6 +185,7 @@ def issue_ballot(event_id: str, request: Request, response: Response) -> dict:
     picked = votes.draw(
         field,
         votes.impressions(kept),
+        votes.impressions(b for b in kept if b.voter == voter),
         manifest.vote.ballot_min,
         manifest.vote.ballot_max,
         random.Random(),

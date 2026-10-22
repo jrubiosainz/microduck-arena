@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from arena.manifest import load_event
-from arena.store import BallotLogStuck
+from arena.store import Ballot, BallotLogStuck
 from arena.trace import encode
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
@@ -166,6 +166,25 @@ def test_a_ballot_carries_each_lanes_cast_and_never_whose_policies(client):
     casts = {ann.run_id: [ann.cast[0], {**ann.cast[1], "policy": "borrowed"}], bob.run_id: [ALONE]}
     assert body["cast"] == [casts[run_id] for run_id in entry.run_ids]
     assert "sound" not in body
+
+
+def test_ballots_in_a_row_show_a_voter_every_entry_before_repeating_one(client):
+    """Not the same least-shown entries on every ballot: what THIS voter has seen least comes first."""
+    api, app = client
+    old = [enter(app, f"old{i}") for i in range(4)]
+    for i in range(4):
+        enter(app, f"new{i}")
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for i in range(10):
+        app.state.ballots.cast(Ballot(ballot_id=f"past{i}", event_id="got-a-talent", voter="dan",
+                                      cast_at=stamp, candidates=tuple(r.run_id for r in old),
+                                      choice=old[0].run_id))
+    seen = set()
+    for _ in range(2):
+        body = api.get("/api/events/got-a-talent/ballot").json()
+        seen |= set(app.state.ballot_book.get(body["ballot"]).run_ids)
+        api.post("/api/events/got-a-talent/vote", json={"ballot": body["ballot"], "lane": 0})
+    assert len(seen) == 8
 
 
 def test_voting_records_the_whole_field_and_pays_the_voter(client):

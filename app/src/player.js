@@ -2,7 +2,7 @@
 // they stand, and every run they published, newest first.
 
 import { getMe, getPlayer } from "./api.js";
-import { formatScore } from "./format.js";
+import { formatRate, formatScore } from "./format.js";
 import { dress, guideHref, menuHref, raceHref, runHref } from "./router.js";
 import { avatar, chequer, footer, settleIdentity, signOutButton, signage } from "./signage.js";
 
@@ -134,11 +134,11 @@ function results(publications, player, me) {
     // The dot is the owner's alone: it says a result of THEIRS waits to be
     // opened.
     if (me?.user === player.user && !pub.seen) link.classList.add("unread");
-    // A voted event's rank is earned by votes, not by time — "#1 · 18.46s"
+    // A voted event's rank is earned by its rating, not by time — "#1 · 18.46s"
     // beside a MicroDuck Got a Talent entry would read as a finish time that placed it,
     // when the finish time never ranked anything there.
     const earned = pub.votes != null
-      ? (pub.votes ? `${pub.votes} votes` : "no votes yet")
+      ? (pub.votes ? `rated ${formatRate(pub.rate)}` : "no votes yet")
       : formatScore(pub.score, { finished: pub.seeds_finished });
     link.append(
       el("strong", null, `#${pub.rank ?? "—"} · ${earned}`),

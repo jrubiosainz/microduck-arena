@@ -221,7 +221,7 @@ def test_a_voted_events_podium_is_paid_on_votes_not_on_time():
 
     # bob is slow but voted-for; ann is quick but unvoted. bob takes the
     # podium, ann does not — a zero-vote row is unpaid even where it ranks
-    # second only by publication-time tie-break, which is not a place held.
+    # second only on its head start, which is not a place held.
     podium = acts(
         receipts([quick, slow], frozenset(), ballots=loved, voted=rules, now=now), "podium"
     )

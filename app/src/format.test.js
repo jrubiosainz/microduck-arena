@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatEventFacts,
+  formatRate,
   formatScore,
   formatSeeds,
   formatSpeed,
@@ -19,6 +20,13 @@ describe("formatScore", () => {
   it("marks a policy that never finished rather than printing the cap", () => {
     // A DNF is scored at the time limit; showing "50.000s" would read as a time.
     expect(formatScore(50.0, { finished: 0 })).toBe("DNF");
+  });
+});
+
+describe("formatRate", () => {
+  it("reads as a whole percentage", () => {
+    expect(formatRate(0.387)).toBe("39%");
+    expect(formatRate(0.25)).toBe("25%");
   });
 });
 

@@ -187,7 +187,7 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
         rows = votes.standings(votes.pool(records, withdrawn), kept)
         out = [_board_row(row) for row in rows]
         for shaped, row in zip(out, rows):
-            shaped["votes"], shaped["shown"] = row.votes, row.shown
+            shaped["votes"], shaped["shown"], shaped["rate"] = row.votes, row.shown, row.rate
         return {"event": event_summary(manifest), "rows": out}
 
     rows = leaderboard(records, entrant=config.entrant, withdrawn=withdrawn)
@@ -230,9 +230,9 @@ def player_page(user: str, request: Request) -> dict:
     by_event: dict[str, list[RunRecord]] = defaultdict(list)
     for run in runs:
         by_event[run.event_id].append(run)
-    # A voted event ranks on votes, not on time, so its rows come off its own
+    # A voted event ranks on its rate, not on time, so its rows come off its own
     # board the way the podium does: the run in the pool holds a rank and a
-    # count, an older run of the same person holds neither.
+    # rate, an older run of the same person holds neither.
     voted_rows = {
         row.record.run_id: row
         for event_id, rows in boards_by_user(runs, withdrawn, ballots, rules, now).items()
@@ -257,11 +257,12 @@ def player_page(user: str, request: Request) -> dict:
             "withdrawn": run.run_id in withdrawn,
             "submitted_at": run.submitted_at,
             "seen": run.run_id in seen,
-            # None off a timed event, a count off a voted one — so the page
-            # can tell a reader what the rank next to it was EARNED by. A
+            # None off a timed event, a rate and a count off a voted one — so the
+            # page can tell a reader what the rank next to it was EARNED by. A
             # bare "#1 · 18.46s" reads as a time on a board actually ranked
             # by votes.
             "votes": (row.votes if row else 0) if voted else None,
+            "rate": (row.rate if row else 0.0) if voted else None,
         })
     return {
         "user": user,
@@ -296,11 +297,11 @@ def run_detail(run_id: str, request: Request) -> dict:
     rules, now = _voted(), datetime.now(UTC)
     manifest = load_event(record.event_id)
     if manifest.metric == "votes":
-        # A voted event's publication stands where its votes put it, as on the event's own board
+        # A voted event's publication stands where its rate puts it, as on the event's own board
         # and the player's page: on a stage, a time would only be the performance's length.
         rank, on_board, rows = votes.placed(store.runs(record.event_id), run_id,
                                             _event_ballots(request, manifest, now), withdrawn)
-        board = [{**_board_row(row), "votes": row.votes, "shown": row.shown,
+        board = [{**_board_row(row), "votes": row.votes, "shown": row.shown, "rate": row.rate,
                   "you": row.record.run_id == record.run_id} for row in rows]
     else:
         place = standing(store.runs(record.event_id), run_id, withdrawn=withdrawn)

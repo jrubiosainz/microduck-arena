@@ -2,6 +2,8 @@ import random
 from collections import Counter
 from datetime import UTC, datetime
 
+import pytest
+
 from arena.constants import RUNNER_VERSION
 from arena.store import Ballot
 from arena.votes import (
@@ -81,15 +83,31 @@ def test_a_draw_prefers_the_least_shown_and_refuses_a_field_that_is_too_small():
     seen = [make_record(user=f"seen{i}") for i in range(3)]
     fresh = [make_record(user=f"new{i}") for i in range(2)]
     shown = Counter({r.run_id: 10 for r in seen})
-    picked = draw(seen + fresh, shown, 2, 4, random.Random(0))
+    picked = draw(seen + fresh, shown, Counter(), 2, 4, random.Random(0))
     assert {r.run_id for r in fresh} <= {r.run_id for r in picked}
     assert len(picked) == 4
-    assert draw(seen[:1], shown, 2, 4, random.Random(0)) is None
+    assert draw(seen[:1], shown, Counter(), 2, 4, random.Random(0)) is None
+
+
+def test_a_series_of_ballots_walks_a_voter_through_every_entry_before_repeating_one():
+    # The Space on 2026-10-22: four entries published that day, shown about 11 times against
+    # the others' 80, took all four lanes of every ballot until they caught up.
+    old = [make_record(user=f"old{i}") for i in range(12)]
+    new = [make_record(user=f"new{i}") for i in range(4)]
+    shown = Counter({r.run_id: 80 for r in old} | {r.run_id: 11 for r in new})
+    mine, seen, rng = Counter(), set(), random.Random(0)
+    for _ in range(4):
+        picked = draw(old + new, shown, mine, 2, 4, rng)
+        for r in picked:
+            shown[r.run_id] += 1
+            mine[r.run_id] += 1
+        seen |= {r.run_id for r in picked}
+    assert len(seen) == 16
 
 
 def test_a_draw_shrinks_to_the_field_rather_than_refusing_it():
     field = [make_record(user="ann"), make_record(user="bob")]
-    picked = draw(field, Counter(), 2, 4, random.Random(0))
+    picked = draw(field, Counter(), Counter(), 2, 4, random.Random(0))
     assert len(picked) == 2
 
 
@@ -103,13 +121,40 @@ def test_a_draw_shuffles_lane_order_so_a_duck_is_not_always_the_same_colour():
     field = [make_record(user=f"u{i}") for i in range(4)]
     shown = Counter({r.run_id: i for i, r in enumerate(field)})
     orders = {
-        tuple(r.run_id for r in draw(field, shown, 2, 2, random.Random(seed)))
+        tuple(r.run_id for r in draw(field, shown, Counter(), 2, 2, random.Random(seed)))
         for seed in range(20)
     }
     assert orders == {
         (field[0].run_id, field[1].run_id),
         (field[1].run_id, field[0].run_id),
     }
+
+
+def four_lane_ballots(entry, shown: int, won: int) -> list:
+    """`shown` four-lane ballots naming `entry`, `won` of them won by it and the rest by a filler."""
+    return [
+        make_ballot(candidates=(entry.run_id, "f1", "f2", "f3"),
+                    choice=entry.run_id if i < won else "f1")
+        for i in range(shown)
+    ]
+
+
+def test_standings_rank_by_how_often_an_entry_wins_not_by_how_many_votes_it_piled_up():
+    judged_less = make_record(user="ann", submitted_at="2026-09-10T10:00:00Z")
+    shown_more = make_record(user="bob", submitted_at="2026-09-09T10:00:00Z")
+    ballots = four_lane_ballots(judged_less, 20, 10) + four_lane_ballots(shown_more, 80, 12)
+    rows = standings([shown_more, judged_less], ballots)
+    assert [(r.record.user, r.votes, r.shown) for r in rows] == [("ann", 10, 20), ("bob", 12, 80)]
+
+
+def test_two_lucky_ballots_do_not_outrank_a_week_of_judging():
+    lucky = make_record(user="ann", submitted_at="2026-09-10T10:00:00Z")
+    judged = make_record(user="bob", submitted_at="2026-09-11T10:00:00Z")
+    ballots = four_lane_ballots(lucky, 2, 2) + four_lane_ballots(judged, 82, 31)
+    rows = standings([lucky, judged], ballots)
+    assert [r.record.user for r in rows] == ["bob", "ann"]
+    # 31 wins in 82 four-lane ballots, plus a head start at the average share of a quarter.
+    assert rows[0].rate == pytest.approx((31 + 5) / (82 + 20))
 
 
 def test_standings_rank_by_votes_then_by_who_published_first():

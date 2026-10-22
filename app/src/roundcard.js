@@ -7,7 +7,7 @@
 // importing a page to get at one component is how a view ends up dragging a
 // whole other view's imports behind it.
 
-import { formatScore } from "./format.js";
+import { formatRate, formatScore } from "./format.js";
 import { raceHref, voteHref } from "./router.js";
 import { symbol } from "./symbols.js";
 
@@ -69,10 +69,10 @@ function leaderLine(event, rows) {
     line.append(el("b", null, rows.length ? "no finisher yet" : "be the first"));
     return line;
   }
-  // A voted event is held by whoever collected the most votes THIS WEEK, so
-  // the line says votes. A time would be the wrong fact about it.
+  // A voted event is held by whoever wins its ballots most often THIS WEEK, so
+  // the line says that rating. A time would be the wrong fact about it.
   const held = event.vote
-    ? (leader.votes ? `${leader.votes} votes` : "no votes yet")
+    ? (leader.votes ? `rated ${formatRate(leader.rate)}` : "no votes yet")
     : formatScore(leader.score, { finished: leader.seeds_finished });
   line.append(el("b", null, held), el("i", "round-card__holder", `@${leader.user}`));
   return line;
