@@ -146,7 +146,7 @@ players' ratings start negative, the name "string" on the site, and the decor as
   the ropes it changes nothing the viewer sees. The floor still runs 20 m past the ring at the
   canvas's level, so no duck is ever below the floor but in the pit (the judge's "in the pit" is
   a height).
-- **Upright, measured**: trunk height ≥ 7 cm and tilt ≤ 45°; a duck is **down** once it has not
+- **Upright, measured** (superseded on 2026-10-22 by walking upright, below): trunk height ≥ 7 cm and tilt ≤ 45°; a duck is **down** once it has not
   been upright for 0.3 s straight (the fall rule's hold). From the robot: standing, the trunk
   stands 11–12 cm; a sweep of the legs robot's poses with only its feet on the floor keeps it at
   7.8 cm or more leaning back up to 45°; the leaning t10-500 sat low at 4.5 cm, tilted 57°, its legs
@@ -157,12 +157,12 @@ players' ratings start negative, the name "string" on the site, and the decor as
   ends the training episode and costs that many pits (the owner trains at 1). The recipe's
   existing reward knob labelled "Stay upright" is relabelled "Keep the trunk level", which is what
   it pays.
-- **The new reference** is warm-started from t7-250 and trained against the frozen t7-250 (the
+- **The new reference** (t15-250 was picked this way; superseded on 2026-10-22, below) is warm-started from t7-250 and trained against the frozen t7-250 (the
   opponent as today), stay upright on. Not self-play: that is a non-goal and new machinery, and
   t7-250 is the yardstick it replaces, so its rating against t7-250 on the new physics measures
   it. Picked by: upright and pulling (gates U and R1), then the highest rating against t7-250,
   a round robin deciding between ratings within 5 cm.
-- **The owner's candidate**: warm-started from the new reference, trained against it, stay upright
+- **The owner's candidate** (t17-250 was picked this way; superseded on 2026-10-22, below): warm-started from the new reference, trained against it, stay upright
   on; gates R1, R2 (rating ≥ +20 cm against the new reference), R3 (≥ 3 of 10 bouts dragging it
   in, a target), plus U; the round robin picks.
 - **No slack phase** any more (the string slack until iteration 250): a rope has no limit to lift,
@@ -185,6 +185,129 @@ players' ratings start negative, the name "string" on the site, and the decor as
   numbers repeats that check.
 - The venue mockup's open decor questions (the jury at ringside, the pads' colour, the screens, the
   portrait clip's near rope, a wide establishing shot) stay as built; they block nothing.
+
+## Owner decisions, 2026-10-22 (walking upright)
+
+A posture probe (2026-10-22) measured how the owner's ducks pull. The reference t15-250, the
+candidate t17-250 and the users' t19-250 do not lean back: they bow forward 33–44° towards the
+other duck, the neck swung 50–85° further down, the trunk at 7–8 cm. The head is planted beak-down
+on the floor 12 cm ahead of the trunk in 77–83 % of the frames. It carries about 40 % of the floor
+load, gives about half of the backward friction, and rests on the string, pinning it. The feet
+slide: 58–73 % of their travel happens while they touch the floor. The robot walking backwards
+(BEST_alpha_walking at −0.40 and −0.60 m/s) holds its head at 23.6 cm, its trunk at 12 cm, pitched
+−3 to +2°, its feet under the trunk, only the feet on the floor, and steps: 3 % of its foot travel
+happens in contact. The owner decided three things. They change §2 (which duck the reference is)
+and §3 (how the owner's ducks train), updated in place below. Nothing is released, so every rating
+is simply computed again.
+
+1. **Walking upright, for the owner's ducks.** "The robot still uses its head to pull. I want it to
+   stay standing; it should just walk backwards while pulling." The Arena's reference duck and the
+   owner's candidate train to walk upright like the robot's normal gait (the option "like its
+   normal walk"):
+   - the head high (≥ 18 cm) and the trunk at 10 cm or more;
+   - pitched between 10° bowed towards the opponent and 20° leaning back away from it, rolled 10°
+     at most;
+   - the neck and head pitch within 30° of STAND;
+   - only the feet on the floor, stepping rather than sliding.
+2. **Other players stay free.** A head on the floor is allowed and the Arena's rules do not change:
+   only the pit decides. Accepted: head-planting ducks will beat the upright reference easily, so
+   many ratings will be very positive.
+3. **The rope and the scene stay as they are.** No change to the Arena's physics or venue.
+
+### My calls (2026-10-22)
+
+- **Walking upright, measured.** A frame is **upright** when all of these hold:
+  - the trunk at z ≥ 0.10 m;
+  - the pitch in [−10°, +20°];
+  - |roll| ≤ 10°;
+  - the head's centre of mass (body `jaw_soft`) at z ≥ 0.18 m;
+  - `neck_pitch` and `head_pitch` within 30° (0.5236 rad) of STAND (both 0.349 rad);
+  - no part of the duck but its feet (bodies `ankle_left`, `ankle_right`) touching the course.
+
+  The bands come from the walker's envelope over six runs: trunk 11.0–12.4 cm, pitch −2.7..+2.1°,
+  roll ≤ 4.7°, head 22.6–24.1 cm, neck −4.7..+11°, head pitch −8.3..+5°, only the feet down. Each
+  band leaves 1 cm to 7° of margin. The +20° of leaning back is a physics estimate, not a
+  measurement, since no walker ever pulled: a ~2.5 N string held at the 15 cm tie needs the centre of
+  mass about 5 cm behind the feet. A duck is **down** once it has not been upright for 0.3 s straight
+  (15 control steps), the hold the fall rule and the 2026-10-21 rule use.
+- **The pitch's sign.** + is the trunk's top leaning away from the opponent. The pitch is read off
+  the trunk quaternion (w, x, y, z) as asin(2(xz − wy)): the z of the trunk's forward axis, R[2,0].
+  A duck faces its opponent, the west one east and the east one west, so its forward axis points at
+  the other duck. Training reads the same number from projected gravity, asin(−g_b[0]). Roll is
+  asin(2(yz + wx)) = asin(−g_b[1]).
+
+  Checked three ways:
+  - numerically, on rotations of known sign: a 30° nose-down gives −30°, a 20° nose-up gives +20°;
+  - on the walker: −1 to 0° backwards, +1° forwards;
+  - on t17-250, bowed with its head 12 cm ahead of its trunk and on the floor (`side_t17_8s.png`):
+    −37 to −38°.
+
+  t6-500, lying back on its trunk, reads +19°.
+- **Only the feet: kept in the training rule.** The height bands do not exclude every contact but the
+  feet's, so the training reads a contact sensor. The probe's own runs could not settle it: only
+  the walker's frames held the bands there, and they were all feet-only. So the duck was posed at
+  random in the Arena's model: 200,000 poses within every band, the leg joints anywhere in their
+  ranges.
+  - The head and the trunk never touched the floor.
+  - A shin (`leg`, `leg_2`) touched it in 2.2 % of the poses, always with the trunk at 10.0–11.1 cm
+    and a foot down: a kneel.
+
+  The sensor covers every robot body but the feet, against the course; `check.py` recomputes the
+  same contacts from a bout's trace.
+- **Stepping, not sliding, is judged, not trained.** It is not a termination. `check.py` measures it
+  (clear touch-downs per second, the share of foot travel made in contact), and gate S reads it.
+  The probe's feet-position band (−3 to +6 cm ahead of the trunk) is not part of the rule: the pitch
+  and height bands already reject the bow (t17-250: 0 % of frames on each).
+- **One rule.** The walking-upright rule replaces the 7 cm / 45° one. The knob keeps its name
+  `stay_upright` and its label "Stay upright": 0.0 for users, 1.0 for the owner's trainings, the
+  cost of going down in pits.
+- **The reference's warm start: the walker.** BEST_alpha_walking is the only policy found walking
+  backwards. It stands still at the tug's −0.30 and walks back at −0.40. It is vendored into the
+  challenge as `walker.onnx` (the same exporter's graph: `load_actor` reads it, 7e-7 from
+  onnxruntime) and started by a second actor class, `WalkerActor`.
+  - **Its normalizer count** is the reference's (t15-250's 502 rollouts × 24 × 4096). Its own count
+    is unknown. What matters is that PPO's first update does not replace its statistics with one
+    batch's, and t15–t17 warm-started with that inertia.
+  - **The tug's commands sit inside its statistics**: vx −0.30 against a mean of 0.04 and a std of
+    0.21; the head commands against stds of 0.14 to 0.60; the body commands against t15-250's own
+    stds.
+- **The opponent while training the reference: the frozen walker.** Measured in two Arena bouts of
+  the walker against itself: both stay 100 % upright and neither stands still, both step
+  (3.5–3.7 steps/s, 7–9 % of the travel sliding). Against t15-250 the walker is dragged into the pit
+  in 5–6 s, still upright. A training names its opponent's ONNX on the command line
+  (`--env.actions.opponent.onnx walker.onnx`, a file beside `opponent.py`). The run's provenance
+  records the command, so a model card's Reproduce carries it.
+- **The owner's candidate** is warm-started from the new reference and trained against it, with
+  stay upright 1.0. It starts as a duck that already pulls upright; the walker never pulled.
+- **The command stays the event's −0.30.** The Arena sends −0.30 to every duck, and a training at
+  another speed would teach a command the Arena never sends. The walker stands still at −0.30, so
+  RL must learn to step back under load (walking back pays 3.0).
+- **Win ground 4.0 from the first training**: the owner's recipe since t15. At 2.0 and on its
+  feet, t13 and t14 never loaded the string.
+- **Gates** for the new reference and the candidate, over `check.py`'s 10 bouts:
+  - **U2** (walking upright): in at least 9 of the 10 bouts, upright for at least 90 % of A's frames
+    and never out for 0.3 s (the 15th step ends a training episode).
+  - **S** (stepping): in at least 8 of the 10, at least 2 clear touch-downs a second and at most
+    20 % of the foot travel in contact. A duck whose feet travel under 1 cm/s is standing still
+    and passes.
+  - **R1**: no NaN, and at least 8 of 10 bouts backed +2 cm by 2 s.
+  - **R2** and **R3**, for the candidate only: a rating of +20 cm or more against the new reference,
+    and 3 of 10 pits as a target.
+
+  The candidate must also pass U2 and S over every round-robin bout (Plan H's ruling).
+  - **The reference's gates are judged against the walker**, its training opponent. Its posture
+    against t15-250, a planter, is recorded as information.
+  - **The reference is ranked** by its rating against t15-250 (the Arena's yardstick until the
+    hand-over), with a round robin between ratings within 5 cm.
+  - **Runs peak early**: checkpoints 250, 500, 750 and 1000 are judged. Three trainings in a row
+    without a passing checkpoint: report to the owner and wait.
+- **The judges' tool** is `check.py`'s posture line: upright share, longest stretch out, feet-only
+  share, steps a second and slide. `posture_probe.py` stays a scratch diagnostic.
+- **Hand-over.** The new reference replaces t15-250 in both repos, and every rating changes. The
+  users' recipe keeps warm-starting from `reference.onnx` (now upright), with stay upright 0 and
+  Win ground 2.0, and one training re-verifies it. Once the reference is handed over, nothing
+  shipped uses the walker: `WalkerActor`, `walker.onnx` and the opponent's ONNX field go, and the
+  reference's training commit and command, named in its provenance, keep them.
 
 ## 1. The tug of war (owner-decided scene, builder-tuned numbers)
 
@@ -252,7 +375,10 @@ another one.
   of the tug recipe). Changing it later changes every rating, like a runner version. Owner,
   2026-10-21: the reference stays on its feet. t7-250 dives prone in the first half second, so a
   new reference, trained upright on the ring and the rope (§3), replaces it before the release;
-  every rating changes, none is released yet.
+  every rating changes, none is released yet. Owner, 2026-10-22: the reference walks upright, as
+  the robot walks. t15-250, which replaced t7-250, pulls bowed forward with its head planted on the
+  floor, so a reference trained to the walking-upright rule (§3) replaces it in turn; every rating
+  changes again.
 - **Score per seed**: one bout (the tug's own physics, 45 s) between the entry and the reference,
   sides alternating with the seed. The score is the marker's displacement towards the entry at the
   end of the bout, in centimetres (negative when the reference pulled it away), plus a bonus when
@@ -283,15 +409,24 @@ another one.
 - (2026-10-20 night, measured) A learner warm-started from the reference beats one trained from
   scratch; runs peak early and decay, so every 250 iterations is judged and the peak kept. The
   recipe users get warm-starts from the reference.
-- (Owner, 2026-10-21) The training scene is the ring and the rope, the Arena's own. An opt-in
+- (Owner, 2026-10-21; the rule since 2026-10-22) The training scene is the ring and the rope, the Arena's own. An opt-in
   knob, **stay upright**, off in the recipe users get, ends a training episode when the learner
-  goes down (trunk under 7 cm or tilted past 45° for 0.3 s) and costs it a pit: the reference
-  and the owner's candidates train with it on, so they stay on their feet; other players may
-  crawl. Order: a new reference, warm-started from t7-250 and trained against the frozen t7-250
-  with the knob on, judged every 250 iterations (on its feet, pulling, its rating against t7-250
-  on the new physics), replaces t7-250 in the Arena and as the recipe's opponent; then the
-  owner's candidate, warm-started from the new reference and trained against it with the knob
-  on, picked by the gates and a round robin.
+  is not walking upright for 0.3 s straight and costs it a pit. Walking upright means: trunk at 10 cm or more, pitched
+  between 10° forward and 20° back, rolled 10° at most, the head's centre of mass at 18 cm or
+  more, neck and head pitch within 30° of STAND, only the feet touching the course. The reference
+  and the owner's candidates train with it on, so they walk upright as the robot walks; other
+  players may crawl or plant their heads. The judge also reads stepping: touch-downs per second
+  and the share of foot travel made in contact. Order (2026-10-22):
+  - A new reference is warm-started from the walker (BEST_alpha_walking) and trained against the
+    frozen walker with the knob on. It is judged every 250 iterations: walking upright, stepping,
+    pulling, and its rating against t15-250. It replaces t15-250 in the Arena and as the recipe's
+    opponent and warm start.
+  - Then the owner's candidate is warm-started from the new reference and trained against it with
+    the knob on, picked by the gates and a round robin.
+  - Then the users' recipe, knob off, is trained once against the new reference to verify it.
+
+  (2026-10-21: the rule was a trunk under 7 cm or tilted past 45°. t15-250 and t17-250, picked
+  under it, pulled bowed onto their heads.)
 
 ## 4. The weekly cup
 
@@ -446,6 +581,10 @@ relock as usual, then the owner publishes the first candidate.
   owner's candidates stay on their feet (leaning back allowed) through an opt-in "stay upright"
   training knob, off for users; a new upright reference replaces t7-250; everything re-rated and
   retrained.
+- 2026-10-22, after the posture probe: the owner's ducks (the reference and his candidate) walk
+  upright like the robot's normal gait, head high, trunk up, only the feet on the floor, stepping
+  rather than sliding; other players stay free (a head on the floor allowed, only the pit decides),
+  knowing head-planting ducks will beat the upright reference easily; the rope and the scene stay.
 
 ## My calls (the owner may object)
 
@@ -468,6 +607,9 @@ relock as usual, then the owner publishes the first candidate.
 - After the premiere the cup's matches join the rotation until the next cup.
 - 2026-10-21: see "My calls (2026-10-21)" above (rope joints and numbers, the ring's edges,
   upright thresholds, the knob, the reference's and the candidate's training, the trace, names).
+- 2026-10-22: see "My calls (2026-10-22)" above (the walking-upright rule and its sign, the
+  feet-only sensor, stepping judged not trained, the walker as the reference's warm start and
+  opponent, the gates U2, S, R1–R3, the hand-over).
 
 ## Left to the builder
 
