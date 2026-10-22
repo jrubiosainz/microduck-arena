@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cupCorner, cupPage } from "./cup.js";
+import { cupCorner, cupDaysLeft, cupPage } from "./cup.js";
 
 const event = { id: "tug-of-war", title: "Tug of War", metric: "mean_ground_cm" };
 const four = ["Tank", "Lean", "Grip", "Sway"].map((name, i) => ({ user: `p${i}`, policy_name: name, livery: "classic", rating: 50 - 5 * i, run_id: `R${i}` }));
@@ -81,5 +81,21 @@ describe("the home card's cup corner", () => {
     const late = { next: { number: 3 }, cups: [{ number: 2, state: "drawn", premiere_at: "2026-11-06T17:00:00Z" },
       { number: 1, state: "drawn", premiere_at: "2026-10-30T17:00:00Z" }] };
     expect(cupCorner("tug-of-war", late, Date.parse("2026-11-06T16:00:00Z"))).toEqual({ text: "Cup #1 · starting soon", href: "#/c/tug-of-war/1" });
+  });
+});
+
+describe("a versus page's days left", () => {
+  const cups = (list) => ({ next: { number: 2, close_at: "2026-11-06T15:00:00Z", premiere_at: "2026-11-06T17:00:00Z", entrants: [] }, cups: list });
+  const at = (iso) => Date.parse(iso);
+
+  it("counts whole days to the same cup as the home card, then hours, then the show itself", () => {
+    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-10-29T21:00:00Z"))).toEqual({ cup: "Cup #2", left: "7 days left", href: "#/c/tug-of-war/2" });
+    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-05T12:00:00Z")).left).toBe("1 day left");
+    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-06T13:30:00Z")).left).toBe("3 hours left");
+    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-06T16:00:00Z")).left).toBe("1 hour left");
+    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-06T16:40:00Z")).left).toBe("20 min left");
+    expect(cupDaysLeft("tug-of-war", cups([{ number: 1, state: "drawn", premiere_at: "2026-10-30T17:00:00Z" }]), at("2026-10-30T17:05:00Z")))
+      .toEqual({ cup: "Cup #1", left: "Starting soon", href: "#/c/tug-of-war/1" });
+    expect(cupDaysLeft("tug-of-war", cups([{ number: 1, state: "airing" }]), 0).left).toBe("Live now");
   });
 });

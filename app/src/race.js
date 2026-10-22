@@ -1,6 +1,7 @@
 // One race: the stage, the entry column beside it, the standing beneath.
 
 import {
+  getCups,
   getEvents,
   getLeaderboard,
   getMe,
@@ -10,6 +11,7 @@ import {
 } from "./api.js";
 import { boardsheetMarkup, podium, wireBoardsheet } from "./boardsheet.js";
 import { replayLane } from "./cast.js";
+import { cupDaysLeft } from "./cup.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
@@ -83,6 +85,25 @@ export function renderEventFacts(root, event) {
 export function renderVoteButton(root, event) {
   if (!event.vote) return;
   root.querySelector(".entry-col").prepend(voteButton(event));
+}
+
+/**
+ * A versus event's days left before its cup, atop the entry column, above training: the date a player trains
+ * for, and the way to the cup's page. Given the cups the page fetched, so the placement is testable without one.
+ */
+export function renderCupDaysLeft(root, event, cups, nowMs = Date.now()) {
+  const { cup, left, href } = cupDaysLeft(event.id, cups, nowMs);
+  const link = document.createElement("a");
+  link.className = "cup-left";
+  link.href = href;
+  const name = document.createElement("span");
+  name.className = "cup-left__cup";
+  name.textContent = cup;
+  const days = document.createElement("strong");
+  days.className = "cup-left__days";
+  days.textContent = left;
+  link.append(name, days);
+  root.querySelector(".entry-col").prepend(link);
 }
 
 /**
@@ -197,6 +218,12 @@ export async function renderRace(root, { event, state }) {
   });
   renderVoteButton(root, event);
   renderTrainPanel(root, event);
+  // Like the strip: the page does not wait for it, and a cup that does not answer leaves it off, named.
+  if (event.category === "versus") {
+    getCups(event.id)
+      .then((cups) => renderCupDaysLeft(root, event, cups))
+      .catch((error) => console.error("The cup's days left did not load:", error));
+  }
 
   renderEventFacts(root, event);
 

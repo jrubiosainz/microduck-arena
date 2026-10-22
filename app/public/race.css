@@ -99,6 +99,26 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 .entry-col { display: flex; flex-direction: column; gap: 14px; }
 .entry-col .vote-button { align-self: flex-end; }
 
+/* A versus page's days left before its cup, above training: lime like the cup's sticker on the home card,
+   taped on the same way, and the way to the cup's page. */
+.cup-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px 12px;
+  background: var(--lime);
+  color: var(--ink);
+  text-decoration: none;
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
+  rotate: -1.5deg;
+}
+.cup-left__cup { font: 600 0.8rem/1.2 var(--mono); text-transform: uppercase; }
+.cup-left__days { font: 400 2.1rem/1 var(--display); text-transform: uppercase; }
+.cup-left:active { translate: var(--shadow-sticker-max) var(--shadow-sticker-max); box-shadow: none; }
+.cup-left:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+
 /* The way to training: the page's one call to action now that there is no
    entry form, open by default and sitting above the guide link in the entry
    column. Same padding, ink border and sticker shadow as anything else taped

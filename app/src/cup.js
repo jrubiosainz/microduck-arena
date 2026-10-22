@@ -268,18 +268,38 @@ export async function renderCup(root, eventId, number, state) {
   settleIdentity(root, await identity);
 }
 
-/** What a versus card's corner says: the cup on now or next, and how soon. `cups` come newest first, and the
- * oldest not yet aired is the next on air: a late cup airs before the one closed after it. */
-export function cupCorner(eventId, { next, cups }, nowMs) {
-  const cup = cups.findLast((c) => ["drawn", "ready", "airing"].includes(c.state)) ?? next;
+/** The cup on now or next. `cups` come newest first, and the oldest not yet aired is the next on air: a late cup
+ * airs before the one closed after it. */
+const onNext = ({ next, cups }) => cups.findLast((c) => ["drawn", "ready", "airing"].includes(c.state)) ?? next;
+
+const minutesTo = (cup, nowMs) => Math.ceil((Date.parse(cup.starts_at ?? cup.premiere_at) - nowMs) / 60000);
+
+/** What a versus card's corner says: the cup on now or next, and how soon. */
+export function cupCorner(eventId, cups, nowMs) {
+  const cup = onNext(cups);
   return { text: `Cup #${cup.number} · ${soon(cup, nowMs)}`, href: cupHref(eventId, cup.number) };
 }
 
 function soon(cup, nowMs) {
   if (cup.state === "airing") return "live now";
-  const minutes = Math.ceil((Date.parse(cup.starts_at ?? cup.premiere_at) - nowMs) / 60000);
+  const minutes = minutesTo(cup, nowMs);
   if (minutes <= 0) return "starting soon";
   const [days, hours, rest] = [Math.floor(minutes / 1440), Math.floor(minutes / 60) % 24, minutes % 60];
   if (days) return `in ${days}d ${hours}h`;
   return hours ? `in ${hours}h ${rest}m` : `in ${rest}m`;
+}
+
+/** What a versus page says above training: the same cup as its card's corner, and the days left before it. */
+export function cupDaysLeft(eventId, cups, nowMs) {
+  const cup = onNext(cups);
+  return { cup: `Cup #${cup.number}`, left: daysLeft(cup, nowMs), href: cupHref(eventId, cup.number) };
+}
+
+function daysLeft(cup, nowMs) {
+  if (cup.state === "airing") return "Live now";
+  const minutes = minutesTo(cup, nowMs);
+  if (minutes <= 0) return "Starting soon";
+  const [days, hours] = [Math.floor(minutes / 1440), Math.floor(minutes / 60)];
+  if (days) return `${days} day${days > 1 ? "s" : ""} left`;
+  return hours ? `${hours} hour${hours > 1 ? "s" : ""} left` : `${minutes} min left`;
 }
