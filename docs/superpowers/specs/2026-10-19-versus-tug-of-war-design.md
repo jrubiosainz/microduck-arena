@@ -295,8 +295,9 @@ is simply computed again.
     and 3 of 10 pits as a target.
 
   The candidate must also pass U2 and S over every round-robin bout (Plan H's ruling).
-  - **The reference's gates are judged against the walker**, its training opponent. Its posture
-    against t15-250, a planter, is recorded as information.
+  - **The reference's U2, S and R1 are judged against the walker**, its training opponent. Its U2
+    against t15-250, a planter, is also a gate (CHECK, 10 bouts, B the default): every player's
+    replay shows the reference, so it must stay upright even when it loses.
   - **The reference is ranked** by its rating against t15-250 (the Arena's yardstick until the
     hand-over), with a round robin between ratings within 5 cm.
   - **Runs peak early**: checkpoints 250, 500, 750 and 1000 are judged. Three trainings in a row

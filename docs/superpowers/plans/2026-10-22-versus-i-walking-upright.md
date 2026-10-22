@@ -34,7 +34,7 @@
   - `uv run --no-config --no-sync …` (`--no-sync` mandatory, never `uv sync`/`uv lock`), and `/usr/bin/git`;
   - **TESTS** = `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-challenges/.claude/worktrees/tug-of-war && uv run --no-config --no-sync pytest -q -p no:cacheprovider tests`, in the foreground with `timeout: 600000`;
   - `env.py`, `rewards.py`, `tasks.py` and `opponent.py` never import `arena`;
-  - unsigned English commits, one per task; a training's commit message is its hypothesis;
+  - unsigned English commits, one per task (the exception: Task 8 makes two commits in the challenges repo, because the verification run trains on the first); a training's commit message is its hypothesis;
   - nothing pushed, and `publish` only with `--dry-run`;
   - HF Jobs under `--namespace Nico-robot`, l4x1, at most 3 in flight, always `--detach`, private ckpt repos; a subagent launches and returns, and the controller waits (Monitor);
   - the ledger `<wt>/logs/tug_of_war/ledger.md` is continued; Mac numbers are indicative; English only; no dead code.
@@ -69,12 +69,12 @@
   - **R3** (candidates, a target): ≥ 3 of 10 `B loses by pit`.
   - Candidates pass U2 and S over every round-robin bout too (Plan H's ruling).
 - **The reference's judge:**
-  - Its gates are read on CHECK against the walker (`<wt>/src/microduck_challenges/tug_of_war/walker.onnx` as B), its training opponent.
-  - It is ranked by `arena score`'s rating against t15-250, the Arena's reference until Task 6, among the checkpoints passing U2, S and R1. Ratings within 5.0 cm go to a round robin: CHECK A B for each pair, more bouts won, then more pits.
-  - CHECK against t15-250 (B left as the default) is information: the posture under a planter's pull.
+  - U2, S and R1 are read on CHECK against the walker (`<wt>/src/microduck_challenges/tug_of_war/walker.onnx` as B), its training opponent.
+  - It is ranked by `arena score`'s rating against t15-250, the Arena's reference until Task 6, among the checkpoints passing U2 both ways, S and R1. Ratings within 5.0 cm go to a round robin: CHECK A B for each pair, more bouts won, then more pits.
+  - U2 is also a gate over `CHECK ONNX/t<k>-<N>.onnx --bouts 10` (B = t15-250, the default until Task 6), the posture under a planter's pull: every player's replay shows the reference, so it must stay upright even when it loses. S and R1 stay against the walker only.
   - The walker itself, measured on the Mac: against t15-250 it is dragged into the pit in 5.2–5.9 s, still 100 % upright. So expect every ranking rating near −160 cm, and the round robin to decide.
 - **Judged checkpoints:** 250, 500, 750 and 1000. A run declining on every judged measure may be cancelled (Plan H's rulings).
-- **Stop rules:** three reference trainings in a row without a checkpoint passing U2, S and R1, or three candidate trainings without one passing U2, S, R1 and R2. Then report to the owner (ledger, curves, CHECK lines, next proposal) and wait.
+- **Stop rules:** three reference trainings in a row without a checkpoint passing U2 both ways, S and R1, or three candidate trainings without one passing U2, S, R1 and R2. Then report to the owner (ledger, curves, CHECK lines, next proposal) and wait.
 - **Names:** reference trainings t20 (seed 1) and t21 (seed 2); a reference lever takes the next name. The candidates take the next two free names, and the users' verification the one after.
 
 ## Review Focus
@@ -101,7 +101,7 @@
 **Interfaces:**
 - Produces in `rewards.py`:
   - the Pinned constants;
-  - `is_upright(z, gravity_b, head_z, neck_dev)`, a bool mask over the leading dims for numpy arrays or torch tensors alike, using only comparisons, `abs` and `.all(-1)`: `z >= UPRIGHT_Z_M`, `sin(-10°) <= -gravity_b[..., 0] <= sin(20°)`, `abs(gravity_b[..., 1]) <= sin(10°)`, `head_z >= UPRIGHT_HEAD_Z_M`, `(abs(neck_dev) <= radians(30)).all(-1)`;
+  - `is_upright(z, gravity_b, head_z, neck_dev)`, a bool mask over the leading dims for numpy arrays or torch tensors alike, using only comparisons, `abs` and `.all(-1)`: `z >= UPRIGHT_Z_M`, `(-gravity_b[..., 0] >= sin(-10°)) & (-gravity_b[..., 0] <= sin(20°))` (the two comparisons combined with `&`, as a chained comparison raises on arrays and tensors), `abs(gravity_b[..., 1]) <= sin(10°)`, `head_z >= UPRIGHT_HEAD_Z_M`, `(abs(neck_dev) <= radians(30)).all(-1)`;
   - `class Down(ArenaFall)` with `__call__(env, sensor_name: str, hold_steps: int, asset_cfg: SceneEntityCfg) -> torch.Tensor`. It fires when the learner has not been upright (`is_upright` on root z, projected gravity, `body_com_pos_w[:, body_ids[0], 2]` and `joint_pos − default_joint_pos` at `joint_ids`, and no `found` on `env.scene[sensor_name]`) for `hold_steps` straight steps.
 - Produces in `env.py`: `BODY_GROUND`, the sensor and the `down` termination with `stay_upright > 0` (Pinned). D22 is rewritten (Step 3).
 - Produces in `check.py`:
@@ -109,7 +109,7 @@
   - Each frame: both ducks' qpos from `outcome.trace` (free joint `[:7]`, `JOINT_NAMES` `[7:]`), the string left at qpos0, then `mujoco.mj_fwdPosition`. The head height is `xipos[<prefix>jaw_soft]`'s z. `gravity_b` = −R[2,:] off the trace quaternion. `neck_dev` = the `NECK` joints − `DEFAULT_POSE`. "Feet only" means no A geom outside `FEET`'s bodies is in contact with a geom of body `course`. Upright = `is_upright(...)` and feet only.
   - `play(manifest, model, a, b, bouts)`; `summary(results, model)`. `main` compiles `compile_tug(manifest)` once and passes it to `run_bout(…, model=model)` and to `summary`. `upright()` is gone.
 
-- [ ] **Step 1: Failing tests.** Replace `_posed_env`, `test_the_upright_rule_lets_a_puller_lean_and_ends_a_sitting_duck`, `test_a_down_count_restarts_on_a_reset`, `test_stay_upright_ends_a_down_duck_and_costs_its_pits` and `test_a_bout_line_says_how_long_a_was_down` with:
+- [ ] **Step 1: Failing tests.** Replace `_posed_env`, `test_the_upright_rule_lets_a_puller_lean_and_ends_a_sitting_duck`, `test_a_down_count_restarts_on_a_reset`, `test_stay_upright_ends_a_down_duck_and_costs_its_pits` and `test_a_bout_line_says_how_long_a_was_down` with the tests below, and delete `_upright_bout` (no other caller):
 
 ```python
 # Postures the posture probe measured (2026-10-22, pull-phase medians): trunk z m, pitch ° (+ the trunk's top leaning away
@@ -234,12 +234,12 @@ def test_a_bout_line_says_how_a_walked(arena_model):
 **Files:** Modify `tug_of_war/check.py`, `tests/test_tug_of_war.py`.
 
 **Interfaces:**
-- Produces `gait(contact: np.ndarray, feet: np.ndarray, counted: np.ndarray) -> str`, where `contact` is (n, 2) bool (left, right), `feet` is (n, 2, 3) (sites `left_foot`, `right_foot`) and `counted` is (n,) bool. It returns `"standing still"` when the horizontal foot travel is under `STILL_CM_S`; otherwise `"{steps:.1f} steps/s · slide {slide:.0f} %"`.
+- Produces `gait(contact: np.ndarray, feet: np.ndarray, counted: np.ndarray) -> str`, where `contact` is (n, 2) bool (left, right), `feet` is (n, 2, 3) (sites `left_foot`, `right_foot`) and `counted` is (n,) bool. It returns `"standing still"` when both feet's horizontal travel is under `STILL_CM_S` × the counted seconds, so a bout with none counted reads standing still; otherwise `"{steps:.1f} steps/s · slide {slide:.0f} %"`.
   - It reads only pairs of consecutive frames both counted.
   - A clear step is a frame in contact after ≥ `STEP_AIR_FRAMES` frames out of contact, during which the foot's site rose ≥ `STEP_LIFT_M` above its height on its last frame in contact. A foot starting in the air has no clear first step.
   - `steps` = both feet's clear steps / (counted frames × `CTRL_DT`).
   - `slide` = 100 × the horizontal site travel between two frames both in contact / all the horizontal site travel, both feet.
-  - These are the definitions of `posture_probe.gait`.
+  - These are the definitions of `SCRATCH/i-plan/posture_prototype.py` (geometric contact, counted pairs), which produced the pinned lines; `posture_probe.gait` reads contact from foot load and differs.
 - `posture` appends `· {gait(...)}`; a foot's contact is its body (`ankle_left`, `ankle_right`) touching a `course` geom in the recomputed collisions.
 
 - [ ] **Step 1: Failing tests:**
@@ -274,7 +274,7 @@ def test_gait_counts_clear_steps_and_the_slide():
   - t17-250: `upright 0 % · longest out 14.20 s · feet only 23 % · 4.7 steps/s · slide 57 %` and `upright 0 % · longest out 15.74 s · feet only 22 % · 4.6 steps/s · slide 60 %`;
   - the walker: `upright 100 % · longest out 0.00 s · feet only 100 % · 3.8 steps/s · slide 8 %` and `… 3.5 steps/s · slide 8 %`.
 
-  The force-based probe measured t17-250 at 22–23 % feet only, 4.7 clear steps/s and 58–60 % slide. A difference of more than 1 % or 0.1 steps/s from the prototype means a definition differs: reconcile with the prototype before committing.
+  The force-based probe measured t17-250 at 22–23 % feet only, 4.7 clear steps/s and 57–60 % slide. A difference of more than 1 % or 0.1 steps/s from the prototype means a definition differs: reconcile with the prototype before committing.
 - [ ] **Step 5: Commit:** "check.py reads how the duck stepped: clear touch-downs a second and the share of foot travel slid in contact, standing still under 1 cm/s".
 
 ### Task 3: The walker, vendored, as a warm start and as an opponent
@@ -302,6 +302,7 @@ def test_gait_counts_clear_steps_and_the_slide():
 - `OpponentActionCfg.onnx: str = "reference.onnx"`; `OpponentAction` loads `load_actor(Path(__file__).with_name(cfg.onnx))`. The module docstring: the opponent is the reference duck unless a training names another file beside it (`--env.actions.opponent.onnx`).
 
 - [ ] **Step 1: Failing tests.**
+  - The three parametrized tests below declare `ids=["reference", "walker"]`, so `test_the_reference_ships_with_the_challenge[reference]` exists.
   - `test_the_reference_ships_with_the_challenge` is parametrized over `(opponent.REFERENCE, EVENT.rating.reference)` and `(opponent.WALKER, "BEST_alpha_walking.onnx")`: the bytes equal the Arena's file, and the path is listed by `git ls-files -co --exclude-standard`.
   - `test_the_opponent_net_is_its_onnx` is parametrized over `REFERENCE` and `WALKER`.
   - `test_the_learner_starts_as_the_reference_duck` is parametrized over `("…opponent:ReferenceActor", REFERENCE)` and `("…opponent:WalkerActor", WALKER)`. The same assertions hold: outputs at 1e-5, std 0.3, and the statistics holding at 1e-2 after one batch. It keeps `resolve_callable(tug.RL_CFG.actor.class_name) is opponent.ReferenceActor`.
@@ -340,7 +341,7 @@ def test_a_training_can_name_its_opponent(upright_live):
   - `down` near 0 and upright near 100 %: the walker in Arena bouts is 100 % upright, its longest stretch out 0.00 s.
 
   A NaN stops the plan. Many `down`s mean the walker warm start falls under the string's pull, or the rule misreads it: report both shares before Task 5.
-- [ ] **Step 5: Preflight:** Task 5 Step 1's t20 command with `--dry-run` in place of `--detach`. The tarball lists `walker.onnx`, `reference.onnx`, `env.py`, `rewards.py`, `opponent.py` and `challenge.toml`.
+- [ ] **Step 5: Preflight:** Task 5 Step 1's t20 command with `--dry-run` in place of `--detach`; the dry run prints no file list, so check the tarball's content with `/usr/bin/git -C <wt> ls-files -co --exclude-standard` (exactly what `_build_tarball` tars). It lists `walker.onnx`, `reference.onnx`, `env.py`, `rewards.py`, `opponent.py` and `challenge.toml`.
 - [ ] **Step 6:** report the probe's numbers to the controller; ledger: "walking-upright probe".
 
 ### Task 5: The walking-upright reference: t20 and t21
@@ -357,24 +358,24 @@ def test_a_training_can_name_its_opponent(upright_live):
   - export to `ONNX/t<k>-<N>.onnx`;
   - `arena score` (the rating against t15-250);
   - `CHECK ONNX/t<k>-<N>.onnx <wt>/src/microduck_challenges/tug_of_war/walker.onnx --bouts 10`, for U2, S and R1;
-  - `CHECK ONNX/t<k>-<N>.onnx --bouts 10`, against t15-250, for information;
+  - `CHECK ONNX/t<k>-<N>.onnx --bouts 10`, against t15-250, for U2 (the gate against a planter);
   - the curves: `Train/mean_episode_length`, `Episode_Termination/{in_pit,opponent_in_pit,down,nan_state,opponent_nan_state}`, `Episode_Reward/{marker_ground,win,out,down,track_linear_velocity,air_time,foot_slip,head_pose_tracking,upright}`.
 
   A gate missed: run `SCRATCH/posture_probe.py`'s per-second table on bout 1 for the diagnosis (scratch only).
-- [ ] **Step 4: Verdicts:** U2, S and R1 per checkpoint; the rating and the information line beside them.
-- [ ] **Step 5: Pick** by Global Constraints' reference judge. The ledger records the pick and why, with its U2/S numbers in both directions and the frames from a bout against t15-250 (a render, as Plan H's posture check).
+- [ ] **Step 4: Verdicts:** U2 both ways (against the walker and against t15-250), S and R1 per checkpoint; the rating beside them.
+- [ ] **Step 5: Pick** by Global Constraints' reference judge (U2 both ways, S, R1). The ledger records the pick and why, with its U2/S numbers in both directions and the frames from a bout against t15-250 (a render, as Plan H's posture check).
   - If no checkpoint passes: ONE lever, aimed at the first gate missed, its hypothesis in the commit, `t<n>` launched as Step 1 (same overrides) and judged as Steps 2–4. The stop rule counts t20, t21 and the lever runs.
 
 **Levers, in order:**
 1. Another checkpoint, then a seed.
 2. R1 missed: Win ground 5.0, the knob's top (4.0 is already in).
-3. S missed: `foot_slip`'s weight −0.1 → −10.0 (env.py:585; mjlab's `feet_slip`, Σ of the feet's squared speed in contact). A pair sliding at the bowed pullers' 8.6 cm/s then costs about 0.15 a step (0.58 at their p90 17 cm/s), the walker's 1.3 cm/s about 0.003, against `air_time`'s up to 2.0 and walking back's up to 3.0.
-4. U2 missed: `stay_upright` 2.0.
+3. S missed: `foot_slip`'s weight −0.1 → −10.0 (env.py:585; mjlab's `feet_slip`, Σ of the feet's squared speed in contact). A pair sliding at the bowed pullers' 8.6 cm/s then costs about 0.15 a second (0.58 at their p90 17 cm/s), the walker's 1.3 cm/s about 0.003, against `air_time`'s up to 2.0 and walking back's up to 3.0.
+4. U2 missed, against the walker or against t15-250: `stay_upright` 2.0.
 
 ### Task 6: The new reference handed over (both repos, one sitting)
 
 **Files:**
-- Arena: Create `arena/assets/policies/tug-reference-<run>-<N>.onnx` (LFS). Delete `arena/assets/policies/tug-reference-t15-250.onnx`. Modify `arena/assets/PROVENANCE.md`, `arena/events/tug-of-war.toml`, `docs/guides/challenges/tug-of-war.md`, `docs/superpowers/plans/2026-10-19-versus-interfaces.md` (line 215), `tests/test_assets.py`, `tests/test_manifest.py` (lines 496, 509, 522).
+- Arena: Create `arena/assets/policies/tug-reference-<run>-<N>.onnx` (LFS). Delete `arena/assets/policies/tug-reference-t15-250.onnx`. Modify `arena/assets/PROVENANCE.md`, `arena/events/tug-of-war.toml`, `docs/guides/challenges/tug-of-war.md`, `docs/superpowers/plans/2026-10-19-versus-interfaces.md` (lines 215 and 348), `tests/test_assets.py`, `tests/test_manifest.py` (lines 496, 509, 522).
 - Challenges: Modify `tug_of_war/reference.onnx` (the pick's bytes) and `tug_of_war/opponent.py` (the module docstring's and `REFERENCE`'s comments, `REFERENCE_SEEN`, `WARM_START_STD`'s comment).
 
 **Interfaces:** Consumes Task 5's pick: `ONNX/<run>-<N>.onnx`, its sha256, its repo, the recipe commit, the command's two overrides, and the date.
@@ -388,7 +389,7 @@ def test_a_training_can_name_its_opponent(upright_live):
     - "It walks backwards upright …" with only facts the ledger measured: its U2 and S numbers, and against the walker and t15-250 who went in the pit and when;
     - the history line: "trained walking upright on the ring and the string (stay upright 1.0, Win ground 4.0), warm-started from BEST_alpha_walking and against it, frozen; replaces t15-250, which pulled bowed onto its head (owner, 2026-10-22): every rating changed".
   - The guide's "## Rating" sentence on the reference says the same measured facts.
-- [ ] **Step 3:** `rtk proxy grep -rnI "t15-250\|t15_250" arena tests app/src docs/guides` prints only PROVENANCE's history line. Run SUITE: tests that rated against the reference by value are re-measured, never loosened.
+- [ ] **Step 3:** `rtk proxy grep -rnI "t15-250\|t15_250" arena tests app/src docs/guides` prints only PROVENANCE's history line. Run SUITE: the four tests that depend on the reference duck's behaviour are `test_evaluate.py::test_the_reference_against_itself_gains_no_ground_on_the_marker`, `test_evaluate.py::test_a_duck_that_walks_forward_drops_itself_in_and_rates_below_minus_the_bonus`, `test_tug.py::test_a_bout_on_the_string_holds_together` and, in the challenges, `test_the_check_plays_the_reference_by_default`. A red one is reported with its bouts and the controller rules; a string-stability miss stops the plan. Never loosened.
 - [ ] **Step 4: Challenges, red first:** TESTS → `test_the_reference_ships_with_the_challenge[reference]` fails.
 - [ ] **Step 5: Challenges:**
   - `cp ONNX/<run>-<N>.onnx <wt>/src/microduck_challenges/tug_of_war/reference.onnx`.
@@ -411,7 +412,7 @@ def test_a_training_can_name_its_opponent(upright_live):
 - [ ] **Step 2: Launch:**
   - `<a>`: `cd /Users/nicolasrabault/Projects/HuggingFace/microduck-challenges/.claude/worktrees/tug-of-war && uv run --no-config --no-sync train Mjlab-TugOfWar-MicroDuck --env.scene.num-envs 4096 --agent.max-iterations 1000 --agent.seed 1 --agent.logger tensorboard --agent.run-name <a> --hf-jobs --detach --no-wandb --namespace Nico-robot --ckpt-repo Nico-robot/mjlab-tugofwar-microduck-<a>`.
   - `<b>`: the same with seed 2.
-- [ ] **Step 3: Judge** as Task 5 Steps 2–3, now against the new reference: `arena score` (R2) and `CHECK ONNX/<run>-<N>.onnx --bouts 10` (B the default: U2, S, R1, R3). Nothing is played against t15-250 or the walker.
+- [ ] **Step 3: Judge** as Task 5 Steps 2–3, now against the new reference: `arena score` (R2) and `CHECK ONNX/<a>-<M>.onnx --bouts 10` (and `<b>`'s), one per judged candidate checkpoint, B left as the default, the new reference: U2, S, R1, R3. Nothing is played against t15-250 or the walker.
 - [ ] **Step 4: Verdicts:** U2, S, R1, R2, R3 per checkpoint.
 - [ ] **Step 5: Pick.**
   - Among the checkpoints passing U2, S, R1 and R2, take the highest rating, with a round robin between ratings within 5.0 cm. In the round robin each duck is A in 20 bouts; U2 and S must hold over those bouts too.
