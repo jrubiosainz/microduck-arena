@@ -23,7 +23,7 @@ match the kinematics' `geom.mesh` values.
 ## The tug's reference duck
 
 Every tug rating is five bouts against this duck (`[rating]` in `arena/events/tug-of-war.toml`).
-It stays on its feet, walks back and pulls the string taut.
+It stays on its feet, walks backwards and drags the other duck towards the pit.
 
 | field | value |
 | --- | --- |

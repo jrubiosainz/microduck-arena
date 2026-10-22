@@ -149,8 +149,8 @@ players' ratings start negative, the name "string" on the site, and the decor as
 - **Upright, measured**: trunk height ≥ 7 cm and tilt ≤ 45°; a duck is **down** once it has not
   been upright for 0.3 s straight (the fall rule's hold). From the robot: standing, the trunk
   stands 11–12 cm; a sweep of the legs robot's poses with only its feet on the floor keeps it at
-  7.8 cm or more leaning back up to 45°; the leaning t10-500 sat at 5–6 cm, tilted 55° (its rear
-  on the floor: sitting); a lying duck sits at 3.6 cm. Tilt is the trunk's angle from vertical,
+  7.8 cm or more leaning back up to 45°; the leaning t10-500 sat low at 4.5 cm, tilted 57°, its legs
+  carrying it (measured later: no trunk–floor contact); a lying duck sits at 3.6 cm. Tilt is the trunk's angle from vertical,
   as `moments.py` reads it.
 - **The knob**: `stay_upright` in the recipe's `challenge.toml`, the cost of going down, in pits.
   0, the users' default, lets a duck crouch, sit or lie as the Arena allows; above 0, going down
