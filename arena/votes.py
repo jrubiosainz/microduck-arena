@@ -66,7 +66,7 @@ def impressions(ballots) -> Counter:
     """run id -> times SHOWN.
 
     The rate's denominator, so how often an entry was shown never decides its
-    place, and per voter what the draw deals from. It costs nothing to know, because a ballot records every candidate
+    place. It costs nothing to know, because a ballot records every candidate
     and not only its winner.
     """
     return Counter(run_id for b in ballots for run_id in b.candidates)
@@ -115,34 +115,44 @@ def pool(
     return sorted(best.values(), key=lambda r: (r.submitted_at, r.run_id))
 
 
-def draw(
+def deal(
     candidates,
-    mine: Counter,
+    dealt: set[str],
     ballot_min: int,
     ballot_max: int,
     rng: random.Random,
-) -> list[RunRecord] | None:
-    """One ballot's field, in lane order. None when there are too few ducks.
+) -> tuple[list[RunRecord], set[str]] | None:
+    """One ballot's field, in lane order, and what the voter has been dealt
+    after it. None when there are too few ducks.
 
-    Shuffle, then sort by what THIS voter has been shown least (`mine`): a
-    series of ballots walks a voter through every entry before any comes back,
-    and the shuffle deals each round's ballots afresh, so an entry meets new
-    rivals every round. Never by what everyone has been shown: entries drawn
-    together gain a showing together, so that sort deals the same groups round
-    after round — and on its own it handed every voter the day's newcomers on
-    every ballot until they caught up with entries a week old. The rate does not
-    need equal exposure. The second shuffle fixes lane order, which IS the
-    colour assignment — the same duck comes out orange on one ballot and
-    lavender on the next, and that is what keeps a ballot anonymous.
+    A voter is dealt the pool like a deck of cards: every entry once, then the
+    deck is gathered and dealt again. `dealt` is what this round has dealt them
+    so far; the field that finishes a round tops up with entries of the next,
+    and those open it. So a series of ballots shows a voter every entry before
+    any comes back, each round deals new groups, and an entry the voter has not
+    seen yet — a newcomer — comes once in the round. A sort on how often each
+    entry was shown, to this voter or to everyone, put the least shown on
+    ballot after ballot until they caught up, and dealt the entries shown
+    together together again; the rate does not need equal exposure.
+
+    The second shuffle fixes lane order, which IS the colour assignment — the
+    same duck comes out orange on one ballot and lavender on the next, and that
+    is what keeps a ballot anonymous.
     """
     field = list(candidates)
     if len(field) < ballot_min:
         return None
+    deck = {r.run_id for r in field}
+    dealt = dealt & deck
     rng.shuffle(field)
-    field.sort(key=lambda r: mine[r.run_id])
+    field.sort(key=lambda r: r.run_id in dealt)
     picked = field[:ballot_max]
     rng.shuffle(picked)
-    return picked
+    ids = {r.run_id for r in picked}
+    if deck <= dealt | ids:
+        # This field finished the round: what it dealt a second time opens the next one.
+        return picked, ids & dealt
+    return picked, dealt | ids
 
 
 def standings(candidates, ballots) -> list[VotedRow]:

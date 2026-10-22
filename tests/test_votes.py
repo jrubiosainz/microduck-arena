@@ -8,7 +8,7 @@ from arena.constants import RUNNER_VERSION
 from arena.store import Ballot
 from arena.votes import (
     cast_today,
-    draw,
+    deal,
     first_day,
     impressions,
     pool,
@@ -79,58 +79,84 @@ def test_you_are_never_handed_your_own_duck():
     assert pool([mine, theirs], frozenset(), exclude_user="ann") == [theirs]
 
 
-def test_a_draw_prefers_what_this_voter_saw_least_and_refuses_a_field_that_is_too_small():
+def in_a_row(field, ballots, rng, dealt=frozenset()):
+    """`ballots` fields dealt one after the other to one voter, as the booth asks for them."""
+    fields = []
+    for _ in range(ballots):
+        picked, dealt = deal(field, dealt, 2, 4, rng)
+        fields.append({r.run_id for r in picked})
+    return fields
+
+
+def test_a_deal_comes_from_what_is_left_in_the_deck_and_refuses_a_field_that_is_too_small():
     seen = [make_record(user=f"seen{i}") for i in range(3)]
     fresh = [make_record(user=f"new{i}") for i in range(2)]
-    mine = Counter({r.run_id: 10 for r in seen})
-    picked = draw(seen + fresh, mine, 2, 4, random.Random(0))
+    dealt = {r.run_id for r in seen}
+    picked, _ = deal(seen + fresh, dealt, 2, 4, random.Random(0))
     assert {r.run_id for r in fresh} <= {r.run_id for r in picked}
     assert len(picked) == 4
-    assert draw(seen[:1], mine, 2, 4, random.Random(0)) is None
+    assert deal(seen[:1], dealt, 2, 4, random.Random(0)) is None
 
 
 def test_a_series_of_ballots_walks_a_voter_through_every_entry_before_repeating_one():
     # The Space on 2026-10-22, when the draw sorted on exposure: four entries published that day,
     # shown about 11 times against the others' 80, took all four lanes of every ballot.
     field = [make_record(user=f"u{i}") for i in range(16)]
-    mine, seen, rng = Counter(), set(), random.Random(0)
-    for _ in range(4):
-        picked = draw(field, mine, 2, 4, rng)
-        mine.update(r.run_id for r in picked)
-        seen |= {r.run_id for r in picked}
-    assert len(seen) == 16
+    assert len(set().union(*in_a_row(field, 4, random.Random(0)))) == 16
+
+
+def test_an_entry_not_dealt_yet_comes_back_once_not_until_it_catches_up():
+    # The owner on the Space on 2026-10-22, when the draw sorted on what each voter had seen: the
+    # five entries they had seen 3 times against the others' 13 to 20 filled ballot after ballot.
+    often = [make_record(user=f"often{i}") for i in range(12)]
+    rarely = [make_record(user=f"rare{i}") for i in range(4)]
+    fields = in_a_row(often + rarely, 4, random.Random(0), {r.run_id for r in often})
+    assert max(sum(r.run_id in field for field in fields) for r in rarely) <= 2
 
 
 def test_a_voters_second_round_mixes_who_meets_whom():
     # Seen in the booth on 2026-10-22: entries shown together gained a showing together, so a
     # sort on exposure kept them together, and a voter's fifth ballot was their first again.
     field = [make_record(user=f"u{i}") for i in range(16)]
-    mine, rng, met = Counter(), random.Random(0), set()
-    for _ in range(8):
-        picked = draw(field, mine, 2, 4, rng)
-        mine.update(r.run_id for r in picked)
-        met |= {(a.run_id, b.run_id) for a in picked for b in picked if a.run_id < b.run_id}
+    fields = in_a_row(field, 8, random.Random(0))
+    met = {(a, b) for picked in fields for a in picked for b in picked if a < b}
     # One round is four ballots of six pairs each: a second round that repeats the first adds none.
     assert len(met) > 24
 
 
-def test_a_draw_shrinks_to_the_field_rather_than_refusing_it():
+def test_a_round_that_does_not_divide_evenly_opens_the_next_with_its_spare():
+    # Fifteen entries in fours: the fourth ballot deals the last three and one of the next round,
+    # which is then not dealt again while that round lasts.
+    field = [make_record(user=f"u{i}") for i in range(15)]
+    fields = in_a_row(field, 7, random.Random(0))
+    assert len(set().union(*fields[:4])) == 15
+    [spare] = fields[3] & set().union(*fields[:3])
+    assert all(spare not in picked for picked in fields[4:7])
+
+
+def test_a_withdrawn_entry_leaves_the_deck_and_a_new_one_joins_it():
+    old = [make_record(user=f"u{i}") for i in range(6)]
+    new = make_record(user="new")
+    dealt = {r.run_id for r in old[:4]}
+    picked, after = deal(old[1:] + [new], dealt, 2, 4, random.Random(0))
+    assert {r.run_id for r in picked} >= {old[4].run_id, old[5].run_id, new.run_id}
+    assert old[0].run_id not in after
+
+
+def test_a_deal_shrinks_to_the_field_rather_than_refusing_it():
     field = [make_record(user="ann"), make_record(user="bob")]
-    picked = draw(field, Counter(), 2, 4, random.Random(0))
+    picked, _ = deal(field, set(), 2, 4, random.Random(0))
     assert len(picked) == 2
 
 
-def test_a_draw_shuffles_lane_order_so_a_duck_is_not_always_the_same_colour():
-    # Distinct `mine` values make the sort in step 2 fully determine which
-    # two survive truncation, regardless of the first shuffle: whatever order
-    # the field arrives in, sorting by a unique key always yields the same
-    # sequence. So the surviving pair is fixed — [field[0], field[1]] — and the
-    # only thing left that can vary their order is the SECOND shuffle. If that
-    # shuffle were dropped, `orders` would collapse to one tuple.
+def test_a_deal_shuffles_lane_order_so_a_duck_is_not_always_the_same_colour():
+    # Two of four dealt already leaves exactly two in the deck, so which two survive truncation
+    # is fixed — [field[0], field[1]] — and the only thing left that can vary their order is the
+    # SECOND shuffle. If that shuffle were dropped, `orders` would collapse to one tuple.
     field = [make_record(user=f"u{i}") for i in range(4)]
-    mine = Counter({r.run_id: i for i, r in enumerate(field)})
+    dealt = {field[2].run_id, field[3].run_id}
     orders = {
-        tuple(r.run_id for r in draw(field, mine, 2, 2, random.Random(seed)))
+        tuple(r.run_id for r in deal(field, dealt, 2, 2, random.Random(seed))[0])
         for seed in range(20)
     }
     assert orders == {

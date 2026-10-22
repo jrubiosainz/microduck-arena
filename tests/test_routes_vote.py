@@ -188,8 +188,8 @@ def test_ballots_in_a_row_show_a_voter_every_entry_before_repeating_one(client):
 
 
 def test_the_next_ballot_drawn_before_this_one_is_cast_holds_other_entries(client):
-    """The booth draws the next field while this one plays, so before its vote: a ballot in hand
-    counts as seen, or the next one repeats it."""
+    """The booth draws the next field while this one plays, so before its vote: a field is dealt
+    when it is issued, or the next one repeats it."""
     api, app = client
     for i in range(8):
         enter(app, f"duck{i}")

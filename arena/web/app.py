@@ -24,7 +24,7 @@ from .routes_live import router as live_router
 from .routes_read import router as read_router
 from .routes_submit import router as submit_router
 from .routes_unfurl import router as unfurl_router
-from .routes_vote import BallotBook
+from .routes_vote import BallotBook, Decks
 from .routes_vote import router as vote_router
 from .session import Sessions
 
@@ -41,6 +41,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.state.store = config.build_store()
     app.state.ballots = config.build_ballots()
     app.state.ballot_book = BallotBook()
+    app.state.decks = Decks()
     app.state.sessions = Sessions()
     app.state.racing = set()  # users whose entry is being raced: one at a time each
 
