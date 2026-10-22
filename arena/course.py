@@ -504,7 +504,8 @@ def compile_tug(manifest: Manifest) -> mujoco.MjModel:
     """A tug's model: the two ducks of `tug_layout`, tied neck to neck by the string
     (`_add_string`), which starts straight and exactly string_m long between their STRING_SITEs
     as they stand. The STAND keyframe holds the string where it was built (its qpos0): left at
-    zero, its free joint's quaternion would be invalid."""
+    zero, its free root would start at the world origin, about 15 cm under the necks, instead of
+    where `_add_string` built it, straight between them."""
     layout = [(manifest.rig, start) for start in tug_layout(manifest.course, manifest.rig)]
     ox, oy, oz = string_offset(manifest.rig)
     spec = _troupe(manifest, layout, (ox, oy, oz))

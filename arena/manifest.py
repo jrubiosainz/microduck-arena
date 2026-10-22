@@ -76,7 +76,7 @@ class Tug:
     ring_m: float  # rope to rope: the field is the square inside the ring's ropes, centred on the pit
     pit_m: float  # the pit's width along x, centred on x = 0, across the whole ring
     pit_depth_m: float
-    string_m: float  # neck base to neck base, taut at the start
+    string_m: float  # neck base to neck base, straight at the start
     kind: str = "tug"
 
 

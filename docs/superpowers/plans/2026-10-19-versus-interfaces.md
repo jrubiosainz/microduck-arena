@@ -238,6 +238,7 @@ STRING = "string/"           # the prefix of the string's bodies `string/seg{k}`
                              # `string/j{k}y`, `string/j{k}z`, geoms `string/cap{k}`, sites `string/p{k}`
 STRING_SEGMENTS = 16         # 17 points; STRING_RADIUS_M = 0.004, STRING_MASS_KG = 0.080, STRING_END_MASS_KG = 0.015,
                              # STRING_DAMPING = 0.003, STRING_ARMATURE = 1e-6, STRING_TIE_SOLREF = (0.01, 1.0),
+                             # STRING_TIE_SOLIMP = (0.9, 0.95, 0.001, 0.5, 2.0) (MuJoCo's default, as the rope study ran the ties),
                              # STRING_FRICTION = (1.0, 0.005, 0.0001): the measured ones, never lowered
 
 def string_offset(rig: str = "legs") -> tuple[float, float, float]   # the `neck` body's pos in `trunk_base`, read from the rig's MJCF
@@ -353,7 +354,7 @@ pinned by sha256 in `tests/test_assets.py`, recorded in `arena/assets/PROVENANCE
 
 API: `event_summary` of a tug adds `course: "tug"`, `ring_m`, `string_m`, `pit_m`, `pit_depth_m`,
 `ropes: [{name, from, to, radius}]` (12), `posts: [{name, from, to, radius}]` (4),
-`bout: {time_limit_s, bouts_to_win, max_bouts}`, and `string_offset: [x, y, z]` until Plan G Task 6;
+and `bout: {time_limit_s, bouts_to_win, max_bouts}`;
 never `length_m`, `width_m`, `walls` or `pit`. `per_seed` items
 carry `score_cm`; every board row carries `trace_seed`; a player's publications carry `metric`. `POST /api/events/{id}/submit` answers with the event's `metric` (every
 event; the publish CLI reads it, Plan B's Task 13).
@@ -395,7 +396,7 @@ go out; in come the geoms `platform_west`, `platform_east`, `pit_floor`, `backst
 `rope_<side>_<k>`, `post_nw`, `post_ne`, `post_sw`, `post_se`; the ring's constants `RING_M`,
 `RING_ROPES_M`, `RING_ROPE_RADIUS_M`, `RING_POST_RADIUS_M`, `RING_POST_TOP_M`; the string's
 `STRING` (the prefix `"string/"`), `STRING_SEGMENTS`, `STRING_RADIUS_M`, `STRING_MASS_KG`,
-`STRING_END_MASS_KG`, `STRING_DAMPING`, `STRING_ARMATURE`, `STRING_TIE_SOLREF`, `STRING_FRICTION`,
+`STRING_END_MASS_KG`, `STRING_DAMPING`, `STRING_ARMATURE`, `STRING_TIE_SOLREF`, `STRING_TIE_SOLIMP`, `STRING_FRICTION`,
 `MIDDLE`, and the names the string is built from (`string_sites` and `marker_x(string)`: the string's
 middle point's x); and still `STRING_SITE`, `SPAWN_HEIGHT_M`, `WALL_THICKNESS_M`,
 `PLATFORM_OVERRUN_M`, `string_offset("legs")`, `PIT_DROP_M`, `tug_layout`'s two starts,
