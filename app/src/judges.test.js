@@ -101,4 +101,24 @@ describe("official Reachy Mini asset", () => {
     panel.dispose();
     disposals.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
   });
+  it("sits on a dais `lift` high, and looks down from it at ducks on decks as high", () => {
+    // A duel's ducks, on decks 0.6 m above the floor (duel-venue.js).
+    const onDecks = [{ x: 0.75, y: 0.75, z: 0 }, { x: 1.25, y: 0.75, z: 0 }];
+    const seated = (lift) => {
+      const panel = buildJudges(model, 2, 0.7, [], 4, lift);
+      panel.group.updateMatrixWorld(true);
+      const robots = panel.group.children.filter((child) => child.name.startsWith("judge-"));
+      const lowest = Math.min(...robots.map((robot) => new Box3().setFromObject(robot).min.y));
+      panel.pose(3, onDecks);
+      const pitch = robots[0].getObjectByName("reachy_head").rotation.z;
+      panel.dispose();
+      return { lowest, pitch };
+    };
+    const floor = seated(0);
+    const dais = seated(0.6);
+    expect(dais.lowest).toBeCloseTo(floor.lowest + 0.6);
+    // On the floor the jury looked up at them; from the dais it looks down.
+    expect(floor.pitch).toBeGreaterThan(0);
+    expect(dais.pitch).toBeLessThan(0);
+  });
 });

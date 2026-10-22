@@ -29,7 +29,7 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-from .constants import CTRL_DT, DEFAULT_POSE, JOINT_NAMES, TIMESTEP
+from .constants import CTRL_DT, DEFAULT_POSE, JOINT_NAMES, TIMESTEP, TRACE_WIDTH
 from .course import (
     SPAWN_HEIGHT_M,
     WALL_THICKNESS_M,
@@ -55,6 +55,11 @@ DECK_YAWS_DEG = (180.0, 0.0)
 # the rope takes up its last few millimetres of slack rather than snapping taut.
 ROPE_SOLIMP = (0.9, 0.95, 0.003, 0.5, 2.0)
 ROPE_WIDTH_M = 0.004  # drawn only: a tendon collides with nothing
+
+# How long a recorded bout runs on once a duck has dropped off its deck: about a
+# third of a second takes a trunk from drop_m to the pit's floor, and the rest
+# shows who is left standing. Watching only; the referee has already decided.
+TAIL_S = 1.5
 
 
 @dataclass(frozen=True)
@@ -352,6 +357,54 @@ def _ahead(rope_mid_m: float, margin_m: float) -> int | None:
     return None
 
 
+def _diverged(data) -> bool:
+    return _reset_by_mujoco(data) or not np.all(np.isfinite(data.qpos))
+
+
+def _frame(sim) -> np.ndarray:
+    """This control step of both ducks, (2, TRACE_WIDTH), as a run's trace keeps it."""
+    frame = np.empty((len(sim.ducks), TRACE_WIDTH), dtype=np.float32)
+    sim.record(frame)
+    return frame
+
+
+def _opening(duel: Duel, model, policies: Sequence, seed: int):
+    """Every run's opening (arena.runner._start), both ducks asked to stand still
+    through the settle: the simulation where the clock starts, and the settle's
+    frames, (2, settle steps + 1, TRACE_WIDTH)."""
+    if len(policies) != 2:
+        raise ValueError(f"a bout takes two policies, got {len(policies)}")
+    still = np.asarray((0.0, 0.0, 0.0) + duel.command[3:], dtype=np.float64)
+    return _start(duel, model, policies, DECK_YAWS_DEG, seed, [still, still])
+
+
+def _referee(duel: Duel, sim, seed: int, frames: list | None = None) -> Bout:
+    """The timed bout, from where _opening left `sim`. With `frames`, every step the
+    referee judges is appended to it (_frame's): reading the physics writes none of
+    it, so the bout is the same recorded or not. A void bout's last step is not
+    among them — it is MuJoCo's reset pose, not the bout."""
+    pull = np.asarray(duel.command, dtype=np.float64)
+    model, data = sim.model, sim.data
+    sites = [model.site(f"{duck_prefix(k)}harness").id for k in range(2)]
+    heights = [duck.adr.free + 2 for duck in sim.ducks]
+    steps = round(duel.time_limit_s / CTRL_DT)
+    for step in range(steps):
+        sim.step([pull, pull])
+        time_s = (step + 1) * CTRL_DT
+        if _diverged(data):
+            return Bout(seed, None, "void", time_s, None)
+        if frames is not None:
+            frames.append(_frame(sim))
+        fell = [data.qpos[z] < -duel.referee.drop_m for z in heights]
+        if all(fell):
+            return Bout(seed, None, "pit", time_s, _rope_mid(data, sites))
+        if any(fell):
+            still_on_deck = 1 if fell[0] else 0
+            return Bout(seed, still_on_deck, "pit", time_s, _rope_mid(data, sites))
+    rope_mid = _rope_mid(data, sites)
+    return Bout(seed, _ahead(rope_mid, duel.referee.margin_m), "bell", steps * CTRL_DT, rope_mid)
+
+
 def play_bout(duel: Duel, model, policies: Sequence, seed: int) -> Bout:
     """One bout on `model` (compile_duel's): policies[k] on deck k, from `seed`'s start.
 
@@ -362,28 +415,40 @@ def play_bout(duel: Duel, model, policies: Sequence, seed: int) -> Bout:
     once is a draw), and the bell gives it to whoever has pulled the rope's middle
     their way by more than the margin.
     """
-    if len(policies) != 2:
-        raise ValueError(f"a bout takes two policies, got {len(policies)}")
-    pull = np.asarray(duel.command, dtype=np.float64)
-    still = np.asarray((0.0, 0.0, 0.0) + duel.command[3:], dtype=np.float64)
-    sim, _ = _start(duel, model, policies, DECK_YAWS_DEG, seed, [still, still])
-    data = sim.data
-    sites = [model.site(f"{duck_prefix(k)}harness").id for k in range(2)]
-    heights = [duck.adr.free + 2 for duck in sim.ducks]
-    steps = round(duel.time_limit_s / CTRL_DT)
-    for step in range(steps):
-        sim.step([pull, pull])
-        time_s = (step + 1) * CTRL_DT
-        if _reset_by_mujoco(data) or not np.all(np.isfinite(data.qpos)):
-            return Bout(seed, None, "void", time_s, None)
-        fell = [data.qpos[z] < -duel.referee.drop_m for z in heights]
-        if all(fell):
-            return Bout(seed, None, "pit", time_s, _rope_mid(data, sites))
-        if any(fell):
-            still_on_deck = 1 if fell[0] else 0
-            return Bout(seed, still_on_deck, "pit", time_s, _rope_mid(data, sites))
-    rope_mid = _rope_mid(data, sites)
-    return Bout(seed, _ahead(rope_mid, duel.referee.margin_m), "bell", steps * CTRL_DT, rope_mid)
+    sim, _ = _opening(duel, model, policies, seed)
+    return _referee(duel, sim, seed)
+
+
+@dataclass(frozen=True, eq=False)
+class Recorded:
+    """A bout as a replay plays it: how it ended, and both ducks' frames, by deck."""
+
+    bout: Bout
+    settle: np.ndarray  # (2, settle steps + 1, TRACE_WIDTH): the untimed settle, as a run's
+    # (2, frames, TRACE_WIDTH): every step the referee judged, a frame each, so the
+    # bout was decided on frame round(bout.time_s / CTRL_DT) - 1; then the tail.
+    trace: np.ndarray
+
+
+def record_bout(duel: Duel, model, policies: Sequence, seed: int, tail_s: float = TAIL_S) -> Recorded:
+    """play_bout's bout, recorded, and run on for tail_s once a duck has dropped off
+    its deck: both still asked to pull, so a replay shows the loser land in the pit
+    and what becomes of the winner on the other end of the rope. The tail stops
+    early if the simulation diverges, and a bout the bell or a divergence ended has
+    none."""
+    sim, settle = _opening(duel, model, policies, seed)
+    frames: list[np.ndarray] = []
+    bout = _referee(duel, sim, seed, frames)
+    if bout.end == "pit":
+        pull = np.asarray(duel.command, dtype=np.float64)
+        for _ in range(round(tail_s / CTRL_DT)):
+            sim.step([pull, pull])
+            if _diverged(sim.data):
+                break
+            frames.append(_frame(sim))
+    if not frames:
+        return Recorded(bout, settle, np.empty((2, 0, TRACE_WIDTH), dtype=np.float32))
+    return Recorded(bout, settle, np.stack(frames, axis=1))
 
 
 @dataclass(frozen=True)
@@ -422,6 +487,17 @@ def play_match(duel: Duel, a, b, model=None) -> Match:
         for seed in duel.seeds
         for deck0 in (0, 1)
     ))
+
+
+def record_match(duel: Duel, a, b, model=None) -> tuple[Match, tuple[Recorded, ...]]:
+    """play_match's match, and every bout of it recorded (record_bout's), in its order."""
+    model = compile_duel(duel) if model is None else model
+    bouts = [
+        (record_bout(duel, model, (a, b) if deck0 == 0 else (b, a), seed), deck0)
+        for seed in duel.seeds
+        for deck0 in (0, 1)
+    ]
+    return Match(tuple(Played(r.bout, deck0) for r, deck0 in bouts)), tuple(r for r, _ in bouts)
 
 
 def round_robin(duel: Duel, policies: Sequence) -> dict[tuple[int, int], Match]:

@@ -25,9 +25,13 @@ export function judgeGaze(seconds, index, position, racers) {
   };
 }
 
-export function buildJudges(model, length, edge, sponsorMaps, count = 4) {
+// `lift` raises the jury and its furniture off the floor, onto a dais as high as
+// the competition: a duel's decks stand above the hall's floor (duel-venue.js),
+// and a jury on the floor behind them saw nothing and was seen by no one.
+export function buildJudges(model, length, edge, sponsorMaps, count = 4, lift = 0) {
   const group = new Group();
   group.name = "judges";
+  group.position.y = lift;
   const furniture = [];
   const materials = [0xd8a56a, 0x243c44, 0x268a91, 0xff7935, 0xfaf6e9].map(
     (color) => new MeshStandardMaterial({ color, roughness: 0.7 }),
@@ -85,7 +89,8 @@ export function buildJudges(model, length, edge, sponsorMaps, count = 4) {
       head,
       right: robot.getObjectByName("antenna_right"),
       left: robot.getObjectByName("antenna_left"),
-      eye: new Vector3(x, 0.42, -seatZ),
+      // Where the head looks from, in the world: judgeGaze aims it at the racers' world positions.
+      eye: new Vector3(x, lift + 0.42, -seatZ),
     };
   });
   function pose(seconds, racers) {

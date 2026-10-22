@@ -15,7 +15,7 @@ from . import stage
 from . import trace as trace_codec
 from .cast import cast_of, load_borrowed
 from .constants import CTRL_DT
-from .duel import load_duel_by_id, round_robin, standings
+from .duel import load_duel_by_id, record_match, round_robin, standings
 from .evaluate import evaluate
 from .hub_fetch import FetchError, fetch_references
 from .index import ENTRANTS, leaderboard
@@ -128,6 +128,16 @@ def _cmd_duel(args) -> int:
     if len(args.onnx) < 2:
         print("a duel takes two policies, or more for a round robin", file=sys.stderr)
         return 1
+    if args.watch and len(args.onnx) != 2:
+        print("--watch shows one match: give it two policies", file=sys.stderr)
+        return 1
+    if args.watch:
+        from .workshop.cli import _port_free
+
+        # Before the match is played, not after it.
+        if not _port_free(args.port):
+            print(f"port {args.port} is busy: try --port", file=sys.stderr)
+            return 1
     duel = load_duel_by_id(args.duel)
     policies = [load_policy(Path(path)) for path in args.onnx]
     names = [Path(path).stem for path in args.onnx]
@@ -136,7 +146,11 @@ def _cmd_duel(args) -> int:
     seeds = ", ".join(str(seed) for seed in duel.seeds)
     print(f"{duel.title}: seed{'s' if len(duel.seeds) > 1 else ''} {seeds}, "
           f"each played from both decks; the bell at {duel.time_limit_s:g} s")
-    matches = round_robin(duel, policies)
+    if args.watch:
+        match, recorded = record_match(duel, *policies)
+        matches = {(0, 1): match}
+    else:
+        matches = round_robin(duel, policies)
     for (i, j), match in matches.items():
         if len(policies) == 2:
             for played in match.bouts:
@@ -151,7 +165,28 @@ def _cmd_duel(args) -> int:
         for rank, row in enumerate(standings(names, matches), 1):
             print(f"{rank:>2}  {row.name:<{width}}  {row.won:>3}  {row.drawn:>5}  "
                   f"{row.lost:>4}  {row.points:>6g}")
+    if args.watch:
+        _watch_duel(duel, names, match, recorded, args.port, open_browser=not args.no_browser)
     return 0
+
+
+def _watch_duel(duel, names, match, recorded, port: int, open_browser: bool) -> None:
+    """The match just played, in the Arena's stadium: duel.html on 127.0.0.1 until Ctrl-C."""
+    import threading
+    import webbrowser
+
+    from .duel_watch import create_duel_app
+    from .web.config import default_frontend
+    from .workshop.cli import serve
+
+    site = default_frontend(Path(__file__).resolve().parent)
+    app = create_duel_app(duel, names, match, recorded,
+                          site if (site / "duel.html").is_file() else None)
+    url = f"http://127.0.0.1:{port}/"
+    print(f"\nWatch it: {url}  (Ctrl-C to close it)", flush=True)
+    if open_browser:
+        threading.Timer(1.0, webbrowser.open, [url]).start()
+    serve(app, port)
 
 
 def _cmd_board(args) -> int:
@@ -399,6 +434,11 @@ def main(argv=None) -> int:
     )
     duel.add_argument("onnx", nargs="+")
     duel.add_argument("--duel", default="tug-of-war", help="which of arena/duels/")
+    duel.add_argument("--watch", action="store_true",
+                      help="two policies: then show their match in the Arena's stadium, in a browser")
+    duel.add_argument("--port", type=int, default=8766, help="where --watch serves, on 127.0.0.1")
+    duel.add_argument("--no-browser", action="store_true", dest="no_browser",
+                      help="with --watch, print the address instead of opening it")
     duel.set_defaults(func=_cmd_duel)
 
     board = subs.add_parser("board", help="print a leaderboard")

@@ -7,8 +7,9 @@ import pytest
 import arena.duel
 from arena.assets import ASSET_ROOT
 from arena.cli import main
-from arena.constants import CTRL_DT, NUM_JOINTS
+from arena.constants import CTRL_DT, NUM_JOINTS, TRACE_WIDTH
 from arena.duel import (
+    TAIL_S,
     Bout,
     Match,
     Played,
@@ -18,8 +19,11 @@ from arena.duel import (
     load_duel_by_id,
     play_bout,
     play_match,
+    record_bout,
+    record_match,
     standings,
 )
+from arena.duel_watch import create_duel_app
 from arena.manifest import ManifestError, all_events, load_event
 from arena.policy import load_policy
 
@@ -235,6 +239,42 @@ def test_a_match_plays_every_seed_from_both_decks(tug, walker):
     assert match.points == (1.0, 1.0)
 
 
+def test_a_recorded_match_is_the_match_played(tug, walker):
+    """Recording reads the physics and writes none of it."""
+    duel = dataclasses.replace(tug, time_limit_s=1.0, seeds=(1,))
+    match, recorded = record_match(duel, walker, walker)
+    assert match == play_match(duel, walker, walker)
+    settle = round(duel.start.settle_s / CTRL_DT) + 1
+    for played, each in zip(match.bouts, recorded, strict=True):
+        assert each.bout == played.bout
+        assert each.settle.shape == (2, settle, TRACE_WIDTH)
+        # A bout the bell ended has no tail: a frame for every step the referee judged.
+        assert each.trace.shape == (2, round(duel.time_limit_s / CTRL_DT), TRACE_WIDTH)
+        assert each.trace.dtype == np.float32
+
+
+def test_a_recorded_fall_runs_on_past_the_referee(tug):
+    """The frame the bout was decided on is the first with the loser drop_m down,
+    and the tail follows it into the pit. No settle, so it falls on the clock."""
+    duel, model = placed(tug, (None, 0.1), start=dataclasses.replace(tug.start, settle_s=0.0))
+    each = record_bout(duel, model, (_ZeroPolicy(), _ZeroPolicy()), seed=1)
+    assert (each.bout.end, each.bout.winner) == ("pit", 0)
+    decided = round(each.bout.time_s / CTRL_DT) - 1
+    assert decided > 5
+    assert each.trace.shape[1] == decided + 1 + round(TAIL_S / CTRL_DT)
+    heights = each.trace[1, :, 2]
+    assert heights[decided] < -duel.referee.drop_m
+    assert np.all(heights[:decided] >= -duel.referee.drop_m)
+    assert heights[-1] < -duel.decks.pit_depth_m / 2
+
+
+def test_a_recorded_void_bout_stops_before_mujocos_reset(tug, monkeypatch):
+    monkeypatch.setattr(arena.duel, "_reset_by_mujoco", lambda data: True)
+    each = record_bout(tug, compile_duel(tug), (_ZeroPolicy(), _ZeroPolicy()), seed=1)
+    assert each.bout.end == "void"
+    assert each.trace.shape == (2, 0, TRACE_WIDTH)
+
+
 def _bout(winner, end="pit"):
     return Bout(seed=1, winner=winner, end=end, time_s=1.0, rope_mid_m=0.0)
 
@@ -303,3 +343,78 @@ def test_duel_needs_two_policies(capsys):
 def test_duel_refuses_an_unknown_duel(capsys):
     assert main(["duel", REFERENCE, REFERENCE, "--duel", "nope"]) == 1
     assert "no such duel" in capsys.readouterr().err
+
+
+@pytest.fixture(scope="module")
+def watched(tug, walker):
+    """A short match recorded, and its names, as `arena duel --watch` serves one."""
+    duel = dataclasses.replace(tug, time_limit_s=0.2, seeds=(1,))
+    match, recorded = record_match(duel, walker, _ZeroPolicy())
+    return duel, ["walker", "zero"], match, recorded
+
+
+def test_the_watch_app_serves_the_match(watched, tmp_path):
+    from fastapi.testclient import TestClient
+
+    (tmp_path / "duel.html").write_text("<!doctype html><title>duel</title>")
+    duel, names, match, recorded = watched
+    client = TestClient(create_duel_app(duel, names, match, recorded, tmp_path))
+    summary = client.get("/api/duel").json()
+    assert summary["names"] == names
+    assert summary["points"] == list(match.points)
+    assert summary["course"]["rope_length_m"] == pytest.approx(2 * duel.start_x_m + duel.rope.slack_m)
+    assert [bout["on_deck"] for bout in summary["bouts"]] == [names, names[::-1]]
+    assert [bout["frames"] for bout in summary["bouts"]] == [r.trace.shape[1] for r in recorded]
+    for k, each in enumerate(recorded):
+        for part, frames in (("trace", each.trace), ("settle", each.settle)):
+            sent = client.get(f"/api/duel/bouts/{k}/{part}")
+            assert sent.headers["X-Duck-Count"] == "2"
+            assert sent.headers["X-Frame-Count"] == str(frames.shape[1])
+            got = np.frombuffer(sent.content, dtype="<f4").reshape(frames.shape)
+            assert np.array_equal(got, frames)
+    assert client.get(f"/api/duel/bouts/{len(recorded)}/trace").status_code == 404
+    assert "<title>duel</title>" in client.get("/").text
+
+
+def test_the_watch_app_says_when_the_page_is_not_built(watched):
+    from fastapi.testclient import TestClient
+
+    client = TestClient(create_duel_app(*watched, frontend_dir=None))
+    page = client.get("/")
+    assert page.status_code == 503
+    assert "npm run build" in page.text
+    assert client.get("/api/duel").status_code == 200
+
+
+def test_watch_plays_the_match_then_serves_it(probe, monkeypatch, capsys):
+    import arena.workshop.cli
+
+    served = {}
+    monkeypatch.setattr(arena.workshop.cli, "serve", lambda app, port: served.update(app=app, port=port))
+    assert main(["duel", REFERENCE, REFERENCE, "--duel", "probe", "--watch", "--no-browser",
+                 "--port", "8799"]) == 0
+    out = capsys.readouterr().out
+    assert "BEST_alpha_walking (1) 1–1 BEST_alpha_walking (2)" in out
+    assert "http://127.0.0.1:8799/" in out
+    assert served["port"] == 8799
+    from fastapi.testclient import TestClient
+
+    summary = TestClient(served["app"]).get("/api/duel").json()
+    assert summary["id"] == "probe"
+    assert len(summary["bouts"]) == 2
+
+
+def test_watch_shows_one_match(capsys):
+    assert main(["duel", REFERENCE, REFERENCE, REFERENCE, "--watch"]) == 1
+    assert "two policies" in capsys.readouterr().err
+
+
+def test_watch_refuses_a_busy_port(capsys):
+    import socket
+
+    with socket.socket() as busy:
+        busy.bind(("127.0.0.1", 0))
+        busy.listen()
+        port = busy.getsockname()[1]
+        assert main(["duel", REFERENCE, REFERENCE, "--watch", "--port", str(port)]) == 1
+    assert "busy" in capsys.readouterr().err
