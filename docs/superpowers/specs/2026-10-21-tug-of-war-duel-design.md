@@ -1,8 +1,9 @@
 # Tug of War: two policies, one rope — design
 
 Date: 2026-10-21. Status: a request for comments from a participant (@jrubiosainz), in a draft
-pull request. It ships the rules, the simulation and a referee that plays from the shell. The
-decisions only the owner can take are listed at the end.
+pull request. It ships the rules, the simulation, a referee that plays from the shell, and a page
+that replays a match in the Arena's own stadium. The decisions only the owner can take are listed
+at the end.
 
 ## Why
 
@@ -16,24 +17,35 @@ a board as simple as a league table, and a duck falling into a pit reads at a gl
 
 ## Goal, and what this PR is
 
-A two-player challenge, declared as data like an event, that plays from the shell:
+A two-player challenge, declared as data like an event, that plays from the shell and can be
+watched:
 
 ```
 arena duel A.onnx B.onnx            # a match: every seed played from both decks
 arena duel A.onnx B.onnx C.onnx     # a round robin, and its table
+arena duel A.onnx B.onnx --watch    # a match, then its bouts in the stadium, on 127.0.0.1
 ```
 
-This PR is the rules, the simulation and the referee. It is not a challenge on the site:
+This PR is the rules, the simulation, the referee and a way to watch them. It is not a challenge
+on the site:
 
 - `arena/duels/tug-of-war.toml`: the duel, validated as strictly as a manifest;
 - `arena/duel.py`: the loader, the two-duck model, the bout, the match, the round robin and the
-  table;
-- `arena duel` in `arena/cli.py`;
-- `tests/test_duel.py`;
+  table, and the bout and the match recorded for a replay;
+- `arena duel` in `arena/cli.py`, and its `--watch`;
+- `arena/duel_watch.py`: the server `--watch` starts on 127.0.0.1, for as long as the command
+  runs;
+- the page it serves: `app/duel.html`, `app/src/duel/` (`main.js`, `hall.js`, `bouts.js`) and
+  `app/public/duel.css`, and the venue the viewer builds for it, `app/src/duel-venue.js`;
+- in the app, a fifth page in `app/vite.config.js`, the duel's venue in `app/src/viewer.js`, and a
+  dais for the jury in `app/src/judges.js`;
+- `tests/test_duel.py`, and the app's tests of the venue, the page and the jury;
 - this document.
 
-There is no board, store, page, clip or Space change. Each of those depends on a decision listed
-under "Left to the owner". This PR is what can be built and measured before those decisions.
+There is no board, store, record, clip or Space workflow change. The page is built with the site,
+as `workshop.html` is, but plays only what `arena duel --watch` serves: on the Space it says that
+the duel's server did not answer. The rest depends on decisions listed under "Left to the owner".
+This PR is what can be built, measured and watched before those decisions.
 
 **Success.**
 
@@ -42,17 +54,26 @@ under "Left to the owner". This PR is what can be built and measured before thos
 - The loser falls: most decided bouts are decided by the pit, not on points.
 - It ranks: the reference walker loses every bout to the leaders, and the leaders separate from each
   other by a few bouts.
-- Nothing that exists changes.
+- A match can be watched as it was played: every bout, in the stadium every challenge is shown in.
+- Nothing that exists behaves differently.
 
-## Scope guard: nothing that exists changes
+## Scope guard: nothing that exists behaves differently
 
 - `arena/duels/` is not `arena/events/`. `all_events()` and `load_event()` never see a duel, so the
   programme, the boards, the store, the sweep and the pages are as they were.
 - `arena/duel.py` builds on the engine's parts (`course._robot`, `_motorized`, `_compiled`,
   `runner._start`, `manifest._command`, …) and changes none of them. `run_once`, `run_stage`, the
   trace and its codec, the golden run and `RUNNER_VERSION` (4) are untouched.
-- The only edit to an existing file is the `duel` subcommand in `arena/cli.py`: an import, a
-  handler and a parser.
+- The edits to existing files add to them, and leave what was there as it was:
+  - `arena/cli.py`: the `duel` subcommand (imports, a handler with its `--watch`, and a parser);
+  - `app/vite.config.js`: `duel.html`, a fifth page;
+  - `app/src/viewer.js`: the duel's venue (`duel-venue.js`), built in place of a race's course
+    when the event is a duel, and `PLATE_HEIGHT` and `PLATE_LIFT` exported. `spot(i, lift)` takes
+    a height above the trunk, 0 by default. For every other event the venue is `null`, and the
+    viewer builds and plays it as before;
+  - `app/src/judges.js`: `buildJudges(…, lift)` raises the jury onto a dais, 0 by default.
+- The page's server, `arena/duel_watch.py`, stands apart from `arena/web` as the workshop's does:
+  no OAuth, no store, never deployed. It answers GETs of the match it played and nothing else.
 
 ## Rules
 
@@ -219,9 +240,53 @@ its matches on one platform, the Space's.
 - Fewer than two is refused. `--duel` picks a duel from `arena/duels/` (default: `tug-of-war`).
   Two files with the same name are told apart by their position.
 
+### 6. Watching a match (`arena duel A B --watch`)
+
+- Two policies only, and the port (`--port`, 8766 by default) must be free before the match is
+  played. The match is played and printed as without `--watch`, then served on 127.0.0.1 until
+  Ctrl-C. A browser opens on it unless `--no-browser` is given.
+- `record_match` is `play_match` with every bout recorded (`record_bout`). A recorded bout is
+  `play_bout`'s: the same opening and the same referee, which appends each step it judges as a
+  frame, as a run's trace keeps it (`TRACE_WIDTH` per duck). Reading the physics writes none of
+  it, so the bout is the same recorded or not. `Recorded` holds the bout, its settle's frames and
+  its trace. A bout lost in the pit runs on for `TAIL_S` (1.5 s), both ducks still asked to pull,
+  so a replay shows the loser land and what becomes of the winner. The tail stops if the
+  simulation diverges, and a void bout keeps nothing of MuJoCo's reset pose.
+- `arena/duel_watch.py` (`create_duel_app`) answers from memory:
+  - `/api/duel`: the duel, its course as built, the two names, the points, and each bout (its
+    seed, who stood on each deck, the winner, how and when it ended, the rope's middle, and how
+    many frames it has);
+  - `/api/duel/bouts/{k}/trace` and `/api/duel/bouts/{k}/settle`: the frames, as every trace is
+    served (`routes_read.frames_response`);
+  - `/`: `duel.html`, from the built site that `web.config.default_frontend` finds, so it works
+    from a checkout once `npm run build` has run, and from a wheel. Without a build, `/` answers
+    503 and says how to build it.
+- The venue (`app/src/duel-venue.js`) is drawn from the course the server describes, where the
+  physics has it: the decks' tops and inner edges, the walls' height and thickness, the harness on
+  each trunk. The pit's floor is the hall's, so the decks stand on legs, over a mat in the pit.
+  The legs are under the outer half of each deck only: a fallen duck the rope drags under its
+  rival's deck passes through nothing. The rope is a tube 7 mm in radius, in pale hemp, between
+  the two harnesses. It is straight when taut, hangs as a parabola no deeper than 25 cm when
+  slack, and a pink ribbon marks its middle. The jury sits on a dais as high as the decks. The
+  camera stands square to the pit, 2.1 m out and 0.5 m above the decks. A drag lets it go, and
+  "Back to ringside" brings it back. The crowd rises at the horn, then cheers a win or mourns two
+  ducks in the pit.
+- The page (`app/duel.html`, `app/src/duel/`, `app/public/duel.css`) is the Arena's trackside
+  frame. On the left is the stage, under the duel's name and facts, with the bout's clock. On the
+  right are the match points in the scoreboard's flip tiles, the bouts (who stood on which deck,
+  and how each ended), Pause and Replay bout, and the rule in a line. The bouts play in order, the
+  next 2.5 s after the last has ended, until the visitor picks one or pauses.
+- Once a bout is decided, the stage says so:
+  - a "Wins" stamp in the winner's colour over its head, clear of its nameplate and of the clock;
+  - or a "Draw" or "Void" stamp over the pit;
+  - and the verdict in full, opposite the clock.
+
+  On a phone, the clock and the verdict shrink, and the written verdict is hidden while a stamp
+  shows. Screen readers still read it, and the bout's row says the same.
+
 ## Testing
 
-**pytest** (`tests/test_duel.py`, 44 tests):
+**pytest** (`tests/test_duel.py`, 52 tests):
 
 - the shipped duel loads with what it declares, and is not an event;
 - every malformed duel is refused, with its message: unknown keys at every level, a missing table,
@@ -239,12 +304,32 @@ its matches on one platform, the Space's.
 - the match: every seed from both decks, the winner named as the match names them, and the points;
 - the table: every bout counted, and ties broken on wins, then name;
 - the shell: a match prints every bout and the score, three policies print a table, and fewer than
-  two policies or an unknown duel are refused.
+  two policies or an unknown duel are refused;
+- the recording: a recorded match is the match played, a frame for every step judged; a fall runs
+  on for the tail past the frame it was decided on, and the loser ends it in the pit; a void bout
+  keeps no frame;
+- watching: the server answers the summary, both kinds of frames for every bout (exactly as
+  recorded) and the page, and 404 for a bout the match does not have; unbuilt, the page says how
+  to build it; `--watch` plays the match, prints it and serves it; it refuses three policies and a
+  busy port.
 
-The rest of the suite runs as it did. No bout in these tests lasts more than a second: they use the
-reference walker or a policy that holds the default pose, on a duel cut short or set up to end at
-once. None asserts how a full bout between real policies ends, since the platforms' physics part
-ways.
+**vitest** (`app/`):
+
+- the venue (`duel-venue.test.js`): the layout; the rope's sag; the decks, their legs and the
+  jury's dais as built; the camera; the rope tied between the harnesses, slack, taut and following
+  a duck into the pit; the crowd's direction; and everything built disposed of;
+- the page (`duel/bouts.test.js`): each bout as the viewer's event and lanes, its clock, and what
+  the referee said of it; and (`duel/hall.test.js`) its frame as DOM: the strip, the duel's name
+  and facts, the scoreboard, the bouts, the clock, stamp and verdict, the way back to ringside, and
+  the transport;
+- the jury on its dais (`judges.test.js`).
+
+The app's whole suite passes: 860 tests in 80 files.
+
+The rest of the suite runs as it did. No bout in these tests lasts more than a second, and the one
+recorded fall runs on for its 1.5 s tail: they use the reference walker or a policy that holds the
+default pose, on a duel cut short or set up to end at once. None asserts how a full bout between
+real policies ends, since the platforms' physics part ways.
 
 ## Left to the owner
 
@@ -267,8 +352,9 @@ ways.
 - **Tie-breaks.** By name today; head-to-head, the rope's middle or a play-off would be fairer.
 - **Integration.** `compile_duel` beside `compile_stage` in `arena/course.py`, and the bout beside
   `run_stage` in `arena/runner.py`, with a two-duck trace (a stage's trace already records several
-  ducks). Then records, a board, pages, a clip of both ducks and the rope, the commentary, and a
-  worker that plays the matches as entries arrive.
+  ducks). Then records, a board, the duel's page played from those records rather than from
+  `--watch`, a clip of both ducks and the rope, the commentary, and a worker that plays the
+  matches as entries arrive.
 - **One platform.** Physics differs between platforms, so a board must play all its bouts on one
   platform (the Space's), or a rematch could disagree with the result on the board.
 
@@ -277,5 +363,6 @@ ways.
 - Teams, with several ducks a side.
 - New observations: a policy never sees the rope, the pit or its opponent.
 - Rollers: the duel is declared, and was measured, on legs.
-- The site: records, boards, pages and clips.
+- The site: records, boards and clips. The duel's page plays only what `arena duel --watch` serves
+  on 127.0.0.1.
 - Real robots.
