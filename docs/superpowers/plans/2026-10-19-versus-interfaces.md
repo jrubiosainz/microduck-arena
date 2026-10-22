@@ -212,7 +212,7 @@ fall_gravity_z = -0.5
 fall_hold_s    = 0.3
 
 [rating]
-reference    = "tug-reference-t15-250.onnx"
+reference    = "tug-reference-t20-500.onnx"
 pit_bonus_cm = 100.0
 
 [bout]
@@ -345,7 +345,7 @@ def sort_key(record) -> tuple   # (-score if higher_wins(record.event_id) else s
 # versus enters its cup: it takes a policy entered on purpose).
 ```
 
-The reference duck's bytes ship with the Arena (`arena/assets/policies/tug-reference-t15-250.onnx`,
+The reference duck's bytes ship with the Arena (`arena/assets/policies/tug-reference-t20-500.onnx`,
 pinned by sha256 in `tests/test_assets.py`, recorded in `arena/assets/PROVENANCE.md`).
 
 `arena score` on a tug (Plan F reads it): per seed
