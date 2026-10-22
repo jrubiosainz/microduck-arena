@@ -187,6 +187,18 @@ def test_ballots_in_a_row_show_a_voter_every_entry_before_repeating_one(client):
     assert len(seen) == 8
 
 
+def test_the_next_ballot_drawn_before_this_one_is_cast_holds_other_entries(client):
+    """The booth draws the next field while this one plays, so before its vote: a ballot in hand
+    counts as seen, or the next one repeats it."""
+    api, app = client
+    for i in range(8):
+        enter(app, f"duck{i}")
+    on_screen = api.get("/api/events/got-a-talent/ballot").json()["ballot"]
+    upcoming = api.get("/api/events/got-a-talent/ballot").json()["ballot"]
+    book = app.state.ballot_book
+    assert not set(book.get(on_screen).run_ids) & set(book.get(upcoming).run_ids)
+
+
 def test_voting_records_the_whole_field_and_pays_the_voter(client):
     api, app = client
     for name in ("ann", "bob", "cid"):

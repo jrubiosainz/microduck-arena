@@ -66,7 +66,7 @@ def impressions(ballots) -> Counter:
     """run id -> times SHOWN.
 
     The rate's denominator, so how often an entry was shown never decides its
-    place. It costs nothing to know, because a ballot records every candidate
+    place, and per voter what the draw deals from. It costs nothing to know, because a ballot records every candidate
     and not only its winner.
     """
     return Counter(run_id for b in ballots for run_id in b.candidates)
@@ -117,7 +117,6 @@ def pool(
 
 def draw(
     candidates,
-    shown: Counter,
     mine: Counter,
     ballot_min: int,
     ballot_max: int,
@@ -125,21 +124,22 @@ def draw(
 ) -> list[RunRecord] | None:
     """One ballot's field, in lane order. None when there are too few ducks.
 
-    Shuffle, then sort by what THIS voter has been shown least (`mine`), then by
-    what everyone has been shown least: a series of ballots walks a voter
-    through every entry before any comes back, and a newcomer opens each of
-    those rounds, so its rate firms up quickly. Sorting on `shown` alone handed
-    every voter the same newcomers on every ballot until they caught up with
-    entries a week old. The shuffle breaks the ties, and the second fixes lane
-    order, which IS the colour assignment — the same duck comes out orange on
-    one ballot and lavender on the next, and that is what keeps a ballot
-    anonymous.
+    Shuffle, then sort by what THIS voter has been shown least (`mine`): a
+    series of ballots walks a voter through every entry before any comes back,
+    and the shuffle deals each round's ballots afresh, so an entry meets new
+    rivals every round. Never by what everyone has been shown: entries drawn
+    together gain a showing together, so that sort deals the same groups round
+    after round — and on its own it handed every voter the day's newcomers on
+    every ballot until they caught up with entries a week old. The rate does not
+    need equal exposure. The second shuffle fixes lane order, which IS the
+    colour assignment — the same duck comes out orange on one ballot and
+    lavender on the next, and that is what keeps a ballot anonymous.
     """
     field = list(candidates)
     if len(field) < ballot_min:
         return None
     rng.shuffle(field)
-    field.sort(key=lambda r: (mine[r.run_id], shown[r.run_id]))
+    field.sort(key=lambda r: mine[r.run_id])
     picked = field[:ballot_max]
     rng.shuffle(picked)
     return picked

@@ -25,6 +25,7 @@ import random
 import secrets
 import threading
 import time
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -106,6 +107,18 @@ class BallotBook:
                 return None
             return entry
 
+    def held(self, voter: str, event_id: str) -> list[str]:
+        """The run ids on this voter's ballots in hand: issued, not cast, not expired."""
+        now = time.time()
+        with self._lock:
+            return [
+                run_id
+                for entry in self._by_token.values()
+                if entry.voter == voter and entry.event_id == event_id
+                and not entry.spent and now <= entry.expires_at
+                for run_id in entry.run_ids
+            ]
+
     def spend(self, token: str) -> None:
         """Mark a ballot cast. It stays in the table — just no longer usable."""
         with self._lock:
@@ -182,10 +195,13 @@ def issue_ballot(event_id: str, request: Request, response: Response) -> dict:
         frozenset(w.run_id for w in store.withdrawals()),
         exclude_user=voter,
     )
+    book = request.app.state.ballot_book
+    # What this voter has been shown: the ballots cast, and those in hand — the booth draws the
+    # next field while this one plays, before its vote, and without these it would draw it again.
+    mine = votes.impressions(b for b in kept if b.voter == voter) + Counter(book.held(voter, event_id))
     picked = votes.draw(
         field,
-        votes.impressions(kept),
-        votes.impressions(b for b in kept if b.voter == voter),
+        mine,
         manifest.vote.ballot_min,
         manifest.vote.ballot_max,
         random.Random(),
@@ -193,7 +209,7 @@ def issue_ballot(event_id: str, request: Request, response: Response) -> dict:
     if picked is None:
         return {"state": "too-few", "have": len(field), "need": manifest.vote.ballot_min}
 
-    token = request.app.state.ballot_book.issue(event_id, voter, [r.run_id for r in picked])
+    token = book.issue(event_id, voter, [r.run_id for r in picked])
     return {
         "state": "ballot",
         "ballot": token,

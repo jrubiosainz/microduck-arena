@@ -79,49 +79,58 @@ def test_you_are_never_handed_your_own_duck():
     assert pool([mine, theirs], frozenset(), exclude_user="ann") == [theirs]
 
 
-def test_a_draw_prefers_the_least_shown_and_refuses_a_field_that_is_too_small():
+def test_a_draw_prefers_what_this_voter_saw_least_and_refuses_a_field_that_is_too_small():
     seen = [make_record(user=f"seen{i}") for i in range(3)]
     fresh = [make_record(user=f"new{i}") for i in range(2)]
-    shown = Counter({r.run_id: 10 for r in seen})
-    picked = draw(seen + fresh, shown, Counter(), 2, 4, random.Random(0))
+    mine = Counter({r.run_id: 10 for r in seen})
+    picked = draw(seen + fresh, mine, 2, 4, random.Random(0))
     assert {r.run_id for r in fresh} <= {r.run_id for r in picked}
     assert len(picked) == 4
-    assert draw(seen[:1], shown, Counter(), 2, 4, random.Random(0)) is None
+    assert draw(seen[:1], mine, 2, 4, random.Random(0)) is None
 
 
 def test_a_series_of_ballots_walks_a_voter_through_every_entry_before_repeating_one():
-    # The Space on 2026-10-22: four entries published that day, shown about 11 times against
-    # the others' 80, took all four lanes of every ballot until they caught up.
-    old = [make_record(user=f"old{i}") for i in range(12)]
-    new = [make_record(user=f"new{i}") for i in range(4)]
-    shown = Counter({r.run_id: 80 for r in old} | {r.run_id: 11 for r in new})
+    # The Space on 2026-10-22, when the draw sorted on exposure: four entries published that day,
+    # shown about 11 times against the others' 80, took all four lanes of every ballot.
+    field = [make_record(user=f"u{i}") for i in range(16)]
     mine, seen, rng = Counter(), set(), random.Random(0)
     for _ in range(4):
-        picked = draw(old + new, shown, mine, 2, 4, rng)
-        for r in picked:
-            shown[r.run_id] += 1
-            mine[r.run_id] += 1
+        picked = draw(field, mine, 2, 4, rng)
+        mine.update(r.run_id for r in picked)
         seen |= {r.run_id for r in picked}
     assert len(seen) == 16
 
 
+def test_a_voters_second_round_mixes_who_meets_whom():
+    # Seen in the booth on 2026-10-22: entries shown together gained a showing together, so a
+    # sort on exposure kept them together, and a voter's fifth ballot was their first again.
+    field = [make_record(user=f"u{i}") for i in range(16)]
+    mine, rng, met = Counter(), random.Random(0), set()
+    for _ in range(8):
+        picked = draw(field, mine, 2, 4, rng)
+        mine.update(r.run_id for r in picked)
+        met |= {(a.run_id, b.run_id) for a in picked for b in picked if a.run_id < b.run_id}
+    # One round is four ballots of six pairs each: a second round that repeats the first adds none.
+    assert len(met) > 24
+
+
 def test_a_draw_shrinks_to_the_field_rather_than_refusing_it():
     field = [make_record(user="ann"), make_record(user="bob")]
-    picked = draw(field, Counter(), Counter(), 2, 4, random.Random(0))
+    picked = draw(field, Counter(), 2, 4, random.Random(0))
     assert len(picked) == 2
 
 
 def test_a_draw_shuffles_lane_order_so_a_duck_is_not_always_the_same_colour():
-    # Distinct `shown` values make the sort in step 2 fully determine which
+    # Distinct `mine` values make the sort in step 2 fully determine which
     # two survive truncation, regardless of the first shuffle: whatever order
     # the field arrives in, sorting by a unique key always yields the same
     # sequence. So the surviving pair is fixed — [field[0], field[1]] — and the
     # only thing left that can vary their order is the SECOND shuffle. If that
     # shuffle were dropped, `orders` would collapse to one tuple.
     field = [make_record(user=f"u{i}") for i in range(4)]
-    shown = Counter({r.run_id: i for i, r in enumerate(field)})
+    mine = Counter({r.run_id: i for i, r in enumerate(field)})
     orders = {
-        tuple(r.run_id for r in draw(field, shown, Counter(), 2, 2, random.Random(seed)))
+        tuple(r.run_id for r in draw(field, mine, 2, 2, random.Random(seed)))
         for seed in range(20)
     }
     assert orders == {
