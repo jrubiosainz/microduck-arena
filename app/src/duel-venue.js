@@ -43,6 +43,13 @@ const APRON = 0.25;
 const CAMERA_BACK = 2.1;
 const CAMERA_RISE = 0.5;
 const CAMERA_AIM = 0.02;
+// What a bout's camera frames its ducks for: the narrowest picture the duel's
+// page gives its stage, 1.2 wide for 1 high (its desktop hall, the stage beside
+// the bouts' column), seen through the viewer's 42° (viewer.js), and how far
+// beyond a trunk it keeps in view — the duck as it leans, and its nameplate.
+const FRAME_ASPECT = 1.2;
+const FRAME_FOV_DEG = 42;
+const FRAME_MARGIN = 0.3;
 // The rope as drawn: 1.4 cm thick rather than the 4 mm arena/duel.py gives
 // MuJoCo's renderer, which two metres off is a pixel; at 1 cm it was still
 // lost from the duel's camera against the stands behind it.
@@ -136,28 +143,45 @@ export function ropeCurve(a, b, length) {
 }
 
 /**
- * Where the camera watches a duel from (viewer.js cameraPose): fixed, square to
- * the pit from the near side, since the ducks never leave the middle metre and
- * a half. A drag lets it go, and the follow key brings it back. Pure, so it is
- * testable.
+ * Where the camera watches a duel from (viewer.js cameraPose): fixed for a
+ * bout, square to the pit from the near side. It stands over the pit while the
+ * bout's ducks keep to the middle of the course. A puller that walks its rival
+ * back across its own deck takes them farther, so for a bout whose `span` —
+ * the farthest either trunk goes to -x and to +x, in the trace's world frame
+ * (duel/bouts.js boutSpan) — will not fit that picture, the camera moves over
+ * the middle of the span, and back along its line of sight until the span fits
+ * a FRAME_ASPECT picture. A drag lets it go, and the follow key brings it back.
+ * Pure, so it is testable.
  */
-export function duelCamera({ length, lift }) {
+export function duelCamera({ length, lift }, span = null) {
+  const target = [length / 2, lift + CAMERA_AIM, 0];
+  const ringside = { kind: "fixed", position: [length / 2, lift + CAMERA_RISE, CAMERA_BACK], target };
+  if (!span) return ringside;
+  // Half the picture's width, a metre down the line of sight; and that line's length at ringside.
+  const reach = FRAME_ASPECT * Math.tan((FRAME_FOV_DEG * Math.PI) / 360);
+  const sight = Math.hypot(CAMERA_BACK, CAMERA_RISE - CAMERA_AIM);
+  const [low, high] = [span[0] - FRAME_MARGIN, span[1] + FRAME_MARGIN];
+  if (-low <= sight * reach && high <= sight * reach) return ringside;
+  const middle = length / 2 + (low + high) / 2;
+  const back = Math.max(1, (high - low) / 2 / reach / sight);
   return {
     kind: "fixed",
-    position: [length / 2, lift + CAMERA_RISE, CAMERA_BACK],
-    target: [length / 2, lift + CAMERA_AIM, 0],
+    position: [middle, target[1] + back * (CAMERA_RISE - CAMERA_AIM), back * CAMERA_BACK],
+    target: [middle, target[1], 0],
   };
 }
 
 /**
  * The crowd's direction over a bout (clip/direction.js stadiumDirection), in
  * the replay's seconds: up at the horn and held through the pull, then the
- * verdict as the referee gives it — a win cheered, a pit both ducks went into
- * mourned. A draw at the bell and a void bout leave it no result to feel.
+ * verdict as the referee gives it — a win cheered, a bout both ducks lost (into
+ * the pit or down) mourned. A draw at the bell and a void bout leave it no
+ * result to feel.
  */
 export function duelDirection({ horn_s = 0, decided_s = 0, winner = null, end = null } = {}) {
   const start = Math.max(0, horn_s);
-  const verdict = winner === 0 || winner === 1 ? "pass" : end === "pit" ? "fail" : null;
+  const bothLost = end === "pit" || end === "fall";
+  const verdict = winner === 0 || winner === 1 ? "pass" : bothLost ? "fail" : null;
   return stadiumDirection({ start, end: Math.max(start, decided_s), verdict });
 }
 
@@ -281,7 +305,7 @@ export function buildDuelVenue(event) {
     length,
     edge: layout.edge,
     lift,
-    camera: duelCamera(layout),
+    camera: duelCamera(layout, event.span),
     /** Stand a duck's rig where its trace's world frame is. */
     place(rig) {
       rig.placer.position.set(...layout.origin);

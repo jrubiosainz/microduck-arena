@@ -9,7 +9,7 @@
 // from where the camera stands (duel-venue.js duelCamera).
 
 import { LANE_COLORS, LANE_CSS } from "../course.js";
-import { leadIn } from "../replay.js";
+import { frameAt, frameCount, leadIn } from "../replay.js";
 
 // A's colours and B's, on the ducks and on the page: the Arena's first two
 // lanes', each in the livery that goes with it — cream for A, sky for B.
@@ -36,9 +36,11 @@ export function boutTimes(summary, bout) {
 /**
  * The viewer's event for bout `k` (viewer.js setLanes): `duel` is the course
  * the venue is built from (duel-venue.js), and the horn, the decision, the
- * winner and how it ended set the crowd's direction over the replay.
+ * winner and how it ended set the crowd's direction over the replay. Given the
+ * bout's `lanes` (boutLanes), `span` is the stretch of the course they cover
+ * (boutSpan), which the venue's camera keeps in the picture.
  */
-export function boutEvent(summary, k) {
+export function boutEvent(summary, k, lanes = null) {
   const bout = summary.bouts[k];
   return {
     course: "duel",
@@ -49,7 +51,26 @@ export function boutEvent(summary, k) {
     ...boutTimes(summary, bout),
     winner: bout.winner,
     end: bout.end,
+    span: lanes ? boutSpan(lanes) : null,
   };
+}
+
+/**
+ * How far along x a bout's ducks go, in their traces' world frame, whose
+ * origin is the middle of the pit: [the farthest either trunk goes to -x, the
+ * farthest to +x], settle and all; null with no frames to go by.
+ */
+export function boutSpan(lanes) {
+  let low = Infinity;
+  let high = -Infinity;
+  for (const { trace } of lanes) {
+    for (let f = 0; f < frameCount(trace); f++) {
+      const x = frameAt(trace, f)[0];
+      low = Math.min(low, x);
+      high = Math.max(high, x);
+    }
+  }
+  return low <= high ? [low, high] : null;
 }
 
 /**
@@ -76,8 +97,9 @@ const seconds = (s) => `${s.toFixed(2)} s`;
 
 /**
  * A bout in a line of the match's list, its policies by letter: who won, and
- * how — `pit` when a duck dropped off its deck, `bell` at the time limit, and
- * `void` when the simulation diverged.
+ * how — `pit` when a duck dropped off its deck, `fall` when one went down by
+ * the fall rule, `bell` at the time limit, and `void` when the simulation
+ * diverged.
  */
 export function boutLine(summary, bout) {
   const letter = (d) => LETTERS[policyOn(summary, bout, d)];
@@ -88,6 +110,11 @@ export function boutLine(summary, bout) {
     return won
       ? `${letter(bout.winner)} won: ${letter(1 - bout.winner)} into the pit at ${at}`
       : `Both into the pit at ${at}: a draw`;
+  }
+  if (bout.end === "fall") {
+    return won
+      ? `${letter(bout.winner)} won: ${letter(1 - bout.winner)} down at ${at}`
+      : `Both down at ${at}: a draw`;
   }
   return won ? `${letter(bout.winner)} won at the bell` : "A draw at the bell";
 }
@@ -103,15 +130,16 @@ export function verdict(summary, bout) {
     return { stamp: "Void", colour: null, deck: null, line: "Void: the simulation diverged, so nobody won it" };
   }
   if (!won) {
-    const line = bout.end === "pit" ? "Both fell into the pit: a draw" : "A draw at the bell";
-    return { stamp: "Draw", colour: null, deck: null, line };
+    const draws = { pit: "Both fell into the pit: a draw", fall: "Both went down: a draw" };
+    return { stamp: "Draw", colour: null, deck: null, line: draws[bout.end] ?? "A draw at the bell" };
   }
   const [winner, loser] = [bout.on_deck[bout.winner], bout.on_deck[1 - bout.winner]];
+  const wins = { pit: `${winner} wins: ${loser} fell into the pit`, fall: `${winner} wins: ${loser} went down` };
   return {
     stamp: "Wins",
     colour: policyColour(policyOn(summary, bout, bout.winner)),
     deck: bout.winner,
-    line: bout.end === "pit" ? `${winner} wins: ${loser} fell into the pit` : `${winner} wins at the bell`,
+    line: wins[bout.end] ?? `${winner} wins at the bell`,
   };
 }
 

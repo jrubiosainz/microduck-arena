@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { Box3, Group, Vector3 } from "three";
+import { Box3, Group, PerspectiveCamera, Vector3 } from "three";
 import { ROPE_RADIUS, buildDuelVenue, duelCamera, duelDirection, duelLayout, isDuel, ropeSag } from "./duel-venue.js";
 import { buildRigTree } from "./rig.js";
 import { TRACE_WIDTH, applyFrame } from "./replay.js";
@@ -145,6 +145,42 @@ describe("buildDuelVenue", () => {
     venue.dispose();
   });
 
+  it("stays at ringside for a bout whose ducks keep to the middle of the course", () => {
+    const layout = duelLayout(COURSE);
+    expect(duelCamera(layout, [-0.6, 0.6])).toEqual(duelCamera(layout));
+    const venue = buildDuelVenue(event({ span: [-0.6, 0.6] }));
+    expect(venue.camera).toEqual(duelCamera(layout));
+    venue.dispose();
+  });
+
+  it("frames a bout whose ducks cover more deck, from over its middle and farther back down the same line of sight", () => {
+    const layout = duelLayout(COURSE);
+    // tug_puller_tilt10 against itself, seed 2: one walks back 1.12 m and drags the other into the pit.
+    const span = [-1.12, 0.65];
+    const ringside = duelCamera(layout);
+    const camera = duelCamera(layout, span);
+    const venue = buildDuelVenue(event({ span }));
+    expect(venue.camera).toEqual(camera);
+    venue.dispose();
+    expect(camera.kind).toBe("fixed");
+    expect(camera.target[0]).toBeCloseTo(2.25 + (span[0] + span[1]) / 2);
+    expect(camera.position[0]).toBeCloseTo(camera.target[0]);
+    expect(camera.target.slice(1)).toEqual(ringside.target.slice(1));
+    const rise = (pose) => pose.position[1] - pose.target[1];
+    expect(camera.position[2]).toBeGreaterThan(ringside.position[2]);
+    expect(rise(camera) / camera.position[2]).toBeCloseTo(rise(ringside) / ringside.position[2]);
+    // Where a trunk at x, 15 cm over the decks, falls across a 1.2-wide picture through the viewer's 42°: -1 to 1 is in it.
+    const across = (pose, x) => {
+      const lens = new PerspectiveCamera(42, 1.2, 0.02, 100);
+      lens.position.set(...pose.position);
+      lens.lookAt(new Vector3(...pose.target));
+      lens.updateMatrixWorld(true);
+      return new Vector3(2.25 + x, 0.75, 0).project(lens).x;
+    };
+    for (const x of [span[0] - 0.25, span[1] + 0.25]) expect(Math.abs(across(camera, x))).toBeLessThan(1);
+    expect(Math.abs(across(ringside, span[0] - 0.25))).toBeGreaterThan(1);
+  });
+
   it("ties the rope to both ducks' harnesses, hangs it while slack and draws it taut", () => {
     const venue = buildDuelVenue(event());
     const rigs = [buildRigTree(kinematics), buildRigTree(kinematics)];
@@ -221,15 +257,17 @@ describe("duelDirection", () => {
     expect(mood(0.2).action).toBe(0);
     expect(mood(horn + 0.5).action).toBeGreaterThan(0.7);
   });
-  it("cheers a win and mourns a pit both ducks went into", () => {
-    for (const end of ["pit", "bell"]) {
+  it("cheers a win and mourns a bout both ducks lost", () => {
+    for (const end of ["pit", "fall", "bell"]) {
       const won = duelDirection({ horn_s: horn, decided_s: decided, winner: 1, end })(decided + 0.2);
       expect(won.joy).toBeGreaterThan(0.9);
       expect(won.sadness).toBe(0);
     }
-    const both = duelDirection({ horn_s: horn, decided_s: decided, winner: null, end: "pit" })(decided + 0.2);
-    expect(both.sadness).toBeGreaterThan(0.9);
-    expect(both.joy).toBe(0);
+    for (const end of ["pit", "fall"]) {
+      const both = duelDirection({ horn_s: horn, decided_s: decided, winner: null, end })(decided + 0.2);
+      expect(both.sadness).toBeGreaterThan(0.9);
+      expect(both.joy).toBe(0);
+    }
   });
   it("feels nothing about a draw at the bell or a void bout", () => {
     for (const end of ["bell", "void"]) {

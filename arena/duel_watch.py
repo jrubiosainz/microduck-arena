@@ -57,6 +57,7 @@ def duel_summary(duel: Duel, names: Sequence[str], match: Match,
             "harness_height_m": rope.harness_height_m,
             "drop_m": duel.referee.drop_m,
             "margin_m": duel.referee.margin_m,
+            "fall_hold_s": duel.termination.fall_hold_s,
         },
         "points": list(match.points),
         "bouts": [

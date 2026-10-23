@@ -123,7 +123,8 @@ export function duelHall(summary) {
     el("p", "eyebrow duel-bouts__head", "Bouts"),
     bouts,
     transport,
-    el("p", "duel-note", "A duck that drops off its deck loses the bout. At the bell, whoever has pulled "
+    el("p", "duel-note", `A duck that drops off its deck, or stays down ${summary.course.fall_hold_s} s, `
+      + "loses the bout. At the bell, whoever has pulled "
       + `the rope's middle more than ${Math.round(summary.course.margin_m * 100)} cm their way wins it.`),
   );
   grid.append(left, column);

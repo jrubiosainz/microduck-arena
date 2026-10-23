@@ -118,6 +118,10 @@ def _how(bout, on_deck) -> str:
         if bout.winner is None:
             return f"both fell off their decks at {at}, a draw"
         return f"{on_deck[bout.winner]} won: {on_deck[1 - bout.winner]} fell off its deck at {at}"
+    if bout.end == "fall":
+        if bout.winner is None:
+            return f"both went down at {at}, a draw"
+        return f"{on_deck[bout.winner]} won: {on_deck[1 - bout.winner]} went down at {at}"
     if bout.winner is None:
         return f"a draw at the bell, the rope's middle at {bout.rope_mid_m:+.3f} m"
     return (f"{on_deck[bout.winner]} won at the bell, "

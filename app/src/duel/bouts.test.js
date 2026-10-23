@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LANE_COLORS, LANE_CSS } from "../course.js";
 import { TRACE_WIDTH, frameCount } from "../replay.js";
 import {
-  LETTERS, boutClock, boutEvent, boutLanes, boutLine, boutTimes, points, policyColour, policyOn, verdict,
+  LETTERS, boutClock, boutEvent, boutLanes, boutLine, boutSpan, boutTimes, points, policyColour, policyOn, verdict,
 } from "./bouts.js";
 
 const course = { gap_m: 0.3, pit_depth_m: 0.6, margin_m: 0.05 };
@@ -51,6 +51,30 @@ describe("boutEvent: a bout as the viewer's event", () => {
     expect(event.duel).toBe(course);
     expect(event.horn_s).toBeCloseTo(1.0, 10);
     expect(event.decided_s).toBeCloseTo(1.5, 10);
+    expect(event.span).toBeNull();
+  });
+
+  it("spans the stretch of the course its lanes' ducks cover, for the camera to keep in the picture", () => {
+    const summary = match([bout({ settle_frames: 3 })]);
+    const lanes = boutLanes(summary, 0, [frames(3, -0.5), frames(3, 0.5)], [frames(4, -1.25), frames(4, 0.25)]);
+    expect(boutEvent(summary, 0, lanes).span).toEqual([-1.25, 0.5]);
+  });
+});
+
+describe("boutSpan: how far along x a bout's ducks go", () => {
+  it("takes the farthest either trunk goes either way, and nothing else in a frame", () => {
+    const left = frames(5, -0.5);
+    left[2 * TRACE_WIDTH] = -1.25;
+    left[3 * TRACE_WIDTH + 1] = -9;
+    const right = frames(5, 0.5);
+    right[4 * TRACE_WIDTH] = 0.75;
+    right[TRACE_WIDTH + 2] = 9;
+    expect(boutSpan([{ trace: left }, { trace: right }])).toEqual([-1.25, 0.75]);
+  });
+
+  it("has nothing to go by without frames", () => {
+    expect(boutSpan([{ trace: new Float32Array(0) }])).toBeNull();
+    expect(boutSpan([])).toBeNull();
   });
 });
 
@@ -90,6 +114,15 @@ describe("boutLine and verdict: what the referee said", () => {
     const both = bout({ end: "pit", time_s: 1.5 });
     expect(boutLine(summary, both)).toBe("Both into the pit at 1.50 s: a draw");
     expect(verdict(summary, both)).toEqual({ stamp: "Draw", colour: null, deck: null, line: "Both fell into the pit: a draw" });
+  });
+
+  it("calls a duck down on its deck for the one left on its feet, or a draw if both went down", () => {
+    const down = bout({ winner: 0, end: "fall", time_s: 0.32 });
+    expect(boutLine(summary, down)).toBe("A won: B down at 0.32 s");
+    expect(verdict(summary, down)).toEqual({ stamp: "Wins", colour: LANE_CSS[0], deck: 0, line: "alpha wins: beta went down" });
+    const both = bout({ end: "fall", time_s: 12.4 });
+    expect(boutLine(summary, both)).toBe("Both down at 12.40 s: a draw");
+    expect(verdict(summary, both)).toEqual({ stamp: "Draw", colour: null, deck: null, line: "Both went down: a draw" });
   });
 
   it("calls the bell for whoever pulled the rope their way, or a draw", () => {

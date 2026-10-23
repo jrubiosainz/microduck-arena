@@ -12,7 +12,7 @@ const summary = {
   names: ["alpha", "beta"],
   ctrl_dt: 0.02,
   time_limit_s: 20,
-  course: { gap_m: 0.3, pit_depth_m: 0.6, margin_m: 0.05 },
+  course: { gap_m: 0.3, pit_depth_m: 0.6, margin_m: 0.05, fall_hold_s: 0.3 },
   points: [2.5, 1.5],
   bouts: [
     { seed: 0, on_deck: ["alpha", "beta"], winner: 0, end: "pit", time_s: 0.42, settle_frames: 51 },
@@ -94,11 +94,13 @@ describe("duelHall: the page's frame", () => {
     expect(hall.querySelector(".orbit-hint")).not.toBeNull();
   });
 
-  it("offers a pause and a replay, and states the rule with the course's margin", () => {
+  it("offers a pause and a replay, and states the rule with the course's hold and margin", () => {
     const { hall, parts } = duelHall(summary);
     expect(parts.pause.textContent).toBe("Pause");
     expect(parts.replay.textContent).toBe("Replay bout");
     expect([parts.pause.type, parts.replay.type]).toEqual(["button", "button"]);
-    expect(hall.querySelector(".duel-note").textContent).toContain("more than 5 cm their way");
+    const note = hall.querySelector(".duel-note").textContent;
+    expect(note).toContain("or stays down 0.3 s, loses the bout");
+    expect(note).toContain("more than 5 cm their way");
   });
 });

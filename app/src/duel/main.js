@@ -107,7 +107,8 @@ async function main() {
     current = k;
     held = false;
     decided = null;
-    viewer.setLanes(boutLanes(summary, k, settles, traces), boutEvent(summary, k), { loop: false });
+    const lanes = boutLanes(summary, k, settles, traces);
+    viewer.setLanes(lanes, boutEvent(summary, k, lanes), { loop: false });
     const bout = summary.bouts[k];
     parts.clockLabel.textContent = `Bout ${k + 1} of ${summary.bouts.length} · seed ${bout.seed}`;
     parts.bouts.forEach((button, b) => button.setAttribute("aria-current", String(b === k)));

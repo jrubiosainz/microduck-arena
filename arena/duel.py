@@ -2,17 +2,17 @@
 
 A proposal, not an event. An event puts one policy on a course and ranks it by a
 number it earns alone; a duel puts two on the same physics and asks which one is
-still on its deck. So nothing here is on the programme, the boards or the store:
-arena/duels/ is not arena/events/, and `arena duel` plays one from the shell.
-docs/superpowers/specs/2026-10-21-tug-of-war-duel-design.md is the proposal: what
-was measured, and the decisions it leaves open.
+still on its deck and on its feet. So nothing here is on the programme, the
+boards or the store: arena/duels/ is not arena/events/, and `arena duel` plays
+one from the shell. docs/superpowers/specs/2026-10-21-tug-of-war-duel-design.md
+is the proposal: what was measured, and the decisions it leaves open.
 
 It is built from the engine's own parts and changes none of them. The model is
 built the way a stage's is (arena.course.compile_stage): a rig's MJCF with its
 servos as BAM motors, the second duck grafted on under its prefix. A bout opens
 as every run does (arena.runner._start: training's reset, the perturbation, the
 untimed settle) and steps the shared physics as a stage does. Only the decks, the
-rope and the referee are new.
+rope, the hold on each duck's mark through the settle and the referee are new.
 
 A duel is data, as an event is: arena/duels/<id>.toml, validated as strictly as a
 manifest and refused with the same ManifestError.
@@ -22,7 +22,7 @@ import math
 import tomllib
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import combinations
 from pathlib import Path
 
@@ -40,7 +40,16 @@ from .course import (
     _yaw_quat,
     duck_prefix,
 )
-from .manifest import KINDS, RIGS, ManifestError, Start, _command, _refuse_unknown, _require
+from .manifest import (
+    KINDS,
+    RIGS,
+    ManifestError,
+    Start,
+    Termination,
+    _command,
+    _refuse_unknown,
+    _require,
+)
 from .runner import _reset_by_mujoco, _start
 
 DUELS_DIR = Path(__file__).parent / "duels"
@@ -101,6 +110,8 @@ class Duel:
     decks: Decks
     rope: Rope
     referee: Referee
+    # Every event's fall rule, read the same way: a duck it calls down has lost.
+    termination: Termination
 
     @property
     def start_x_m(self) -> float:
@@ -139,7 +150,7 @@ def load_duel(path: Path) -> Duel:
     _refuse_unknown(
         raw,
         {"id", "title", "rig", "kind", "time_limit_s", "seeds",
-         "command", "start", "decks", "rope", "referee"},
+         "command", "start", "decks", "rope", "referee", "termination"},
         where,
     )
 
@@ -169,6 +180,8 @@ def load_duel(path: Path) -> Duel:
                                       "pit_depth_m"}, where, "[decks]")
     rope_raw = _table(raw, "rope", {"slack_m", "timeconst_s", "harness_height_m"}, where, "[rope]")
     referee_raw = _table(raw, "referee", {"drop_m", "margin_m"}, where, "[referee]")
+    termination_raw = _table(raw, "termination", {"fall_gravity_z", "fall_hold_s"}, where,
+                             "[termination]")
 
     decks = Decks(
         gap_m=_number(decks_raw, "gap_m", "[decks]"),
@@ -186,6 +199,18 @@ def load_duel(path: Path) -> Duel:
         drop_m=_number(referee_raw, "drop_m", "[referee]"),
         margin_m=_number(referee_raw, "margin_m", "[referee]", zero=True),
     )
+    gravity_z = _require(termination_raw, "fall_gravity_z", "[termination]")
+    if (isinstance(gravity_z, bool) or not isinstance(gravity_z, (int, float))
+            or not -1.0 < gravity_z < 1.0):
+        raise ManifestError(f"{where}: [termination] fall_gravity_z must be a number between -1 "
+                            f"and 1 (projected gravity's z), got {gravity_z!r}")
+    termination = Termination(
+        fall_gravity_z=float(gravity_z),
+        fall_hold_s=_number(termination_raw, "fall_hold_s", "[termination]"),
+    )
+    if termination.fall_hold_s < CTRL_DT:
+        raise ManifestError(f"{where}: [termination] fall_hold_s must be at least one control "
+                            f"step ({CTRL_DT} s)")
     setback = _number(start_raw, "setback_m", "[start]")
     if setback >= decks.length_m:
         raise ManifestError(f"{where}: [start] setback_m must be shorter than the decks, "
@@ -219,6 +244,7 @@ def load_duel(path: Path) -> Duel:
         decks=decks,
         rope=rope,
         referee=referee,
+        termination=termination,
     )
 
 
@@ -321,6 +347,21 @@ def compile_duel(duel: Duel) -> mujoco.MjModel:
     for k in range(2):
         rope.wrap_site(f"{duck_prefix(k)}harness")
 
+    # Each duck's mark: a mocap body its trunk is welded to through the settle
+    # (_opening), the weld off until then. Neither has a geom: nothing to hit or see.
+    for k in range(2):
+        spec.worldbody.add_body(name=f"{duck_prefix(k)}mark", mocap=True)
+        spec.add_equality(
+            name=f"{duck_prefix(k)}hold",
+            type=mujoco.mjtEq.mjEQ_WELD,
+            objtype=mujoco.mjtObj.mjOBJ_BODY,
+            name1=f"{duck_prefix(k)}trunk_base",
+            name2=f"{duck_prefix(k)}mark",
+            active=False,
+            # anchor, then the trunk's pose in the mark's frame (the same pose), torque scale
+            data=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        )
+
     model = _compiled(spec)
     pose = model.key_qpos[model.key(duel.start.keyframe).id]
     for k, (start_x, yaw_deg) in enumerate(zip((-x, x), DECK_YAWS_DEG)):
@@ -337,7 +378,7 @@ class Bout:
 
     seed: int
     winner: int | None  # the deck whose duck won, or None for a draw
-    end: str  # "pit" | "bell" | "void"
+    end: str  # "pit" | "fall" | "bell" | "void"
     time_s: float
     # The rope's middle along x when it ended, below 0 on deck 0's side. None when
     # the simulation diverged, which leaves nothing to measure.
@@ -371,11 +412,34 @@ def _frame(sim) -> np.ndarray:
 def _opening(duel: Duel, model, policies: Sequence, seed: int):
     """Every run's opening (arena.runner._start), both ducks asked to stand still
     through the settle: the simulation where the clock starts, and the settle's
-    frames, (2, settle steps + 1, TRACE_WIDTH)."""
+    frames, (2, settle steps + 1, TRACE_WIDTH).
+
+    Asked is not made: a policy deaf to its command walks off through the settle
+    and meets the bout with the rope already taut. So each duck is held on its
+    mark until the clock starts: its trunk welded where the reset put it, the
+    spawn height, so it drops onto its feet at the horn as every run's reset drops a
+    duck. The policies run on through the hold as they do through any settle."""
     if len(policies) != 2:
         raise ValueError(f"a bout takes two policies, got {len(policies)}")
     still = np.asarray((0.0, 0.0, 0.0) + duel.command[3:], dtype=np.float64)
-    return _start(duel, model, policies, DECK_YAWS_DEG, seed, [still, still])
+    commands = [still, still]
+    sim, reset = _start(replace(duel, start=replace(duel.start, settle_s=0.0)), model, policies,
+                        DECK_YAWS_DEG, seed, commands)
+    data = sim.data
+    holds = [model.equality(f"{duck_prefix(k)}hold").id for k in range(2)]
+    marks = [int(model.body_mocapid[model.body(f"{duck_prefix(k)}mark").id]) for k in range(2)]
+    for mark, duck in zip(marks, sim.ducks):
+        data.mocap_pos[mark] = data.xpos[duck.adr.trunk]
+        data.mocap_quat[mark] = data.xquat[duck.adr.trunk]
+    data.eq_active[holds] = 1
+    steps = round(duel.start.settle_s / CTRL_DT)
+    settle = np.empty((2, steps + 1, TRACE_WIDTH), dtype=np.float32)
+    settle[:, 0] = reset[:, 0]
+    for step in range(steps):
+        sim.step(commands)
+        sim.record(settle[:, step + 1])
+    data.eq_active[holds] = 0
+    return sim, settle
 
 
 def _referee(duel: Duel, sim, seed: int, frames: list | None = None) -> Bout:
@@ -387,6 +451,9 @@ def _referee(duel: Duel, sim, seed: int, frames: list | None = None) -> Bout:
     model, data = sim.model, sim.data
     sites = [model.site(f"{duck_prefix(k)}harness").id for k in range(2)]
     heights = [duck.adr.free + 2 for duck in sim.ducks]
+    trunks = [duck.adr.trunk for duck in sim.ducks]
+    needed = round(duel.termination.fall_hold_s / CTRL_DT)
+    tipped_for = [0, 0]
     steps = round(duel.time_limit_s / CTRL_DT)
     for step in range(steps):
         sim.step([pull, pull])
@@ -396,11 +463,18 @@ def _referee(duel: Duel, sim, seed: int, frames: list | None = None) -> Bout:
         if frames is not None:
             frames.append(_frame(sim))
         fell = [data.qpos[z] < -duel.referee.drop_m for z in heights]
-        if all(fell):
-            return Bout(seed, None, "pit", time_s, _rope_mid(data, sites))
-        if any(fell):
-            still_on_deck = 1 if fell[0] else 0
-            return Bout(seed, still_on_deck, "pit", time_s, _rope_mid(data, sites))
+        # The runner's fall rule (arena.runner.run_once): projected gravity's z,
+        # -R[2, 2], above fall_gravity_z for fall_hold_s straight control steps.
+        for k, trunk in enumerate(trunks):
+            tipped = -data.xmat[trunk][8] > duel.termination.fall_gravity_z
+            tipped_for[k] = tipped_for[k] + 1 if tipped else 0
+        lost = [fell[k] or tipped_for[k] >= needed for k in range(2)]
+        if all(lost):
+            return Bout(seed, None, "pit" if all(fell) else "fall", time_s, _rope_mid(data, sites))
+        if any(lost):
+            winner = lost.index(False)
+            return Bout(seed, winner, "pit" if fell[1 - winner] else "fall", time_s,
+                        _rope_mid(data, sites))
     rope_mid = _rope_mid(data, sites)
     return Bout(seed, _ahead(rope_mid, duel.referee.margin_m), "bell", steps * CTRL_DT, rope_mid)
 
@@ -409,11 +483,13 @@ def play_bout(duel: Duel, model, policies: Sequence, seed: int) -> Bout:
     """One bout on `model` (compile_duel's): policies[k] on deck k, from `seed`'s start.
 
     The opening is every run's (arena.runner._start), both ducks asked to stand
-    still through the settle; from the first timed step both are asked the duel's
-    command. The referee looks after every control step: a simulation MuJoCo had
-    to reset ends the bout void, a trunk drop_m below the decks loses it (two at
-    once is a draw), and the bell gives it to whoever has pulled the rope's middle
-    their way by more than the margin.
+    still through the settle and held on their marks while they are (_opening);
+    from the first timed step both are asked the duel's command. The referee
+    looks after every control step: a simulation MuJoCo had to reset ends the
+    bout void; a trunk drop_m below the decks loses it, and so does going down by
+    the fall rule ([termination], every event's), the clock for which starts at
+    the first timed step (two losers at once is a draw); and the bell gives it to
+    whoever has pulled the rope's middle their way by more than the margin.
     """
     sim, _ = _opening(duel, model, policies, seed)
     return _referee(duel, sim, seed)
@@ -431,15 +507,15 @@ class Recorded:
 
 
 def record_bout(duel: Duel, model, policies: Sequence, seed: int, tail_s: float = TAIL_S) -> Recorded:
-    """play_bout's bout, recorded, and run on for tail_s once a duck has dropped off
-    its deck: both still asked to pull, so a replay shows the loser land in the pit
-    and what becomes of the winner on the other end of the rope. The tail stops
-    early if the simulation diverges, and a bout the bell or a divergence ended has
-    none."""
+    """play_bout's bout, recorded, and run on for tail_s once a duck has lost it
+    (off its deck or down): both still asked to pull, so a replay shows the loser
+    land, in the pit or on its deck, and what becomes of the winner on the other
+    end of the rope. The tail stops early if the simulation diverges, and a bout
+    the bell or a divergence ended has none."""
     sim, settle = _opening(duel, model, policies, seed)
     frames: list[np.ndarray] = []
     bout = _referee(duel, sim, seed, frames)
-    if bout.end == "pit":
+    if bout.end in ("pit", "fall"):
         pull = np.asarray(duel.command, dtype=np.float64)
         for _ in range(round(tail_s / CTRL_DT)):
             sim.step([pull, pull])

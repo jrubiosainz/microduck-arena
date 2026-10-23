@@ -49,3 +49,10 @@ harness_height_m = 0.025
 [referee]
 drop_m   = 0.10
 margin_m = 0.05
+
+# Every event's fall rule, the same numbers: a duck whose projected gravity's z stays
+# above fall_gravity_z for fall_hold_s is down, and has lost. So a duck lying on its
+# deck or knocked over is beaten, whichever way it fell.
+[termination]
+fall_gravity_z = -0.5
+fall_hold_s    = 0.3
