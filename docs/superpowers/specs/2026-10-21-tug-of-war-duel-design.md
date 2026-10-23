@@ -219,12 +219,17 @@ duck down and 2 at the bell, and those between walkers 32 in the pit, 2 down and
 | No walls | puller-8 and puller-10 level on points. Between walkers: all 36 in the pit, the last at 18.0 s, and in 7 of them the loser dropped off the side of its deck. |
 | Setback 1.0 m, the bell still at 20 s | The same ranking. Between walkers: 26 at the bell (4 drawn), 7 in the pit and 3 with a duck down. The reference against itself: 2 bouts won at the bell, and 4 with a duck down, at 15.4 and 19.8 s. |
 
-**One platform.** These numbers are from a Mac. Physics on two platforms part ways within a few
-seconds, as `arena/golden.py` records for the sprint, so a bout that lasts seconds can end
-differently on Linux-x86_64, the Space's platform. This duel before the hold and the fall rule was
-played on both: the falls that came within half a second were the same, the longer bouts between
-leaders were not. This version has not been played on Linux-x86_64. A board would play all its
-matches on one platform, the Space's.
+**One platform.** These numbers are from a Mac, where the round robin played again comes out the
+same to the hundredth of a second. Physics on two platforms part ways within a few seconds, as
+`arena/golden.py` records for the sprint, so a bout that lasts seconds can end differently on
+Linux-x86_64, the Space's platform. The same round robin, from the same files, on a cloud VM there
+(AMD EPYC 7763, Python 3.12.15, MuJoCo 3.10.0, onnxruntime 1.24.4, numpy 2.4.1): the 294 bouts
+with a pose or a leader in them, all over by 2.2 s, ended the same, to the hundredth of a second.
+The 36 between walkers, which last more than 3 s, all ended at other times: 30 in the pit, 4 with
+a duck down and 2 at the bell. 35 of them went to the same walker; the other turns puller-8
+against puller-10 from 2–4 to 3–3, so the two are level on 57 points at the top of the table. The
+rest of the table is the same, and each walker against itself still scores 3–3. A board would play
+all its matches on one platform, the Space's.
 
 ## Design
 
