@@ -29,7 +29,8 @@ finish time wins, as on every race.
   it finishes every one on a Mac, and 31 on x86, where it fell once.
 - Policies that win elsewhere by diving or charging do not finish it, on either platform: it rewards
   another skill.
-- Every other event is untouched: same steps, same traces, same golden run, same records.
+- Every other event is untouched: same steps, same golden run, same records, and the same traces
+  while its ducks keep within 4 m of the origin, as they do on their courses.
 
 ## Scope guard: events with `[lights]` or `[steering]` only
 
@@ -39,16 +40,18 @@ event:
 - `run_once` takes exactly the steps it takes today: every new line is behind `lights is not None`
   or `steering is not None`;
 - the sweep, the golden run and `RUNNER_VERSION` (4) do not change;
-- the trace is stored as before. Only an array holding a value of 4 or more is stored float32, and
-  every other shipped course is smaller than that (lanes of 1.5 and 2 m, a 2.6 × 3.8 m stage);
-- the API's event summary answers `"lights": null`, and the pages draw no caller and mark no duck
-  out. Its clip settings gain three keys, `speed` (1), `track` (false) and `hold` (null), with which
-  a clip films as before;
+- the trace is stored as before while every value in it is under 4, as a duck's position is on
+  every other shipped course (lanes of 1.5 and 2 m, a 2.6 × 3.8 m stage). An array holding a value
+  of 4 or more, a duck that strayed 4 m from the origin, off its course, is stored float32, and
+  decodes to float32 as every array does;
+- the API's summary of a lane event answers `"lights": null`, and a stage's has no `lights` key, as
+  before; the pages draw no caller and mark no duck out. Every summary's clip settings gain three
+  keys, `speed` (1), `track` (false) and `hold` (null), with which a clip films as before;
 - the pages' camera is drawn back into the gym (`inRoom`) only from beyond its end wall or above
-  its lamps, where no other event's camera goes: the end wall stands 2 m behind every start line
-  and the camera's ceiling is 2.03 m, while a chase stands at most 0.35 m behind and 0.34 m above
-  its duck, and a clip's opening sweep, swinging out and up from it, stays under 1.9 m. The roller
-  hall declares no room, so its camera is never moved.
+  its lamps, where no other event's camera goes while its ducks stay on their courses: the end
+  wall stands 2 m behind every start line and the camera's ceiling is 2.03 m, while a chase stands
+  at most 0.35 m behind and 0.34 m above its duck, and a clip's opening sweep, swinging out and up
+  from it, stays under 1.9 m. The roller hall declares no room, so its camera is never moved.
 
 A stage refuses `[lights]`, `[steering]` and a clip speed other than 1. A test keeps every shipped
 event other than this one free of lights and of steering.
