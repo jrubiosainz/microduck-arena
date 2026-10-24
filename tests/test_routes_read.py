@@ -29,7 +29,7 @@ def test_events_lists_the_whole_programme(client):
         "sprint-2m",
         "roller-sprint-2m",
         "hill-climb-1m5",
-        "red-light-green-light-2m5",
+        "red-light-green-light-15m",
         "got-a-talent",
     }
 
@@ -254,7 +254,7 @@ def test_the_programme_is_served_in_its_declared_order(client):
         "got-a-talent",
         "roller-sprint-2m",
         "hill-climb-1m5",
-        "red-light-green-light-2m5",
+        "red-light-green-light-15m",
     ]
     assert [e["order"] for e in events] == sorted(e["order"] for e in events)
 
@@ -288,7 +288,7 @@ def test_a_lane_serves_its_lights_so_the_page_can_draw_the_caller(client):
     its light from the event, in step with any replay."""
     api, _ = client
     events = {e["id"]: e for e in api.get("/api/events").json()["events"]}
-    assert events["red-light-green-light-2m5"]["lights"] == {
+    assert events["red-light-green-light-15m"]["lights"] == {
         "green_s": [0.6, 2.4, 1.6, 3.0, 2.0, 2.8],
         "red_s": [1.6, 2.0, 1.4, 2.4, 1.8, 2.2],
         "turn_s": 0.4,
@@ -430,7 +430,7 @@ def test_every_event_says_what_kind_of_course_it_is(client):
     api, _ = client
     courses = {e["id"]: e["course"] for e in api.get("/api/events").json()["events"]}
     assert courses == {"sprint-2m": "lane", "roller-sprint-2m": "lane", "hill-climb-1m5": "lane",
-                       "red-light-green-light-2m5": "lane", "got-a-talent": "stage"}
+                       "red-light-green-light-15m": "lane", "got-a-talent": "stage"}
 
 
 def test_a_voted_events_publication_stands_where_its_votes_put_it(client):

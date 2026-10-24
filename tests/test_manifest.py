@@ -259,7 +259,7 @@ EXPECTED_CATEGORIES = {
     "sprint-2m": "race",
     "roller-sprint-2m": "race",
     "hill-climb-1m5": "race",
-    "red-light-green-light-2m5": "race",
+    "red-light-green-light-15m": "race",
     "got-a-talent": "showcase",
 }
 
@@ -291,7 +291,7 @@ def test_the_programme_has_a_declared_order_with_the_sprint_first():
         "got-a-talent",
         "roller-sprint-2m",
         "hill-climb-1m5",
-        "red-light-green-light-2m5",
+        "red-light-green-light-15m",
     ]
 
 
@@ -428,11 +428,13 @@ def test_an_event_without_a_clip_section_gets_the_defaults():
     assert clip.sounds == ("crowd", "horn", "verdict")
     assert clip.camera.kind == "chase"
     assert clip.camera.side is None
+    assert clip.speed == 1
     assert clip.to_dict() == {
         "tape_max_s": 12.0,
         "sounds": ["crowd", "horn", "verdict"],
         "camera": {"kind": "chase", "back": 0.35, "height": 0.34, "side": None,
-                   "target_height": 0.12, "fov": 42.0},
+                   "target_height": 0.12, "fov": 42.0, "track": False, "hold": None},
+        "speed": 1,
     }
 
 
@@ -450,9 +452,33 @@ def test_a_clip_section_pins_the_tape_a_fixed_camera_and_the_sounds(tmp_path):
     }
 
 
+def test_a_chase_can_track_its_leader_and_hold_short_of_the_line(tmp_path):
+    path = write_manifest(
+        tmp_path,
+        clip='[clip]\n[clip.camera]\nkind="chase"\nback=2.1\nheight=0.86\ntrack=true\nhold=1\n',
+    )
+    camera = load_manifest(path).clip.camera
+    assert (camera.track, camera.hold) == (True, 1.0)
+    assert camera.to_dict() == {
+        "kind": "chase", "back": 2.1, "height": 0.86, "side": None,
+        "target_height": 0.12, "fov": 42.0, "track": True, "hold": 1.0,
+    }
+
+
 def test_a_performance_is_filmed_whole_without_a_start_horn():
     clip = load_event("got-a-talent").clip
     assert (clip.tape_max_s, clip.sounds) == (20.0, ("crowd", "verdict"))
+
+
+def test_a_long_race_is_filmed_as_a_time_lapse(tmp_path):
+    clip = load_manifest(write_manifest(tmp_path, clip="[clip]\ntape_max_s=300.0\nspeed=4\n")).clip
+    assert (clip.tape_max_s, clip.speed) == (300.0, 4)
+    assert clip.to_dict()["speed"] == 4
+
+
+def test_a_performance_is_filmed_at_the_speed_it_is_sung(tmp_path):
+    with pytest.raises(ManifestError, match="a performance is filmed in time with its voices"):
+        load_manifest(write_manifest(tmp_path, **STAGE, clip="[clip]\nspeed=2\n"))
 
 
 @pytest.mark.parametrize(
@@ -460,10 +486,17 @@ def test_a_performance_is_filmed_whole_without_a_start_horn():
     [
         ('[clip]\nsounds=["crowd","organ"]\n', "unknown sound source"),
         ('[clip]\ntape_max_s=0\n', "tape_max_s must be positive"),
+        ('[clip]\nspeed=0\n', "speed must be a whole number of at least 1, got 0"),
+        ('[clip]\nspeed=1.5\n', "speed must be a whole number of at least 1, got 1.5"),
+        ('[clip]\nspeed=true\n', "speed must be a whole number of at least 1, got True"),
         ('[clip]\nfoo=1\n', "unknown keys"),
         ('[clip]\n[clip.camera]\nkind="drone"\n', "unknown camera kind"),
         ('[clip]\n[clip.camera]\nkind="fixed"\nfov=40\n', "needs position and target"),
         ('[clip]\n[clip.camera]\nkind="chase"\nposition=[0,0,0]\n', "unknown keys"),
+        ('[clip]\n[clip.camera]\nkind="chase"\ntrack="yes"\n', "track must be true or false, got 'yes'"),
+        ('[clip]\n[clip.camera]\nkind="chase"\nhold=-1\n', "hold must be a distance of at least 0 m, got -1"),
+        ('[clip]\n[clip.camera]\nkind="chase"\nhold=true\n', "hold must be a distance of at least 0 m, got True"),
+        ('[clip]\n[clip.camera]\nkind="fixed"\nposition=[0,0,0]\ntarget=[1,0,0]\ntrack=true\n', "unknown keys"),
     ],
 )
 def test_a_malformed_clip_section_is_refused(tmp_path, section, said):

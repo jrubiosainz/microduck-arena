@@ -42,8 +42,8 @@ def test_nature_reads_the_manifest():
     assert nature(load_event("roller-sprint-2m")) == ("a 2 m race on roller skates", ("rollers",))
     assert nature(load_event("got-a-talent")) == (
         "a performance on a stage decided by the public's votes", ("vote",))
-    assert nature(load_event("red-light-green-light-2m5")) == (
-        "a 2.5 m game of red light, green light: walk on green, stand still on red", ("lights",))
+    assert nature(load_event("red-light-green-light-15m")) == (
+        "a 15 m game of red light, green light: walk on green, stand still on red", ("lights",))
 
 
 def test_a_clean_run_states_event_participant_time_rank_gap_and_points():
@@ -99,25 +99,25 @@ def test_a_dnf_by_timeout_is_not_a_fall_and_a_voted_event_has_no_board():
 
 
 def test_caught_under_a_red_light_is_said_and_is_not_a_fall():
-    lights = load_event("red-light-green-light-2m5")
+    lights = load_event("red-light-green-light-15m")
     per_seed = (SeedResult(1, "caught", None), SeedResult(2, "caught", None), SeedResult(3, "timeout", None),
                 SeedResult(4, "caught", None), SeedResult(5, "timeout", None))
-    caught = make_record(user="fay", score=60.0, seeds_finished=0, per_seed=per_seed,
-                         event_id="red-light-green-light-2m5", submitted_at="2026-09-11T10:00:00Z")
+    caught = make_record(user="fay", score=150.0, seeds_finished=0, per_seed=per_seed,
+                         event_id="red-light-green-light-15m", submitted_at="2026-09-11T10:00:00Z")
     facts = {f.ref: f for f in result_facts(caught, lights, [caught], [])}
     assert facts["run#/result"].text == (
         "@fay did not finish: none of the 5 seeds reached the line, the duck was caught moving "
         "under a red light on 3 of them."
     )
     assert facts["run#/result"].tags == ("dnf", "caught")
-    per_seed = (SeedResult(1, "finish", 38.0), SeedResult(2, "fall", None), SeedResult(3, "caught", None),
-                SeedResult(4, "finish", 40.0), SeedResult(5, "finish", 39.0))
-    mixed = make_record(user="fay", score=47.4, seeds_finished=3, per_seed=per_seed,
-                        event_id="red-light-green-light-2m5", submitted_at="2026-09-11T10:00:00Z")
+    per_seed = (SeedResult(1, "finish", 63.0), SeedResult(2, "fall", None), SeedResult(3, "caught", None),
+                SeedResult(4, "finish", 70.0), SeedResult(5, "finish", 66.5))
+    mixed = make_record(user="fay", score=99.9, seeds_finished=3, per_seed=per_seed,
+                        event_id="red-light-green-light-15m", submitted_at="2026-09-11T10:00:00Z")
     facts = {f.ref: f for f in result_facts(mixed, lights, [mixed], [])}
     assert facts["run#/result"].text == (
-        "The mean finish time is 47.40 s, with 3 of 5 seeds finished; an unfinished seed counts as "
-        "the 60 s limit, and the duck fell on 1 and was caught moving under a red light on 1 of them."
+        "The mean finish time is 99.90 s, with 3 of 5 seeds finished; an unfinished seed counts as "
+        "the 150 s limit, and the duck fell on 1 and was caught moving under a red light on 1 of them."
     )
     assert facts["run#/result"].tags == ("fall", "caught")
 

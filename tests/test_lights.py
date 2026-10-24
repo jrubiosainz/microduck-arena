@@ -14,7 +14,7 @@ from arena.runner import _LightSteps, run_once
 from tests.test_manifest import GOOD, STAGE, write_manifest
 from tests.test_runner import REFERENCE, STEADY_VX
 
-EVENT = "red-light-green-light-2m5"
+EVENT = "red-light-green-light-15m"
 
 # A well-formed [lights] table, field by field. A test overrides one field (None
 # leaves it out) to build a specific malformation.
@@ -43,7 +43,7 @@ def walker():
 
 def test_the_event_is_played_to_lights_on_a_longer_lane(rlgl):
     assert rlgl.course.kind == "lane"
-    assert rlgl.course.length_m == 2.5
+    assert rlgl.course.length_m == 15.0
     assert rlgl.lights == Lights(
         green_s=(0.6, 2.4, 1.6, 3.0, 2.0, 2.8),
         red_s=(1.6, 2.0, 1.4, 2.4, 1.8, 2.2),
@@ -52,6 +52,16 @@ def test_the_event_is_played_to_lights_on_a_longer_lane(rlgl):
     )
     # Still a frozen, hashable manifest: the schedule is tuples, not lists.
     assert len({rlgl, load_event(EVENT)}) == 1
+
+
+def test_the_long_lane_is_filmed_whole_from_behind_its_field(rlgl):
+    # Two and a half minutes of tape at four times life fits a clip; the camera
+    # tracks the field down its lanes and stops short of the caller so it is
+    # filmed whole.
+    assert (rlgl.clip.tape_max_s, rlgl.clip.speed) == (rlgl.time_limit_s, 4)
+    assert rlgl.clip.camera.kind == "chase"
+    assert rlgl.clip.camera.track is True
+    assert 0 < rlgl.clip.camera.hold < rlgl.course.length_m
 
 
 def test_no_other_event_has_lights():
@@ -161,7 +171,9 @@ def _short(event, seconds: float, tolerance_m: float):
 def test_the_duck_settles_standing_walks_on_green_and_is_asked_to_stand_on_red(rlgl, walker):
     # 3 s: a 0.6 s green, then the 1.6 s red, then the start of the next green. A
     # tolerance no duck strays from: this test is about what the duck is asked.
-    event = _short(rlgl, 3.0, tolerance_m=100.0)
+    # Without the lane's heading hold, which asks for a yaw rate of its own
+    # (tests/test_steering.py).
+    event = dataclasses.replace(_short(rlgl, 3.0, tolerance_m=100.0), steering=None)
     listener = _Listener(walker)
     outcome = run_once(event, listener, seed=1, command=event.command_at(STEADY_VX))
     assert outcome.status == "timeout"
@@ -188,8 +200,8 @@ def test_a_duck_that_moves_while_the_caller_looks_is_caught(rlgl, walker):
 
 def test_the_event_runs_end_to_end(rlgl, walker):
     """The shipped event, start to whatever end the walker meets. Not which end:
-    two platforms' runs part ways within seconds (arena.golden), and 60 s is
-    plenty of seconds."""
+    two platforms' runs part ways within seconds (arena.golden), and this one
+    runs for minutes."""
     model = compile_course(rlgl)
     assert model.nu == 14
     outcome = run_once(rlgl, walker, seed=1, model=model, command=rlgl.command_at(STEADY_VX))

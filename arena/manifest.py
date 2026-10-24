@@ -133,6 +133,33 @@ class Lights:
 
 
 @dataclass(frozen=True)
+class Steering:
+    """A long lane's heading hold: the course keeps the duck pointed down it.
+
+    No policy walks fifteen metres straight unaided. Asked for a yaw rate of
+    zero, the reference walker's heading wanders tens of degrees within a few
+    metres, and on a long lane that wander, not the task, decides who reaches
+    the line. On a lane that declares this, every step the duck is asked to
+    walk, the command's yaw rate (vel's third value) turns it toward the
+    lane's centre line `lookahead_m` ahead:
+
+        yaw rate = clip(gain * wrap(atan2(-y, lookahead_m) - yaw), ±max_yaw_rate)
+
+    It is mjlab's heading command (`heading_control_stiffness`) with its target
+    aimed down the lane rather than held fixed. The forward speed is still the
+    sweep's, and a duck asked to stand (a red light) is asked to stand: no yaw
+    rate either.
+    """
+
+    lookahead_m: float
+    gain: float
+    max_yaw_rate: float
+
+    def to_dict(self) -> dict:
+        return {"lookahead_m": self.lookahead_m, "gain": self.gain, "max_yaw_rate": self.max_yaw_rate}
+
+
+@dataclass(frozen=True)
 class Vote:
     """How an event collects ballots.
 
@@ -167,6 +194,12 @@ class ClipCamera:
     side offset widening with the lanes — with its constants exposed. `fixed`
     is an absolute position and target, for events whose picture is a jump or
     a stand rather than a run down a lane.
+
+    A chase that `track`s keeps its leader in the middle of the picture as it
+    wanders across its lane, which a camera standing behind it needs: one off
+    to the side sees the same wander as a step nearer or farther. One that
+    `hold`s stops that many metres short of the finish line and watches its
+    leader walk on to it, so that what stands past the line stays in frame.
     """
 
     kind: str = "chase"
@@ -175,6 +208,8 @@ class ClipCamera:
     side: float | None = None  # None: the viewer's cameraSideOffset
     target_height: float = 0.12
     fov: float = 42.0
+    track: bool = False
+    hold: float | None = None  # None: the chase follows its leader to the line
     position: tuple[float, float, float] | None = None
     target: tuple[float, float, float] | None = None
 
@@ -183,21 +218,28 @@ class ClipCamera:
             return {"kind": "fixed", "position": list(self.position),
                     "target": list(self.target), "fov": self.fov}
         return {"kind": "chase", "back": self.back, "height": self.height, "side": self.side,
-                "target_height": self.target_height, "fov": self.fov}
+                "target_height": self.target_height, "fov": self.fov,
+                "track": self.track, "hold": self.hold}
 
 
 @dataclass(frozen=True)
 class ClipConfig:
     """How this event's clip is framed and scored. Every field has a default,
-    so an event with no [clip] section renders as the sprint does."""
+    so an event with no [clip] section renders as the sprint does.
+
+    `speed` plays the tape that many times faster than life, a whole number so
+    that every clip frame lands on a trace step: a race that runs for minutes
+    is filmed whole, as a time-lapse. `tape_max_s` is still seconds of the race.
+    """
 
     tape_max_s: float = 12.0
     sounds: tuple[str, ...] = SOUND_SOURCES
     camera: ClipCamera = ClipCamera()
+    speed: int = 1
 
     def to_dict(self) -> dict:
         return {"tape_max_s": self.tape_max_s, "sounds": list(self.sounds),
-                "camera": self.camera.to_dict()}
+                "camera": self.camera.to_dict(), "speed": self.speed}
 
 
 @dataclass(frozen=True)
@@ -234,6 +276,8 @@ class Manifest:
     clip: ClipConfig = ClipConfig()
     # None unless the event is played to a caller's red and green lights. A lane only.
     lights: Lights | None = None
+    # None unless the lane holds the duck's heading for it. A lane only.
+    steering: Steering | None = None
 
     def command_at(self, vx: float) -> tuple[float, ...]:
         """This event's command, with the forward speed replaced.
@@ -289,21 +333,30 @@ def _camera(raw: dict | None, where: str) -> ClipCamera:
             raise ManifestError(f"{where}: a fixed camera needs position and target")
         return ClipCamera(kind="fixed", position=_triple(raw, "position", where),
                           target=_triple(raw, "target", where), fov=float(raw.get("fov", 42.0)))
-    _refuse_unknown(raw, {"kind", "back", "height", "side", "target_height", "fov"}, where)
+    _refuse_unknown(raw, {"kind", "back", "height", "side", "target_height", "fov", "track", "hold"},
+                    where)
     default = ClipCamera()
+    track = raw.get("track", default.track)
+    if not isinstance(track, bool):
+        raise ManifestError(f"{where}: track must be true or false, got {track!r}")
+    hold = raw.get("hold")
+    if hold is not None and (isinstance(hold, bool) or not isinstance(hold, (int, float)) or hold < 0):
+        raise ManifestError(f"{where}: hold must be a distance of at least 0 m, got {hold!r}")
     return ClipCamera(
         back=float(raw.get("back", default.back)),
         height=float(raw.get("height", default.height)),
         side=None if raw.get("side", "auto") == "auto" else float(raw["side"]),
         target_height=float(raw.get("target_height", default.target_height)),
         fov=float(raw.get("fov", default.fov)),
+        track=track,
+        hold=None if hold is None else float(hold),
     )
 
 
-def _clip(raw: dict | None, where: str) -> ClipConfig:
+def _clip(raw: dict | None, where: str, stage: bool = False) -> ClipConfig:
     if raw is None:
         return ClipConfig()
-    _refuse_unknown(raw, {"tape_max_s", "sounds", "camera"}, where)
+    _refuse_unknown(raw, {"tape_max_s", "sounds", "camera", "speed"}, where)
     tape = float(raw.get("tape_max_s", 12.0))
     if tape <= 0:
         raise ManifestError(f"{where}: tape_max_s must be positive")
@@ -311,7 +364,14 @@ def _clip(raw: dict | None, where: str) -> ClipConfig:
     for name in sounds:
         if name not in SOUND_SOURCES:
             raise ManifestError(f"{where}: unknown sound source {name!r}, expected among {SOUND_SOURCES}")
-    return ClipConfig(tape_max_s=tape, sounds=sounds, camera=_camera(raw.get("camera"), f"{where}.camera"))
+    speed = raw.get("speed", 1)
+    # bool first: TOML's true is a Python int, and would otherwise read as 1.
+    if isinstance(speed, bool) or not isinstance(speed, int) or speed < 1:
+        raise ManifestError(f"{where}: speed must be a whole number of at least 1, got {speed!r}")
+    if stage and speed != 1:
+        raise ManifestError(f"{where}: a performance is filmed in time with its voices, so its speed is 1")
+    return ClipConfig(tape_max_s=tape, sounds=sounds, camera=_camera(raw.get("camera"), f"{where}.camera"),
+                      speed=speed)
 
 
 def _stage(raw: dict) -> Stage:
@@ -366,6 +426,23 @@ def _lights(raw: dict, path: Path) -> Lights:
         raise ManifestError(f"{where} tolerance_m must be a positive distance, got {tolerance!r}")
     return Lights(green_s=phases["green_s"], red_s=phases["red_s"], turn_s=float(turn),
                   tolerance_m=float(tolerance))
+
+
+def _steering(raw: dict, path: Path, command: tuple[float, ...]) -> Steering:
+    where = f"{path}: [steering]"
+    if not isinstance(raw, dict):
+        raise ManifestError(f"{where} must be a table")
+    _refuse_unknown(raw, {"lookahead_m", "gain", "max_yaw_rate"}, "[steering]")
+    values = {}
+    for key in ("lookahead_m", "gain", "max_yaw_rate"):
+        value = _require(raw, key, "[steering]")
+        if not _number(value) or value <= 0:
+            raise ManifestError(f"{where} {key} must be a positive number, got {value!r}")
+        values[key] = float(value)
+    # The hold owns the yaw rate: a declared one would be overwritten on every step it walks.
+    if command[2] != 0.0:
+        raise ManifestError(f"{where} sets the yaw rate, so [command] vel's third value must be 0")
+    return Steering(**values)
 
 
 def _sweep(raw: dict, path: Path) -> Sweep:
@@ -428,6 +505,8 @@ def load_manifest(path: Path) -> Manifest:
             raise ManifestError(f"{path}: a stage plays each entry's timeline, so it takes no [sweep]")
         if "lights" in raw:
             raise ManifestError(f"{path}: a stage has no line to walk to, so it takes no [lights]")
+        if "steering" in raw:
+            raise ManifestError(f"{path}: a stage has no lane to hold a heading down, so it takes no [steering]")
         course, sweep = _stage(course_raw), None
     else:
         course = Course(
@@ -467,6 +546,7 @@ def load_manifest(path: Path) -> Manifest:
     if vote is not None and metric != "votes":
         raise ManifestError(f"{path}: [vote] section needs metric = 'votes' to rank by")
 
+    command = _command(_require(raw, "command", str(path)))
     return Manifest(
         id=_require(raw, "id", str(path)),
         title=_require(raw, "title", str(path)),
@@ -489,10 +569,11 @@ def load_manifest(path: Path) -> Manifest:
             fall_hold_s=float(_require(term_raw, "fall_hold_s", "[termination]")),
         ),
         sweep=sweep,
-        command=_command(_require(raw, "command", str(path))),
+        command=command,
         vote=vote,
-        clip=_clip(raw.get("clip"), "[clip]"),
+        clip=_clip(raw.get("clip"), "[clip]", stage=kind == "stage"),
         lights=_lights(raw["lights"], path) if "lights" in raw else None,
+        steering=_steering(raw["steering"], path, command) if "steering" in raw else None,
     )
 
 

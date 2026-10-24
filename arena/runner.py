@@ -53,7 +53,7 @@ from .constants import (
     TRACE_WIDTH,
 )
 from .course import compile_course, compile_stage, duck_prefix, ramp_dir
-from .manifest import Lights, Manifest
+from .manifest import Lights, Manifest, Steering
 from .timeline import Start, Timeline
 
 _WORLD_DOWN = np.array([0.0, 0.0, -1.0])
@@ -294,6 +294,19 @@ class _LightSteps:
         return cls(red=red, mark=mark, watch=watch)
 
 
+def _steered(steering: Steering, data, adr, command: np.ndarray) -> np.ndarray:
+    """`command` with its yaw rate turning the duck toward the lane's centre line
+    (y = 0) `lookahead_m` ahead of it, from where it stands at the start of this
+    control step: the state the duck observes (arena.manifest.Steering)."""
+    y = float(data.qpos[adr.free + 1])
+    w, qx, qy, qz = (float(v) for v in data.qpos[adr.free + 3:adr.free + 7])
+    yaw = np.arctan2(2.0 * (w * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
+    error = (np.arctan2(-y, steering.lookahead_m) - yaw + np.pi) % (2.0 * np.pi) - np.pi
+    steered = command.copy()
+    steered[2] = np.clip(steering.gain * error, -steering.max_yaw_rate, steering.max_yaw_rate)
+    return steered
+
+
 def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) -> RunOutcome:
     # Converted once per run, not per step. The manifest holds an immutable tuple
     # so a loaded event cannot be mutated in place by anything downstream.
@@ -331,9 +344,19 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     if lights is not None:
         schedule = _LightSteps.of(lights, max_steps)
         mark = None
+    # A long lane's heading hold (arena.manifest.Steering) turns the duck on the
+    # steps it is asked to walk. Not in the settle, where it stands on the line,
+    # nor under a red light, where it is asked to stand still.
+    steering = manifest.steering
 
     for step in range(max_steps):
-        sim.step([stand if lights is not None and schedule.red[step] else command])
+        if lights is not None and schedule.red[step]:
+            asked = stand
+        elif steering is not None:
+            asked = _steered(steering, data, adr, command)
+        else:
+            asked = command
+        sim.step([asked])
         sim.record(frames[:, written])
         written += 1
 
