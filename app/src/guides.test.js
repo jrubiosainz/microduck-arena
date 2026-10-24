@@ -52,7 +52,7 @@ describe("public guides", () => {
   });
 
   it("keeps each challenge's help within its own context", () => {
-    for (const id of ["sprint-2m", "roller-sprint-2m", "hill-climb-1m5", "got-a-talent", "red-light-green-light-2m5"]) {
+    for (const id of ["sprint-2m", "roller-sprint-2m", "hill-climb-1m5", "got-a-talent", "red-light-green-light-15m"]) {
       const root = show(null, null, { id });
       expect(root.querySelector("article h1").textContent).not.toBe("Guide not found");
       expect(root.querySelector(`a[href="#/e/${id}"]`)).not.toBeNull();
