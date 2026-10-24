@@ -45,10 +45,10 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    // Five pages: the app, the clip the recorder photographs, the plan the
+    // Six pages: the app, the clip the recorder photographs, the plan the
     // booth's dialogue is timed by, the workshop (served by `workshop`, never
-    // by the Space's API) and the duel (served by `arena duel --watch`, never
-    // by the Space's API either).
+    // by the Space's API), the duel and the football match (both served by
+    // `arena duel --watch`, never by the Space's API either).
     rollupOptions: {
       input: {
         main: page("index.html"),
@@ -56,6 +56,7 @@ export default defineConfig({
         plan: page("plan.html"),
         workshop: page("workshop.html"),
         duel: page("duel.html"),
+        football: page("football.html"),
       },
     },
   },

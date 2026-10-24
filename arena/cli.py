@@ -17,6 +17,10 @@ from .cast import cast_of, load_borrowed
 from .constants import CTRL_DT
 from .duel import load_duel_by_id, record_match, round_robin, standings
 from .evaluate import evaluate
+from .football import is_football, load_football_by_id
+from .football import record_match as record_football_match
+from .football import round_robin as football_round_robin
+from .football import standings as football_standings
 from .hub_fetch import FetchError, fetch_references
 from .index import ENTRANTS, leaderboard
 from .manifest import ManifestError, all_events, load_event
@@ -159,11 +163,10 @@ def _cmd_duel(args) -> int:
         if not _port_free(args.port):
             print(f"port {args.port} is busy: try --port", file=sys.stderr)
             return 1
+    if is_football(args.duel):
+        return _cmd_football(args)
     duel = load_duel_by_id(args.duel)
-    policies = [load_policy(Path(path)) for path in args.onnx]
-    names = [Path(path).stem for path in args.onnx]
-    if len(set(names)) < len(names):
-        names = [f"{name} ({k + 1})" for k, name in enumerate(names)]
+    policies, names = _entrants(args.onnx)
     seeds = ", ".join(str(seed) for seed in duel.seeds)
     print(f"{duel.title}: seed{'s' if len(duel.seeds) > 1 else ''} {seeds}, "
           f"each played from both decks; the bell at {duel.time_limit_s:g} s")
@@ -189,6 +192,84 @@ def _cmd_duel(args) -> int:
     if args.watch:
         _watch_duel(duel, names, match, recorded, args.port, open_browser=not args.no_browser)
     return 0
+
+
+def _entrants(paths) -> tuple[list, list[str]]:
+    """The policies a duel's command line names, and what to call them: their files'
+    stems, numbered when two share one."""
+    policies = [load_policy(Path(path)) for path in paths]
+    names = [Path(path).stem for path in paths]
+    if len(set(names)) < len(names):
+        names = [f"{name} ({k + 1})" for k, name in enumerate(names)]
+    return policies, names
+
+
+def _football_how(play, on_end) -> str:
+    """How a football play ended, `on_end` naming who kicked off from each end."""
+    at = f"{play.time_s:.2f} s"
+    if play.end == "goal":
+        return f"goal, {on_end[play.scorer]}, at {at}"
+    if play.end == "fault":
+        if play.scorer is None:
+            return f"both faulted at {at}: no goal"
+        return f"{on_end[1 - play.scorer]} faulted at {at}: the goal to {on_end[play.scorer]}"
+    if play.end == "down":
+        return f"both down at {at}: no goal"
+    if play.end == "void":
+        return f"void at {at}: MuJoCo had to reset the simulation"
+    return "the whistle: no goal"
+
+
+def _cmd_football(args) -> int:
+    """`arena duel --duel football`: goals rather than points, a league table for three
+    or more (arena.football)."""
+    game = load_football_by_id(args.duel)
+    policies, names = _entrants(args.onnx)
+    seeds = ", ".join(str(seed) for seed in game.seeds)
+    print(f"{game.title}: seed{'s' if len(game.seeds) > 1 else ''} {seeds}, "
+          f"each played from both ends; the first goal ends a play, the whistle at "
+          f"{game.time_limit_s:g} s")
+    if args.watch:
+        match, recorded = record_football_match(game, *policies)
+        matches = {(0, 1): match}
+    else:
+        matches = football_round_robin(game, policies)
+    for (i, j), match in matches.items():
+        if len(policies) == 2:
+            for played in match.plays:
+                on_end = (names[i], names[j]) if played.ends == 0 else (names[j], names[i])
+                print(f"seed {played.play.seed}  {on_end[0]} | {on_end[1]}  "
+                      f"{_football_how(played.play, on_end)}")
+        a, b = match.goals
+        print(f"{names[i]} {a}–{b} {names[j]}")
+    if len(policies) > 2:
+        width = max(len(name) for name in names)
+        print(f"\n{'#':>2}  {'policy':<{width}}  won  drawn  lost  for  against  points")
+        for rank, row in enumerate(football_standings(names, matches), 1):
+            print(f"{rank:>2}  {row.name:<{width}}  {row.won:>3}  {row.drawn:>5}  "
+                  f"{row.lost:>4}  {row.scored:>3}  {row.conceded:>7}  {row.points:>6}")
+    if args.watch:
+        _watch_football(game, names, match, recorded, args.port, open_browser=not args.no_browser)
+    return 0
+
+
+def _watch_football(game, names, match, recorded, port: int, open_browser: bool) -> None:
+    """The match just played, on the Arena's pitch: football.html on 127.0.0.1 until Ctrl-C."""
+    import threading
+    import webbrowser
+
+    from .football_watch import create_football_app
+    from .web.config import default_frontend
+    from .workshop.cli import serve
+
+    site = default_frontend(Path(__file__).resolve().parent)
+    app = create_football_app(game, names, match, recorded,
+                              site if (site / "football.html").is_file() else None)
+    url = f"http://127.0.0.1:{port}/"
+    print(f"\nWatch it: {url}  (Ctrl-C to close it)", flush=True)
+    if open_browser:
+        threading.Timer(1.0, webbrowser.open, [url]).start()
+    serve(app, port)
 
 
 def _watch_duel(duel, names, match, recorded, port: int, open_browser: bool) -> None:
@@ -454,7 +535,8 @@ def main(argv=None) -> int:
         "duel", help="play policies against each other in a duel: two a match, more a round robin"
     )
     duel.add_argument("onnx", nargs="+")
-    duel.add_argument("--duel", default="tug-of-war", help="which of arena/duels/")
+    duel.add_argument("--duel", default="tug-of-war",
+                      help="which of arena/duels/: tug-of-war, football")
     duel.add_argument("--watch", action="store_true",
                       help="two policies: then show their match in the Arena's stadium, in a browser")
     duel.add_argument("--port", type=_port, default=8766, help="where --watch serves, on 127.0.0.1")

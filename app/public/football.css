@@ -1,0 +1,31 @@
+/* The football page's own pieces (football.html), over the duel's (duel.css), whose frame,
+   clock, stamp, verdict, scoreboard and list it wears: only what a match adds. Colours from
+   design/tokens.css, the charter's faces only, and the keepers' shells. */
+
+/* What the referee last saw — a shot, a save, the ball out, a duck down — at the top of the
+   picture, between the clock and the verdict's corner, in the quiet the clock wears. Its colour
+   is the duck's, or the keeper's for a save (main.js). */
+.football-caption {
+  position: absolute;
+  z-index: 1;
+  top: 14px;
+  left: 50%;
+  translate: -50% 0;
+  margin: 0;
+  padding: 6px 14px;
+  color: var(--paper);
+  background: var(--deep-ink);
+  border: 2px solid var(--paper-60);
+  font: 400 clamp(1.1rem, 2.4vw, 1.7rem)/1 var(--display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* The keepers' names in the note, each in its shell's colour on deep ink: lime on paper is lost. */
+.football-keeper {
+  padding: 0 4px;
+  background: var(--deep-ink);
+  font-weight: 400;
+}

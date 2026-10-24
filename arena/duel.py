@@ -420,10 +420,12 @@ def _frame(sim) -> np.ndarray:
     return frame
 
 
-def _opening(duel: Duel, model, policies: Sequence, seed: int):
+def _opening(duel: Duel, model, policies: Sequence, seed: int,
+             yaws_deg: Sequence[float] = DECK_YAWS_DEG):
     """Every run's opening (arena.runner._start), both ducks asked to stand still
     through the settle: the simulation where the clock starts, and the settle's
-    frames, (2, settle steps + 1, TRACE_WIDTH).
+    frames, (2, settle steps + 1, TRACE_WIDTH). Duck k faces yaws_deg[k]; the
+    football's ducks (arena.football) face each other, not away.
 
     Asked is not made: a policy deaf to its command walks off through the settle
     and meets the bout with the rope already taut. So each duck is held on its
@@ -435,7 +437,7 @@ def _opening(duel: Duel, model, policies: Sequence, seed: int):
     still = np.asarray((0.0, 0.0, 0.0) + duel.command[3:], dtype=np.float64)
     commands = [still, still]
     sim, reset = _start(replace(duel, start=replace(duel.start, settle_s=0.0)), model, policies,
-                        DECK_YAWS_DEG, seed, commands)
+                        yaws_deg, seed, commands)
     data = sim.data
     holds = [model.equality(f"{duck_prefix(k)}hold").id for k in range(2)]
     marks = [int(model.body_mocapid[model.body(f"{duck_prefix(k)}mark").id]) for k in range(2)]

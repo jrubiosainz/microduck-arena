@@ -50,6 +50,7 @@ import { stadiumDirection } from "./clip/direction.js";
 import { buildGym } from "./gym.js";
 import { buildRollerHall } from "./roller-hall.js";
 import { buildDuelVenue, isDuel } from "./duel-venue.js";
+import { buildFootballVenue, isFootball } from "./football-venue.js";
 import { nameplate } from "./plate.js";
 import { Player, applyFrame, frameAt, frameCount, CTRL_DT } from "./replay.js";
 import { readBrightness, writeBrightness } from "./brightness.js";
@@ -395,8 +396,9 @@ export async function createViewer(
   // The stage's camera over those lanes (stageCamera); null on a race.
   let broadcast = null;
   let course = null;
-  // A duel's venue (duel-venue.js), when the course is one: its group is the
-  // course, and it hangs the rope between the ducks in draw.
+  // A duel's venue (duel-venue.js) or a football match's (football-venue.js),
+  // when the course is one: its group is the course, and in draw it hangs the
+  // rope between the ducks, or puts the ball and the keepers where they were.
   let venue = null;
   let gym = null;
   let judges = null;
@@ -455,7 +457,7 @@ export async function createViewer(
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
     slopeDeg = event?.slope_deg ?? 0;
-    venue = isDuel(event) ? buildDuelVenue(event) : null;
+    venue = isDuel(event) ? buildDuelVenue(event) : isFootball(event) ? buildFootballVenue(event, reachy) : null;
     courseLength = venue?.length ?? event?.length_m ?? 2;
     if (talent) {
       slopeDeg = 0;
@@ -463,8 +465,8 @@ export async function createViewer(
       course = stage.group;
       scene.add(course);
     } else if (event) {
-      // A duel's decks and pit stand where a race's lanes would, and the
-      // stadium, the hall and the jury are built round them the same way.
+      // A duel's decks and pit, or a football pitch, stand where a race's lanes
+      // would, and the stadium, the hall and the jury are built round them the same way.
       if (venue) scene.add((course = venue.group));
       else {
         course = attachCourse(
@@ -562,7 +564,8 @@ export async function createViewer(
 
       // The follow-spot, on the course so it climbs a slope with it (placeMarker).
       // A duel's ducks have none: each has a deck of its own, and a ring on the
-      // floor would stay there while its duck fell into the pit.
+      // floor would stay there while its duck fell into the pit. Nor have a
+      // football match's: the ball is what the eye follows there.
       const marker = talent
         ? new Mesh(shadowGeometry, shadowMaterial)
         : venue ? null : buildMarker(tier, entry.colour ?? null);
@@ -648,8 +651,8 @@ export async function createViewer(
         lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);
       }
     });
-    // The rope, between the harnesses where the ducks now stand.
-    venue?.pose(lanes.map((lane) => lane.rig));
+    // The rope, between the harnesses where the ducks now stand; or the ball and the keepers.
+    venue?.pose(lanes.map((lane) => lane.rig), indices[0] ?? 0);
     audience?.pose(seconds, mood);
     gym?.pose?.(seconds, mood);
     const subjects = lanes.map((lane) =>
