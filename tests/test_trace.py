@@ -54,7 +54,28 @@ def test_the_wire_format_is_float16():
     that dropped the float16 downcast would sail past a size bound.
     """
     original = np.random.default_rng(0).standard_normal((10, TRACE_WIDTH)).astype(np.float32)
+    assert np.abs(original).max() < codec.FLOAT16_REACH
     with np.load(io.BytesIO(codec.encode(original))) as loaded:
+        assert loaded["trace"].dtype == np.float16
+
+
+def test_a_long_lanes_trace_is_stored_float32_and_its_settle_need_not_be():
+    """Fifteen metres down a lane, float16 would place the duck to the nearest 4 mm or so."""
+    rng = np.random.default_rng(5)
+    trace = rng.uniform(-3, 3, (60, TRACE_WIDTH)).astype(np.float32)
+    trace[:, 0] = np.linspace(0.0, 15.0, 60, dtype=np.float32)
+    settle = rng.uniform(-3, 3, (26, TRACE_WIDTH)).astype(np.float32)
+    blob = codec.encode(trace, settle)
+    with np.load(io.BytesIO(blob)) as loaded:
+        assert (loaded["trace"].dtype, loaded["settle"].dtype) == (np.float32, np.float16)
+    np.testing.assert_array_equal(codec.decode(blob)[0], trace)
+    np.testing.assert_allclose(codec.decode_settle(blob)[0], settle, atol=3e-3)
+
+
+def test_a_solver_explosions_nans_leave_a_short_trace_float16():
+    trace = np.random.default_rng(6).uniform(-3, 3, (20, TRACE_WIDTH)).astype(np.float32)
+    trace[-1] = np.nan
+    with np.load(io.BytesIO(codec.encode(trace))) as loaded:
         assert loaded["trace"].dtype == np.float16
 
 

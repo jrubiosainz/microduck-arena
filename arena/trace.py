@@ -4,6 +4,11 @@ float16 at 50 Hz: a 20 s sprint is ~42 KB, and half a millimetre of precision is
 invisible in a replay. The frontend renders these directly through the rig, so
 physics never runs client-side.
 
+float16's error grows with the value, though: under a millimetre below 4, but
+up to 4 mm between 8 and 16. A frame array with any value of 4 or more, a duck
+that walked that far down a long lane, is stored float32 instead. Every array
+decodes to float32, whichever it was stored as.
+
 Beside the timed trace, the untimed settle that led into it (see RunOutcome).
 Traces stored before settles were recorded have none.
 
@@ -18,6 +23,15 @@ import numpy as np
 
 from .constants import TRACE_WIDTH
 
+# Below this, float16 places a value to within a millimetre.
+FLOAT16_REACH = 4.0
+
+
+def _on_the_wire(array: np.ndarray) -> np.ndarray:
+    # Finite values only: a solver explosion's NaNs say nothing about the lane.
+    finite = np.abs(array[np.isfinite(array)])
+    return array.astype(np.float32 if finite.size and finite.max() >= FLOAT16_REACH else np.float16)
+
 
 def encode(trace: np.ndarray, settle: np.ndarray | None = None) -> bytes:
     frames = {"trace": trace} if settle is None else {"trace": trace, "settle": settle}
@@ -27,7 +41,7 @@ def encode(trace: np.ndarray, settle: np.ndarray | None = None) -> bytes:
                 f"{name} must be (frames, {TRACE_WIDTH}) or (ducks, frames, {TRACE_WIDTH}), got {array.shape}"
             )
     buffer = io.BytesIO()
-    np.savez_compressed(buffer, **{name: array.astype(np.float16) for name, array in frames.items()})
+    np.savez_compressed(buffer, **{name: _on_the_wire(array) for name, array in frames.items()})
     return buffer.getvalue()
 
 
