@@ -108,12 +108,13 @@ def test_evaluate_is_deterministic():
 # fifth actuator writes joined the runner (arena/runner.py), 8.672 s at 0.50
 # since. Linux-x86_64: HF Jobs, Intel Xeon Platinum 8375C and AMD EPYC 7R13,
 # identical — 8.556 s at 0.50 on Intel before those writes and the libm
-# exp/pow (arena/golden.py), 9.404 s at 0.45 since — the Space runs x86_64. On
-# a platform with no baseline the tests that need one skip, and
+# exp/pow (arena/golden.py), 9.404 s at 0.45 since — the Space runs x86_64. At
+# version 5, the finishes clocked to the substep: 8.666 s and 9.392 s. On a
+# platform with no baseline the tests that need one skip, and
 # arena.golden.check() refuses.
 GOLDEN_BASELINES = {
-    "Darwin-arm64": (8.672, 0.50),
-    "Linux-x86_64": (9.404, 0.45),
+    "Darwin-arm64": (8.666, 0.50),
+    "Linux-x86_64": (9.392, 0.45),
 }
 GOLDEN_SCORE_S, GOLDEN_COMMAND_VX = GOLDEN_BASELINES.get(PLATFORM, (None, None))
 needs_golden = pytest.mark.skipif(
@@ -126,8 +127,9 @@ needs_golden = pytest.mark.skipif(
 # falling and counted at the 50 s limit, the other four finishing in 18.1-19.0
 # s. Before training's reset and fifth actuator writes joined the runner it was
 # 18.208 s with all five finishing — close to version 1's 18.216 s by
-# coincidence, not because the physics agreed.
-PINNED_SCORE_S = 24.856
+# coincidence, not because the physics agreed. At version 5, the finishes
+# clocked to the substep: 24.853 s.
+PINNED_SCORE_S = 24.853
 
 
 @needs_golden

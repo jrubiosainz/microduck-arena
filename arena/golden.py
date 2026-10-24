@@ -53,10 +53,11 @@ PLATFORM = f"{platform.system()}-{platform.machine()}"
 # before training's reset and fifth actuator writes joined the runner).
 # Linux-x86_64: HF Jobs, Intel Xeon Platinum 8375C and AMD EPYC 7R13,
 # identical (8.556 s at 0.50 m/s on Intel before those writes and before the
-# libm exp/pow) — the Space runs x86_64.
+# libm exp/pow) — the Space runs x86_64. At runner v5, the finishes clocked to
+# the substep: 8.672 s here and 9.404 s on x86_64 before.
 BASELINES: dict[str, tuple[float, float]] = {
-    "Darwin-arm64": (8.672, 0.50),
-    "Linux-x86_64": (9.404, 0.45),
+    "Darwin-arm64": (8.666, 0.50),
+    "Linux-x86_64": (9.392, 0.45),
 }
 # The score check only catches gross drift: the 3.13 regression above was
 # roughly a factor of two. A pin move can be far smaller and still slip past

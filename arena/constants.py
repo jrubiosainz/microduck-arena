@@ -77,4 +77,10 @@ TRACE_WIDTH = 3 + 4 + NUM_JOINTS
 #    substeps, and once at reset on 0 rad targets), instead of the MJCF
 #    position servos the sandbox uses. v3 times were made by a different
 #    actuator and are not comparable.
-RUNNER_VERSION = 4
+#
+# 5: a race's finish is timed to the physics step that crosses the line (5 ms)
+#    instead of the control step it falls in (20 ms), so a five-seed score is
+#    to the millisecond rather than to 4 ms. The physics is unchanged, so a v4
+#    time is the same run clocked up to 15 ms a seed later, still not
+#    comparable.
+RUNNER_VERSION = 5
