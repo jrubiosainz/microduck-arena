@@ -63,7 +63,7 @@ Space it says that the match's server did not answer.
 - It ranks: in a round robin with four policies from near the top of the sprint and hill boards, the
   reference wins all four of its matches.
 - A match can be watched as it was played: every play, on a pitch in the stadium every challenge is
-  shown in, a Reachy Mini in each goal and the stands full of microducks.
+  shown in, a Reachy Mini in each goal and microducks in the stands all round the pitch.
 - Nothing that exists behaves differently.
 
 ## Scope guard: nothing that exists behaves differently
@@ -85,9 +85,11 @@ Space it says that the match's server did not answer.
     match's ducks can face each other;
   - `app/vite.config.js`: `football.html`, a sixth page;
   - `app/src/viewer.js`: the football venue, built in place of a race's course when the event is a
-    football match (`isFootball`); and `venue.pose(rigs, frame)`, the replay's frame, by which a
-    football venue places the ball and the keepers and which the duel's venue ignores. For every
-    other event the venue is as it was.
+    football match (`isFootball`), and handed the crowd's lighter model for its stands behind the
+    goals; `venue.pose(rigs, frame)`, the replay's frame, by which a football venue places the
+    ball and the keepers and which the duel's venue ignores; and `venue.crowd`, those stands'
+    crowd, posed and culled with the others, which no other venue has. For every other event the
+    venue is as it was.
 - The page's server, `arena/football_watch.py`, stands apart from `arena/web` as the duel's does:
   no OAuth, no store, never deployed. It answers GETs of the match it played and nothing else.
 
@@ -436,8 +438,13 @@ there.
   Mini, the jury's model cloned with its shell tinted lime (keeper 0, on the left) or magenta
   (keeper 1), slides along a steel rail, its head turned to watch the ball as far as its neck
   goes. Round the pitch the viewer builds what every event has: the hall, the jury, and the
-  stadium's stands, six tiers of microducks along each side, the near one set back behind the lens;
-  none behind the goals.
+  stadium's stands, six tiers of microducks along each side, the near one set back behind the lens.
+  The venue adds a stand behind each goal, from the stadium's own parts (`buildStand`, `seats`,
+  `crowd`), so that `stadium.js` is as it was: a side stand turned end on, its first tier 0.1 m
+  beyond the venue's end and its back short of the hall's end wall, six tiers of eight microducks
+  facing the pitch. About 1.9 m across, it stops inside the floor's edge, clear of the far side's
+  rail and cones, which run on past the pitch's ends. Their one crowd cheers and does the wave with
+  the others, without speech bubbles, which would pop up at the very moment the side stands' do.
 - The camera stands on the near side, square to the pitch, 2.15 m out from its long axis and 1.2 m
   up, aimed 0.37 m above the turf. It follows the ball along the pitch: the ball's x smoothed over
   0.6 s either side, three quarters of the way, and no farther than 0.55 m from the centre spot,
@@ -504,7 +511,7 @@ they did.
 
 **vitest** (`app/`):
 
-- the venue (`football-venue.test.js`, 40 tests): the layout, the stadium set out beyond the side
+- the venue (`football-venue.test.js`, 47 tests): the layout, the stadium set out beyond the side
   boards, and a football match's event told from a duel's or a race's; the turf narrowed over the
   cuts, the boards' outline, and the stripes; the nets' strings; the props on each frame; the
   camera, following the ball smoothly and only so far, and where it stands; the ball's way to
@@ -515,7 +522,12 @@ they did.
   where the physics has them, the ground and the floor, the ball and the keepers placed from the
   props, their heads turned, the camera following, a venue built without the Reachy Mini's model
   (the rails, no keepers), the crowd cheering a goal, and everything built disposed of but the
-  model the jury shares;
+  model the jury shares; and the stands behind the goals: none without the crowd's model; two,
+  mirrored, beyond the ends, wider than the boards, inside the floor's edge and short of the hall's
+  end walls, casting shadows, their boxes clear of every mesh the stadium sets out but its crowd;
+  96 seats, none on the pitch's axis, each on a tier and facing the pitch; the wave standing them
+  up, at the end it sets off from first; a camera facing one end drawing only that end's 48, and
+  every seat given back as it was; and what they build disposed of, but not the crowd's model;
 - the page (`football/plays.test.js`, 19 tests): each policy's end, livery and colour, and each
   keeper's colour; the play as the viewer's event and lanes, its kick-off and decision; what the
   referee said of it, a fault and a void play included; its clock; the score as the plays are
@@ -524,7 +536,7 @@ they did.
   the way back to the touchline, the transport and the rules, and the keepers named in their
   colours.
 
-The app's whole suite passes: 936 tests in 83 files.
+The app's whole suite passes: 943 tests in 83 files.
 
 The plays in these tests are cut short or ruled at once: the ball put where the referee must rule,
 or a match of one or two seeds and 0.2–1 s, with the reference walker, a policy that holds the
@@ -552,9 +564,11 @@ ways.
 - **The hold.** As in #2: held through the settle, the leaders go down within 1.44 s of the horn.
   The alternatives are #2's: no hold, or a duck that leaves its mark during the settle gives the
   goal away, as a false start.
-- **Stands behind the goals.** The stands are the Arena's stadium (`stadium.js`), which every event
-  shares and which builds them along the sides. Stands behind the goals need a change there, and
-  more ducks to draw: more time on a clip for SwiftShader, the Space's renderer.
+- **The stands behind the goals.** The football venue builds them from the stadium's parts, and
+  leaves `stadium.js`, which every event shares, as it was. They seat 96 more microducks: timed
+  with SwiftShader, the Space's renderer, in headless Edge on a Mac (a 1131×918 stage), a frame
+  took 1.0–1.2 s with them and without them alike, the difference lost in the machine's load.
+  Built without the crowd's model, the venue has none.
 - **Tie-breaks.** By name, after points, goal difference and goals scored; head-to-head or a
   play-off would be fairer.
 - **Integration.** `compile_football` beside `compile_stage` in `arena/course.py`, and the play
