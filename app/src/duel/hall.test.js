@@ -101,6 +101,7 @@ describe("duelHall: the page's frame", () => {
     expect([parts.pause.type, parts.replay.type]).toEqual(["button", "button"]);
     const note = hall.querySelector(".duel-note").textContent;
     expect(note).toContain("or stays down 0.3 s, loses the bout");
+    expect(note).toContain("and so does one whose action is not a number");
     expect(note).toContain("more than 5 cm their way");
   });
 });

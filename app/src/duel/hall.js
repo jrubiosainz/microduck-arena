@@ -124,7 +124,8 @@ export function duelHall(summary) {
     bouts,
     transport,
     el("p", "duel-note", `A duck that drops off its deck, or stays down ${summary.course.fall_hold_s} s, `
-      + "loses the bout. At the bell, whoever has pulled "
+      + "loses the bout, and so does one whose action is not a number. "
+      + "At the bell, whoever has pulled "
       + `the rope's middle more than ${Math.round(summary.course.margin_m * 100)} cm their way wins it.`),
   );
   grid.append(left, column);

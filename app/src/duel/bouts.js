@@ -98,8 +98,8 @@ const seconds = (s) => `${s.toFixed(2)} s`;
 /**
  * A bout in a line of the match's list, its policies by letter: who won, and
  * how — `pit` when a duck dropped off its deck, `fall` when one went down by
- * the fall rule, `bell` at the time limit, and `void` when the simulation
- * diverged.
+ * the fall rule, `fault` when one's action was not a number, `bell` at the time
+ * limit, and `void` when the simulation diverged.
  */
 export function boutLine(summary, bout) {
   const letter = (d) => LETTERS[policyOn(summary, bout, d)];
@@ -116,6 +116,11 @@ export function boutLine(summary, bout) {
       ? `${letter(bout.winner)} won: ${letter(1 - bout.winner)} down at ${at}`
       : `Both down at ${at}: a draw`;
   }
+  if (bout.end === "fault") {
+    return won
+      ? `${letter(bout.winner)} won: ${letter(1 - bout.winner)} faulted at ${at}`
+      : `Both faulted at ${at}: a draw`;
+  }
   return won ? `${letter(bout.winner)} won at the bell` : "A draw at the bell";
 }
 
@@ -130,11 +135,19 @@ export function verdict(summary, bout) {
     return { stamp: "Void", colour: null, deck: null, line: "Void: the simulation diverged, so nobody won it" };
   }
   if (!won) {
-    const draws = { pit: "Both fell into the pit: a draw", fall: "Both went down: a draw" };
+    const draws = {
+      pit: "Both fell into the pit: a draw",
+      fall: "Both went down: a draw",
+      fault: "Both faulted, their actions not numbers: a draw",
+    };
     return { stamp: "Draw", colour: null, deck: null, line: draws[bout.end] ?? "A draw at the bell" };
   }
   const [winner, loser] = [bout.on_deck[bout.winner], bout.on_deck[1 - bout.winner]];
-  const wins = { pit: `${winner} wins: ${loser} fell into the pit`, fall: `${winner} wins: ${loser} went down` };
+  const wins = {
+    pit: `${winner} wins: ${loser} fell into the pit`,
+    fall: `${winner} wins: ${loser} went down`,
+    fault: `${winner} wins: ${loser} faulted, its action not a number`,
+  };
   return {
     stamp: "Wins",
     colour: policyColour(policyOn(summary, bout, bout.winner)),

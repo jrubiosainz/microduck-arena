@@ -378,7 +378,7 @@ class Bout:
 
     seed: int
     winner: int | None  # the deck whose duck won, or None for a draw
-    end: str  # "pit" | "fall" | "bell" | "void"
+    end: str  # "pit" | "fall" | "fault" | "bell" | "void"
     time_s: float
     # The rope's middle along x when it ended, below 0 on deck 0's side. None when
     # the simulation diverged, which leaves nothing to measure.
@@ -400,6 +400,17 @@ def _ahead(rope_mid_m: float, margin_m: float) -> int | None:
 
 def _diverged(data) -> bool:
     return _reset_by_mujoco(data) or not np.all(np.isfinite(data.qpos))
+
+
+def _faulted(sim) -> list[bool]:
+    """Whether each duck's servos hold a control MuJoCo refuses: not finite, or past
+    mjMAXVAL, as a policy's action that is not a number makes one. MuJoCo answers it
+    by switching off every actuator in the model, the other duck's too, for as long
+    as it is there; and it stays, the servo's next supply voltage being computed
+    from the torque it last gave (arena.actuator.Servos.drive)."""
+    ctrl = sim.data.ctrl
+    return [bool(np.any(~(np.abs(ctrl[duck.servos.act_ids]) <= mujoco.mjMAXVAL)))
+            for duck in sim.ducks]
 
 
 def _frame(sim) -> np.ndarray:
@@ -462,6 +473,10 @@ def _referee(duel: Duel, sim, seed: int, frames: list | None = None) -> Bout:
             return Bout(seed, None, "void", time_s, None)
         if frames is not None:
             frames.append(_frame(sim))
+        faulted = _faulted(sim)
+        if any(faulted):
+            winner = None if all(faulted) else faulted.index(False)
+            return Bout(seed, winner, "fault", time_s, _rope_mid(data, sites))
         fell = [data.qpos[z] < -duel.referee.drop_m for z in heights]
         # The runner's fall rule (arena.runner.run_once): projected gravity's z,
         # -R[2, 2], above fall_gravity_z for fall_hold_s straight control steps.
@@ -486,7 +501,10 @@ def play_bout(duel: Duel, model, policies: Sequence, seed: int) -> Bout:
     still through the settle and held on their marks while they are (_opening);
     from the first timed step both are asked the duel's command. The referee
     looks after every control step: a simulation MuJoCo had to reset ends the
-    bout void; a trunk drop_m below the decks loses it, and so does going down by
+    bout void; a duck whose servos hold a control MuJoCo refuses loses it by a
+    fault (_faulted), since MuJoCo has then switched off its rival's servos too, a
+    fault in the settle called at the first timed step (two at once is a draw);
+    a trunk drop_m below the decks loses it, and so does going down by
     the fall rule ([termination], every event's), the clock for which starts at
     the first timed step (two losers at once is a draw); and the bell gives it to
     whoever has pulled the rope's middle their way by more than the margin.
@@ -511,7 +529,7 @@ def record_bout(duel: Duel, model, policies: Sequence, seed: int, tail_s: float 
     (off its deck or down): both still asked to pull, so a replay shows the loser
     land, in the pit or on its deck, and what becomes of the winner on the other
     end of the rope. The tail stops early if the simulation diverges, and a bout
-    the bell or a divergence ended has none."""
+    the bell, a fault or a divergence ended has none."""
     sim, settle = _opening(duel, model, policies, seed)
     frames: list[np.ndarray] = []
     bout = _referee(duel, sim, seed, frames)

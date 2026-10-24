@@ -122,10 +122,27 @@ def _how(bout, on_deck) -> str:
         if bout.winner is None:
             return f"both went down at {at}, a draw"
         return f"{on_deck[bout.winner]} won: {on_deck[1 - bout.winner]} went down at {at}"
+    if bout.end == "fault":
+        if bout.winner is None:
+            return f"both faulted at {at}, their actions not numbers, a draw"
+        return (f"{on_deck[bout.winner]} won: {on_deck[1 - bout.winner]} faulted at {at}, "
+                f"its action not a number")
     if bout.winner is None:
         return f"a draw at the bell, the rope's middle at {bout.rope_mid_m:+.3f} m"
     return (f"{on_deck[bout.winner]} won at the bell, "
             f"the rope's middle {abs(bout.rope_mid_m):.3f} m its way")
+
+
+def _port(text: str) -> int:
+    """A port to serve on, 1 to 65535: 0 would have the system pick one the page's address
+    cannot name."""
+    try:
+        port = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a port: {text!r}") from None
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError(f"not a port: {port}, give 1 to 65535")
+    return port
 
 
 def _cmd_duel(args) -> int:
@@ -440,7 +457,7 @@ def main(argv=None) -> int:
     duel.add_argument("--duel", default="tug-of-war", help="which of arena/duels/")
     duel.add_argument("--watch", action="store_true",
                       help="two policies: then show their match in the Arena's stadium, in a browser")
-    duel.add_argument("--port", type=int, default=8766, help="where --watch serves, on 127.0.0.1")
+    duel.add_argument("--port", type=_port, default=8766, help="where --watch serves, on 127.0.0.1")
     duel.add_argument("--no-browser", action="store_true", dest="no_browser",
                       help="with --watch, print the address instead of opening it")
     duel.set_defaults(func=_cmd_duel)

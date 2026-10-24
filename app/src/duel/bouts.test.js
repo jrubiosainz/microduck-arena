@@ -133,6 +133,21 @@ describe("boutLine and verdict: what the referee said", () => {
     expect(verdict(summary, bout({}))).toEqual({ stamp: "Draw", colour: null, deck: null, line: "A draw at the bell" });
   });
 
+  it("calls a fault for the duck whose action was a number, or a draw if neither's was", () => {
+    const fault = bout({ on_deck: ["beta", "alpha"], winner: 1, end: "fault", time_s: 0.02 });
+    expect(boutLine(summary, fault)).toBe("A won: B faulted at 0.02 s");
+    expect(verdict(summary, fault)).toEqual({
+      stamp: "Wins", colour: LANE_CSS[0], deck: 1,
+      line: "alpha wins: beta faulted, its action not a number",
+    });
+    const both = bout({ end: "fault", time_s: 0.02 });
+    expect(boutLine(summary, both)).toBe("Both faulted at 0.02 s: a draw");
+    expect(verdict(summary, both)).toEqual({
+      stamp: "Draw", colour: null, deck: null,
+      line: "Both faulted, their actions not numbers: a draw",
+    });
+  });
+
   it("calls a diverged simulation void, with nobody's colour", () => {
     const void_ = bout({ end: "void", time_s: 3.2 });
     expect(boutLine(summary, void_)).toBe("Void at 3.20 s: the simulation diverged");

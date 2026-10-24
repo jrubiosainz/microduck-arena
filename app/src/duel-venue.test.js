@@ -258,7 +258,7 @@ describe("duelDirection", () => {
     expect(mood(horn + 0.5).action).toBeGreaterThan(0.7);
   });
   it("cheers a win and mourns a bout both ducks lost", () => {
-    for (const end of ["pit", "fall", "bell"]) {
+    for (const end of ["pit", "fall", "fault", "bell"]) {
       const won = duelDirection({ horn_s: horn, decided_s: decided, winner: 1, end })(decided + 0.2);
       expect(won.joy).toBeGreaterThan(0.9);
       expect(won.sadness).toBe(0);
@@ -269,8 +269,8 @@ describe("duelDirection", () => {
       expect(both.joy).toBe(0);
     }
   });
-  it("feels nothing about a draw at the bell or a void bout", () => {
-    for (const end of ["bell", "void"]) {
+  it("feels nothing about a draw at the bell, two faults or a void bout", () => {
+    for (const end of ["bell", "fault", "void"]) {
       const mood = duelDirection({ horn_s: horn, decided_s: decided, winner: null, end });
       for (const second of [decided - 0.5, decided, decided + 1]) {
         expect(mood(second).joy).toBe(0);

@@ -93,6 +93,32 @@ class _Deaf:
         return self.walker.act(obs)
 
 
+class _NaN:
+    """A broken policy: no action of it is a number."""
+
+    def act(self, obs):
+        return np.full(NUM_JOINTS, np.nan, dtype=np.float32)
+
+
+class _Blip:
+    """`policy`, but its `call`-th action is not a number."""
+
+    def __init__(self, policy, call):
+        self.policy, self.call, self.calls = policy, call, 0
+
+    def act(self, obs):
+        self.calls += 1
+        action = self.policy.act(obs)
+        return np.full(NUM_JOINTS, np.nan, dtype=np.float32) if self.calls == self.call else action
+
+
+@pytest.fixture
+def mujoco_log_aside(tmp_path, monkeypatch):
+    """MuJoCo writes a control it refuses to MUJOCO_LOG.TXT in the working directory: not the
+    checkout."""
+    monkeypatch.chdir(tmp_path)
+
+
 @pytest.fixture(scope="module")
 def tug():
     return load_duel_by_id("tug-of-war")
@@ -327,6 +353,41 @@ def test_a_diverged_simulation_is_a_void_bout(tug, monkeypatch):
     assert bout == Bout(1, None, "void", CTRL_DT, None)
 
 
+def test_a_policy_whose_action_is_not_a_number_loses_by_a_fault(tug, walker, mujoco_log_aside):
+    """MuJoCo switches off both ducks' servos for a control that is not a number, so
+    the duck whose policy gave it loses: every bout, from either deck, at the first
+    timed step, its actions not numbers since the settle. Two such draw."""
+    model = compile_duel(tug)
+    match = play_match(tug, _NaN(), walker, model)
+    assert match.points == (0.0, 6.0)
+    assert {(played.bout.end, played.bout.time_s) for played in match.bouts} == {("fault", CTRL_DT)}
+    both = play_bout(tug, model, (_NaN(), _NaN()), seed=1)
+    assert (both.end, both.winner, both.time_s) == ("fault", None, CTRL_DT)
+
+
+def test_a_fault_in_the_settle_is_called_at_the_first_timed_step(tug, walker, mujoco_log_aside):
+    """One action not a number in the settle: its servos' torque stays one, so the duck
+    is called at the first timed step though its policy has acted well since."""
+    bout = play_bout(tug, compile_duel(tug), (_Blip(walker, 3), walker), seed=2)
+    assert (bout.end, bout.winner, bout.time_s) == ("fault", 1, CTRL_DT)
+
+
+def test_a_fault_is_called_once_it_reaches_the_servos(tug, walker, mujoco_log_aside):
+    """An action not a number at timed step 40 reaches the servos after their command
+    delay, 3 to 6 physics steps: that control step or the next."""
+    settle = round(tug.start.settle_s / CTRL_DT)
+    bout = play_bout(tug, compile_duel(tug), (walker, _Blip(walker, settle + 40)), seed=3)
+    assert (bout.end, bout.winner) == ("fault", 0)
+    assert round(bout.time_s / CTRL_DT) in (40, 41)
+
+
+def test_a_diverged_simulation_is_void_before_it_is_a_fault(tug, monkeypatch, mujoco_log_aside):
+    """A simulation MuJoCo had to reset is nobody's fault, whatever its controls are."""
+    monkeypatch.setattr(arena.duel, "_reset_by_mujoco", lambda data: True)
+    bout = play_bout(tug, compile_duel(tug), (_NaN(), _NaN()), seed=1)
+    assert bout == Bout(1, None, "void", CTRL_DT, None)
+
+
 def test_a_match_plays_every_seed_from_both_decks(tug, walker):
     """A policy against itself: the same bout twice, one win each or two draws."""
     duel = dataclasses.replace(tug, time_limit_s=1.0, seeds=(1,))
@@ -377,6 +438,13 @@ def test_a_recorded_void_bout_stops_before_mujocos_reset(tug, monkeypatch):
     each = record_bout(tug, compile_duel(tug), (_ZeroPolicy(), _ZeroPolicy()), seed=1)
     assert each.bout.end == "void"
     assert each.trace.shape == (2, 0, TRACE_WIDTH)
+
+
+def test_a_recorded_fault_keeps_the_step_it_was_called_and_no_tail(tug, walker, mujoco_log_aside):
+    """Both ducks' servos are off: there is nothing to run on for."""
+    each = record_bout(tug, compile_duel(tug), (_NaN(), walker), seed=1)
+    assert (each.bout.end, each.bout.winner) == ("fault", 1)
+    assert each.trace.shape == (2, 1, TRACE_WIDTH)
 
 
 def _bout(winner, end="pit"):
@@ -450,12 +518,30 @@ def test_duel_needs_two_policies(capsys):
         (Bout(1, 0, "fall", 0.3, 0.0), "a won: b went down at 0.30 s"),
         (Bout(1, None, "fall", 12.4, 0.0), "both went down at 12.40 s, a draw"),
         (Bout(1, 1, "pit", 0.7, 0.2), "b won: a fell off its deck at 0.70 s"),
+        (Bout(1, 1, "fault", 0.02, 0.0), "b won: a faulted at 0.02 s, its action not a number"),
+        (Bout(1, None, "fault", 0.02, 0.0),
+         "both faulted at 0.02 s, their actions not numbers, a draw"),
     ],
 )
 def test_the_shell_says_how_a_bout_ended(bout, said):
     from arena.cli import _how
 
     assert _how(bout, ["a", "b"]) == said
+
+
+@pytest.mark.parametrize("port", ["0", "70000", "-1", "http"])
+def test_duel_refuses_a_port_it_cannot_serve_on(port, capsys):
+    """Before any match is played, as the shell refuses any argument."""
+    with pytest.raises(SystemExit) as refused:
+        main(["duel", REFERENCE, REFERENCE, "--watch", "--port", port])
+    assert refused.value.code == 2
+    assert "not a port" in capsys.readouterr().err
+
+
+def test_duel_takes_a_port_from_1_to_65535():
+    from arena.cli import _port
+
+    assert (_port("1"), _port("8766"), _port("65535")) == (1, 8766, 65535)
 
 
 def test_duel_refuses_an_unknown_duel(capsys):

@@ -175,8 +175,8 @@ export function duelCamera({ length, lift }, span = null) {
  * The crowd's direction over a bout (clip/direction.js stadiumDirection), in
  * the replay's seconds: up at the horn and held through the pull, then the
  * verdict as the referee gives it — a win cheered, a bout both ducks lost (into
- * the pit or down) mourned. A draw at the bell and a void bout leave it no
- * result to feel.
+ * the pit or down) mourned. A draw at the bell, two faults and a void bout leave
+ * it no result to feel.
  */
 export function duelDirection({ horn_s = 0, decided_s = 0, winner = null, end = null } = {}) {
   const start = Math.max(0, horn_s);
