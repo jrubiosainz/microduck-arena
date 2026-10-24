@@ -416,10 +416,11 @@ export async function createViewer(
   const voice = manual ? null : createStageVoice(loadCalls, { muted: () => isMuted() || hushed() });
   let crowdDirection = stadiumDirection();
 
-  // Whichever set is up, its crowd draws only the seats the camera about to
+  // Whichever sets are up, each crowd draws only the seats the camera about to
   // render can see — the chase camera's and each roller-hall screen feed's
   // alike — and has them all back once that render is done (stadium.js crowd).
-  const crowds = () => [audience, gym, stage].map((set) => set?.crowd).filter(Boolean);
+  // A football venue seats its own behind the goals (football-venue.js).
+  const crowds = () => [audience, gym, stage, venue].map((set) => set?.crowd).filter(Boolean);
   scene.onBeforeRender = (_renderer, _scene, view) => crowds().forEach((one) => one.cull(view));
   scene.onAfterRender = () => crowds().forEach((one) => one.restore());
 
@@ -457,7 +458,7 @@ export async function createViewer(
     const spacing = laneSpacing(event || {});
     sideOffset = cameraSideOffset(entries.length, spacing);
     slopeDeg = event?.slope_deg ?? 0;
-    venue = isDuel(event) ? buildDuelVenue(event) : isFootball(event) ? buildFootballVenue(event, reachy) : null;
+    venue = isDuel(event) ? buildDuelVenue(event) : isFootball(event) ? buildFootballVenue(event, reachy, spectators) : null;
     courseLength = venue?.length ?? event?.length_m ?? 2;
     if (talent) {
       slopeDeg = 0;
@@ -654,6 +655,7 @@ export async function createViewer(
     // The rope, between the harnesses where the ducks now stand; or the ball and the keepers.
     venue?.pose(lanes.map((lane) => lane.rig), indices[0] ?? 0);
     audience?.pose(seconds, mood);
+    venue?.crowd?.pose(seconds, mood);
     gym?.pose?.(seconds, mood);
     const subjects = lanes.map((lane) =>
       lane.rig.bodies.get("trunk_base").getWorldPosition(lane.gazeTarget),

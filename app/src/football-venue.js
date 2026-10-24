@@ -1,9 +1,10 @@
 // The football match's venue (arena/football.py): a small pitch walled in by
-// glass boards, a goal netted at each end, the ball, and a Reachy Mini in each
-// goal on its rail. The viewer builds the rest round it as it does round a
-// duel's decks (viewer.js setLanes): the hall, the stands and their crowd of
-// microducks, the jury. A match is played in the same stadium, before the same
-// spectators, as every challenge on the programme.
+// glass boards, a goal netted at each end, the ball, a Reachy Mini in each
+// goal on its rail, and a stand of microducks behind each goal. The viewer
+// builds the rest round it as it does round a duel's decks (viewer.js
+// setLanes): the hall, the side stands and their crowd, the jury. A match is
+// played in the same stadium, before the same spectators, as every challenge
+// on the programme.
 //
 // The physics has the turf at z = 0 and the centre spot at its origin
 // (arena/football.py compile_football). Here the venue is laid along three.js
@@ -37,6 +38,7 @@ import {
 import { stadiumDirection } from "./clip/direction.js";
 import { OVERRUN } from "./course.js";
 import { PALETTE, flat } from "./palette.js";
+import { buildStand, crowd, seats } from "./stadium.js";
 
 /** Whether an event is a football match's (football/main.js makes it), for which the viewer builds this venue. */
 export const isFootball = (event) => event?.course === "football";
@@ -45,6 +47,17 @@ export const isFootball = (event) => event?.course === "football";
 // goals' backs: the stands and the jury are set out from the side's edge.
 const APRON = 0.25;
 const END_APRON = 0.2;
+// A stand behind each goal, the stadium's own turned end on, so the crowd is
+// round the whole pitch. Its first tier is END_STAND_OUT beyond the venue's
+// end, its back as far short of the hall's end wall (gym.js) whatever the
+// pitch's length; across, it stops END_STAND_INSET inside the floor's edge,
+// clear of the far side's rail and cones, which run on past the venue's ends
+// (stadium.js attachStadium). END_SEATS a tier, about as close as the
+// stadium's, and even, so none sits on the pitch's axis, which crowd splits
+// its flocks by.
+const END_STAND_OUT = 0.1;
+const END_STAND_INSET = 0.1;
+const END_SEATS = 8;
 // The turf over the hall's parquet, and its paint over the turf.
 const TURF_LIFT = 0.0015;
 const PAINT_LIFT = 0.003;
@@ -335,15 +348,71 @@ export function keeperRobot(model, tint, materials) {
 }
 
 /**
+ * A stand behind each goal, from the venue's `half` and its floor's `edge`
+ * (footballLayout), and in its seats the viewer's `spectators` (the crowd's
+ * lighter model, viewer.js): one crowd for both ends, so its wave sweeps along
+ * x with the side stands' (stadium.js crowd).
+ */
+function endStands({ kinematics, geometries }, { half, edge }) {
+  const group = new Group();
+  group.name = "end-stands";
+  const inner = half + END_STAND_OUT;
+  // buildStand runs on OVERRUN and 0.1 past either end of its run, and seats
+  // spectators to OVERRUN less 0.1 (stadium.js): the run that leaves it so wide.
+  const run = 2 * (edge - END_STAND_INSET - OVERRUN - 0.1);
+  const reach = run / 2 + OVERRUN - 0.1;
+  // Each tier's height by how far out it is, as the stadium seats its own.
+  const rows = new Map(seats(run, inner, 1).map(({ y, z }) => [z, y]));
+  const across = Array.from({ length: END_SEATS }, (_, i) => -reach + (2 * reach * i) / (END_SEATS - 1));
+  const stand = buildStand(run, inner, 1);
+  const placed = [];
+  for (const [s, built] of [[-1, stand.clone()], [1, stand]]) {
+    // buildStand runs along x and steps out along +z: a quarter turn and it
+    // steps out along x, beyond the end at -x or +x, centred on the axis.
+    built.rotation.y = (s * Math.PI) / 2;
+    built.position.set(half, 0, (s * run) / 2);
+    group.add(built);
+    for (const [out, y] of rows) {
+      for (const z of across) placed.push({ x: half + s * out, y, z, yaw: ((1 + s) * Math.PI) / 2 });
+    }
+  }
+  const audience = crowd(kinematics, geometries, placed);
+  // Its talk is left unhung: crowdBubbles times each word by the clock alone,
+  // so it would pop up here at the very moment the side stands' does. As on
+  // the talent stage (talent-stage.js), these spectators only cheer.
+  group.add(audience.group);
+  group.traverse((node) => {
+    if (node.isMesh) node.castShadow = true;
+  });
+  return {
+    group,
+    crowd: audience,
+    dispose() {
+      audience.dispose();
+      // The two stands share their geometry and paint.
+      const own = new Set();
+      group.traverse((node) => {
+        if (!node.isMesh || node.isInstancedMesh) return;
+        own.add(node.geometry);
+        own.add(node.material);
+      });
+      own.forEach((thing) => thing.dispose());
+    },
+  };
+}
+
+/**
  * The venue for a football match's event (football/main.js): `event.football`
  * is the pitch, the goals, the ball and the keepers as the server describes
  * them, `event.props` the play's props, and its horn, decision and end set the
  * crowd's direction. `reachy` is the Reachy Mini's model the jury is cloned
- * from. `place` stands a duck's rig where its trace's world frame is; `pose`
- * puts the ball and the keepers where they were on the replay's frame `index`,
- * once a frame, and moves the camera along the pitch with the ball.
+ * from; `spectators` is the crowd's lighter model (viewer.js), seated in a
+ * stand behind each goal (none without it). `place` stands a duck's rig where
+ * its trace's world frame is; `pose` puts the ball and the keepers where they
+ * were on the replay's frame `index`, once a frame, and moves the camera along
+ * the pitch with the ball.
  */
-export function buildFootballVenue(event, reachy) {
+export function buildFootballVenue(event, reachy, spectators) {
   const { pitch, goal, keeper } = event.football;
   const layout = footballLayout(event.football);
   const { length, half, span } = layout;
@@ -496,6 +565,11 @@ export function buildFootballVenue(event, reachy) {
     };
   });
 
+  // A stand of spectators behind each goal; the side stands are the stadium's,
+  // which the viewer hangs on the venue as on a race's course (attachStadium).
+  const ends = spectators ? endStands(spectators, layout) : null;
+  if (ends) group.add(ends.group);
+
   const frames = event.settle_frames + (event.props ? Math.floor(event.props.length / PROP_WIDTH) : 0);
   const track = followTrack(event, Math.max(1, frames), event.ctrl_dt);
   let shown = 0;
@@ -541,7 +615,10 @@ export function buildFootballVenue(event, reachy) {
     },
     direction: () =>
       footballDirection({ ...event, progress: ballProgress(event, event, length_m / 2, event.ctrl_dt) }),
+    /** The spectators behind the goals, for the viewer to pose and cull with the stadium's. */
+    crowd: ends?.crowd,
     dispose() {
+      ends?.dispose();
       group.removeFromParent();
       geometries.forEach((geometry) => geometry.dispose());
       // The keepers' tinted shells are in `materials`; the rest of them is the model's, shared.

@@ -4,11 +4,14 @@
 // the camera's side and -z the jury's. The physics' frame, the pitch's, has +y
 // where three.js has -z.
 
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { Box3, Group, Triangle, Vector3 } from "three";
+import { Box3, BoxGeometry, Group, Matrix4, PerspectiveCamera, Triangle, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OVERRUN } from "./course.js";
+import { olaAt } from "./crowd-behaviour.js";
+import { meshNames } from "./rig.js";
+import { attachStadium } from "./stadium.js";
 import {
   KEEPER_TINTS,
   PROP_WIDTH,
@@ -519,6 +522,163 @@ describe("buildFootballVenue", () => {
     });
     venue.dispose();
     expect(venue.group.parent).toBe(null);
+    owned.forEach((dispose) => expect(dispose).toHaveBeenCalled());
+    shared.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
+  });
+});
+
+// The crowd's lighter model as the viewer hands it on (viewer.js), a box for
+// each of its meshes, as the stadium's own tests seat their crowd.
+const kinematics = JSON.parse(readFileSync("public/robot/kinematics.json", "utf8"));
+const spectators = () => ({
+  kinematics,
+  geometries: new Map(meshNames(kinematics).map((name) => [name, new BoxGeometry(0.01, 0.01, 0.01)])),
+});
+
+describe("the stands behind the goals", () => {
+  // A crowd draws its speech bubbles on canvases (crowd-bubbles.js), which node has none of.
+  beforeAll(() => {
+    const pen = { beginPath() {}, roundRect() {}, fill() {}, stroke() {}, moveTo() {}, lineTo() {}, fillText() {} };
+    vi.stubGlobal("document", { createElement: () => ({ getContext: () => pen }) });
+  });
+  afterAll(() => vi.unstubAllGlobals());
+
+  const built = (seated = spectators()) => {
+    const venue = buildFootballVenue(event(), null, seated);
+    venue.group.updateMatrixWorld(true);
+    return venue;
+  };
+  const ends = (venue) => venue.group.getObjectByName("end-stands");
+  const stands = (venue) => ends(venue).children.filter((child) => child.name === "stand");
+  const solids = (root) => {
+    const found = [];
+    root.traverse((node) => node.isMesh && !node.isInstancedMesh && found.push(bounds(node)));
+    return found;
+  };
+  /** Every spectator the crowd draws, where it stands in the venue. */
+  const crowdOf = (venue) =>
+    venue.crowd.group.children.flatMap((mesh) =>
+      Array.from({ length: mesh.count }, (_, k) => {
+        const matrix = new Matrix4();
+        mesh.getMatrixAt(k, matrix);
+        matrix.premultiply(mesh.matrixWorld);
+        return { mesh, k, matrix, at: new Vector3().setFromMatrixPosition(matrix) };
+      }),
+    );
+  const standing = ({ mesh, k }) => mesh.morphTexture.source.data.data[2 * k + 1];
+  const end = ({ at }) => Math.sign(at.x - 1.5);
+
+  it("seats no one behind the goals without the crowd's model", () => {
+    const venue = buildFootballVenue(event(), model);
+    expect(ends(venue)).toBeUndefined();
+    expect(venue.crowd).toBeUndefined();
+    venue.dispose();
+  });
+
+  it("stands one beyond each end, mirrored, wider than the pitch and inside the floor, short of the hall's end walls", () => {
+    const venue = built();
+    expect(stands(venue)).toHaveLength(2);
+    const [low, high] = stands(venue).map(bounds).sort((a, b) => a.min.x - b.min.x);
+    expect(low.max.x).toBeLessThan(0);
+    expect(high.min.x).toBeGreaterThan(3);
+    expect(high.min.x).toBeCloseTo(3 - low.max.x);
+    expect(high.max.x).toBeCloseTo(3 - low.min.x);
+    for (const one of [low, high]) {
+      expect(one.min.z).toBeCloseTo(-one.max.z);
+      // Past the boards, which wall the pitch in at 0.8 either side of its axis.
+      expect(one.max.z).toBeGreaterThan(0.8);
+      expect(one.max.z).toBeLessThan(venue.edge);
+    }
+    // gym.js: the hall's end walls are 2 m beyond the course's ends, and the
+    // timber rail along them stands 0.105 proud of their line.
+    expect(high.max.x).toBeLessThan(3 + 2 - 0.105);
+    expect(low.min.x).toBeGreaterThan(-2 + 0.105);
+    ends(venue).traverse((node) => node.isMesh && expect(node.castShadow).toBe(true));
+    venue.dispose();
+  });
+
+  it("keeps clear of the stadium the viewer hangs round the venue, whose rails and cones run on past its ends", () => {
+    const venue = built();
+    const stadium = attachStadium(venue.group, spectators(), venue.camera.position[2]);
+    venue.group.updateMatrixWorld(true);
+    const theirs = solids(stadium.group);
+    expect(theirs.length).toBeGreaterThan(0);
+    for (const part of stands(venue).flatMap(solids)) {
+      for (const other of theirs) expect(part.intersectsBox(other)).toBe(false);
+    }
+    stadium.dispose();
+    venue.dispose();
+  });
+
+  it("seats a crowd on every tier, none on the pitch's axis, each spectator facing the pitch", () => {
+    const venue = built();
+    const all = crowdOf(venue);
+    expect(all).toHaveLength(96);
+    const tiers = stands(venue).flatMap((stand) => stand.children.filter((child) => child.name === "tier").map(bounds));
+    expect(tiers).toHaveLength(12);
+    const seated = new Set();
+    for (const { matrix, at } of all) {
+      // crowd splits its flocks by which side of the axis a seat is on.
+      expect(Math.abs(at.z)).toBeGreaterThan(0.05);
+      const under = tiers.findIndex(({ min, max }) => min.x < at.x && at.x < max.x && min.z < at.z && at.z < max.z);
+      expect(under).toBeGreaterThanOrEqual(0);
+      seated.add(under);
+      // On the deck, bobbing no higher than a seated spectator does.
+      expect(at.y - tiers[under].max.y).toBeGreaterThan(-1e-6);
+      expect(at.y - tiers[under].max.y).toBeLessThan(0.0061);
+      const ahead = new Vector3(1, 0, 0).transformDirection(matrix);
+      expect(ahead.x * -end({ at })).toBeGreaterThan(0.99);
+    }
+    expect(seated.size).toBe(12);
+    venue.dispose();
+  });
+
+  it("rises in the wave as it sweeps the stadium along the pitch, one end and then the other", () => {
+    const venue = built();
+    const risen = {};
+    for (let t = 0; t <= 14; t += 0.05) {
+      venue.crowd.pose(t);
+      const up = crowdOf(venue).filter((one) => standing(one) > 0.9);
+      for (const side of [-1, 1]) {
+        // Most of an end at once: a spectator having its say rises alone (crowdStanding).
+        if (risen[side] === undefined && up.filter((one) => end(one) === side).length >= 24) risen[side] = t;
+      }
+    }
+    expect(risen[-1]).toBeDefined();
+    expect(risen[1]).toBeDefined();
+    // The first wave runs from the low end of x to the high, or back (olaAt).
+    const first = olaAt(0).reverse ? 1 : -1;
+    expect(risen[first]).toBeLessThan(risen[-first]);
+    venue.dispose();
+  });
+
+  it("keeps, for the camera about to render, only the seats it can see, and gives every seat back after", () => {
+    const venue = built();
+    const before = crowdOf(venue);
+    const camera = new PerspectiveCamera(40, 16 / 9, 0.02, 50);
+    camera.position.set(1.5, 0.5, 0);
+    camera.lookAt(10, 0.5, 0);
+    camera.updateMatrixWorld();
+    venue.crowd.cull(camera);
+    const shown = crowdOf(venue);
+    expect(shown).toHaveLength(48);
+    for (const one of shown) expect(end(one)).toBe(1);
+    venue.crowd.restore();
+    const after = crowdOf(venue);
+    expect(after).toHaveLength(96);
+    after.forEach(({ matrix }, i) => expect(matrix.equals(before[i].matrix)).toBe(true));
+    venue.dispose();
+  });
+
+  it("disposes of the stands and their crowd, but not the model the viewer seats every crowd with", () => {
+    const seated = spectators();
+    const venue = built(seated);
+    const owned = [];
+    ends(venue).traverse((node) => {
+      if (node.isMesh) owned.push(vi.spyOn(node.geometry, "dispose"), vi.spyOn(node.material, "dispose"));
+    });
+    const shared = [...seated.geometries.values()].map((geometry) => vi.spyOn(geometry, "dispose"));
+    venue.dispose();
     owned.forEach((dispose) => expect(dispose).toHaveBeenCalled());
     shared.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
   });
