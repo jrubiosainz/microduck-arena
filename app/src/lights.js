@@ -4,7 +4,11 @@
 // red_s[k], and the cycle repeats until the time limit — as arena/runner.py _LightSteps judges it,
 // on whole control steps.
 
-import { CTRL_DT } from "./replay.js";
+import { CTRL_DT, frameAt, frameCount } from "./replay.js";
+
+// How far short of the line a duck's trunk may end its trace and still have finished: the runner
+// judges progress from where the duck stood once settled, millimetres from its trace's first frame.
+const REACHED_M = 0.05;
 
 const smooth = (x) => x * x * (3 - 2 * x);
 const steps = (seconds) => Math.round(seconds / CTRL_DT);
@@ -39,4 +43,16 @@ export function lightAt(lights, seconds) {
     start += red[k];
   }
   return { red: false, facing: 0, watching: false };
+}
+
+/**
+ * The frame of `trace` from which its duck is out of a `length` metre race, or null if it reached
+ * the line: its last, when the trace ends short of the line, as a duck the caller caught moving
+ * does, and one that fell or ran out of time (arena/runner.py). A replay holds a lane's last frame
+ * (replay.js Player), so from that frame on a duck caught mid-course stands still, out.
+ */
+export function outAt(trace, length) {
+  const last = frameCount(trace) - 1;
+  if (last < 0) return null;
+  return frameAt(trace, last)[0] - frameAt(trace, 0)[0] < length - REACHED_M ? last : null;
 }

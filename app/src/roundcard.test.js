@@ -10,7 +10,7 @@ const SPRINT = {
 };
 const HILL = { ...SPRINT, id: "hill-climb-1m5", title: "1.5 m Hill Climb", length_m: 1.5, slope_deg: 8 };
 const ROLLER = { ...SPRINT, id: "roller-sprint-2m", title: "2 m Roller Sprint", rig: "rollers" };
-const LIGHTS = { ...SPRINT, id: "red-light-green-light-2m5", title: "2.5 m Red Light, Green Light", length_m: 2.5 };
+const LIGHTS = { ...SPRINT, id: "red-light-green-light-15m", title: "15 m Red Light, Green Light", length_m: 15 };
 const TALENT = { id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", course: "stage",
   rig: "legs", time_limit_s: 20, metric: "votes", vote: { ballot_min: 2 } };
 const HELD = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
@@ -71,7 +71,7 @@ describe("a round card", () => {
     expect(card.querySelector(".round-card__title").textContent).toBe("Red Light");
     expect(card.querySelector(".round-card__cta").textContent).toBe("Green light!");
     expect(card.style.getPropertyValue("--c")).toBe("var(--lime)");
-    expect(cells(card)).toEqual(["2.5 m", "Flat", "Legs"]);
+    expect(cells(card)).toEqual(["15 m", "Flat", "Legs"]);
   });
 
   it("still deals an event it has no look for, in paper with a plain button", () => {

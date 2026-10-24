@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { Box3, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { buildCaller } from "./caller.js";
+import { buildCaller, callerSize } from "./caller.js";
 
 const LIGHTS = { green_s: [0.6, 2.4], red_s: [1.6, 2.0], turn_s: 0.4, tolerance_m: 0.03 };
 const LENGTH = 2.5;
@@ -37,6 +37,23 @@ describe("red light, green light's caller", () => {
         expect(node.receiveShadow).toBe(true);
       }
     });
+    caller.dispose();
+  });
+
+  it("stands over a long lane as the show's doll stands over its field, still past the line", () => {
+    expect([2.5, 6, 9, 15, 30].map(callerSize)).toEqual([1, 1, 1.5, 2.5, 2.5]);
+    const caller = buildCaller(model, LIGHTS, 15, EDGE);
+    const robot = robotOf(caller);
+    expect(robot.scale.toArray()).toEqual([2.5, 2.5, 2.5]);
+    const life = new Box3().setFromObject(model);
+    for (const seconds of [0, 1.0, 1.4]) {
+      caller.pose(seconds);
+      caller.group.updateMatrixWorld(true);
+      const bounds = new Box3().setFromObject(robot);
+      expect(bounds.min.x).toBeGreaterThan(15 + 0.06);
+      // On its step, which grows with it.
+      expect(bounds.min.y).toBeCloseTo(2.5 * (0.06 + life.min.y));
+    }
     caller.dispose();
   });
 

@@ -19,13 +19,14 @@ function fnv(text) {
   return hash;
 }
 
-/** The author's progress down the course, sampled through the tape. */
+/** The author's progress down the course, sampled through the tape: every
+ * PROGRESS_EVERY_S of the tape, however fast the tape plays the race. */
 function progress(trace, plan, lengthM, start) {
   const samples = [];
-  for (let t = 0; t <= plan.steps * CTRL_DT; t += PROGRESS_EVERY_S) {
+  for (let t = 0; t <= plan.steps * CTRL_DT; t += PROGRESS_EVERY_S * plan.speed) {
     const step = Math.min(plan.steps - 1, Math.round(t / CTRL_DT));
     const value = Math.max(0, Math.min(1, frameAt(trace, step)[0] / lengthM));
-    samples.push({ second: start + t, value });
+    samples.push({ second: start + t / plan.speed, value });
   }
   return samples;
 }

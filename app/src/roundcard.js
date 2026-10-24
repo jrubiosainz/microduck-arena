@@ -26,7 +26,7 @@ const CARDS = {
   "got-a-talent": { accent: "var(--lavender)", cta: "Vote", title: "Got a Talent" },
   "roller-sprint-2m": { accent: "var(--orange)", cta: "Let's roll!" },
   "hill-climb-1m5": { accent: "var(--cyan)", cta: "Climb!" },
-  "red-light-green-light-2m5": { accent: "var(--lime)", cta: "Green light!", title: "Red Light" },
+  "red-light-green-light-15m": { accent: "var(--lime)", cta: "Green light!", title: "Red Light" },
 };
 const PLAIN = { accent: "var(--paper)", cta: "Go!" };
 

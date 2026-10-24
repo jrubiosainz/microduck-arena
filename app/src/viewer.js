@@ -45,6 +45,7 @@ import { attachStadium } from "./stadium.js";
 import { isStage } from "./format.js";
 import { buildJudges } from "./judges.js";
 import { buildCaller } from "./caller.js";
+import { outAt } from "./lights.js";
 import { buildTalentStage, stageCameraPose, placeStageDuck, stageCameraTarget } from "./talent-stage.js";
 import { loadGymBranding } from "./gym-branding.js";
 import { stadiumDirection } from "./clip/direction.js";
@@ -171,18 +172,99 @@ const PLATE_LIFT = 0.16;
  * outright; `distance` scales a chase's offsets, which is how the vertical
  * clip fits the same picture in a narrower frame. `rise` is the ramp's height
  * under the leader: a chase climbs a hill with its duck instead of watching it
- * walk out of the top of the frame. Pure, so it is testable.
+ * walk out of the top of the frame. `across` is where a tracking chase centres
+ * across the lanes (chaseAcross, packChase). `fit` is how far back a chase must
+ * stand to fit its lanes across the picture (packChase): one that stands closer
+ * backs off to it, rising with it, so it looks down on them at the same angle.
+ * Pure, so it is testable.
  */
-export function cameraPose(spec, lead, sideOffset, rise) {
+export function cameraPose(spec, lead, sideOffset, rise, across = 0, fit = 0) {
   if (spec?.kind === "fixed") return { position: [...spec.position], target: [...spec.target] };
   const back = spec?.back ?? 0.35;
   const height = spec?.height ?? 0.34;
   const side = spec?.side ?? sideOffset;
-  const distance = spec?.distance ?? 1;
+  const distance = Math.max(spec?.distance ?? 1, fit / back);
   return {
-    position: [lead - back * distance, height * distance + rise, side * distance],
-    target: [lead, (spec?.target_height ?? 0.12) + rise, 0],
+    position: [lead - back * distance, height * distance + rise, across + side * distance],
+    target: [lead, (spec?.target_height ?? 0.12) + rise, across],
   };
+}
+
+// How far either side of the frame drawn a tracking chase looks along its leader's path, in trace
+// steps, and how often it samples it: a second each way, beyond a stride's sway.
+const TRACK_REACH = 50;
+const TRACK_EVERY = 5;
+const _across = new Vector3();
+
+/**
+ * Where a tracking chase centres across the lanes at `seconds` of the replay, in three.js z: its
+ * leader's path, averaged over a Hann window as a stage's camera averages its troupe's
+ * (talent-stage.js), so that a stride's sway does not shake the picture and a change of leader is
+ * a pan rather than a cut. Each lane is the viewer's: a trace and a rig placed on its lane. Pure
+ * but for the placers' world matrices, so it is testable.
+ */
+export function chaseAcross(lanes, seconds) {
+  const centre = Math.floor(seconds / CTRL_DT);
+  let across = 0, weight = 0;
+  for (let k = -TRACK_REACH; k <= TRACK_REACH; k += TRACK_EVERY) {
+    let leader = null, frame = null;
+    for (const lane of lanes) {
+      const candidate = frameAt(lane.trace, Math.max(0, Math.min(frameCount(lane.trace) - 1, centre + k)));
+      if (!frame || candidate[0] > frame[0]) [leader, frame] = [lane, candidate];
+    }
+    const w = 0.5 + 0.5 * Math.cos((Math.PI * k) / (TRACK_REACH + TRACK_EVERY));
+    across += w * _across.set(frame[0], 0, -frame[1]).applyMatrix4(leader.rig.placer.matrixWorld).z;
+    weight += w;
+  }
+  return across / weight;
+}
+
+// How far behind its leader a tracking chase over several lanes still keeps a duck in front of
+// it, how far beyond a lane's centre line its picture reaches to hold that lane's duck and its
+// sway, and how far back from the hindmost duck it stands at most: as far as a landscape picture
+// of four lanes needs, so that a narrower picture shows fewer lanes rather than smaller ducks.
+const PACK_REACH = 3;
+const PACK_MARGIN = 0.3;
+const PACK_FAR = 3;
+
+/**
+ * What a tracking chase over several lanes follows, from each lane's duck along the course `xs` and
+ * each lane's centre across it `zs`: the hindmost duck rather than the leader, so that the field
+ * walks ahead of the camera toward the caller, but never one more than PACK_REACH behind the
+ * leader, so that a duck caught or fallen far back is left behind rather than holding the field's
+ * camera. `fit` is how far back a camera of `aspect` and vertical `fov` degrees stands to see every
+ * lane across its picture, but no farther than PACK_FAR, nor than the room allows in front of
+ * `back`, the nearest it may come to the wall behind the start. It centres across the lanes, or,
+ * when its picture cannot hold them all, as near their centre as keeps the last lane's duck in it:
+ * a clip's author (clip/main.js). Continuous as its ducks move, so a duck left behind is a pan, not
+ * a cut. Pure, so it is testable.
+ */
+export function packChase(xs, zs, aspect, fov, back = -Infinity) {
+  const lo = Math.min(...zs);
+  const hi = Math.max(...zs);
+  const rear = Math.max(Math.min(...xs), Math.max(...xs) - PACK_REACH);
+  const tan = Math.tan((fov * Math.PI) / 360) * aspect;
+  const fit = Math.min(((hi - lo) / 2 + PACK_MARGIN) / tan, PACK_FAR, rear - back);
+  const kept = zs[zs.length - 1];
+  const half = Math.max(0, fit * tan - PACK_MARGIN);
+  return { rear, across: Math.min(kept + half, Math.max(kept - half, (lo + hi) / 2)), fit };
+}
+
+/**
+ * `pose` drawn in along its line of sight until its camera stands inside `room` (gym.js): in front
+ * of `back`, the wall behind the start, and under `ceiling`. A chase backed off to fit its lanes,
+ * and the travel that opens a clip on it, film the hall rather than the far side of its walls.
+ * The target stays, and so does the angle the camera looks down at it. Pure, so it is testable.
+ */
+export function inRoom(pose, room) {
+  if (!room) return pose;
+  const [x, y, z] = pose.position;
+  const [tx, ty, tz] = pose.target;
+  let keep = 1;
+  if (x < room.back && tx > room.back) keep = Math.min(keep, (room.back - tx) / (x - tx));
+  if (y > room.ceiling && ty < room.ceiling) keep = Math.min(keep, (room.ceiling - ty) / (y - ty));
+  if (keep === 1) return pose;
+  return { position: [tx + (x - tx) * keep, ty + (y - ty) * keep, tz + (z - tz) * keep], target: pose.target };
 }
 
 // Where a clip's opening travel starts, relative to the chase it ends on: turned
@@ -436,6 +518,8 @@ export async function createViewer(
       lane.marker?.removeFromParent();
       lane.plate?.dispose();
       if (lane.plate) scene.remove(lane.plate.sprite);
+      lane.outPlate?.dispose();
+      if (lane.outPlate) scene.remove(lane.outPlate.sprite);
     }
     lanes = [];
     if (course) {
@@ -563,12 +647,24 @@ export async function createViewer(
       // The duck's name, hung over its head in its lane's colour: there is
       // no legend over the picture, so the name rides the duck.
       let plate = null;
+      let outPlate = null;
+      // On red light, green light, a duck that is out says so once its replay has stopped short of
+      // the line: a duck the caller caught otherwise just stands there mid-course.
+      const out = event?.lights && entry.trace ? outAt(entry.trace, courseLength) : null;
       if (entry.name) {
-        plate = nameplate(entry.name, `#${marker.material.color.getHexString()}`, "#08080c");
-        plate.sprite.scale.set(PLATE_HEIGHT * plate.ratio, PLATE_HEIGHT, 1);
-        scene.add(plate.sprite);
+        const hang = (text) => {
+          const hung = nameplate(text, `#${marker.material.color.getHexString()}`, "#08080c");
+          hung.sprite.scale.set(PLATE_HEIGHT * hung.ratio, PLATE_HEIGHT, 1);
+          scene.add(hung.sprite);
+          return hung;
+        };
+        plate = hang(entry.name);
+        if (out != null) {
+          outPlate = hang(`${entry.name} · OUT`);
+          outPlate.sprite.visible = false;
+        }
       }
-      return { ...entry, rig, marker, plate, tier, gazeTarget: new Vector3(), mouth, jaw };
+      return { ...entry, rig, marker, plate, outPlate, out, tier, gazeTarget: new Vector3(), mouth, jaw };
     });
     broadcast = talent ? stageCamera(lanes, stage.layout, () => lag) : null;
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
@@ -629,8 +725,11 @@ export async function createViewer(
       // Follow both feet, including sideways drift and the lane offset.
       if (lane.marker) placeMarker(lane.marker, course ?? scene, feetPosition(lane.rig, _feet), slopeDeg);
       if (lane.plate) {
+        const out = lane.outPlate != null && indices[i] >= lane.out;
+        lane.plate.sprite.visible = !out;
+        if (lane.outPlate) lane.outPlate.sprite.visible = out;
         lane.rig.bodies.get("trunk_base").getWorldPosition(_trunk);
-        lane.plate.sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);
+        (out ? lane.outPlate : lane.plate).sprite.position.set(_trunk.x, _trunk.y + PLATE_LIFT, _trunk.z);
       }
     });
     audience?.pose(seconds, mood);
@@ -645,13 +744,20 @@ export async function createViewer(
     if (chase && course) {
       // Follow the leader along +x, the direction of travel, from behind and
       // slightly to one side so the gait is visible rather than end-on.
-      const lead = lanes.length
-        ? Math.max(...lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]))
-        : courseLength / 2;
+      const xs = lanes.map((lane, i) => frameAt(lane.trace, indices[i])[0]);
+      const ahead = lanes.length ? Math.max(...xs) : courseLength / 2;
+      // Over several lanes a tracking chase films the field from behind it instead (packChase).
+      const pack = !stage && spec?.track && lanes.length > 1
+        ? packChase(xs, lanes.map((lane) => lane.rig.placer.position.z), camera.aspect, camera.fov, gym?.room?.back)
+        : null;
+      const followed = pack ? pack.rear : ahead;
+      // A chase that holds short of the line stops there and watches the field walk on to it.
+      const lead = spec?.hold == null ? followed : Math.min(followed, courseLength - spec.hold);
       const rise = lead * Math.tan((slopeDeg * Math.PI) / 180);
+      const across = pack ? pack.across : spec?.track && lanes.length ? chaseAcross(lanes, player.time) : 0;
       const pose = dragPose(stage
         ? broadcast(manual ? seconds : player.time, player.time, camera.aspect, camera.fov)
-        : travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise), travel),
+        : inRoom(travelPose(cameraPose(spec ?? gym?.camera, lead, sideOffset, rise, across, pack?.fit), travel), gym?.room),
       SWEEP_TURN * sweepAt((performance.now() - swept) / 1000));
       camera.position.set(...pose.position);
       _target.set(...pose.target);

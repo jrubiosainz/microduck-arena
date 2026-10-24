@@ -21,6 +21,20 @@ describe("clipScore", () => {
     expect(score.crowd.progress.at(-1).value).toBeGreaterThan(0.9);
   });
 
+  it("hears a time-lapse's progress every half second of tape, in the tape's own seconds", () => {
+    const long = { ...event, id: "red-light-green-light-15m", length_m: 15 };
+    const steps = 4000; // 80 s of race
+    const lane = new Float32Array(steps * 21);
+    for (let i = 0; i < steps; i++) lane[i * 21] = (15 * i) / steps;
+    const plan = clipPlan(steps, 300, 0, 4);
+    const crowd = clipScore({ run: { run_id: "R4", event: long, seeds_finished: 5 }, plan, trace: lane, ducks: [] }).crowd;
+    expect(crowd.progress.slice(0, 3).map((sample) => sample.second)).toEqual([3, 3.5, 4]);
+    // 80 s of race in 20 s of tape: the last sample lands at the tape's end, near the line.
+    expect(crowd.end).toBeCloseTo(3 + 20);
+    expect(crowd.progress.at(-1).second).toBeCloseTo(crowd.end);
+    expect(crowd.progress.at(-1).value).toBeGreaterThan(0.99);
+  });
+
   it("falls after a DNF, and only plays the sources the event lists", () => {
     const dnf = clipScore({ run: { run_id: "R2", event, seeds_finished: 0 }, plan, trace, ducks: [] });
     expect(dnf.cues.at(-1).file).toBe("microduck-fall.wav");

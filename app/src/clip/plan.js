@@ -18,17 +18,20 @@ export const STRIDE = Math.round(1 / FPS / CTRL_DT);
  * `settle` the frames of untimed settle the lanes play first (leadIn), so the
  * tape starts where the simulation did. A run longer than the ceiling — a
  * timeout — is cut there and stamped anyway: the verdict is the record's, not
- * the tape's.
+ * the tape's. `speed` is the event's time-lapse: the tape plays that many times
+ * faster than life, a whole number so every clip frame lands on a trace step.
  */
-export function clipPlan(authorFrames, tapeMaxS, settle) {
+export function clipPlan(authorFrames, tapeMaxS, settle, speed = 1) {
+  const stride = STRIDE * speed;
   const steps = settle + Math.max(1, Math.min(authorFrames, Math.round(tapeMaxS / CTRL_DT)));
   const intro = FPS * INTRO_S;
-  const tape = Math.ceil(steps / STRIDE);
+  const tape = Math.ceil(steps / stride);
   const outro = Math.round(FPS * OUTRO_S);
   const frames = intro + tape + outro;
   return {
     fps: FPS,
-    stride: STRIDE,
+    stride,
+    speed,
     settle,
     steps,
     intro,

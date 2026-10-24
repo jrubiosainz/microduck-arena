@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { lightAt } from "./lights.js";
+import { lightAt, outAt } from "./lights.js";
+import { TRACE_WIDTH } from "./replay.js";
 
-// The shipped event's schedule (arena/events/red-light-green-light-2m5.toml).
+// The shipped event's schedule (arena/events/red-light-green-light-15m.toml).
 const SHIPPED = {
   green_s: [0.6, 2.4, 1.6, 3.0, 2.0, 2.8],
   red_s: [1.6, 2.0, 1.4, 2.4, 1.8, 2.2],
@@ -63,5 +64,28 @@ describe("the light", () => {
     const instant = { ...SHIPPED, turn_s: 0 };
     expectLight(instant, 0.6, { red: true, facing: 1, watching: true });
     expectLight(instant, 2.2, { red: false, facing: 0, watching: false });
+  });
+});
+
+describe("outAt", () => {
+  // A trace whose trunk walks along x from `from` through each of `xs`, one frame each.
+  const walk = (from, ...xs) => {
+    const trace = new Float32Array((xs.length + 1) * TRACE_WIDTH);
+    [from, ...xs].forEach((x, i) => { trace[i * TRACE_WIDTH] = x; });
+    return trace;
+  };
+
+  it("leaves a duck that reached the line in, wherever on the floor it set off", () => {
+    expect(outAt(walk(0.01, 5, 10, 15.02), 15)).toBeNull();
+    expect(outAt(walk(-0.02, 7, 14.99), 15)).toBeNull();
+  });
+
+  it("puts a duck whose trace ends short of the line out from its last frame", () => {
+    expect(outAt(walk(0, 3, 5.9), 15)).toBe(2);
+    expect(outAt(walk(0, 0.35), 15)).toBe(1);
+  });
+
+  it("has nothing to say about an empty trace", () => {
+    expect(outAt(new Float32Array(0), 15)).toBeNull();
   });
 });

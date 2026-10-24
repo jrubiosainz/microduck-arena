@@ -32,4 +32,12 @@ describe("clipPlan", () => {
     const plan = clipPlan(200, 12, 26);
     expect([0, 30, 60, 74, 75, 200].map((i) => travelAt(plan, i))).toEqual([0, 0.5, 1, 1, 1, 1]);
   });
+
+  it("plays a time-lapse's tape that many times faster, every clip frame on a trace step", () => {
+    // 126 s of racing at four times life: 31.6 s of tape, not 126.
+    const plan = clipPlan(6300, 300, 25, 4);
+    expect(plan).toMatchObject({ stride: 8, speed: 4, steps: 6325, tape: 791 });
+    expect([stepAt(plan, 75), stepAt(plan, 76), stepAt(plan, 77)]).toEqual([0, 8, 16]);
+    expect(clipPlan(200, 12, 26)).toMatchObject({ stride: 2, speed: 1 });
+  });
 });
