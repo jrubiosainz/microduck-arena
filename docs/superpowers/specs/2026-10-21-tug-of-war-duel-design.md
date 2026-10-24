@@ -91,10 +91,11 @@ This PR is what can be built, measured and watched before those decisions.
   go, to drop onto their feet as every run's reset drops a duck, and asked the same command:
   0.3 m/s straight on, away from the pit. Walking is pulling.
 - After every control step (0.02 s) the referee looks. A simulation that MuJoCo had to reset is
-  void, and a void bout is a draw. A trunk 0.10 m below the decks is in the pit, and its duck has
-  lost. A duck that is down has lost too, by every event's fall rule: its trunk tilted past 60°
-  (projected gravity's z above −0.5) for 0.3 s in a row, counted from the horn. Two losers at once
-  is a draw.
+  void, and a void bout is a draw. A duck whose action is not a number has faulted, and lost,
+  whatever else that step did: while a servo's command is not a number, MuJoCo drives no motor,
+  its rival's included. A trunk 0.10 m below the decks is in the pit, and its duck has lost. A
+  duck that is down has lost too, by every event's fall rule: its trunk tilted past 60° (projected
+  gravity's z above −0.5) for 0.3 s in a row, counted from the horn. Two losers at once is a draw.
 - At the bell (20 s), a bout that nobody has lost goes to the duck that has pulled the rope's middle
   more than 5 cm its way. Otherwise it is a draw.
 - A match plays every seed (1, 2, 3) twice, the policies swapping decks. A won bout is a point and
@@ -117,6 +118,7 @@ This PR is what can be built, measured and watched before those decisions.
 | **Walls along the decks' sides** | Without them, 7 of the 36 bouts between walkers ended with the loser dropping off the side of its deck rather than into the pit, at 4.4–18.0 s, all in matches of the walker that leans furthest. A bout is lost to the pull, not to a drift sideways. |
 | **Each seed from both decks** | The decks are not alike: each duck draws its start perturbation and its servo delays from its own slot's random streams (`arena.runner._streams`). The reference against itself draws every seed at the bell, but puller-5 against itself wins every seed from deck 1, at the bell by 5.1–10.7 cm; puller-8 wins two seeds from deck 1 and draws the third, and puller-10 wins two from deck 0 and one from deck 1. Playing every seed twice, the policies swapping decks, leaves neither with the luckier slot: each of the four walkers scores 3–3 against itself. |
 | **A void bout is a draw** | A simulation that MuJoCo had to reset leaves nothing to judge, and nobody can say whose fault it was. None of the 354 bouts measured was void. |
+| **A duck whose action is not a number loses** | A policy that answers NaN gives its servos a command that is not a number, and MuJoCo then applies no actuator force at all, the rival's included (`mjWARN_BADCTRL`). The servo model carries it on, its supply voltage worked out from the last torque, so a single NaN keeps the duck's command not a number to the end of the bout: measured, every one of the 990 steps after one NaN at the 10th. Without the rule, a policy that answers only NaN drew all six bouts with the reference at the bell. Judged, it loses 0–6, each bout called at 0.02 s. The fault is checked before the pit and the fall rule, since in a step it reached the servos neither duck was driven. Not void: the simulation is sound, and the fault is the policy's. |
 | **Points by the bout** | The table counts bouts (won, drawn, lost) rather than matches, so a 4–2 and a 6–0 are not worth the same. |
 | **A 20 s bell and a 5 cm margin** | Between walkers, the last bout decided in the pit ended at 17.6 s, and the last decided by a duck going down at 18.4 s. Few bouts reach the bell: 2 of the 330 between different policies, won by 10.1 and 15.5 cm. Of the walkers against themselves, the bouts drawn at the bell ended within 4.6 cm of the middle, and those won at the bell 5.1 cm or more from it. |
 
@@ -275,13 +277,16 @@ all its matches on one platform, the Space's.
   to stand (the command's twist zeroed), their policies running. At the horn the holds are
   switched off.
 - Then (`_referee`), every control step: both ducks are asked the duel's command, and the referee
-  checks for a void, then for a trunk in the pit, then the fall rule: projected gravity's z above
-  `fall_gravity_z` for `round(fall_hold_s / 0.02)` control steps in a row, as `arena.runner`
-  counts it, from the first timed step. A duck in the pit or down has lost, and two at once is a
-  draw. At the bell, the rope's middle decides.
+  checks for a void, then for a fault (`_faulted`: a servo command that is not a number or beyond
+  `mujoco.mjMAXVAL`, as MuJoCo tests it), then for a trunk in the pit, then the fall rule:
+  projected gravity's z above `fall_gravity_z` for `round(fall_hold_s / 0.02)` control steps in a
+  row, as `arena.runner` counts it, from the first timed step. A duck that faulted has lost, and
+  two faults are a draw. Otherwise a duck in the pit or down has lost, and two at once is a draw.
+  At the bell, the rope's middle decides.
 - `Bout(seed, winner, end, time_s, rope_mid_m)`: the winner is a deck (or `None`), and `end` is
-  `"pit"`, `"fall"`, `"bell"` or `"void"`. A bout lost in the pit ends `"pit"`, and one lost by a
-  duck down `"fall"`; a draw between two losers ends `"pit"` only if both are in the pit.
+  `"pit"`, `"fall"`, `"fault"`, `"bell"` or `"void"`. A bout lost in the pit ends `"pit"`, one
+  lost by a duck down `"fall"`, and one lost by a fault `"fault"`. Two faults are a draw that ends
+  `"fault"`; a draw between two other losers ends `"pit"` only if both are in the pit.
 
 ### 4. The match, the round robin and the table
 
@@ -294,15 +299,15 @@ all its matches on one platform, the Space's.
 ### 5. The shell (`arena duel`)
 
 - Two policies: a line per bout (who stood on which deck, and how the bout ended: a duck off its
-  deck, a duck down, at the bell, or void), then the score.
+  deck, a duck down, a fault, at the bell, or void), then the score.
 - Three or more: each match's score, then the table.
 - Fewer than two is refused. `--duel` picks a duel from `arena/duels/` (default: `tug-of-war`).
   Two files with the same name are told apart by their position.
 
 ### 6. Watching a match (`arena duel A B --watch`)
 
-- Two policies only, and the port (`--port`, 8766 by default) must be free before the match is
-  played. The match is played and printed as without `--watch`, then served on 127.0.0.1 until
+- Two policies only, and the port (`--port`, 8766 by default, from 1 to 65535) must be free before
+  the match is played. The match is played and printed as without `--watch`, then served on 127.0.0.1 until
   Ctrl-C. A browser opens on it unless `--no-browser` is given.
 - `record_match` is `play_match` with every bout recorded (`record_bout`). A recorded bout is
   `play_bout`'s: the same opening and the same referee, which appends each step it judges as a
@@ -310,7 +315,8 @@ all its matches on one platform, the Space's.
   it, so the bout is the same recorded or not. `Recorded` holds the bout, its settle's frames and
   its trace. A bout lost in the pit or by a duck down runs on for `TAIL_S` (1.5 s), both ducks
   still asked to pull, so a replay shows the loser land and what becomes of the winner. The tail
-  stops if the simulation diverges, and a void bout keeps nothing of MuJoCo's reset pose.
+  stops if the simulation diverges, and a void bout keeps nothing of MuJoCo's reset pose. A bout
+  ended at the bell or by a fault has no tail: after a fault, no motor would be driven.
 - `arena/duel_watch.py` (`create_duel_app`) answers from memory:
   - `/api/duel`: the duel, its course as built (the fall rule's hold among it), the two names, the
     points, and each bout (its seed, who stood on each deck, the winner, how and when it ended,
@@ -333,25 +339,25 @@ all its matches on one platform, the Space's.
   middle of that span, the camera moved back along its line of sight until the span, and 0.3 m
   beyond each end, fits the stage's narrowest picture: 1.2 wide for 1 high, through the viewer's
   42°. A drag lets it go, and "Back to ringside" brings it back. The crowd rises at the horn, then
-  cheers a win or mourns a bout both ducks lost.
+  cheers a win or mourns a bout both ducks lost in the pit or down.
 - The page (`app/duel.html`, `app/src/duel/`, `app/public/duel.css`) is the Arena's trackside
   frame. On the left is the stage, under the duel's name and facts, with the bout's clock. On the
   right are the match points in the scoreboard's flip tiles, the bouts (who stood on which deck,
   and how each ended), Pause and Replay bout, and the rule in a line: a duck that drops off its
-  deck, or stays down 0.3 s, loses the bout. The bouts play in order, the next 2.5 s after the
+  deck, or stays down 0.3 s, loses the bout, and so does one whose action is not a number. The bouts play in order, the next 2.5 s after the
   last has ended, until the visitor picks one or pauses.
 - Once a bout is decided, the stage says so:
   - a "Wins" stamp in the winner's colour over its head, clear of its nameplate and of the clock;
   - or a "Draw" or "Void" stamp over the pit;
-  - and the verdict in full, opposite the clock: who won and how (the loser fell into the pit or
-    went down, or the bell), or that both fell in or both went down.
+  - and the verdict in full, opposite the clock: who won and how (the loser fell into the pit,
+    went down or faulted, or the bell), or that both fell in, both went down or both faulted.
 
   On a phone, the clock and the verdict shrink, and the written verdict is hidden while a stamp
   shows. Screen readers still read it, and the bout's row says the same.
 
 ## Testing
 
-**pytest** (`tests/test_duel.py`, 68 tests):
+**pytest** (`tests/test_duel.py`, 80 tests):
 
 - the shipped duel loads with what it declares, and is not an event; its fall rule is every
   event's, the same numbers in all four;
@@ -369,36 +375,43 @@ all its matches on one platform, the Space's.
   the end of the settle, meet the clock on their marks with the rope at its starting length, and
   the holds are off for the bout;
 - the bout: deterministic; a duck placed over the pit, let go at the horn, is called in the pit
-  after a free fall's time; two in the pit is a draw; a duck that lies down on its deck loses once the fall rule has held, and two
-  that do draw; a longer hold calls the same fall later by the difference, and a fall line the
-  lying duck is not past never calls it; at the bell, both ducks placed 10 cm towards one deck
-  give that deck the win, and centred they draw; a simulation MuJoCo resets is void; a bout takes
-  exactly two policies;
+  after a free fall's time; two in the pit is a draw; a duck that lies down on its deck loses once
+  the fall rule has held, and two that do draw; a longer hold calls the same fall later by the
+  difference, and a fall line the lying duck is not past never calls it; at the bell, both ducks
+  placed 10 cm towards one deck give that deck the win, and centred they draw; a simulation MuJoCo
+  resets is void, not a fault; a policy whose action is not a number loses every bout of a match
+  by a fault at the first timed step, and two such policies draw; a NaN in the settle is called at
+  the first timed step, and one later in the bout once it reaches the servos; a bout takes exactly
+  two policies;
 - the match: every seed from both decks, the winner named as the match names them, and the points;
 - the table: every bout counted, and ties broken on wins, then name;
-- the shell: each way a bout ends, said as the shell says it; a match prints every bout and the
-  score, three policies print a table, and fewer than two policies or an unknown duel are refused;
+- the shell: each way a bout ends, a fault included, said as the shell says it; a match prints
+  every bout and the score, three policies print a table, and fewer than two policies or an
+  unknown duel are refused;
 - the recording: a recorded match is the match played, a frame for every step judged; a bout lost
   in the pit or by a duck down runs on for the tail past the frame it was decided on, and a duck
-  that fell in ends the tail deep in the pit; a void bout keeps no frame;
+  that fell in ends the tail deep in the pit; a fault keeps the frame it was called on, and no
+  tail; a void bout keeps no frame;
 - watching: the server answers the summary, the fall rule's hold among the course, both kinds of
   frames for every bout (exactly as recorded) and the page, and 404 for a bout the match does not
   have; unbuilt, the page says how to build it; `--watch` plays the match, prints it and serves
-  it; it refuses three policies and a busy port.
+  it; it refuses three policies, a busy port and a port outside 1–65535.
 
 **vitest** (`app/`):
 
 - the venue (`duel-venue.test.js`): the layout; the rope's sag; the decks, their legs and the
   jury's dais as built; the camera, at ringside and for a bout that crosses the decks; the rope
   tied between the harnesses, slack, taut and following a duck into the pit; the crowd's
-  direction, a bout both ducks lost mourned; and everything built disposed of;
+  direction: a win cheered however it came, a bout both ducks lost in the pit or down mourned,
+  and nothing felt for a draw at the bell, two faults or a void bout; and everything built
+  disposed of;
 - the page (`duel/bouts.test.js`): each bout as the viewer's event and lanes, the span its ducks
-  cover, its clock, and what the referee said of it, a duck down included; and
+  cover, its clock, and what the referee said of it, a duck down and a fault included; and
   (`duel/hall.test.js`) its frame as DOM: the strip, the duel's name and facts, the rule, the
   scoreboard, the bouts, the clock, stamp and verdict, the way back to ringside, and the transport;
 - the jury on its dais (`judges.test.js`).
 
-The app's whole suite passes: 866 tests in 80 files.
+The app's whole suite passes: 867 tests in 80 files.
 
 The rest of the suite runs as it did. No bout in these tests lasts much more than a second, and the
 recorded ones run on for their 1.5 s tail: they use the reference walker,
