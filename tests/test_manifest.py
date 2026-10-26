@@ -559,7 +559,7 @@ def tug(tmp_path, cup=CUP):
 
 
 def test_the_tug_of_war_holds_a_weekly_cup():
-    assert load_event("tug-of-war").cup == CupRules(date(2026, 10, 30), time(18, 0), "Europe/Paris", 2.0, 4)
+    assert load_event("tug-of-war").cup == CupRules(date(2026, 11, 6), time(18, 0), "Europe/Paris", 2.0, 4)
     assert load_event("sprint-2m").cup is None
 
 

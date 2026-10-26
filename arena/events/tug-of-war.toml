@@ -46,7 +46,7 @@ tape_max_s = 45.0
 sounds     = ["crowd", "verdict"]
 
 [cup]
-first          = "2026-10-30"   # cup #1's premiere day: the owner sets it at release
+first          = "2026-11-06"   # cup #1's premiere day: the owner sets it at release
 premiere       = "18:00"
 timezone       = "Europe/Paris"
 close_before_h = 2.0
