@@ -156,6 +156,9 @@ def _told(cup: Cup, manifest: Manifest, match: MatchRecord, bout: BoutResult,
                          f"east; {score(bout.k)}")
         elif moment.kind == "time" and reset:
             whats.append("The bout is stopped and called a draw.")
+        elif moment.kind == "time" and bout.how == "fault":
+            whats.append(f"The bout is stopped: {b if bout.winner == 'a' else a}'s action is not a number, a fault."
+                         if bout.winner else "The bout is stopped: neither duck's action is a number, a fault each.")
         elif moment.kind == "time":
             whats.append(f"Time is up with the marker on {duck}'s side." if duck
                          else "Time is up with the marker dead centre.")

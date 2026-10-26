@@ -8,6 +8,7 @@ from arena import runner, tug
 from arena.assets import ASSET_ROOT
 from arena.constants import CTRL_DT
 from arena.course import compile_tug, string_sites
+from arena.evaluate import evaluate
 from arena.manifest import BoutRules, load_event
 from arena.policy import load_policy
 from arena.tug import (
@@ -35,6 +36,16 @@ ON_ITS_SIDE = (math.cos(math.pi / 4), math.sin(math.pi / 4), 0.0, 0.0)   # 90° 
 class _ZeroPolicy:
     def act(self, obs):
         return np.zeros(14, dtype=np.float32)
+
+class _NaN:
+    """A duck whose action is not a number on its calls in `bad` (counted from 1, settle included), on
+    every call when `bad` is None, and zeros otherwise."""
+    def __init__(self, bad=None):
+        self.bad, self.calls = bad, 0
+
+    def act(self, obs):
+        self.calls += 1
+        return np.full(14, np.nan if self.bad is None or self.calls in self.bad else 0.0, dtype=np.float32)
 
 def frame(pos, quat):
     f = np.zeros(21)
@@ -121,6 +132,23 @@ def test_a_bout_on_the_string_holds_together():
     gaps, ties = _string_bout(SHORT, reference_duck(TUG), reference_duck(TUG), 1)   # _start + sim.step as run_bout, each step read off data
     assert max(gaps) <= 1.005 and max(ties) <= 0.01
 
+def test_a_duck_whose_action_is_not_a_number_loses_by_a_fault_at_once():
+    """MuJoCo drives no motor while a servo's command is not a number, the other duck's included: unjudged,
+    a NaN duck froze the reference and rated -0.1 cm, above a duck that never moves (-15.0)."""
+    for west, east, loser in ((_NaN(), _ZeroPolicy(), 0), (_ZeroPolicy(), _NaN(), 1), (_NaN(), _NaN(), None)):
+        out = run_bout(SHORT, west, east, 1)
+        assert (out.loser, out.how, out.trace.shape) == (loser, "fault", (2, 1, 21)) and out.time_s == pytest.approx(CTRL_DT)
+
+def test_a_nan_in_the_settle_is_called_on_the_first_timed_step_and_a_later_one_when_it_comes():
+    once = run_bout(SHORT, _NaN(bad={1}), _ZeroPolicy(), 1)        # the settle's first step: the servos carry it on
+    assert (once.loser, once.how) == (0, "fault") and once.time_s == pytest.approx(CTRL_DT)
+    later = run_bout(SHORT, _ZeroPolicy(), _NaN(bad={40}), 1)      # 25 settle steps, then the 15th timed step
+    assert (later.loser, later.how) == (1, "fault") and later.time_s == pytest.approx(15 * CTRL_DT)
+
+def test_a_duck_that_faults_rates_below_any_bout_played_out():
+    rating = evaluate(TUG, _NaN())
+    assert rating.score == pytest.approx(-200.0) and {r.status for r in rating.per_seed} == {"lost"}
+
 def _explode_at(monkeypatch, bad_step):
     """MuJoCo resets the simulation on timed step `bad_step`, as the runner's own check would say."""
     calls = iter(range(1_000_000))
@@ -155,5 +183,10 @@ def test_a_bout_scores_the_ground_the_entry_won_and_the_pit_either_way():
     assert bout_score_cm(drawn, 0, 100.0) == 0.0 and bout_status(drawn, 1) == "draw"
     assert [bout_status(out(1, "pit", 0.0, (1,)), e) for e in (0, 1)] == ["pit_won", "pit_lost"]
     assert [bout_status(out(0, "marker", 0.1), e) for e in (0, 1)] == ["lost", "won"]
+    faulted = out(0, "fault", 0.0)               # west faulted: twice the pit bonus, beyond any bout played out
+    assert [bout_score_cm(faulted, e, 100.0) for e in (0, 1)] == pytest.approx([-200.0, 200.0])
+    assert [bout_status(faulted, e) for e in (0, 1)] == ["lost", "won"]
+    both = out(None, "fault", 0.0)
+    assert bout_score_cm(both, 0, 100.0) == 0.0 and bout_status(both, 0) == "draw"
     assert [entry_side(s) for s in (1, 2, 3, 4, 5)] == [0, 1, 0, 1, 0] and SIDES == ("west", "east")
     assert reference_duck(TUG).sha256 == REFERENCE_SHA256

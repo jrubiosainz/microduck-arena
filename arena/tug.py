@@ -13,6 +13,12 @@ in at the time limit, the marker (the string's middle point) decides: pulled to 
 loses; to the east, west loses; exactly on the centre line, a draw. Only its x counts: the
 marker sagging into the pit is still on its side of the line.
 
+Before the pit, a fault: a duck whose servos are driven by a command that is not a number loses
+the bout on that step (both at once, a draw). MuJoCo drives no motor at all while one command is
+not a number, the other duck's included, and the servo model carries a NaN on to the end of the
+bout: unjudged, a duck answering NaN froze the reference duck and rated -0.1 cm, above a duck
+that never moves (-15.0 cm). Found by @jrubiosainz's duel (pollen-robotics/microduck-arena#2).
+
 A trace frame is a runner frame: trunk position (0:3), trunk quaternion w, x, y, z (3:7), then
 the joint angles.
 """
@@ -29,6 +35,7 @@ from .policy import load_policy
 from .runner import _reset_by_mujoco, _start
 
 PIT_DROP_M = 0.05  # a trunk below z = -PIT_DROP_M is in the pit
+FAULT_PITS = 2  # a fault scores this many pit bonuses: beyond any bout played out (a pit and 65 cm of marker)
 SIDES = ("west", "east")
 STRING_POINTS = STRING_SEGMENTS + 1  # a recorded string frame: its points, west to east
 MIDDLE = STRING_SEGMENTS // 2  # the point the marker is tied at
@@ -59,7 +66,8 @@ def _verdict(trace: np.ndarray, string: np.ndarray, final: bool) -> tuple[int | 
 class BoutOutcome:
     seed: int
     loser: int | None  # 0 west, 1 east, None undecided by the physics
-    how: str  # "pit" (the first duck in the pit),
+    how: str  # "fault" (a command not a number; both at once, a draw),
+    # "pit" (the first duck in the pit),
     # "marker" (both in on one control step, or the time limit),
     # "draw" (marker exactly 0, or a step MuJoCo had to reset)
     time_s: float  # when it was decided
@@ -67,6 +75,11 @@ class BoutOutcome:
     settle: np.ndarray  # (2, settle + 1, 21)
     string: np.ndarray  # (frames, STRING_POINTS, 3), west to east, frame for frame with the trace
     string_settle: np.ndarray  # (settle + 1, STRING_POINTS, 3)
+
+
+def _faults(sim) -> list[bool]:
+    """Per duck, west first: are its servos driven by a command that is not a number?"""
+    return [not np.isfinite(sim.data.ctrl[duck.servos.act_ids]).all() for duck in sim.ducks]
 
 
 def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutcome:
@@ -91,7 +104,9 @@ def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutco
             )
         sim.record(frames[:, step])
         sim.points(string[step])
-        verdict = _verdict(frames[:, : step + 1], string[: step + 1], final=step == steps - 1)
+        faults = _faults(sim)
+        verdict = ((faults.index(True) if faults.count(True) == 1 else None), "fault") if any(faults) else \
+            _verdict(frames[:, : step + 1], string[: step + 1], final=step == steps - 1)
         if verdict is not None:
             loser, how = verdict
             return BoutOutcome(
@@ -124,6 +139,8 @@ def bout_score_cm(outcome: BoutOutcome, entry: int, pit_bonus_cm: float) -> floa
     the pit, minus it when only the entry is (nothing when both are)."""
     if outcome.how == "draw":  # the centre line exactly, or a step MuJoCo reset: nobody's ground
         return 0.0
+    if outcome.how == "fault":
+        return 0.0 if outcome.loser is None else FAULT_PITS * pit_bonus_cm * (-1 if outcome.loser == entry else 1)
     x = float(marker_x(outcome.string[-1:])[0])
     last = outcome.trace[:, -1]
     pits = int(in_pit(last[1 - entry])) - int(in_pit(last[entry]))

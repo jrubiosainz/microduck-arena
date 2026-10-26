@@ -189,7 +189,7 @@ def _next_facts(cup: Cup, upcoming: MatchRecord) -> list[Fact]:
 def _last_fact(cup: Cup, last: MatchRecord) -> Fact:
     last_bout = last.bouts[-1]
     how = ("" if last.decided_by == "rating" else ", the last bout ending in the pit" if last_bout.how == "pit"
-           else ", the last bout decided on the marker")
+           else ", the last bout lost on a fault" if last_bout.how == "fault" else ", the last bout decided on the marker")
     return _fact("cup#/last", f"In the last match, {stage_of(cup, last.index)}, {_beat(cup, last)}{how}.")
 
 

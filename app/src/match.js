@@ -16,10 +16,12 @@ function el(tag, className, text) {
   return node;
 }
 
-/** What a bout's line says it was decided by: the duck dragged into the pit, or the marker's side. */
+/** What a bout's line says it was decided by: the duck dragged into the pit, the marker's side, or the duck whose
+ * action was not a number. */
 const HOW = {
   pit: (loser) => `${loser} in the pit`,
   marker: () => "the marker on their side",
+  fault: (loser) => `${loser} faulted`,
 };
 
 /** One bout in a line: who won it, how, and when, the time held to its unit by a no-break space. */

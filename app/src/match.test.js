@@ -48,6 +48,11 @@ describe("a match page", () => {
     expect(boutLine(match, match.bouts[1])).toMatch(/ 45\.00\u00a0s$/);
   });
 
+  it("names the duck that faulted, its action not a number", () => {
+    expect(boutLine(match, { k: 0, winner: "a", how: "fault", time_s: 0.02 })).toBe("Bout 1 · Tank wins · Lean faulted · 0.02 s");
+    expect(boutLine(match, { k: 1, winner: null, how: "fault", time_s: 0.02 })).toBe("Bout 2 · a draw · 0.02 s");
+  });
+
   it("names the pit's victim whichever side won the bout", () => {
     expect(boutLine(match, match.bouts[1])).toBe("Bout 2 · Lean wins · the marker on their side · 45.00\u00a0s");
     expect(boutLine(match, { k: 4, winner: "b", how: "pit", time_s: 5 })).toBe("Bout 5 · Lean wins · Tank in the pit · 5.00\u00a0s");

@@ -21,8 +21,8 @@ class Moment:
     """`side` is, per kind: start, None; lead, the new leader; ground, the side the marker was
     pulled to; edge, slip and pit, the duck at its edge, slipping, dropping in; time, the side the
     marker favours at the limit (None when it is on the centre line). `time` is the trace's last
-    frame: the time limit, or, for a bout a MuJoCo reset ended early (a draw), where it stopped,
-    which show.py tells as such, never as time up."""
+    frame: the time limit, or, for a bout a MuJoCo reset (a draw) or a fault ended early, where it
+    stopped, which show.py tells as such, never as time up."""
 
     at_s: float
     kind: str

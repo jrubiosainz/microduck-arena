@@ -144,6 +144,11 @@ def test_the_last_match_names_how_its_last_bout_ended():
             "the last bout decided on the marker.") in texts(marker, 1)
     assert ("In the last match, group round 1 of 3 in Group A, puller 2 (@p2) beat puller 4 (@p4) 2–0, "
             "the last bout ending in the pit.") in texts(CUP, 1)
+    fault = replace(CUP, matches=tuple(
+        replace(m, bouts=(*m.bouts[:-1], replace(m.bouts[-1], how="fault"))) if m.index == 0 else m
+        for m in CUP.matches))
+    assert ("In the last match, group round 1 of 3 in Group A, puller 2 (@p2) beat puller 4 (@p4) 2–0, "
+            "the last bout lost on a fault.") in texts(fault, 1)
 
 
 def rewritten(cup, k):

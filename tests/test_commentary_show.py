@@ -215,6 +215,23 @@ def test_a_bout_stopped_by_a_reset_is_called_a_draw_at_its_end_and_never_time_up
                         "the score is puller 2 1, puller 4 0.")
 
 
+def test_a_bout_lost_on_a_fault_is_called_a_fault_and_never_time_up():
+    faulted = BoutResult(0, 0, "west", "b", "fault", 0.02)
+    both = BoutResult(1, 1, "east", None, "fault", 0.02)
+    first = replace(CUP.matches[0], bouts=(faulted, both, BoutResult(2, 2, "west", "a", "pit", 6.5)))
+    cup = replace(CUP, matches=(first, *CUP.matches[1:]))
+    tape = footage(cup)
+    for taped in tape[first.match_id]["bouts"][:2]:
+        taped.update(seconds=0.02, moments=[STEPS[0], Moment(0.02, "time", None)])
+    router = Router()
+    show(router, cup=cup, tape=tape)
+    one, two = (whats(moments) for moments in router.calls()[:2])
+    assert one[-1] == ("The bout is stopped: puller 2's action is not a number, a fault. puller 4 wins the bout; "
+                       "the score is puller 2 0, puller 4 1.")
+    assert two[-1] == "The bout is stopped: neither duck's action is a number, a fault each. Nobody wins the bout."
+    assert not any("Time is up" in what for what in one + two)
+
+
 def test_a_match_level_after_its_bouts_goes_to_the_rating_on_air():
     final = CUP.matches[-1]
     bouts = (BoutResult(0, 0, "west", "a", "pit", 6.5), BoutResult(1, 1, "east", "b", "pit", 6.5),
