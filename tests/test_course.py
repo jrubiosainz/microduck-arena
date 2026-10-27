@@ -10,8 +10,8 @@ from arena.constants import DEFAULT_POSE, JOINT_NAMES, TIMESTEP
 from arena.course import (
     SPAWN_HEIGHT_M,
     STRING_TIE_SOLIMP,
-    build_course_xml,
     backstops,
+    build_course_xml,
     compile_course,
     compile_stage,
     compile_tug,

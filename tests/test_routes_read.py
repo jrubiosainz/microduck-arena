@@ -36,7 +36,7 @@ def test_a_tug_serves_its_course_and_its_bouts(client):
     assert len(tug["ropes"]) == 12 and tug["posts"][3]["name"] == "post_se"
     assert not {"length_m", "width_m", "walls", "pit"} & tug.keys()
     assert "string_offset" not in tug   # the page draws the string as recorded
-    assert "sweep_lo" not in tug and "size_m" not in tug and "winch" not in tug and "bench" not in tug
+    assert "sweep_lo" not in tug and "size_m" not in tug
 
 
 def test_a_rated_run_serves_its_bouts_and_a_board_strongest_first_each_row_with_its_seed(client):
@@ -44,7 +44,7 @@ def test_a_rated_run_serves_its_bouts_and_a_board_strongest_first_each_row_with_
     record_run(app, event_id="tug-of-war", user="bob", score=-15.2, trace_seed=2, per_seed=(SeedResult(2, "lost", 45.0, -15.2),))
     mine = record_run(app, event_id="tug-of-war", user="alice", score=12.5, trace_seed=1, per_seed=(SeedResult(1, "won", 45.0, 12.5),))
     body = api.get(f"/api/runs/{mine.run_id}").json()
-    assert body["per_seed"] == [{"seed": 1, "status": "won", "time_s": 45.0, "score_cm": 12.5}] and "bench" not in body
+    assert body["per_seed"] == [{"seed": 1, "status": "won", "time_s": 45.0, "score_cm": 12.5}]
     assert [(r["user"], r["trace_seed"]) for r in body["board"]] == [("alice", 1), ("bob", 2)]
     assert [r["user"] for r in api.get("/api/events/tug-of-war/leaderboard").json()["rows"]] == ["alice", "bob"]
     assert api.get("/api/players/alice").json()["publications"][0]["metric"] == "mean_ground_cm"

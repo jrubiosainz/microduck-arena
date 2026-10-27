@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from . import votes
-from .cup import Cup, MatchRecord, iso, reached, revealed_at
 from .constants import RUNNER_VERSION
+from .cup import Cup, MatchRecord, iso, reached, revealed_at
 from .index import by_user, leaderboard, sort_key
 from .manifest import Vote
 from .store import RunRecord

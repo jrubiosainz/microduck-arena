@@ -5,7 +5,17 @@ from datetime import date, time
 import pytest
 
 from arena.manifest import (
-    EVENTS_DIR, BoutRules, CupRules, ManifestError, Rating, Stage, Tug, all_events, higher_wins, load_event, load_manifest,
+    EVENTS_DIR,
+    BoutRules,
+    CupRules,
+    ManifestError,
+    Rating,
+    Stage,
+    Tug,
+    all_events,
+    higher_wins,
+    load_event,
+    load_manifest,
 )
 
 # A well-formed manifest, as TOML sections. Tests override one entry to build a

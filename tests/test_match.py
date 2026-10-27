@@ -1,5 +1,8 @@
 import dataclasses
-import numpy as np, pytest
+
+import numpy as np
+import pytest
+
 from arena.manifest import BoutRules, load_event
 from arena.match import BoutResult, bout_seed, play_match
 from arena.tug import BoutOutcome

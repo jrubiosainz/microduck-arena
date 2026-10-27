@@ -359,6 +359,13 @@ sweep in a versus.
   centre makes a drawn bout, which counts for nobody; the match goes on (at most five bouts), and a
   match still undecided after them goes to more bouts won, then the higher rating. (A rule that
   never needs a replay.)
+- **A fault loses the bout on its step**, before the pit (owner, 2026-10-26, "corrige la faille",
+  found by @jrubiosainz's duel, PR #2): a duck that gives no valid action, an action that is not a
+  number, a policy that fails to answer, one answer longer than a second, or more thinking over
+  the bout, settle included, than the bout lasts (owner, 2026-10-27: a time limit before the
+  release). Both at once: nobody wins the bout. MuJoCo drives no motor while one command is not a
+  number, so a NaN duck froze the reference and rated -0.1 cm; a hanging policy held a cup for good.
+- **A step MuJoCo has to reset** ends the bout with nobody winning it, its frame left out.
 
 **Match** (my call): first to two bouts, sides swapped after each bout. Each bout's seed derives
 from the cup's secret (section 4), the match and the bout, so a whole cup replays identically on
@@ -385,7 +392,11 @@ another one.
 - **Score per seed**: one bout (the tug's own physics, 45 s) between the entry and the reference,
   sides alternating with the seed. The score is the marker's displacement towards the entry at the
   end of the bout, in centimetres (negative when the reference pulled it away), plus a bonus when
-  the reference is dragged into the pit (and the same malus when the entry is).
+  the reference is dragged into the pit (and the same malus when the entry is). A fault scores
+  minus two pit bonuses (-200 cm), beyond any bout played out; in a rating bout a fault of either
+  duck and a MuJoCo reset are the entry's (2026-10-27), since the reference never causes one on its
+  own: a duck at -inf on every joint made MuJoCo reset on the first step and rated 0.0 cm, above
+  every duck that pulls and loses.
 - **Rating**: the mean over five seeds, in centimetres; higher is better.
 - **Clip**: the entry's median bout against the reference — a real tug of war, two ducks, the
   string as it lay and the marker, in the ring. Landscape and vertical, on the HF Job, like every run.
@@ -400,7 +411,7 @@ another one.
 
 - A `tug_of_war` challenge in `microduck-challenges` (the usual folder). The duck trains
   **against another duck** (owner, 2026-10-20 night): the Arena's own bout — the same string, pit,
-  lane and 45 s — with a frozen opponent policy on the other end, first the reference duck (our
+  ring and 45 s — with a frozen opponent policy on the other end, first the reference duck (our
   walking-back t7-250). Later the opponent can be chosen, even switched during training, among the
   best checkpoints and the published models (a league); not in the first version.
 - The workshop's Test step rates a checkpoint against the reference locally (indicative: a Mac is
@@ -481,7 +492,11 @@ far as it has aired, never the champion before the final. The cup's points land 
 airs. The dataset is private; the Space serves the cup's state as of "now".
 
 **If something is late** (my call): the premiere waits until every match clip and every line of
-the show is ready; until then the page and the live say "starting soon". Cup clip jobs are
+the show is ready; until then the page and the live say "starting soon". The booth is waited for
+30 minutes past the premiere at most (owner, 2026-10-27): then the matches air without the desk or
+the calls, rather than the live standing by for as long as the router is down. Clip jobs run 16 at
+once (owner, 2026-10-27, "plus de clips"): a 23-entrant cup owes 62 match clips, about two hours
+of jobs four at a time. Cup clip jobs are
 relaunched without the usual three-try limit. Cup N+1 never premieres before cup N has. Nothing
 airs with a hole in it.
 
@@ -588,6 +603,11 @@ relock as usual, then the owner publishes the first candidate.
   upright like the robot's normal gait, head high, trunk up, only the feet on the floor, stepping
   rather than sliding; other players stay free (a head on the floor allowed, only the pit decides),
   knowing head-planting ducks will beat the upright reference easily; the rope and the scene stay.
+- 2026-10-26, after @jrubiosainz's duel (PR #2): a fault (an action that is not a number) loses the
+  bout at once and costs two pit bonuses in a rating; cup #1 premieres on Friday 6 November.
+- 2026-10-27, after the pre-release review: a time limit on the policies before the release (a
+  policy that fails or thinks too long faults); a MuJoCo reset is the entry's fault in a rating;
+  clip jobs 16 at once; the booth waited for 30 minutes past the premiere at most.
 
 ## My calls (the owner may object)
 

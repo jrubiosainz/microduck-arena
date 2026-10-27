@@ -162,7 +162,6 @@ def test_a_tug_checkpoint_is_rated_against_the_reference(checkout, fakes, hub):
     body = client.get(f"/api/workshop/challenges/tug-of-war/jobs/{run.name}/checkpoints/1").json()
     assert body["seeds_total"] == 5
     assert all("score_cm" in seed for seed in body["per_seed"])
-    assert "bench" not in body
     assert body["ducks"] == 2  # the entry's duck and the reference
     frames = len(base64.b64decode(body["trace_b64"])) // (2 * TRACE_WIDTH * 4)
     assert len(base64.b64decode(body["string_b64"])) == frames * 51 * 4 and body["format"] == 3

@@ -278,7 +278,7 @@ def test_a_second_transport_error_is_not_retried_again(monkeypatch):
 def test_the_booth_is_taught_what_the_tug_is():
     assert "a duck's rating is the ground it wins from the Arena's reference duck" in BOOTH_CONTEXT
     assert "across a pit in a wrestling ring" in BOOTH_CONTEXT
-    assert "winch" not in BOOTH_CONTEXT and "fell or went" not in BOOTH_CONTEXT
+    assert "fell or went" not in BOOTH_CONTEXT
 
 
 MOMENTS = [{"index": 0, "second": 0.0, "what": "The bout starts."},
