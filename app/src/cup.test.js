@@ -88,12 +88,14 @@ describe("a versus page's days left", () => {
   const cups = (list) => ({ next: { number: 2, close_at: "2026-11-06T15:00:00Z", premiere_at: "2026-11-06T17:00:00Z", entrants: [] }, cups: list });
   const at = (iso) => Date.parse(iso);
 
-  it("counts whole days to the same cup as the home card, then hours, then the show itself", () => {
+  it("counts whole days to the same cup as the home card, then hours: to its close, then to its start", () => {
     expect(cupDaysLeft("tug-of-war", cups([]), at("2026-10-29T21:00:00Z"))).toEqual({ cup: "Cup #2", left: "7 days left", href: "#/c/tug-of-war/2" });
     expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-05T12:00:00Z")).left).toBe("1 day left");
-    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-06T13:30:00Z")).left).toBe("3 hours left");
-    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-06T16:00:00Z")).left).toBe("1 hour left");
-    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-06T16:40:00Z")).left).toBe("20 min left");
+    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-06T12:30:00Z")).left).toBe("2 hours left");
+    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-06T13:30:00Z")).left).toBe("1 hour left");
+    expect(cupDaysLeft("tug-of-war", cups([]), at("2026-11-06T14:40:00Z")).left).toBe("20 min left");
+    const drawn = cups([{ number: 2, state: "drawn", premiere_at: "2026-11-06T17:00:00Z" }]);
+    expect(cupDaysLeft("tug-of-war", drawn, at("2026-11-06T15:30:00Z")).left).toBe("1 hour left");
     expect(cupDaysLeft("tug-of-war", cups([{ number: 1, state: "drawn", premiere_at: "2026-10-30T17:00:00Z" }]), at("2026-10-30T17:05:00Z")))
       .toEqual({ cup: "Cup #1", left: "Starting soon", href: "#/c/tug-of-war/1" });
     expect(cupDaysLeft("tug-of-war", cups([{ number: 1, state: "airing" }]), 0).left).toBe("Live now");

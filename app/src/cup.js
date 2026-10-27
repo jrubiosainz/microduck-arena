@@ -272,7 +272,7 @@ export async function renderCup(root, eventId, number, state) {
  * airs before the one closed after it. */
 const onNext = ({ next, cups }) => cups.findLast((c) => ["drawn", "ready", "airing"].includes(c.state)) ?? next;
 
-const minutesTo = (cup, nowMs) => Math.ceil((Date.parse(cup.starts_at ?? cup.premiere_at) - nowMs) / 60000);
+const minutesTo = (iso, nowMs) => Math.ceil((Date.parse(iso) - nowMs) / 60000);
 
 /** What a versus card's corner says: the cup on now or next, and how soon. */
 export function cupCorner(eventId, cups, nowMs) {
@@ -282,14 +282,15 @@ export function cupCorner(eventId, cups, nowMs) {
 
 function soon(cup, nowMs) {
   if (cup.state === "airing") return "live now";
-  const minutes = minutesTo(cup, nowMs);
+  const minutes = minutesTo(cup.starts_at ?? cup.premiere_at, nowMs);
   if (minutes <= 0) return "starting soon";
   const [days, hours, rest] = [Math.floor(minutes / 1440), Math.floor(minutes / 60) % 24, minutes % 60];
   if (days) return `in ${days}d ${hours}h`;
   return hours ? `in ${hours}h ${rest}m` : `in ${rest}m`;
 }
 
-/** What a versus page says above training: the same cup as its card's corner, and the days left before it. */
+/** What a versus page says above training: the same cup as its card's corner, and the days left to enter it, while
+ * its entries are open, then before it starts. */
 export function cupDaysLeft(eventId, cups, nowMs) {
   const cup = onNext(cups);
   return { cup: `Cup #${cup.number}`, left: daysLeft(cup, nowMs), href: cupHref(eventId, cup.number) };
@@ -297,7 +298,7 @@ export function cupDaysLeft(eventId, cups, nowMs) {
 
 function daysLeft(cup, nowMs) {
   if (cup.state === "airing") return "Live now";
-  const minutes = minutesTo(cup, nowMs);
+  const minutes = minutesTo(cup.close_at ?? cup.starts_at ?? cup.premiere_at, nowMs);
   if (minutes <= 0) return "Starting soon";
   const [days, hours] = [Math.floor(minutes / 1440), Math.floor(minutes / 60)];
   if (days) return `${days} day${days > 1 ? "s" : ""} left`;
