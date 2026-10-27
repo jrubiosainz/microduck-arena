@@ -53,6 +53,9 @@ CLIP_RETRY = timedelta(minutes=10)
 # A show held by anything but the router (an answer refused every time, a plan page that cannot time one) is written
 # again this often: on the next tick it would most likely fail again, after buying its answers again.
 SHOW_RETRY = timedelta(minutes=10)
+# A show the booth has not written this long past its cup's premiere is given up: the matches air without the desk or
+# the calls rather than the live standing by, races and Got a Talent included, for as long as the router is down.
+BOOTH_PATIENCE = timedelta(minutes=30)
 TICK_S = 30
 
 
@@ -172,7 +175,8 @@ class CupWorker:
     and the same results. `show(cup, partial)` writes into `partial` what it can of the show now and returns it: the
     desk needs only the matches, a match's call its clip (its lines are timed on the clip's tape), so the show is
     written while the clips render, each call on the first tick its clip is ready, and a write cut off resumes on the
-    next tick. With no `show` (no booth) the cup airs its matches alone.
+    next tick. With no `show` (no booth), or a show still unwritten BOOTH_PATIENCE past the premiere, the cup airs its
+    matches alone.
     """
 
     def __init__(self, store, clips, *, events, load: Callable[[Entrant], object],
@@ -292,7 +296,7 @@ class CupWorker:
         show = None
         if self.show is not None:
             show = self._written_show(manifest, cup, now)
-            if show is None:
+            if show is None and now < parse_iso(cup.premiere_at) + BOOTH_PATIENCE:
                 return
         if len(seconds) < len(cup.matches):
             return
@@ -303,7 +307,8 @@ class CupWorker:
         starts_at = max(parse_iso(cup.premiere_at), (now + ORDER_LEAD).replace(microsecond=0))
         order = running_order(cup, seconds, starts_at, show=show)
         self.store.put_cup_files(cup.event_id, cup.number, {"order.json": json.dumps(order, indent=2).encode()})
-        self.log(f"cups: {cup.event_id} #{cup.number} airs from {order['starts_at']}")
+        alone = " without the booth" if self.show is not None and show is None else ""
+        self.log(f"cups: {cup.event_id} #{cup.number} airs from {order['starts_at']}{alone}")
 
     def _written_show(self, manifest: Manifest, cup: Cup, now: datetime) -> dict | None:
         """The cup's show.json, stored once every match is called; until then each tick writes what it can of it,

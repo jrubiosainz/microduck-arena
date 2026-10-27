@@ -21,6 +21,7 @@ from arena.commentary.show import show_outline
 from arena.constants import NUM_JOINTS, OBS_SIZE, RUNNER_VERSION
 from arena.cup import Cup, cup_times, draw_groups, ends_at, iso, match_label, parse_iso
 from arena.cupworker import (
+    BOOTH_PATIENCE,
     LOAD_PATIENCE,
     SHOW_RETRY,
     CupWorker,
@@ -356,6 +357,27 @@ def test_an_unwritten_show_holds_the_order_and_resumes_on_the_next_tick(tmp_path
     cups.tick()
     assert given[1][0] is given[0][0] and (given[0][1], given[1][1]) == ({}, {"opening": {"kind": "opening"}})
     assert load_cup(store, "tug-of-war", 1).order is not None
+
+
+def test_a_show_unwritten_half_an_hour_past_the_premiere_airs_the_matches_alone(tmp_path, no_physics):
+    """The live stands by from the premiere until the order: a router down for hours must not hold it, races and
+    Got a Talent included, for hours."""
+    store, said = ready_cup(tmp_path), []
+    clock = Clock(datetime(2026, 10, 23, 16, tzinfo=UTC) + BOOTH_PATIENCE - timedelta(seconds=1))
+
+    def down(cup, done):
+        raise httpx.ConnectError("router down")
+
+    cups = worker(store, clock, show=down, log=said.append)
+    cups.tick()
+    assert BOOTH_PATIENCE == timedelta(minutes=30) and load_cup(store, "tug-of-war", 1).order is None
+    clock.at += timedelta(seconds=1)
+    cups.tick()
+    cup = load_cup(store, "tug-of-war", 1)
+    assert cup.order == running_order(cup, {m.match_id: 10.0 for m in cup.matches},
+                                      datetime(2026, 10, 23, 16, 40, tzinfo=UTC))
+    assert store.cup_file("tug-of-war", 1, "show.json") is None
+    assert said[-1] == "cups: tug-of-war #1 airs from 2026-10-23T16:40:00Z without the booth"
 
 
 def test_a_restarted_worker_reads_the_show_it_wrote(tmp_path, no_physics):
