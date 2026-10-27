@@ -29,10 +29,11 @@ from arena.match import BoutResult
 from arena.moments import Moment, moments
 from arena.store import LocalStore
 from arena.trace import decode, decode_string, encode
+from arena.tug import reference_duck, run_bout
 from tests.show_cups import MANIFEST, played_cup
 from tests.test_commentary_generator import reply
 from tests.test_moments import dragged
-from tests.test_tug import straight
+from tests.test_tug import _Constant, straight
 
 CUP = played_cup()
 IDS = [match.match_id for match in CUP.matches]
@@ -47,7 +48,7 @@ DESK = [{"speaker": speaker, "text": f"Desk line {i}.", "fact_refs": [0]}
 def footage(cup):
     return {m.match_id: {"duration_ms": 30000, "bouts": [
         {"k": bout.k, "tape_start_s": 2.0 + 9 * bout.k, "tape_end_s": 10.0 + 9 * bout.k,
-         "hold_end_s": 10.5 + 9 * bout.k, "seconds": 8.0, "moments": list(STEPS)}
+         "hold_end_s": 10.5 + 9 * bout.k, "moments": list(STEPS)}
         for bout in m.bouts]} for m in cup.matches}
 
 
@@ -163,10 +164,10 @@ def test_a_bout_s_last_line_is_heard_while_the_clip_holds_its_end():
     first = CUP.matches[0]
     tape = footage(CUP)
     tape[first.match_id] = {"duration_ms": 87040, "bouts": [
-        {"k": 0, "tape_start_s": 3.52, "tape_end_s": 48.52, "hold_end_s": 54.52, "seconds": 45.0,
+        {"k": 0, "tape_start_s": 3.52, "tape_end_s": 48.52, "hold_end_s": 54.52,
          "moments": [Moment(0.0, "start", None), Moment(3.62, "lead", "west"),
                      Moment(45.0, "time", "west")]},
-        {"k": 1, "tape_start_s": 55.04, "tape_end_s": 78.5, "hold_end_s": 84.52, "seconds": 23.46,
+        {"k": 1, "tape_start_s": 55.04, "tape_end_s": 78.5, "hold_end_s": 84.52,
          "moments": [Moment(0.0, "start", None), Moment(17.04, "edge", "west"),
                      Moment(23.02, "slip", "west"), Moment(23.46, "pit", "west")]}]}
     lines = show(Router(), tape=tape)["calls"][first.match_id]["lines"]
@@ -194,23 +195,22 @@ def test_a_bout_s_lines_are_written_from_that_bout_alone():
 
 
 def test_a_bout_stopped_by_a_reset_is_called_a_draw_at_its_end_and_never_time_up():
-    reset = BoutResult(0, 0, "west", None, "draw", 12.0)
+    reset = BoutResult(0, 0, "west", None, "reset", 8.0)
     limit = BoutResult(1, 1, "east", "a", "marker", 45.0)
     first = replace(CUP.matches[0], bouts=(reset, limit, BoutResult(2, 2, "west", "a", "pit", 6.5)))
     cup = replace(CUP, matches=(first, *CUP.matches[1:]))
     tape = footage(cup)
     bouts = tape[first.match_id]["bouts"]
-    bouts[0].update(seconds=12.0, moments=[STEPS[0], STEPS[1], Moment(12.0, "time", "west")])
-    bouts[1].update(seconds=45.0,
-                    moments=[STEPS[0], Moment(4.0, "lead", "east"), Moment(45.0, "time", "east")])
+    bouts[0].update(moments=[STEPS[0], STEPS[1], Moment(8.0, "time", "west")])
+    bouts[1].update(moments=[STEPS[0], Moment(4.0, "lead", "east"), Moment(45.0, "time", "east")])
     router = Router()
     written = show(router, cup=cup, tape=tape)
     cut, full = (whats(moments) for moments in router.calls()[:2])
     assert cut[-1] == "The bout is stopped and called a draw."
     assert not any("Nobody wins" in what or "Time is up" in what for what in cut)
     assert cut[1] == "puller 2 pulls the marker over to their side of the pit."
-    # the draw is said at the bout's end: its 12 s are taped from 2 s to 10 s
-    assert [line["at_ms"] for line in written["calls"][first.match_id]["lines"]][:3] == [2000, 4667, 10000]
+    # the draw is said at the bout's end: its 8 s are taped from 2 s to 10 s
+    assert [line["at_ms"] for line in written["calls"][first.match_id]["lines"]][:3] == [2000, 6000, 10000]
     assert full[-1] == ("Time is up with the marker on puller 2's side. puller 2 wins the bout; "
                         "the score is puller 2 1, puller 4 0.")
 
@@ -222,13 +222,13 @@ def test_a_bout_lost_on_a_fault_is_called_a_fault_and_never_time_up():
     cup = replace(CUP, matches=(first, *CUP.matches[1:]))
     tape = footage(cup)
     for taped in tape[first.match_id]["bouts"][:2]:
-        taped.update(seconds=0.02, moments=[STEPS[0], Moment(0.02, "time", None)])
+        taped.update(moments=[STEPS[0], Moment(0.02, "time", None)])
     router = Router()
     show(router, cup=cup, tape=tape)
     one, two = (whats(moments) for moments in router.calls()[:2])
-    assert one[-1] == ("The bout is stopped: puller 2's action is not a number, a fault. puller 4 wins the bout; "
+    assert one[-1] == ("The bout is stopped: puller 2 gave no valid action, a fault. puller 4 wins the bout; "
                        "the score is puller 2 0, puller 4 1.")
-    assert two[-1] == "The bout is stopped: neither duck's action is a number, a fault each. Nobody wins the bout."
+    assert two[-1] == "The bout is stopped: neither duck gave a valid action, a fault each. Nobody wins the bout."
     assert not any("Time is up" in what for what in one + two)
 
 
@@ -236,13 +236,13 @@ def test_a_match_level_after_its_bouts_goes_to_the_rating_on_air():
     final = CUP.matches[-1]
     bouts = (BoutResult(0, 0, "west", "a", "pit", 6.5), BoutResult(1, 1, "east", "b", "pit", 6.5),
              BoutResult(2, 2, "west", None, "draw", 45.0), BoutResult(3, 3, "east", None, "draw", 45.0),
-             BoutResult(4, 4, "west", None, "draw", 20.0))  # the last one stopped by a reset
+             BoutResult(4, 4, "west", None, "reset", 20.0))
     level = replace(final, bouts=bouts, wins=(1, 1), decided_by="rating")
     cup = replace(CUP, matches=(*CUP.matches[:-1], level))
     tape = footage(cup)
     tape[level.match_id]["duration_ms"] = 50000
     for bout, taped in zip(bouts[2:], tape[level.match_id]["bouts"][2:]):
-        taped.update(seconds=bout.time_s, moments=[STEPS[0], Moment(bout.time_s, "time", None)])
+        taped.update(moments=[STEPS[0], Moment(bout.time_s, "time", None)])
     router = Router()
     show(router, cup=cup, tape=tape)
     told = [whats(moments) for moments in router.calls()[-5:]]
@@ -357,10 +357,29 @@ def test_match_footage_reads_each_bout_and_where_its_clip_tapes_it(tmp_path):
     store.put_clip(first.match_id, {"clip.json": taped_clip([0])})
     assert match_footage(store, replace(CUP, matches=CUP.matches[:2]), MANIFEST, {}) == {first.match_id: {
         "duration_ms": 30000, "bouts": [{"k": 0, "tape_start_s": 2.0, "tape_end_s": 10.02, "hold_end_s": 10.5,
-                                         "seconds": 8.02,
                                          "moments": moments(decode(blob), decode_string(blob)[1], MANIFEST.course)}]}}
     # the second match's clip is not ready: it is called on a later tick, as the first already is here
     assert match_footage(store, replace(CUP, matches=CUP.matches[:2]), MANIFEST, {first.match_id: {}}) == {}
+
+
+def test_a_bout_reset_before_its_first_frame_is_read_called_and_timed_on_its_tape(tmp_path):
+    """A duck at -inf on every joint makes MuJoCo reset on the first timed step: a bout with no frame.
+    Its moments are its start and its stop, both at 0 s, called on its tape's first second."""
+    blown = run_bout(MANIFEST, _Constant(-np.inf), reference_duck(MANIFEST), 1)
+    assert (blown.how, blown.trace.shape) == ("reset", (2, 0, 21))
+    store, first = LocalStore(tmp_path), CUP.matches[0]
+    reset = replace(first, bouts=(BoutResult(0, 1, "west", None, "reset", blown.time_s), *first.bouts[1:]))
+    cup = replace(CUP, matches=(reset, *CUP.matches[1:]))
+    store.put_cup_files("tug-of-war", 1, {
+        f"bouts/{first.match_id}-0.npz": encode(blown.trace, blown.settle, blown.string, blown.string_settle),
+        f"bouts/{first.match_id}-1.npz": stored_bout()})
+    store.put_clip(first.match_id, {"clip.json": taped_clip([0, 1])})
+    taped = match_footage(store, replace(cup, matches=cup.matches[:1]), MANIFEST, {})
+    assert taped[first.match_id]["bouts"][0]["moments"] == [Moment(0.0, "start", None), Moment(0.0, "time", None)]
+    router = Router()
+    lines = show(router, cup=cup, tape={**FOOTAGE, **taped})["calls"][first.match_id]["lines"]
+    assert whats(router.calls()[0])[-1] == "The bout is stopped and called a draw."
+    assert [line["at_ms"] for line in lines[:2]] == [2000, 2000]
 
 
 def test_a_cup_s_show_is_composed_from_its_store_and_the_cups_before_it(tmp_path):

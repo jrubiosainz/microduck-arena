@@ -9,7 +9,6 @@ booth cannot play is logged and asked for again, TRIES times in all, and then th
 import random
 from collections.abc import Collection, Mapping, Sequence
 
-from ..constants import CTRL_DT
 from ..cup import Cup, Entrant, MatchRecord
 from ..cupworker import load_cup
 from ..manifest import Manifest, load_event
@@ -137,9 +136,8 @@ def _told(cup: Cup, manifest: Manifest, match: MatchRecord, bout: BoutResult,
           aired: Sequence[Moment]) -> list[dict]:
     """A bout's moments as its call is told them, every duck by its on-air name: the last one
     adds the bout's result, and the deciding bout's the match's."""
-    # A draw before the time limit is a step MuJoCo had to reset: its last moment, the trace's
-    # last frame, is no time up.
-    reset = bout.how == "draw" and bout.time_s < manifest.bout.time_limit_s - CTRL_DT / 2
+    # A bout MuJoCo had to reset: its last moment, the trace's last frame, is no time up.
+    reset = bout.how == "reset"
     a, b = cup.entrants[match.a].name, cup.entrants[match.b].name
     west, east = (a, b) if bout.a_side == "west" else (b, a)
     ducks = {"west": west, "east": east}
@@ -157,8 +155,8 @@ def _told(cup: Cup, manifest: Manifest, match: MatchRecord, bout: BoutResult,
         elif moment.kind == "time" and reset:
             whats.append("The bout is stopped and called a draw.")
         elif moment.kind == "time" and bout.how == "fault":
-            whats.append(f"The bout is stopped: {b if bout.winner == 'a' else a}'s action is not a number, a fault."
-                         if bout.winner else "The bout is stopped: neither duck's action is a number, a fault each.")
+            whats.append(f"The bout is stopped: {b if bout.winner == 'a' else a} gave no valid action, a fault."
+                         if bout.winner else "The bout is stopped: neither duck gave a valid action, a fault each.")
         elif moment.kind == "time":
             whats.append(f"Time is up with the marker on {duck}'s side." if duck
                          else "Time is up with the marker dead centre.")
@@ -225,8 +223,8 @@ def write_show(cup: Cup, *, manifest: Manifest, history: Sequence[Cup], lore: Lo
                              _told(cup, manifest, match, bout, aired), first, lore=lore,
                              provider=provider, model=model,
                              time_limit_s=manifest.bout.time_limit_s)
-            start, end, seconds = tape["tape_start_s"], tape["tape_end_s"], tape["seconds"]
-            lines += [{"at_ms": round(1000 * (start + (end - start) * moment.at_s / seconds)), **line}
+            # The clip tapes a bout at its own speed: a moment is heard that long into its tape.
+            lines += [{"at_ms": round(1000 * (tape["tape_start_s"] + moment.at_s)), **line}
                       for moment, line in zip(aired, written["lines"])]
             # A bout ends on its tape's last frame, and the clip holds it until the next bout or the
             # outro: the line telling its result is heard whole by then.
@@ -252,8 +250,7 @@ def match_footage(store, cup: Cup, manifest: Manifest, called: Collection[str]) 
         for tape in landscape["timing"]["bouts"]:
             blob = store.cup_file(cup.event_id, cup.number, f"bouts/{match.match_id}-{tape['k']}.npz")
             trace, (_, string) = decode(blob), decode_string(blob)
-            bouts.append({**tape, "seconds": trace.shape[1] * CTRL_DT,
-                          "moments": moments(trace, string, manifest.course)})
+            bouts.append({**tape, "moments": moments(trace, string, manifest.course)})
         footage[match.match_id] = {"duration_ms": round(landscape["seconds"] * 1000), "bouts": bouts}
     return footage
 

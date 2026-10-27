@@ -27,6 +27,12 @@ def test_a_bout_nobody_pulls_is_its_start_and_the_time():
     assert moments(t, straight(t), COURSE) == [START, Moment(10.0, "time", None)]
 
 
+def test_a_bout_reset_before_its_first_frame_is_its_start_and_its_stop():
+    """MuJoCo reset on the first timed step: the bout has no frame, and stops at 0 s on the centre line."""
+    t = bout(0)
+    assert moments(t, straight(t), COURSE) == [START, Moment(0.0, "time", None)]
+
+
 def test_the_lead_changes_when_the_marker_crosses_lead_m():
     t = bout()
     t[:, 100:300, 0] -= 0.05

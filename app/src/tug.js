@@ -29,7 +29,8 @@ export const entrySide = (seed) => 1 - (seed % 2);
 const REFERENCE = { livery: "charcoal", name: "Reference" };
 
 /** How an entry's bout ended, in its own words (arena/tug.py's seed statuses). */
-export const BOUT_WORDS = { won: "won the pull", lost: "lost the pull", draw: "draw", pit_won: "pulled it in", pit_lost: "dragged in" };
+export const BOUT_WORDS = { won: "won the pull", lost: "lost the pull", draw: "draw", pit_won: "pulled it in", pit_lost: "dragged in",
+  fault: "faulted" };
 
 /**
  * A rated run's bout as a lane of the viewer, from its two traces (west first) and, for a clip, their

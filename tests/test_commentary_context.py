@@ -236,5 +236,9 @@ def test_a_rated_run_states_its_ground_its_wins_and_its_gap_in_centimetres():
     dragged = dataclasses.replace(mine, trace_seed=5)
     assert {f.ref: f for f in result_facts(dragged, manifest, [leader, dragged], [])}["run#/result"].tags == ("pit_lost",)
     assert facts["run#/board"].text == "On the Tug of War board this run ranks 2 of 2, 3.80 cm behind the leader, @carol."
+    broken = dataclasses.replace(mine, score=-200.0, per_seed=tuple(SeedResult(s, "fault", 0.02, -200.0) for s in range(1, 6)))
+    assert {f.ref: f for f in result_facts(broken, manifest, [leader, broken], [])}["run#/result"].text.endswith(
+        "it won 0 of them. It faulted in 5, 200 cm less each: the bout stopped because the duck gave no valid action, "
+        "or broke the simulation.")
     assert "close" in facts["run#/board"].tags
     assert nature(manifest)[1] == ("tug",)

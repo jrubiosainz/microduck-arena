@@ -23,7 +23,8 @@ describe("the tug's arithmetic, as the server's", () => {
     expect(lane.string).toEqual({ trace: "st" });
     expect(ratingLane(["tw", "te"], null, { trace: "st" }, { traceSeed: 1, livery: "charcoal", name: "@nico" }).ducks[1]).toEqual(
       { trace: "te", livery: "classic", name: "Reference" });
-    expect(BOUT_WORDS).toEqual({ won: "won the pull", lost: "lost the pull", draw: "draw", pit_won: "pulled it in", pit_lost: "dragged in" });
+    expect(BOUT_WORDS).toEqual({ won: "won the pull", lost: "lost the pull", draw: "draw", pit_won: "pulled it in", pit_lost: "dragged in",
+      fault: "faulted" });
   });
   it("holds a bout from duck to duck", () => {
     [A[0] - 0.15, B[0] + 0.15].forEach((v, i) => expect(tugSpan([B, A])[i]).toBeCloseTo(v, 9));

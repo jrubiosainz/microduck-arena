@@ -82,6 +82,7 @@ describe("a seed's line", () => {
   it("says the ground a bout won in centimetres, the entry's side and how it ended", () => {
     expect(seedText({ seed: 3, status: "won", time_s: 45, score_cm: 10.14 })).toBe("+10.1 cm · west · won the pull");
     expect(seedText({ seed: 2, status: "pit_lost", time_s: 4.5, score_cm: -143.42 })).toBe("-143.4 cm · east · dragged in");
+    expect(seedText({ seed: 5, status: "fault", time_s: 0.02, score_cm: -200 })).toBe("-200.0 cm · west · faulted");
   });
   it("keeps a race's time, or how it ended", () => {
     expect(seedText({ seed: 1, status: "finish", time_s: 12.3456 })).toBe("12.346s");

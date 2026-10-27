@@ -14,6 +14,7 @@ from ..index import by_user, leaderboard, sort_key, standing
 from ..manifest import Manifest, higher_wins
 from ..points import Receipt
 from ..store import RunRecord
+from ..tug import FAULT_PITS
 
 
 @dataclass(frozen=True)
@@ -82,9 +83,13 @@ ACT_TAGS = {"first_event": "first-run", "own_best": "pb", "podium": "podium"}
 def _rating_result(record: RunRecord, manifest: Manifest) -> Fact:
     bonus = manifest.rating.pit_bonus_cm
     won = sum(1 for s in record.per_seed if s.status in ("won", "pit_won"))
+    faults = sum(1 for s in record.per_seed if s.status == "fault")
     text = (f"The rating is {record.score:.1f} cm: the ground the duck won from the reference duck in "
             f"{len(record.per_seed)} bouts, on average, {bonus:g} cm more for dragging it into the pit and "
             f"{bonus:g} cm less for being dragged in; it won {won} of them.")
+    if faults:
+        text += (f" It faulted in {faults}, {FAULT_PITS * bonus:g} cm less each: the bout stopped because the duck "
+                 f"gave no valid action, or broke the simulation.")
     traced = next(s.status for s in record.per_seed if s.seed == record.trace_seed)
     return Fact("run#/result", text, "result", (traced,))
 

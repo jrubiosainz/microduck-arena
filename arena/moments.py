@@ -21,8 +21,9 @@ class Moment:
     """`side` is, per kind: start, None; lead, the new leader; ground, the side the marker was
     pulled to; edge, slip and pit, the duck at its edge, slipping, dropping in; time, the side the
     marker favours at the limit (None when it is on the centre line). `time` is the trace's last
-    frame: the time limit, or, for a bout a MuJoCo reset (a draw) or a fault ended early, where it
-    stopped, which show.py tells as such, never as time up."""
+    frame: the time limit, or, for a bout a MuJoCo reset or a fault ended early, where it stopped,
+    which show.py tells as such, never as time up; 0 s, on the centre line, for a bout reset on its
+    first step, which has no frame."""
 
     at_s: float
     kind: str
@@ -68,7 +69,8 @@ def moments(trace: np.ndarray, string: np.ndarray, course: Tug) -> list[Moment]:
             add(j, "pit", side)
 
     if not any(kind == "pit" for _, kind, _ in found):
-        side = SIDES[0] if x[-1] < 0 else SIDES[1] if x[-1] > 0 else None
+        end = x[-1] if frames else 0.0
+        side = SIDES[0] if end < 0 else SIDES[1] if end > 0 else None
         add(frames - 1, "time", side)
 
     found.sort(key=lambda m: (m[0], KINDS.index(m[1]), SIDES.index(m[2]) if m[2] else 0))

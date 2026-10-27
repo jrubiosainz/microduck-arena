@@ -19,9 +19,9 @@ const traced = (status) => ({ ...tugRun, per_seed: [{ seed: 1, status: "lost", t
 
 describe("clipVerdict", () => {
   it("stamps a rated run with how its replayed bout ended, a pass for a win", () => {
-    expect(["won", "lost", "draw", "pit_won", "pit_lost"].map((s) => clipVerdict(traced(s)))).toEqual([
+    expect(["won", "lost", "draw", "pit_won", "pit_lost", "fault"].map((s) => clipVerdict(traced(s)))).toEqual([
       { stamp: "WON THE PULL", pass: true }, { stamp: "LOST THE PULL", pass: false }, { stamp: "DRAW", pass: false },
-      { stamp: "PULLED IT IN", pass: true }, { stamp: "DRAGGED IN", pass: false }]);
+      { stamp: "PULLED IT IN", pass: true }, { stamp: "DRAGGED IN", pass: false }, { stamp: "FAULTED", pass: false }]);
   });
   it("stamps a race and a performance as it always has", () => {
     const race = { event, seeds_finished: 5 };
