@@ -40,6 +40,10 @@ RENDER_BUDGET_S = 900.0
 JOB_FLAVOR = "t4-small"
 # Past this a job is stuck rather than slow, and HF ends it: what one may cost.
 JOB_TIMEOUT = "30m"
+# How many jobs run at once at most (ARENA_CLIP_JOBS). A cup owes a clip for each of its matches the moment it is
+# played, 62 for 23 entrants, two hours before its premiere: at about 8 min a job, sixteen at once render them in about
+# half an hour; four took two. Each job costs the same, however many run beside it.
+JOBS_AT_ONCE = 16
 # The longest match's clip in frames: five full 45 s bouts with their settles and their 6 s holds,
 # between the title and the outro (app/src/clip/match.js matchPlan); a test ties it to the tug's
 # [bout] and [start].
@@ -155,7 +159,7 @@ class ClipJobs:
 
     def __init__(self, store, *, space_id: str | None, dataset: str | None, token: str | None,
                  jobs_token: str | None = None, namespace: str | None = None,
-                 flavor: str = JOB_FLAVOR, running: int = 4,
+                 flavor: str = JOB_FLAVOR, running: int = JOBS_AT_ONCE,
                  api=None, log=print, enabled: bool = True, backfill: bool = False,
                  landed=lambda run_id: None, now=time.monotonic):
         self.store = store

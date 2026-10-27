@@ -18,6 +18,7 @@ from arena.clips import (
     CLIP_VERSION,
     JOB_TIMEOUT,
     JOB_TRIES,
+    JOBS_AT_ONCE,
     MATCH_FRAMES,
     MATCH_JOB_TIMEOUT,
     RETRY_S,
@@ -360,6 +361,19 @@ def test_a_rated_run_is_described_by_its_rating():
     record = make_record(user="eve", event_id="tug-of-war", score=4.2)
     assert describe(record, Standing(2, True, []), load_event("tug-of-war")) == (
         "@eve's duck holds a 4.2 cm rating on the Tug of War, #2 on the board.")
+
+
+def test_a_cup_s_match_clips_render_sixteen_at_once(tmp_path, monkeypatch):
+    """A 23-entrant cup owes 62 match clips two hours before it premieres: four at once took about two hours."""
+    api = FakeJobs()
+    jobs = jobs_for(LocalStore(tmp_path), api)
+    for k in range(20):
+        jobs.enqueue(f"tug-of-war-0001-{k:03d}")
+    jobs.tick()
+    assert JOBS_AT_ONCE == 16 and [job["labels"]["run"] for job in api.launched] == [
+        f"tug-of-war-0001-{k:03d}" for k in range(16)]
+    monkeypatch.delenv("ARENA_CLIP_JOBS", raising=False)
+    assert ArenaConfig.from_env(store_dir=tmp_path, dev_user="eve").clip_jobs == JOBS_AT_ONCE
 
 
 def test_the_jobs_say_where_a_clip_stands(tmp_path):

@@ -120,7 +120,7 @@ is the list — and is launched again later, and at every boot.
 | `ARENA_CLIP_FLAVOR` | variable | the job's hardware, default `t4-small` |
 | `ARENA_CLIP_NAMESPACE` | variable | the account that runs and pays for the jobs, default the Space's owner |
 | `ARENA_CLIP_TOKEN` | secret | the token that launches the jobs, with `job.read` and `job.write` on that account; default `HF_TOKEN`. The jobs themselves write to the dataset with `HF_TOKEN` |
-| `ARENA_CLIP_JOBS` | variable | jobs running at once at most, default 4 |
+| `ARENA_CLIP_JOBS` | variable | jobs running at once at most, default 16: a cup's match clips render in about half an hour |
 | `ARENA_CLIP_PARALLEL` | variable | layouts a job renders at once, default half its cores |
 | `ARENA_CLIP_BACKFILL` | variable | `1` also owes a clip to every run that has none — the log as it stood before clips — newest first, behind fresh publishes; once caught up a boot finds nothing to do |
 | `ARENA_ORIGIN` | variable | where the recorder's Chrome loads `clip.html`, if not this server's own loopback address |
