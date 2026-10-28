@@ -45,6 +45,7 @@ UNLIT = {"Darwin-arm64": ("614878b4b905b518e98d8c1eb0198651c504cd501708d76bbf9d7
 def test_a_lane_without_lights_runs_bit_for_bit_as_before(sprint, walker):
     outcome = run_once(sprint, walker, seed=1, command=sprint.command_at(STEADY_VX))
     assert outcome.status == "finish" and outcome.time_s == pytest.approx(14.45, abs=1e-9)
+    assert outcome.caught_frame is None
     assert (sha256(outcome.trace.tobytes()).hexdigest(), sha256(outcome.settle.tobytes()).hexdigest()) == UNLIT[PLATFORM]
 
 

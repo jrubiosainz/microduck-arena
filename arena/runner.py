@@ -60,6 +60,10 @@ from .timeline import Start, Timeline
 
 _WORLD_DOWN = np.array([0.0, 0.0, -1.0])
 
+# How long a caught duck is simulated on with its motors off, so its replay shows it fall
+# and lie still. It changes no score (Plan C may retune it).
+COLLAPSE_S = 2.0
+
 
 @dataclass(frozen=True)
 class RunOutcome:
@@ -76,6 +80,9 @@ class RunOutcome:
     # settle step, so a replay can start where the simulation did. Shaped as the
     # trace is, with settle steps + 1 frames.
     settle: np.ndarray
+    # The index in `trace` of the step a duck was caught on; its trace runs on
+    # COLLAPSE_S more seconds, past the time limit if need be.
+    caught_frame: int | None = None
 
 
 @dataclass(frozen=True)
@@ -352,7 +359,9 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     max_steps = round(manifest.time_limit_s / CTRL_DT)
     fall_steps_needed = round(manifest.termination.fall_hold_s / CTRL_DT)
 
-    frames = np.empty((1, max_steps, TRACE_WIDTH), dtype=np.float32)
+    collapse_steps = round(COLLAPSE_S / CTRL_DT) if lights is not None else 0
+    frames = np.empty((1, max_steps + collapse_steps, TRACE_WIDTH), dtype=np.float32)
+    caught_frame = None
     tipped_for = 0
     status = "timeout"
     time_s = None
@@ -414,6 +423,7 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
                 mark = here.copy()
             elif schedule.watch[step] and float(np.hypot(*(here - mark))) > lights.tolerance_m:
                 status = "caught"
+                caught_frame = written - 1
                 break
 
         progress = float(direction @ data.qpos[0:3]) - start_progress
@@ -421,6 +431,17 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
             status = "finish"
             time_s = (step * DECIMATION + crossing + 1) * TIMESTEP
             break
+
+    # A caught duck's motors go off, its gearboxes left as the last drive wrote them
+    # (measured: it folds and lies still within a second): no policy, no servo drive.
+    if status == "caught":
+        data.ctrl[adr.act] = 0.0
+        for _ in range(collapse_steps):
+            for _ in range(DECIMATION):
+                mujoco.mj_step(model, data)
+            mujoco.mj_forward(model, data)
+            sim.record(frames[:, written])
+            written += 1
 
     return RunOutcome(
         seed=seed,
@@ -430,6 +451,7 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
         start_progress_m=start_progress,
         trace=frames[0, :written].copy(),
         settle=settle[0],
+        caught_frame=caught_frame,
     )
 
 

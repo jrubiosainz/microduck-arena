@@ -10,12 +10,13 @@ from itertools import pairwise
 import numpy as np
 import pytest
 
-from arena.constants import CTRL_DT
+from arena.actuator import Servos
+from arena.constants import CTRL_DT, DECIMATION
 from arena.course import compile_course
 from arena.lights import Red, served, timetable
 from arena.manifest import Lights, ManifestError, all_events, load_event, load_manifest
 from arena.policy import load_policy
-from arena.runner import _LightSteps, run_once
+from arena.runner import COLLAPSE_S, _LightSteps, run_once
 from tests.test_manifest import GOOD, STAGE, write_manifest
 from tests.test_runner import REFERENCE, STEADY_VX
 
@@ -251,15 +252,31 @@ def test_the_duck_settles_standing_walks_on_green_and_is_asked_to_stand_on_red(h
     np.testing.assert_array_equal(np.array(listener.twists), np.array(expected))
 
 
-def test_a_duck_that_moves_while_the_giant_looks_is_caught(heist, walker):
-    # A tolerance nothing alive stays within: the first step the giant watches
-    # catches the duck, and not one before it. It walked through the first 0.4 s
-    # of the red, while the giant was turning round, and that did not count.
+def test_a_duck_caught_moving_collapses_where_it_stood(heist, walker, monkeypatch):
+    # Judged to 1 µm: the first step the giant watches catches the duck, and not one before it.
+    drives, drive = [], Servos.drive
+    monkeypatch.setattr(Servos, "drive", lambda self, data, target: (drives.append(1), drive(self, data, target)))
+    event, listener = _short(heist, 3.0, tolerance_m=1e-6), _Listener(walker)
+    outcome = run_once(event, listener, seed=1, command=event.command_at(STEADY_VX))
+    caught, settle = _first_look(event, 1), round(event.start.settle_s / CTRL_DT)
+    assert (outcome.status, outcome.time_s, outcome.caught_frame) == ("caught", None, caught)
+    assert len(outcome.trace) == caught + 1 + round(COLLAPSE_S / CTRL_DT)
+    # Its motors go off on the catch: no policy, no servo drive (one at reset, five a step up to it).
+    assert len(listener.twists) == settle + caught + 1
+    assert len(drives) == 1 + (DECIMATION + 1) * (settle + caught + 1)
+    # It folds up and lies there: measured 6-9 cm lower and under 0.5 mm of motion (plan-a/still.py).
+    assert outcome.trace[-1, 2] < outcome.trace[caught, 2] - 0.04
+    assert np.ptp(outcome.trace[-25:, 0:3], axis=0).max() < 0.002
+
+
+def test_a_duck_caught_on_the_last_step_collapses_past_the_limit(heist, walker):
     event = _short(heist, 3.0, tolerance_m=1e-6)
-    outcome = run_once(event, walker, seed=1, command=event.command_at(STEADY_VX))
-    assert outcome.status == "caught"
-    assert outcome.time_s is None
-    assert len(outcome.trace) == _first_look(event, 1) + 1
+    caught = _first_look(event, 1)
+    last = dataclasses.replace(event, time_limit_s=round((caught + 1) * CTRL_DT, 2))
+    assert round(last.time_limit_s / CTRL_DT) == caught + 1
+    outcome = run_once(last, walker, seed=1, command=last.command_at(STEADY_VX))
+    assert (outcome.status, outcome.caught_frame) == ("caught", caught)
+    assert len(outcome.trace) == caught + 1 + round(COLLAPSE_S / CTRL_DT)
 
 
 def test_the_event_runs_end_to_end(heist, walker):
@@ -270,5 +287,7 @@ def test_the_event_runs_end_to_end(heist, walker):
     assert model.nu == 14
     outcome = run_once(heist, walker, seed=1, model=model, command=heist.command_at(STEADY_VX))
     assert outcome.status in {"finish", "fall", "timeout", "caught"}
-    assert 0 < len(outcome.trace) <= round(heist.time_limit_s / CTRL_DT)
+    collapse = round(COLLAPSE_S / CTRL_DT) if outcome.status == "caught" else 0
+    assert 0 < len(outcome.trace) <= round(heist.time_limit_s / CTRL_DT) + collapse
+    assert (outcome.caught_frame is not None) == (outcome.status == "caught")
     assert (outcome.time_s is not None) == (outcome.status == "finish")
