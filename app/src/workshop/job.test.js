@@ -30,6 +30,7 @@ const JOB = {
 const CODE = { fork: null, changes: [], identity: true, commit: "abc1234", unpushed: 0 };
 const SPRINT = { id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null, metric: "time", rig: "legs",
   length_m: 2, slope_deg: 0, sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21 };
+const HEIST = { ...SPRINT, id: "sock-heist-6m", length_m: 6, lights: { turn_s: 0.4, tolerance_m: 0.03, timetables: {} } };
 const TALENT = { id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", course: "stage",
   metric: "votes", rig: "legs", time_limit_s: 20, vote: { ballot_min: 2 },
   size_m: [2.6, 3.8], max_ducks: 4, edge_margin_m: 0.3, min_spacing_m: 0.3 };
@@ -73,6 +74,17 @@ describe("a training's page", () => {
     expect(api.getCheckpoint).toHaveBeenCalledWith("sprint-2m", "first", 500);
     expect(viewer.setLanes).toHaveBeenLastCalledWith([expect.objectContaining({ name: "checkpoint 500", tier: "trial" })], SPRINT);
     expect(root.querySelector(".output pre").textContent).toContain("uv run --no-sync train");
+    expect(viewer.setLanes.mock.lastCall[0][0]).not.toHaveProperty("caught");
+  });
+
+  it("replays a sock heist checkpoint on its trace seed, caught where it was caught", async () => {
+    api.getJob.mockResolvedValue(JOB);
+    api.getCheckpoint.mockResolvedValueOnce({ checkpoint: 500, score: 30, ducks: 1, traces: [new Float32Array(21)],
+      trace_seed: 4, caught_frame: 120, cast: [{ policy: "self", rig: null, start: null, sound: null }] });
+    const root = document.createElement("div");
+    await open(root, HEIST);
+    await settle();
+    expect(viewer.setLanes).toHaveBeenLastCalledWith([expect.objectContaining({ traceSeed: 4, caught: 120 })], HEIST);
   });
 
   it("a tug's training rates its checkpoints in centimetres and replays the bout against the reference", async () => {

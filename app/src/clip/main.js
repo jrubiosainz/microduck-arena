@@ -5,7 +5,7 @@
 
 import { getBoutSettle, getBoutString, getBoutTrace, getMatch, getRun, getSettle, getString, getTrace } from "../api.js";
 import { boutLane } from "../bouts.js";
-import { credit, stageDucks } from "../cast.js";
+import { credit, replaySeed, stageDucks } from "../cast.js";
 import { LANE_COLORS } from "../course.js";
 import { formatScore, isStage, isTug } from "../format.js";
 import { lanesFor } from "../lanes.js";
@@ -117,9 +117,10 @@ async function main() {
   const tug = isTug(run.event);
   // One trace and one settle per duck: a race's lane has one, a stage's troupe every duck; a tug's
   // lane its string too, settle and all.
+  const seed = replaySeed(run.event, run); // a lights event: every lane plays the run's own trace seed
   const [traces, settles, strings] = await Promise.all([
-    Promise.all(lanes.map((lane) => getTrace(lane.run_id))),
-    Promise.all(lanes.map((lane) => getSettle(lane.run_id).then(standing))),
+    Promise.all(lanes.map((lane) => getTrace(lane.run_id, seed))),
+    Promise.all(lanes.map((lane) => getSettle(lane.run_id, seed).then(standing))),
     Promise.all(tug ? lanes.map((lane) => getString(lane.run_id)) : []),
   ]);
   // Every lane from where its ducks stand, all in step.
@@ -147,7 +148,11 @@ async function main() {
           ? { ducks }
           : tug
             ? ratingLane(traces[i], settles[i], strings[i], { traceSeed: run.trace_seed, livery: lane.livery, name: `@${lane.user}` })
-            : { trace: replays[i], lead: settle }),
+            : {
+                trace: replays[i],
+                lead: settle,
+                ...(run.event.lights && { traceSeed: run.trace_seed, caught: traces[i].caught }),
+              }),
       }))
       // The camera stands beyond the last lane: reversed, the author's duck is
       // the one in the foreground, still in the colour its page gives it.

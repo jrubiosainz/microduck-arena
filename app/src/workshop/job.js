@@ -283,7 +283,8 @@ export async function mountJob(root, { status, account, route }) {
     viewer.setLanes([stage
       ? { name, livery: "classic", ducks: stageDucks(body.cast, body.traces, null, { livery: "classic", eventRig: event.rig, lead: 0 }) }
       : tug ? ratingLane(body.traces, null, { trace: body.string }, { traceSeed: body.trace_seed, livery: "classic", name })
-      : { trace: body.traces[0], tier: "trial", livery: "classic", name }], event);
+      : { trace: body.traces[0], tier: "trial", livery: "classic", name,
+          ...(event.lights && { traceSeed: body.trace_seed, caught: body.caught_frame }) }], event);
   }
 
   async function pick(n) {
