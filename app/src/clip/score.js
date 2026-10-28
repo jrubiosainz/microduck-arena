@@ -6,7 +6,7 @@ import { choirOf, voiceEvents } from "../duck-voice.js";
 import { isStage, isTug } from "../format.js";
 import { FALL_FILE, GIANT_RATE, heistCues } from "../heist-sound.js";
 import { timetableOf } from "../lights.js";
-import { CTRL_DT, frameAt } from "../replay.js";
+import { CTRL_DT, frameAt, frameCount } from "../replay.js";
 import { BOUT_WORDS } from "../tug.js";
 
 /** Cue gains, measured on a real render: the horn 5 dB over the crowd's surge,
@@ -22,14 +22,14 @@ function fnv(text) {
   return hash;
 }
 
-/** The author's progress down the course, sampled through the tape: every
- * PROGRESS_EVERY_S of the tape, however fast the tape plays the race. */
+/** The author's progress down the course, sampled every PROGRESS_EVERY_S of the tape; the tape
+ * can run on past the author's lane, which holds its last frame. */
 function progress(trace, plan, lengthM, start) {
   const samples = [];
-  for (let t = 0; t <= plan.steps * CTRL_DT; t += PROGRESS_EVERY_S * plan.speed) {
-    const step = Math.min(plan.steps - 1, Math.round(t / CTRL_DT));
+  for (let t = 0; t <= plan.steps * CTRL_DT; t += PROGRESS_EVERY_S) {
+    const step = Math.min(plan.steps - 1, frameCount(trace) - 1, Math.round(t / CTRL_DT));
     const value = Math.max(0, Math.min(1, frameAt(trace, step)[0] / lengthM));
-    samples.push({ second: start + t / plan.speed, value });
+    samples.push({ second: start + t, value });
   }
   return samples;
 }

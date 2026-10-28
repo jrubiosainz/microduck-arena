@@ -160,7 +160,11 @@ async function main() {
     run.event,
     { loop: false },
   );
-  const plan = clipPlan(frameCount(traces[0][0]), config.tape_max_s, settle, config.speed);
+  const plan = clipPlan(
+    run.event.lights ? Math.max(...traces.map(([t]) => frameCount(t))) : frameCount(traces[0][0]),
+    config.tape_max_s,
+    settle,
+  );
   const score = clipScore({ run, plan, trace: replays[0], ducks, lanes: traces.map((t) => ({ trace: t[0], caught: t.caught })) });
   const crowdDirection = stadiumDirection(score.crowd ?? {});
   letter(run);
@@ -171,9 +175,8 @@ async function main() {
     const step = stepAt(plan, i);
     viewer.frame(step * CTRL_DT, travelAt(plan, i), i / plan.fps, crowdDirection);
     // The clock starts where the record's does, after the settle, and stops on
-    // the author's last step while the rivals race on. A time-lapse says so.
-    const lapse = plan.speed > 1 ? ` ×${plan.speed}` : "";
-    $("osd-clock").textContent = clock(Math.max(0, Math.min(step, plan.steps - 1) - plan.settle)) + lapse;
+    // the author's last step while the rivals race on.
+    $("osd-clock").textContent = clock(Math.max(0, Math.min(step, plan.steps - 1) - plan.settle));
     document.documentElement.dataset.act = act;
     $("intro").hidden = act !== "intro";
     $("stamp").hidden = act !== "outro";
