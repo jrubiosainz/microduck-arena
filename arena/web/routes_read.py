@@ -25,6 +25,7 @@ from ..cup import reached
 from ..cupworker import all_cups
 from ..evaluate import seed_row
 from ..index import leaderboard, standing
+from ..lights import served
 from ..manifest import Manifest, ManifestError, all_events, load_event
 from ..points import boards_by_user, receipts, revealed_final, standings
 from ..store import CLIP_MEDIA, RunRecord, clip_version
@@ -88,10 +89,9 @@ def event_summary(manifest: Manifest) -> dict:
             "sweep_hi": manifest.sweep.hi,
             "sweep_step": manifest.sweep.step,
             "sweep_count": len(manifest.sweep.speeds()),
-            # Red light, green light: the caller's whole schedule, or null. It is
-            # the same on every seed, so the page draws the caller and its light
-            # from the event alone, in step with any replay of it.
-            "lights": manifest.lights.to_dict() if manifest.lights else None,
+            # Every seed's timetable, so the page draws the giant in step with
+            # any replay and never draws a random number itself.
+            "lights": served(manifest) if manifest.lights else None,
         }
     elif manifest.course.kind == "stage":
         # The stage's floor and its cap, so the server's placement rules, the workshop's plan and

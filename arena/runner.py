@@ -54,7 +54,8 @@ from .constants import (
     TRACE_WIDTH,
 )
 from .course import compile_course, compile_stage, duck_prefix, ramp_dir
-from .manifest import Lights, Manifest, Steering
+from .lights import Red, timetable
+from .manifest import Manifest, Steering
 from .timeline import Start, Timeline
 
 _WORLD_DOWN = np.array([0.0, 0.0, -1.0])
@@ -284,11 +285,11 @@ def _start(
 
 @dataclass(frozen=True)
 class _LightSteps:
-    """A lights schedule laid over a run's timed control steps, indexed by step.
+    """The giant's timetable laid over a run's timed control steps, indexed by step.
 
-    `red`: the duck is asked to stand during that step. `mark`: the caller
-    has just finished turning round once that step is over, so where the duck
-    stands then is where it has to stay. `watch`: the caller is looking once that
+    `red`: the duck is asked to stand during that step. `mark`: the giant
+    has just finished turning its head once that step is over, so where the duck
+    stands then is where it has to stay. `watch`: the giant is looking once that
     step is over, so a duck that has strayed from its mark by then is caught.
     """
 
@@ -297,22 +298,17 @@ class _LightSteps:
     watch: np.ndarray
 
     @classmethod
-    def of(cls, lights: Lights, steps: int) -> "_LightSteps":
+    def of(cls, reds: tuple[Red, ...], turn: int, steps: int) -> "_LightSteps":
         red, mark, watch = (np.zeros(steps, dtype=bool) for _ in range(3))
-        turn = round(lights.turn_s / CTRL_DT)
-        phase, onset = 0, 0
-        while onset < steps:
-            index = phase % len(lights.green_s)
-            onset += round(lights.green_s[index] / CTRL_DT)
-            length = round(lights.red_s[index] / CTRL_DT)
-            # Step i ends at (i + 1) * CTRL_DT, so the step that ends as the caller
+        for r in reds:
+            # Step i ends at (i + 1) * CTRL_DT, so the step that ends as the giant
             # faces the lanes, turn steps into the red, is onset + turn - 1:
-            # with no turn at all, the last green step.
-            if onset + turn - 1 < steps:
-                mark[onset + turn - 1] = True
-            red[onset:onset + length] = True
-            watch[onset + turn:onset + length] = True
-            phase, onset = phase + 1, onset + length
+            # with no turn at all, the last green step. A first green is at least
+            # one step, so that is never below 0.
+            if r.onset + turn - 1 < steps:
+                mark[r.onset + turn - 1] = True
+            red[r.onset:r.onset + r.length] = True
+            watch[r.onset + turn:r.onset + r.length] = True
         return cls(red=red, mark=mark, watch=watch)
 
 
@@ -334,12 +330,12 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     # so a loaded event cannot be mutated in place by anything downstream.
     #
     # `command` overrides it for one run, which is how the speed sweep works
-    # (see evaluate.py). The event still owns the shape of the command; a caller
-    # only gets to say how fast.
+    # (see evaluate.py). The event still owns the shape of the command; the
+    # sweep only gets to say how fast.
     command = np.asarray(manifest.command if command is None else command, dtype=np.float64)
     model = model if model is not None else compile_course(manifest)
 
-    # Red light, green light (arena.manifest.Lights): under a red light the duck
+    # The giant's lights (arena.manifest.Lights): under a red light the duck
     # is asked to stand, its command's twist zeroed and its head and body left as
     # declared. It settles standing, too, on the line, and walks off when the
     # clock starts on the first green: nobody gets a flying start.
@@ -364,7 +360,9 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     written = 0
 
     if lights is not None:
-        schedule = _LightSteps.of(lights, max_steps)
+        schedule = _LightSteps.of(
+            timetable(lights, manifest.id, seed, max_steps), round(lights.turn_s / CTRL_DT), max_steps
+        )
         mark = None
     # A long lane's heading hold (arena.manifest.Steering) turns the duck on the
     # steps it is asked to walk. Not in the settle, where it stands on the line,
@@ -406,9 +404,9 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
             status = "fall"
             break
 
-        # Caught is judged after the fall and before the finish: a duck the caller
+        # Caught is judged after the fall and before the finish: a duck the giant
         # sees moving does not get to cross the line on that step. A duck still
-        # coasting while the caller turns round is not seen, and if it crosses then
+        # coasting while the giant turns its head is not seen, and if it crosses then
         # it has finished.
         if lights is not None:
             here = data.qpos[adr.free:adr.free + 2]

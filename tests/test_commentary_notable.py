@@ -73,7 +73,7 @@ def test_leading_two_events_publishing_on_every_event_and_a_busy_day():
     roller = run("alice", 9.0, "2026-09-10T09:30:00Z", event="roller-sprint-2m")
     tug = run("alice", 4.0, "2026-09-10T09:15:00Z", event="tug-of-war")
     # Published, but no lead: a board's top run that finished no seed leads nothing.
-    lights = run("alice", 60.0, "2026-09-10T10:00:00Z", finished=0, event="red-light-green-light-15m")
+    lights = run("alice", 60.0, "2026-09-10T10:00:00Z", finished=0, event="sock-heist-6m")
     first = run("alice", 12.9, "2026-09-11T08:00:00Z")
     second = run("alice", 12.7, "2026-09-11T09:00:00Z")
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z")

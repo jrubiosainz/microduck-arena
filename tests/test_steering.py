@@ -9,12 +9,12 @@ import pytest
 from arena.constants import CTRL_DT
 from arena.manifest import ManifestError, Steering, all_events, load_event, load_manifest
 from arena.policy import load_policy
-from arena.runner import _LightSteps, _steered, run_once
-from tests.test_lights import _Listener, _short
+from arena.runner import _steered, run_once
+from tests.test_lights import _Listener, _schedule, _short
 from tests.test_manifest import GOOD, STAGE, write_manifest
 from tests.test_runner import REFERENCE
 
-EVENT = "red-light-green-light-15m"
+EVENT = "sock-heist-6m"
 
 FIELDS = {"lookahead_m": "0.5", "gain": "2.0", "max_yaw_rate": "1.0"}
 
@@ -30,7 +30,7 @@ def write_steering(tmp_path, **overrides):
 
 
 @pytest.fixture(scope="module")
-def rlgl():
+def heist():
     return load_event(EVENT)
 
 
@@ -39,8 +39,8 @@ def walker():
     return load_policy(REFERENCE)
 
 
-def test_the_long_lane_holds_its_ducks_heading(rlgl):
-    assert rlgl.steering == Steering(lookahead_m=0.5, gain=2.0, max_yaw_rate=1.0)
+def test_the_long_lane_holds_its_ducks_heading(heist):
+    assert heist.steering == Steering(lookahead_m=0.5, gain=2.0, max_yaw_rate=1.0)
 
 
 def test_no_other_event_holds_a_heading():
@@ -103,22 +103,22 @@ def _standing(y: float, yaw: float):
         (0.0, np.pi - 0.1, -1.0),  # facing back up the lane: round the short way
     ],
 )
-def test_the_hold_turns_the_duck_toward_the_centre_line_ahead(rlgl, y, yaw, rate):
-    command = np.asarray(rlgl.command_at(0.6), dtype=np.float64)
-    steered = _steered(rlgl.steering, *_standing(y, yaw), command)
+def test_the_hold_turns_the_duck_toward_the_centre_line_ahead(heist, y, yaw, rate):
+    command = np.asarray(heist.command_at(0.6), dtype=np.float64)
+    steered = _steered(heist.steering, *_standing(y, yaw), command)
     assert steered[2] == pytest.approx(rate, abs=1e-12)
     np.testing.assert_array_equal(np.delete(steered, 2), np.delete(command, 2))
     assert command[2] == 0.0, "the command asked for was steered in place"
 
 
-def test_the_duck_is_steered_on_green_and_on_green_only(rlgl, walker):
+def test_the_duck_is_steered_on_green_and_on_green_only(heist, walker):
     # The first green, the first red, and the start of the next green; no catch.
-    event = _short(rlgl, 3.0, tolerance_m=100.0)
+    event = _short(heist, 3.0, tolerance_m=100.0)
     listener = _Listener(walker)
     run_once(event, listener, seed=1, command=event.command_at(0.6))
 
     settle = round(event.start.settle_s / CTRL_DT)
-    red = _LightSteps.of(event.lights, round(event.time_limit_s / CTRL_DT)).red
+    red = _schedule(event, 1).red
     twists = np.array(listener.twists)
     assert len(twists) == settle + len(red)
     # Standing on the line and under a red light: no yaw rate either.
@@ -131,11 +131,11 @@ def test_the_duck_is_steered_on_green_and_on_green_only(rlgl, walker):
     assert np.count_nonzero(walking[:, 2]) == len(walking)
 
 
-def test_a_held_duck_keeps_to_its_lane(rlgl, walker):
+def test_a_held_duck_keeps_to_its_lane(heist, walker):
     """Twenty seconds of the shipped event at a brisk walk, every light obeyed: the
     duck is still near the centre line it started on, and facing down the lane. On
-    seeds 1 to 10 it strays 0.18 to 0.22 m from it, in a lane 0.8 m wide."""
-    event = _short(rlgl, 20.0, tolerance_m=100.0)
+    seeds 1 to 10 it strays 0.19 to 0.26 m from it, in a lane 0.8 m wide."""
+    event = _short(heist, 20.0, tolerance_m=100.0)
     outcome = run_once(event, walker, seed=1, command=event.command_at(0.8))
     assert outcome.status == "timeout"
     assert outcome.progress_m > 2.0

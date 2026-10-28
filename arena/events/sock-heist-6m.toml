@@ -1,0 +1,83 @@
+id           = "sock-heist-6m"
+order        = 50
+title        = "6 m Sock Heist"
+category     = "race"
+kind         = "perpetual"
+rig          = "legs"
+# A placeholder until Task A6 measures it on Linux-x86_64: a minute to cross six
+# metres and stop for every red on the way.
+time_limit_s = 60.0
+metric       = "mean_finish_time"
+seeds        = [1, 2, 3, 4, 5]
+
+[course]
+kind          = "lane"
+length_m      = 6.0
+width_m       = 0.8
+wall_height_m = 0.15
+slope_deg     = 0.0
+
+[command]
+vel  = [0.25, 0.0, 0.0]
+head = [0.0, 0.0, 0.0, 0.0]
+body = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+[start]
+keyframe = "STAND"
+settle_s = 0.5
+
+[start.perturbation]
+joint_rad = 0.01
+yaw_deg   = 2.0
+
+[termination]
+fall_gravity_z = -0.5
+fall_hold_s    = 0.3
+
+[sweep]
+lo        = 0.20
+hi        = 1.20
+step      = 0.05
+finalists = 3
+
+# The giant microduck in its nest of socks, past the line (arena.lights). Each
+# seed draws its own timetable from these three ranges, the same for every
+# entrant: seconds of green before its first look, then red, green, red... until
+# the time limit. The first green is short on purpose, so a duck that bolts off
+# the line has to stop as hard as it started. On red the duck is asked to stand;
+# the giant takes turn_s to turn its head, and nothing counts then. After that, a
+# duck that strays more than tolerance_m from where it stood is caught. These
+# ranges are placeholders until Task A6 measures them on Linux-x86_64.
+[lights]
+first_green_s = [0.6, 1.0]
+green_s       = [1.6, 3.0]
+red_s         = [1.4, 2.4]
+turn_s        = 0.4
+tolerance_m   = 0.03
+
+# Even six metres is not straight unaided (arena.manifest.Steering): the lane
+# turns the duck toward its centre line half a metre ahead, at no more than
+# 1 rad/s, the range of yaw rates the reference walker was trained on.
+[steering]
+lookahead_m  = 0.5
+gain         = 2.0
+max_yaw_rate = 1.0
+
+# The whole heist on tape, at life speed, and the giant's roar in its soundtrack.
+[clip]
+tape_max_s = 60.0
+sounds     = ["crowd", "horn", "giant", "verdict"]
+
+# From behind the field and above its nameplates, down the lanes to the giant:
+# over several lanes it follows the hindmost duck less than 3 m behind the
+# leader, backed off to show every lane a picture can hold (app/src/viewer.js
+# packChase), and it stops short of the line so that the giant and its nest
+# stand whole in the last shot.
+[clip.camera]
+kind          = "chase"
+back          = 2.1
+height        = 0.86
+side          = 0.1
+target_height = 0.4
+track         = true
+hold          = 0.8

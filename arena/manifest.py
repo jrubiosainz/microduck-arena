@@ -148,32 +148,29 @@ class Termination:
 
 @dataclass(frozen=True)
 class Lights:
-    """Red light, green light: the caller past the finish line counts with its
-    back to the lanes, then turns round and watches them.
+    """Sock Heist: the giant microduck past the finish line, in its nest of socks,
+    counts with its back to the lanes, then turns its head and watches them.
 
-    The schedule is declared, not drawn: phase k is green for `green_s[k]`, then
-    red for `red_s[k]`, and the cycle repeats until the time limit. It is the
-    same on every seed, so one caller times every lane of a replay and a page
-    can draw it from the event alone. Every duration is a whole number of control
+    It looks at moments each seed draws from these ranges (arena.lights.timetable):
+    `first_green_s` before its first look, then `red_s` of red and `green_s` of
+    green in turn, each a (lo, hi) in seconds. Every seed draws its own timetable,
+    the same for every entrant. Every duration is a whole number of control
     steps, so the light changes on a step and nowhere in between.
 
     While the light is red the duck is asked to stand still: the command's
     twist (forward, lateral and yaw) drops to zero, head and body stay as
-    declared. The caller takes `turn_s` to turn round, and nothing a duck does
+    declared. The giant takes `turn_s` to turn its head, and nothing a duck does
     then counts. From the moment it faces the lanes to the end of the red, a
     duck whose trunk strays more than `tolerance_m` across the floor from where
-    it stood when the caller finished turning is caught: its run ends there,
+    it stood when the giant finished turning is caught: its run ends there,
     unfinished.
     """
 
-    green_s: tuple[float, ...]
-    red_s: tuple[float, ...]
+    first_green_s: tuple[float, float]
+    green_s: tuple[float, float]
+    red_s: tuple[float, float]
     turn_s: float
     tolerance_m: float
-
-    def to_dict(self) -> dict:
-        return {"green_s": list(self.green_s), "red_s": list(self.red_s),
-                "turn_s": self.turn_s, "tolerance_m": self.tolerance_m}
 
 
 @dataclass(frozen=True)
@@ -227,7 +224,9 @@ class Vote:
 CAMERA_KINDS = ("chase", "fixed")
 # The sound sources a clip can draw on (app/src/clip/score.js). A name here is
 # a function there; an event lists the ones it wants.
-SOUND_SOURCES = ("crowd", "horn", "verdict")
+SOUND_SOURCES = ("crowd", "horn", "verdict", "giant")
+# What a clip sounds when its event says nothing: no giant, which only a lights event has.
+DEFAULT_SOUNDS = ("crowd", "horn", "verdict")
 
 
 @dataclass(frozen=True)
@@ -270,20 +269,15 @@ class ClipCamera:
 class ClipConfig:
     """How this event's clip is framed and scored. Every field has a default,
     so an event with no [clip] section renders as the sprint does.
-
-    `speed` plays the tape that many times faster than life, a whole number so
-    that every clip frame lands on a trace step: a race that runs for minutes
-    is filmed whole, as a time-lapse. `tape_max_s` is still seconds of the race.
     """
 
     tape_max_s: float = 12.0
-    sounds: tuple[str, ...] = SOUND_SOURCES
+    sounds: tuple[str, ...] = DEFAULT_SOUNDS
     camera: ClipCamera = ClipCamera()
-    speed: int = 1
 
     def to_dict(self) -> dict:
         return {"tape_max_s": self.tape_max_s, "sounds": list(self.sounds),
-                "camera": self.camera.to_dict(), "speed": self.speed}
+                "camera": self.camera.to_dict()}
 
 
 @dataclass(frozen=True)
@@ -318,7 +312,7 @@ class Manifest:
     # whether the VOTE badge and the vote button exist at all.
     vote: Vote | None = None
     clip: ClipConfig = ClipConfig()
-    # None unless the event is played to a caller's red and green lights. A lane only.
+    # None unless the event is played to a giant's red and green lights. A lane only.
     lights: Lights | None = None
     # None unless the lane holds the duck's heading for it. A lane only.
     steering: Steering | None = None
@@ -402,25 +396,18 @@ def _camera(raw: dict | None, where: str) -> ClipCamera:
     )
 
 
-def _clip(raw: dict | None, where: str, stage: bool = False) -> ClipConfig:
+def _clip(raw: dict | None, where: str) -> ClipConfig:
     if raw is None:
         return ClipConfig()
-    _refuse_unknown(raw, {"tape_max_s", "sounds", "camera", "speed"}, where)
+    _refuse_unknown(raw, {"tape_max_s", "sounds", "camera"}, where)
     tape = float(raw.get("tape_max_s", 12.0))
     if tape <= 0:
         raise ManifestError(f"{where}: tape_max_s must be positive")
-    sounds = tuple(raw.get("sounds", SOUND_SOURCES))
+    sounds = tuple(raw.get("sounds", DEFAULT_SOUNDS))
     for name in sounds:
         if name not in SOUND_SOURCES:
             raise ManifestError(f"{where}: unknown sound source {name!r}, expected among {SOUND_SOURCES}")
-    speed = raw.get("speed", 1)
-    # bool first: TOML's true is a Python int, and would otherwise read as 1.
-    if isinstance(speed, bool) or not isinstance(speed, int) or speed < 1:
-        raise ManifestError(f"{where}: speed must be a whole number of at least 1, got {speed!r}")
-    if stage and speed != 1:
-        raise ManifestError(f"{where}: a performance is filmed in time with its voices, so its speed is 1")
-    return ClipConfig(tape_max_s=tape, sounds=sounds, camera=_camera(raw.get("camera"), f"{where}.camera"),
-                      speed=speed)
+    return ClipConfig(tape_max_s=tape, sounds=sounds, camera=_camera(raw.get("camera"), f"{where}.camera"))
 
 
 def _stage(raw: dict) -> Stage:
@@ -452,29 +439,31 @@ def _lights(raw: dict, path: Path) -> Lights:
     where = f"{path}: [lights]"
     if not isinstance(raw, dict):
         raise ManifestError(f"{where} must be a table")
-    _refuse_unknown(raw, {"green_s", "red_s", "turn_s", "tolerance_m"}, "[lights]")
-    phases = {}
-    for key in ("green_s", "red_s"):
+    _refuse_unknown(raw, {"first_green_s", "green_s", "red_s", "turn_s", "tolerance_m"}, "[lights]")
+    ranges = {}
+    for key in ("first_green_s", "green_s", "red_s"):
         values = _require(raw, key, "[lights]")
-        if not isinstance(values, list) or not values or not all(_number(v) and v > 0 for v in values):
-            raise ManifestError(f"{where} {key} must be a non-empty list of positive seconds, got {values!r}")
-        if not all(_whole_steps(v) for v in values):
-            raise ManifestError(f"{where} every {key} must be a whole number of {CTRL_DT:g} s control steps")
-        phases[key] = tuple(float(v) for v in values)
-    if len(phases["green_s"]) != len(phases["red_s"]):
-        raise ManifestError(f"{where} green_s and red_s must have as many phases as each other")
+        if not isinstance(values, list) or len(values) != 2 or not all(_number(v) and v > 0 for v in values):
+            raise ManifestError(f"{where} {key} must be two positive seconds, lo then hi, got {values!r}")
+        lo, hi = (float(v) for v in values)
+        if lo > hi:
+            raise ManifestError(f"{where} {key} must not have its lo above its hi, got {[lo, hi]!r}")
+        if not (_whole_steps(lo) and _whole_steps(hi)):
+            raise ManifestError(
+                f"{where} {key} must be whole numbers of {CTRL_DT:g} s control steps, got {[lo, hi]!r}"
+            )
+        ranges[key] = (lo, hi)
     turn = _require(raw, "turn_s", "[lights]")
     if not _number(turn) or turn < 0 or not _whole_steps(turn):
         raise ManifestError(
             f"{where} turn_s must be zero or more, a whole number of {CTRL_DT:g} s control steps, got {turn!r}"
         )
-    if turn >= min(phases["red_s"]):
-        raise ManifestError(f"{where} turn_s must be shorter than every red_s, or the caller never looks")
+    if turn >= ranges["red_s"][0]:
+        raise ManifestError(f"{where} turn_s must be shorter than the shortest red, or the giant never looks")
     tolerance = _require(raw, "tolerance_m", "[lights]")
     if not _number(tolerance) or tolerance <= 0:
         raise ManifestError(f"{where} tolerance_m must be a positive distance, got {tolerance!r}")
-    return Lights(green_s=phases["green_s"], red_s=phases["red_s"], turn_s=float(turn),
-                  tolerance_m=float(tolerance))
+    return Lights(**ranges, turn_s=float(turn), tolerance_m=float(tolerance))
 
 
 def _steering(raw: dict, path: Path, command: tuple[float, ...]) -> Steering:
@@ -690,6 +679,10 @@ def load_manifest(path: Path) -> Manifest:
     if vote is not None and metric != "votes":
         raise ManifestError(f"{path}: [vote] section needs metric = 'votes' to rank by")
 
+    clip = _clip(raw.get("clip"), "[clip]")
+    if "giant" in clip.sounds and "lights" not in raw:
+        raise ManifestError(f"{path}: the giant's sound goes with [lights], and this event has none")
+
     command = _command(_require(raw, "command", str(path)))
     return Manifest(
         id=_require(raw, "id", str(path)),
@@ -715,7 +708,7 @@ def load_manifest(path: Path) -> Manifest:
         sweep=sweep,
         command=command,
         vote=vote,
-        clip=_clip(raw.get("clip"), "[clip]", stage=kind == "stage"),
+        clip=clip,
         lights=_lights(raw["lights"], path) if "lights" in raw else None,
         steering=_steering(raw["steering"], path, command) if "steering" in raw else None,
         rating=rating,
