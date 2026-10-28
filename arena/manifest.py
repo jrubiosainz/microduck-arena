@@ -177,7 +177,7 @@ class Lights:
 class Steering:
     """A long lane's heading hold: the course keeps the duck pointed down it.
 
-    No policy walks fifteen metres straight unaided. Asked for a yaw rate of
+    No policy walks six metres straight unaided. Asked for a yaw rate of
     zero, the reference walker's heading wanders tens of degrees within a few
     metres, and on a long lane that wander, not the task, decides who reaches
     the line. On a lane that declares this, every step the duck is asked to

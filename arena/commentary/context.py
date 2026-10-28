@@ -65,8 +65,8 @@ def nature(manifest: Manifest) -> tuple[str, tuple[str, ...]]:
                 "across a pit in a wrestling ring and each pulls by walking backwards"), ("tug",)
     length = f"{manifest.course.length_m:g} m"
     if manifest.lights is not None:
-        return (f"a {length} game of red light, green light: walk on green, stand still on red",
-                ("lights",))
+        return (f"a {length} sock heist: little microducks sneak up on a giant microduck's nest to "
+                "steal its socks, and must freeze whenever it turns its head"), ("lights",)
     if manifest.course.slope_deg > 0:
         return f"a {length} climb up an {manifest.course.slope_deg:g} degree slope", ("hill",)
     if manifest.rig == "rollers":
@@ -85,12 +85,12 @@ ACT_TAGS = {"first_event": "first-run", "own_best": "pb", "podium": "podium"}
 
 def _unfinished(record: RunRecord) -> tuple[str, tuple[str, ...]]:
     """What stopped the seeds that did not finish, when it was more than the
-    clock: a fall, or being caught moving under a red light. Nothing to say
+    clock: a fall, or being caught moving while the giant looked. Nothing to say
     when every one of them simply ran out of time."""
     falls = sum(1 for s in record.per_seed if s.status == "fall")
     caught = sum(1 for s in record.per_seed if s.status == "caught")
     said = ([f"fell on {falls}"] if falls else []) + (
-        [f"was caught moving under a red light on {caught}"] if caught else [])
+        [f"was caught moving while the giant looked on {caught}"] if caught else [])
     if not said:
         return "", ()
     tags = (("fall",) if falls else ()) + (("caught",) if caught else ())

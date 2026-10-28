@@ -45,7 +45,8 @@ def test_nature_reads_the_manifest():
     assert nature(load_event("got-a-talent")) == (
         "a performance on a stage decided by the public's votes", ("vote",))
     assert nature(load_event("sock-heist-6m")) == (
-        "a 6 m game of red light, green light: walk on green, stand still on red", ("lights",))
+        ("a 6 m sock heist: little microducks sneak up on a giant microduck's nest to steal its socks, "
+         "and must freeze whenever it turns its head"), ("lights",))
 
 
 def test_a_clean_run_states_event_participant_time_rank_gap_and_points():
@@ -100,7 +101,7 @@ def test_a_dnf_by_timeout_is_not_a_fall_and_a_voted_event_has_no_board():
     assert "run#/board" not in refs
 
 
-def test_caught_under_a_red_light_is_said_and_is_not_a_fall():
+def test_caught_by_the_giant_is_said_and_is_not_a_fall():
     lights = load_event("sock-heist-6m")
     per_seed = (SeedResult(1, "caught", None), SeedResult(2, "caught", None), SeedResult(3, "timeout", None),
                 SeedResult(4, "caught", None), SeedResult(5, "timeout", None))
@@ -109,7 +110,7 @@ def test_caught_under_a_red_light_is_said_and_is_not_a_fall():
     facts = {f.ref: f for f in result_facts(caught, lights, [caught], [])}
     assert facts["run#/result"].text == (
         "@fay did not finish: none of the 5 seeds reached the line, the duck was caught moving "
-        "under a red light on 3 of them."
+        "while the giant looked on 3 of them."
     )
     assert facts["run#/result"].tags == ("dnf", "caught")
     per_seed = (SeedResult(1, "finish", 63.0), SeedResult(2, "fall", None), SeedResult(3, "caught", None),
@@ -119,7 +120,7 @@ def test_caught_under_a_red_light_is_said_and_is_not_a_fall():
     facts = {f.ref: f for f in result_facts(mixed, lights, [mixed], [])}
     assert facts["run#/result"].text == (
         "The mean finish time is 99.90 s, with 3 of 5 seeds finished; an unfinished seed counts as "
-        f"the {lights.time_limit_s:g} s limit, and the duck fell on 1 and was caught moving under a red light on 1 of them."
+        f"the {lights.time_limit_s:g} s limit, and the duck fell on 1 and was caught moving while the giant looked on 1 of them."
     )
     assert facts["run#/result"].tags == ("fall", "caught")
 
