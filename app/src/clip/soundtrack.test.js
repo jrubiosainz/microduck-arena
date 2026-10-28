@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CEILING } from "../duck-voice.js";
+import { GIANT_CALL, GIANT_RATE } from "../heist-sound.js";
 import { renderSoundtrack } from "./soundtrack.js";
 
 /**
@@ -26,7 +27,7 @@ function fakeContext(log, wiring = [], rendered = (length) => new Float32Array(l
       return { data, copyToChannel: (samples) => data.set(samples) };
     }
     createBufferSource() {
-      const node = { connect() {}, start: (at) => log.push({ at, buffer: node.buffer }) };
+      const node = { connect() {}, playbackRate: { value: 1 }, start: (at) => log.push({ at, buffer: node.buffer, rate: node.playbackRate.value }) };
       return node;
     }
     async decodeAudioData() {
@@ -106,6 +107,15 @@ describe("renderSoundtrack", () => {
     expect(peak).toBeLessThanOrEqual(1);
     expect(peak).toBeCloseTo(CEILING, 6);
     expect(pcm[2 * 10] / pcm[2 * 3]).toBeCloseTo(Math.sin(10 / 7) / Math.sin(3 / 7), 6);
+  });
+
+  it("renders the giant's quack from the synth's chirp, slowed to its rate", async () => {
+    const log = [];
+    const calls = { chirp: (seed, variant) => new Float32Array(480).fill(variant + 1), wheee: () => new Float32Array(1) };
+    await renderSoundtrack({ crowd: null, cues: [{ at: 2, quack: true, rate: GIANT_RATE, gain: 1 }] }, 3, {
+      Context: fakeContext(log), load: () => { throw new Error("a quack fetched a file"); }, calls: async () => calls });
+    expect([log[0].at, log[0].rate]).toEqual([2, GIANT_RATE]);
+    expect(log[0].buffer.data).toEqual(new Float32Array(480).fill(GIANT_CALL + 1));
   });
 
   it("leaves a render under the ceiling as it rendered", async () => {

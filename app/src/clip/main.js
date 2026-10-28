@@ -161,7 +161,7 @@ async function main() {
     { loop: false },
   );
   const plan = clipPlan(frameCount(traces[0][0]), config.tape_max_s, settle, config.speed);
-  const score = clipScore({ run, plan, trace: replays[0], ducks });
+  const score = clipScore({ run, plan, trace: replays[0], ducks, lanes: traces.map((t) => ({ trace: t[0], caught: t.caught })) });
   const crowdDirection = stadiumDirection(score.crowd ?? {});
   letter(run);
 

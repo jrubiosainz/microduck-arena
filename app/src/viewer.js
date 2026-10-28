@@ -34,6 +34,7 @@ import {
 } from "./rig.js";
 import { MOUTH_TRAVEL, mouthTrack } from "./duck-voice.js";
 import { createStageVoice } from "./stage-voice.js";
+import { createHeistSound, heistCues } from "./heist-sound.js";
 import { loadCalls } from "./live/voice.js";
 import { isMuted } from "./sound.js";
 import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
@@ -490,6 +491,8 @@ export async function createViewer(
   // its tongue while the Arena is muted or the page says `hushed` — the run page, while its clip
   // plays, so the two soundtracks never mix.
   const voice = manual ? null : createStageVoice(loadCalls, { muted: () => isMuted() || hushed() });
+  // The giant's quack and the falls of a Sock Heist race, on the same terms.
+  const heist = manual ? null : createHeistSound(loadCalls, { muted: () => isMuted() || hushed() });
   let crowdDirection = stadiumDirection();
 
   // Whichever set is up, its crowd draws only the seats the camera about to
@@ -691,6 +694,7 @@ export async function createViewer(
     // Every duck on the stage sounds for as long as the troupe's traces perform: a cut-short
     // performance falls silent with them. A race makes no sound.
     voice?.set(talent ? lanes : [], player.duration);
+    heist?.set(event?.lights ? heistCues(timetable, lanes, courseLength, event.time_limit_s) : []);
     const progress = [];
     // A tug goes nowhere along its course: its crowd follows no progress.
     if (event?.length_m && lanes.length && !tugged) {
@@ -809,6 +813,7 @@ export async function createViewer(
   function tick(now) {
     player.advance(now);
     voice?.follow(player.playing ? player.time : null);
+    heist?.follow(player.playing ? player.time : null);
     // The crowd on the wall clock: it fidgets before a lane is ticked and after
     // a publication's race has run out, when the replay's clock stands still.
     crowdStart ??= now;
@@ -862,6 +867,7 @@ export async function createViewer(
     },
     dispose() {
       voice?.dispose();
+      heist?.dispose();
       if (raf) cancelAnimationFrame(raf);
       watcher.disconnect();
       controls?.dispose();
