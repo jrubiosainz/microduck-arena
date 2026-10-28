@@ -40,7 +40,8 @@ import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js"
 import { attachStadium } from "./stadium.js";
 import { isStage, isTug } from "./format.js";
 import { buildJudges } from "./judges.js";
-import { laneOut } from "./lights.js";
+import { laneOut, lightAt, timetableOf } from "./lights.js";
+import { buildGiant } from "./giant.js";
 import { buildTalentStage, stageCameraPose, placeStageDuck, stageCameraTarget } from "./talent-stage.js";
 import { loadGymBranding } from "./gym-branding.js";
 import { stadiumDirection } from "./clip/direction.js";
@@ -465,6 +466,12 @@ export async function createViewer(
   let course = null;
   let gym = null;
   let judges = null;
+  // Sock Heist's giant, on a race with lights, and what turns its head: the replay's seed's
+  // timetable and turn, on the race clock, which starts once the lanes' settle lead-in has played.
+  let giant = null;
+  let timetable = [];
+  let turnS = 0;
+  let heistLead = 0;
   let stage = null;
   // While a tug plays: the string drawn, and its points, a frame each, in step with the ducks.
   let tug = null;
@@ -499,6 +506,8 @@ export async function createViewer(
     venue = null;
     judges?.dispose();
     judges = null;
+    giant?.dispose();
+    giant = null;
     gym?.dispose();
     gym = null;
     for (const lane of lanes) {
@@ -583,6 +592,13 @@ export async function createViewer(
       scene.add(gym.group);
       judges = buildJudges(reachy, courseLength, Math.max(1, laneCount) * spacing / 2, gym.sponsorMaps, roller ? 3 : 4);
       scene.add(judges.group);
+      if (event.lights) {
+        giant = buildGiant(rigs.legs, courseLength);
+        scene.add(giant.group);
+        timetable = timetableOf(event, entries[0]?.traceSeed);
+        turnS = event.lights.turn_s;
+        heistLead = Math.max(0, ...entries.map((entry) => entry.lead ?? 0)) * CTRL_DT;
+      }
       if (!slopeDeg) {
         ground.material.dispose();
         ground.material = gym.floorMaterial(width, height);
@@ -756,6 +772,7 @@ export async function createViewer(
       lane.rig.bodies.get("trunk_base").getWorldPosition(lane.gazeTarget),
     );
     judges?.pose(seconds, subjects);
+    giant?.pose(lightAt(timetable, turnS, player.time - heistLead).facing);
     stage?.pose(seconds, subjects, mood);
     venue?.pose(seconds, subjects, mood);
 
