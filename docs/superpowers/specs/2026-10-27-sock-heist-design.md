@@ -220,8 +220,8 @@ moments drawn from the event's ranges, a reward for standing within the toleranc
 and for progress on green, and the caught rule as a termination. Its guide says what the policy
 sees (only its command), the time it has to stop, what gets it caught, and what is known to work.
 
-We then train a policy with that folder, as the Tug of War's candidate was trained (on HF, paid by
-Pollen), and evaluate it on the Space's platform. The owner wants a microduck good enough, not the
+We then train a policy with that folder, as the Tug of War's candidate was trained (HF Jobs under the
+`Nico-robot` namespace, the owner's grant), and evaluate it on the Space's platform. The owner wants a microduck good enough, not the
 best one: the bar is to finish every seed and beat the reference walker's score. The first policy
 that clears it is the event's published reference, in place of the walker, and training stops
 there. The owner allows up to **10 trainings**; if none clears the bar, we go back to the owner with
