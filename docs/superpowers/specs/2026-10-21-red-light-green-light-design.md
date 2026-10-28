@@ -174,7 +174,7 @@ scored it 130.376 s on a Mac and 130.308 s on x86, at 0.95 m/s.
 - `ClipConfig.speed` is a whole number of at least 1 (TOML's `true` is refused rather than read as
   1), and 1 for a stage. A chase's `ClipCamera.track` is true or false, and its `hold` a distance of
   at least 0 m, or none; the camera serialises both.
-- The event: `order = 40`, perpetual, legs, a 15 × 0.8 m lane with 0.15 m walls, 150 s,
+- The event: `order = 50`, perpetual, legs, a 15 × 0.8 m lane with 0.15 m walls, 150 s,
   `mean_finish_time`, seeds 1 to 5, the sprint's start (STAND, settled 0.5 s, perturbed 0.01 rad
   and 2°) and sweep, and:
 

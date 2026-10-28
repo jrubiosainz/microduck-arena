@@ -7,6 +7,7 @@ newcomer experiences here.
 """
 
 import hashlib
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,10 @@ from .constants import NUM_JOINTS, OBS_SIZE
 # a feature.
 MAX_MODEL_BYTES = 64 * 1024 * 1024
 
+# The robot asks for an action every 20 ms: an answer still being worked out after a second is
+# given up, so a model that loops for ever holds neither an evaluation nor a cup.
+ANSWER_S = 1.0
+
 
 class PolicyError(Exception):
     """A submitted model cannot be used, with a reason fit to show a human."""
@@ -34,9 +39,19 @@ class Policy:
     _output_name: str
 
     def act(self, obs: np.ndarray) -> np.ndarray:
+        """The action for `obs`, or a PolicyError saying why there is none: the model failed, or
+        was still working it out ANSWER_S on."""
         feeds = {self._input_name: obs.reshape(1, OBS_SIZE).astype(np.float32)}
-        out = self.session.run([self._output_name], feeds)[0]
-        return np.asarray(out, dtype=np.float32).reshape(NUM_JOINTS)
+        run = ort.RunOptions()
+        timer = threading.Timer(ANSWER_S, setattr, (run, "terminate", True))
+        timer.start()
+        try:
+            out = self.session.run([self._output_name], feeds, run)[0]
+            return np.asarray(out, dtype=np.float32).reshape(NUM_JOINTS)
+        except Exception as exc:  # onnxruntime raises a variety of types here, numpy a ValueError
+            raise PolicyError(f"no answer within {ANSWER_S:g} s" if run.terminate else f"no action: {exc}") from exc
+        finally:
+            timer.cancel()
 
 
 def _width(shape, axis=-1):

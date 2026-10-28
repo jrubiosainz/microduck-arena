@@ -71,15 +71,16 @@ def test_a_dnf_after_clean_runs_and_a_dnf_streak():
 def test_leading_two_events_publishing_on_every_event_and_a_busy_day():
     hill = run("alice", 30.0, "2026-09-10T09:00:00Z", event="hill-climb-1m5")
     roller = run("alice", 9.0, "2026-09-10T09:30:00Z", event="roller-sprint-2m")
+    tug = run("alice", 4.0, "2026-09-10T09:15:00Z", event="tug-of-war")
     # Published, but no lead: a board's top run that finished no seed leads nothing.
     lights = run("alice", 60.0, "2026-09-10T10:00:00Z", finished=0, event="red-light-green-light-15m")
     first = run("alice", 12.9, "2026-09-11T08:00:00Z")
     second = run("alice", 12.7, "2026-09-11T09:00:00Z")
     mine = run("alice", 12.4, "2026-09-11T10:00:00Z")
-    facts = facts_for(mine, hill, roller, lights, first, second)
+    facts = facts_for(mine, hill, roller, tug, lights, first, second)
     # Titles come in `all_events()` order, which is by event id.
     assert facts["notable#/leads-events"].text == (
-        "@alice now leads 3 events at once: 1.5 m Hill Climb, 2 m Roller Sprint, 2 m Sprint.")
+        "@alice now leads 4 events at once: 1.5 m Hill Climb, 2 m Roller Sprint, 2 m Sprint, Tug of War.")
     assert facts["notable#/regular"].text == "@alice has published on every open event."
     assert facts["notable#/busy-day"].text == "This is @alice's publication number 3 today."
 
@@ -132,3 +133,33 @@ def test_profiles_give_the_season_of_the_author_and_of_who_the_board_measures_th
     _, behind = profiles_for(back, carol, hill, mine)
     assert behind.text.startswith("@alice, next on this board, has 620 points")
     assert [f.ref for f in profiles_for(carol)] == ["notable#/profile"]
+
+
+def test_a_rated_run_has_no_time_milestone_and_beats_its_best_by_winning_more_ground():
+    first = run("alice", 3.0, "2026-09-10T10:00:00Z", event="tug-of-war")
+    facts = facts_for(run("alice", 4.2, "2026-09-11T10:00:00Z", event="tug-of-war"), first)
+    assert "notable#/milestone" not in facts and "notable#/record" not in facts
+    assert facts["notable#/personal-best"].text == "@alice beats their previous best on the Tug of War, 3.00 cm, by 1.20 cm."
+
+
+def test_a_tug_best_beaten_by_a_little_below_zero_is_no_big_margin():
+    first = run("alice", -20.0, "2026-09-10T10:00:00Z", event="tug-of-war")
+    facts = facts_for(run("alice", -19.9, "2026-09-11T10:00:00Z", event="tug-of-war"), first)
+    assert facts["notable#/personal-best"].text == "@alice beats their previous best on the Tug of War, -20.00 cm, by 0.10 cm."
+    assert facts["notable#/personal-best"].tags == ("pb",)
+
+
+def test_a_tug_best_is_a_big_margin_from_five_centimetres_whatever_its_size():
+    small = facts_for(run("alice", 1.7, "2026-09-11T10:00:00Z", event="tug-of-war"),
+                      run("alice", 1.5, "2026-09-10T10:00:00Z", event="tug-of-war"))
+    assert small["notable#/personal-best"].tags == ("pb",)
+    big = facts_for(run("alice", 7.0, "2026-09-11T10:00:00Z", event="tug-of-war"),
+                    run("alice", 1.5, "2026-09-10T10:00:00Z", event="tug-of-war"))
+    assert big["notable#/personal-best"].tags == ("pb", "big-margin")
+
+
+def test_a_displaced_rated_rival_is_quoted_in_centimetres():
+    bob = run("bob", 3.0, "2026-09-01T10:00:00Z", event="tug-of-war")
+    facts = facts_for(run("alice", 4.0, "2026-09-11T10:00:00Z", event="tug-of-war"), bob)
+    assert facts["notable#/opponent/bob"].text == ("@bob drops from rank 1 to rank 2 on the Tug of War; their best "
+                                                   "rating there, 3.00 cm, was published 10 days ago.")

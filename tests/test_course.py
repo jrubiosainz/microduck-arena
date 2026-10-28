@@ -9,14 +9,24 @@ from arena.actuator import ARMATURE, FORCE_LIMIT, SOLIMP_FRICTION, SOLREF_FRICTI
 from arena.constants import DEFAULT_POSE, JOINT_NAMES, TIMESTEP
 from arena.course import (
     SPAWN_HEIGHT_M,
+    STRING_TIE_SOLIMP,
+    backstops,
     build_course_xml,
     compile_course,
     compile_stage,
+    compile_tug,
     duck_prefix,
+    pit_boxes,
     ramp_dir,
     ramp_normal,
+    ring_posts,
+    ring_ropes,
+    string_offset,
+    string_sites,
+    tug_layout,
 )
 from arena.manifest import load_event
+from arena.runner import _Addresses, _reset_by_mujoco
 from arena.timeline import Start
 
 
@@ -308,3 +318,107 @@ def test_every_ducks_servos_are_torque_motors_with_bams_parameters():
             assert model.dof_frictionloss[dof] == pytest.approx(0.0)
             assert model.dof_solref[dof] == pytest.approx(SOLREF_FRICTION)
             assert model.dof_solimp[dof] == pytest.approx(SOLIMP_FRICTION)
+
+
+TUG = load_event("tug-of-war")
+names = lambda boxes: [n for n, _, _ in boxes]
+numbers = lambda boxes: [v for _, pos, half in boxes for v in (*pos, *half)]
+
+
+def _standing(model):
+    data = mujoco.MjData(model)
+    mujoco.mj_resetDataKeyframe(model, data, model.key("STAND").id)
+    mujoco.mj_forward(model, data)
+    return data
+
+
+def test_the_ring_is_three_ropes_a_side_post_to_post_with_a_backstop_behind():
+    ropes = ring_ropes(TUG.course)
+    assert names(ropes) == [f"rope_{s}_{k}" for s in ("west", "east", "north", "south") for k in (0, 1, 2)]
+    assert ropes[0] == ("rope_west_0", (-1.5, -1.5, 0.06), (-1.5, 1.5, 0.06))
+    assert ropes[11] == ("rope_south_2", (-1.5, -1.5, 0.18), (1.5, -1.5, 0.18))
+    assert ring_posts(TUG.course)[0] == ("post_nw", (-1.5, 1.5, 0.0), (-1.5, 1.5, 0.23))
+    assert names(backstops(TUG.course)) == [f"backstop_{s}" for s in ("west", "east", "north", "south")]
+    assert numbers(backstops(TUG.course))[:6] == pytest.approx([-1.531, 0, 0.093, 0.025, 1.556, 0.093])
+    assert numbers(backstops(TUG.course))[12:18] == pytest.approx([0, 1.531, 0.093, 1.556, 0.025, 0.093])
+    assert string_offset("legs") == pytest.approx((0.026, 0.0145, 0.0324215))   # kept from the replaced lane test
+    assert numbers(pit_boxes(TUG.course)) == pytest.approx([-10.825, 0, -0.175, 10.675, 21.55, 0.175,
+                                                            10.825, 0, -0.175, 10.675, 21.55, 0.175, 0, 0, -0.325, 0.15, 21.55, 0.025])
+
+
+def test_a_tug_is_a_ring_on_platforms_over_a_pit_and_no_floor_plane():
+    model = compile_course(TUG)
+    with pytest.raises(KeyError):
+        model.geom("floor")
+    with pytest.raises(KeyError):
+        model.geom("wall_left")
+    rope = model.geom("rope_west_1")
+    assert rope.type[0] == mujoco.mjtGeom.mjGEOM_CAPSULE and rope.size[:2] == pytest.approx([0.006, 1.5])
+    assert model.geom("post_se").size[:2] == pytest.approx([0.022, 0.115])
+
+
+def test_a_duck_thrown_at_the_ropes_stays_in_the_ring():
+    """Both ducks, limp (no servo is driven), moved 1.38 m north, 12 cm from the north ropes, and thrown at them at
+    0.75 m/s stay in the ring for 1 s: no trunk crosses y = 1.5, none drops below the floor outside the pit, and the
+    solver never resets the model. Faster (about 0.77 m/s and up) a limp duck's neck tie ends past the rope line and
+    the string's tied end piece is squeezed between tie and rope until the string blows up. Real bouts never bring a
+    trunk within 60 cm of the ropes: the pit ends a bout first and the string keeps the necks 1 m apart."""
+    model = compile_tug(TUG)
+    data = _standing(model)
+    for j in np.flatnonzero(model.jnt_type == mujoco.mjtJoint.mjJNT_FREE):   # the ducks and the string's root
+        data.qpos[model.jnt_qposadr[j] + 1] += 1.38
+        data.qvel[model.jnt_dofadr[j] + 1] = 0.75
+    for _ in range(round(1.0 / model.opt.timestep)):
+        mujoco.mj_step(model, data)
+        assert not _reset_by_mujoco(data)
+        trunks = [data.xpos[model.body(p + "trunk_base").id] for p in ("", "duck1/")]
+        assert max(t[1] for t in trunks) < 1.5 and min(t[2] for t in trunks) > -0.05
+
+
+def test_a_tug_is_two_ducks_neck_to_neck_and_nothing_else():
+    west, east = tug_layout(TUG.course)
+    assert (west.x, west.y, west.yaw_deg, east.x, east.y, east.yaw_deg) == pytest.approx((-0.526, -0.0145, 0, 0.526, 0.0145, 180))
+    model = compile_tug(TUG)
+    assert model.nu == 28 and len(model.key("STAND").ctrl) == 28
+    data = _standing(model)
+    np.testing.assert_allclose(data.site_xpos[model.site("string_end").id], [-0.5, 0, 0.1524215], atol=1e-9)
+    np.testing.assert_allclose(data.site_xpos[model.site("duck1/string_end").id], [0.5, 0, 0.1524215], atol=1e-9)
+
+
+def test_the_strings_ends_sit_on_the_necks_at_the_start():
+    model = compile_tug(TUG)
+    data = _standing(model)
+    for end, neck in (("string/p0", "string_end"), ("string/p16", "duck1/string_end")):
+        np.testing.assert_allclose(data.site_xpos[model.site(end).id], data.site_xpos[model.site(neck).id], atol=1e-9)
+
+
+def test_the_string_is_the_measured_one():
+    model = compile_tug(TUG)
+    segs = [model.body(f"string/seg{k}") for k in range(16)]
+    assert [round(float(s.mass[0]), 7) for s in segs] == [0.015] + [0.0035714] * 14 + [0.015]
+    assert model.joint("string/root").type[0] == mujoco.mjtJoint.mjJNT_FREE and model.body(model.joint("string/root").bodyid[0]).name == "string/seg8"
+    hinges = [model.joint(f"string/j{k}{a}") for k in range(16) if k != 8 for a in "yz"]
+    assert {int(j.type[0]) for j in hinges} == {mujoco.mjtJoint.mjJNT_HINGE} and len(hinges) == 30
+    assert [list(model.joint(f"string/j3{a}").axis) for a in "yz"] == [[0, 1, 0], [0, 0, 1]]
+    dofs = [d for d in range(model.nv) if model.body(model.dof_bodyid[d]).name.startswith("string/")]
+    assert len(dofs) == 36 and set(model.dof_armature[dofs]) == {1e-6}
+    assert set(model.dof_damping[[d for d in dofs if model.dof_jntid[d] != model.joint("string/root").id]]) == {0.003}
+    assert not model.dof_damping[[d for d in dofs if model.dof_jntid[d] == model.joint("string/root").id]].any()   # the root: armature only, as measured
+    cap = model.geom("string/cap0")
+    assert (cap.size[0], cap.size[1], cap.contype[0], cap.conaffinity[0], cap.priority[0]) == pytest.approx((0.004, 0.03125, 0, 1, 1))
+    assert list(cap.friction) == pytest.approx([1.0, 0.005, 0.0001])
+    ties = [model.eq(e) for e in range(model.neq)]
+    assert [(model.site(t.obj1id[0]).name, model.site(t.obj2id[0]).name) for t in ties] == [("string_end", "string/p0"), ("duck1/string_end", "string/p16")]
+    assert all(t.type[0] == mujoco.mjtEq.mjEQ_CONNECT and list(t.solref) == pytest.approx([0.01, 1.0]) for t in ties)
+    assert all(list(t.solimp) == pytest.approx(STRING_TIE_SOLIMP) for t in ties)   # MuJoCo's, not the duck MJCF's default
+    assert model.ntendon == 0 and model.nu == 28 and model.nexclude == 2
+    data = _standing(model)   # the STAND keyframe, forwarded
+    points = data.site_xpos[string_sites(model)]
+    np.testing.assert_allclose(points[[0, 8, 16]], [[-0.5, 0, 0.1524215], [0, 0, 0.1524215], [0.5, 0, 0.1524215]], atol=1e-9)
+    assert np.linalg.norm(np.diff(points, axis=0), axis=1) == pytest.approx([0.0625] * 16)
+
+
+def test_the_string_leaves_every_ducks_addresses_alone():
+    same = lambda a, b: all(np.array_equal(getattr(a, f), getattr(b, f)) for f in ("qpos", "dof", "act", "gyro", "trunk", "free"))
+    stage = compile_stage(TUG, [("legs", s) for s in tug_layout(TUG.course)])
+    assert all(same(_Addresses.of(compile_tug(TUG), "STAND", p), _Addresses.of(stage, "STAND", p)) for p in ("", "duck1/"))

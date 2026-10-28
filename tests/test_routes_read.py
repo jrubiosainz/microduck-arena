@@ -2,10 +2,13 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from arena.evaluate import SeedResult
+from arena.manifest import load_event
 from arena.timeline import EDGE_MARGIN_M, MIN_SPACING_M
 from arena.trace import encode
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
+from tests.test_cupworker import played_cup, store_cup
 from tests.test_store import ALONE, WALKER, make_record
 
 
@@ -23,6 +26,36 @@ def record_run(app, **overrides):
     return record
 
 
+def test_a_tug_serves_its_course_and_its_bouts(client):
+    api, _ = client
+    tug = next(e for e in api.get("/api/events").json()["events"] if e["id"] == "tug-of-war")
+    assert (tug["course"], tug["category"], tug["metric"]) == ("tug", "versus", "mean_ground_cm")
+    assert [tug[k] for k in ("ring_m", "string_m", "pit_m", "pit_depth_m")] == [3.0, 1.0, 0.3, 0.3]
+    assert tug["bout"] == {"time_limit_s": 45.0, "bouts_to_win": 2, "max_bouts": 5}
+    assert tug["ropes"][0] == {"name": "rope_west_0", "from": [-1.5, -1.5, 0.06], "to": [-1.5, 1.5, 0.06], "radius": 0.006}
+    assert len(tug["ropes"]) == 12 and tug["posts"][3]["name"] == "post_se"
+    assert not {"length_m", "width_m", "walls", "pit"} & tug.keys()
+    assert "string_offset" not in tug   # the page draws the string as recorded
+    assert "sweep_lo" not in tug and "size_m" not in tug
+
+
+def test_a_rated_run_serves_its_bouts_and_a_board_strongest_first_each_row_with_its_seed(client):
+    api, app = client
+    record_run(app, event_id="tug-of-war", user="bob", score=-15.2, trace_seed=2, per_seed=(SeedResult(2, "lost", 45.0, -15.2),))
+    mine = record_run(app, event_id="tug-of-war", user="alice", score=12.5, trace_seed=1, per_seed=(SeedResult(1, "won", 45.0, 12.5),))
+    body = api.get(f"/api/runs/{mine.run_id}").json()
+    assert body["per_seed"] == [{"seed": 1, "status": "won", "time_s": 45.0, "score_cm": 12.5}]
+    assert [(r["user"], r["trace_seed"]) for r in body["board"]] == [("alice", 1), ("bob", 2)]
+    assert [r["user"] for r in api.get("/api/events/tug-of-war/leaderboard").json()["rows"]] == ["alice", "bob"]
+    assert api.get("/api/players/alice").json()["publications"][0]["metric"] == "mean_ground_cm"
+
+
+def test_a_race_answer_carries_no_centimetres(client):
+    api, app = client
+    body = api.get(f"/api/runs/{record_run(app).run_id}").json()
+    assert "score_cm" not in body["per_seed"][0]
+
+
 def test_events_lists_the_whole_programme(client):
     api, _ = client
     assert {e["id"] for e in api.get("/api/events").json()["events"]} == {
@@ -31,6 +64,7 @@ def test_events_lists_the_whole_programme(client):
         "hill-climb-1m5",
         "red-light-green-light-15m",
         "got-a-talent",
+        "tug-of-war",
     }
 
 
@@ -249,11 +283,12 @@ def test_the_programme_is_served_in_its_declared_order(client):
     """Sorted once on the server, so every client reads the same programme."""
     api, _ = client
     events = api.get("/api/events").json()["events"]
-    assert [e["id"] for e in events[:5]] == [
+    assert [e["id"] for e in events[:6]] == [
         "sprint-2m",
         "got-a-talent",
         "roller-sprint-2m",
         "hill-climb-1m5",
+        "tug-of-war",
         "red-light-green-light-15m",
     ]
     assert [e["order"] for e in events] == sorted(e["order"] for e in events)
@@ -430,7 +465,7 @@ def test_every_event_says_what_kind_of_course_it_is(client):
     api, _ = client
     courses = {e["id"]: e["course"] for e in api.get("/api/events").json()["events"]}
     assert courses == {"sprint-2m": "lane", "roller-sprint-2m": "lane", "hill-climb-1m5": "lane",
-                       "red-light-green-light-15m": "lane", "got-a-talent": "stage"}
+                       "red-light-green-light-15m": "lane", "got-a-talent": "stage", "tug-of-war": "tug"}
 
 
 def test_a_voted_events_publication_stands_where_its_votes_put_it(client):
@@ -441,6 +476,7 @@ def test_a_voted_events_publication_stands_where_its_votes_put_it(client):
     body = api.get(f"/api/runs/{bob.run_id}").json()
     assert (body["rank"], body["on_board"]) == (1, True)
     assert [(r["user"], r["votes"], r["you"]) for r in body["board"]] == [("bob", 1, True), ("ann", 0, False)]
+    assert body["board"][0]["rate"] > body["board"][1]["rate"]
 
 
 def test_an_older_performance_finds_its_place_off_the_board(client):
@@ -452,7 +488,7 @@ def test_an_older_performance_finds_its_place_off_the_board(client):
     assert [r["you"] for r in body["board"]] == [True]
 
 
-def test_a_voted_board_ranks_on_votes_and_still_reports_the_time(client):
+def test_a_voted_board_ranks_on_its_rate_and_still_reports_the_time(client):
     api, app = client
     ann = record_run(app, user="ann", event_id="got-a-talent", score=12.0)
     bob = record_run(app, user="bob", event_id="got-a-talent", score=40.0)
@@ -463,6 +499,7 @@ def test_a_voted_board_ranks_on_votes_and_still_reports_the_time(client):
         (1, "bob", 1, 1),
         (2, "ann", 0, 1),
     ]
+    assert rows[0]["rate"] > rows[1]["rate"]
     # The time is measured anyway, so it stays on the row — as a fact, not a rank.
     assert rows[0]["score"] == 40.0
 
@@ -477,12 +514,13 @@ def test_a_players_best_row_on_a_voted_event_carries_its_vote_count(client):
     cast(app, bob.run_id, [ann.run_id, bob.run_id])
 
     winner = api.get("/api/players/bob").json()
-    [talent] = [b for b in winner["publications"] if b["event_id"] == "got-a-talent"]
-    assert talent["votes"] == 1
+    [won] = [b for b in winner["publications"] if b["event_id"] == "got-a-talent"]
+    assert won["votes"] == 1
 
     runner_up = api.get("/api/players/ann").json()
-    [talent] = [b for b in runner_up["publications"] if b["event_id"] == "got-a-talent"]
-    assert talent["votes"] == 0
+    [lost] = [b for b in runner_up["publications"] if b["event_id"] == "got-a-talent"]
+    assert lost["votes"] == 0
+    assert won["rate"] > lost["rate"]
 
 
 def test_a_players_best_row_on_a_timed_event_carries_no_vote_count(client):
@@ -491,6 +529,7 @@ def test_a_players_best_row_on_a_timed_event_carries_no_vote_count(client):
     body = api.get("/api/players/ann").json()
     [sprint] = [b for b in body["publications"] if b["event_id"] == "sprint-2m"]
     assert sprint["votes"] is None
+    assert sprint["rate"] is None
 
 
 def test_a_vote_cast_days_ago_but_still_inside_the_window_counts(client):
@@ -608,3 +647,50 @@ def test_a_run_detail_carries_its_place_its_receipts_and_its_event(client):
     assert sum(r["points"] for r in body["receipts"]) == 260
     # Dropped: it cost a full trace decode, and the page loads the trace anyway.
     assert "frames" not in body
+
+
+def test_a_run_page_reads_no_cup(client, monkeypatch):
+    """A cup's receipts are paid to its deciding matches, never to a run: the run page has nothing to read there."""
+    api, app = client
+    monkeypatch.setattr("arena.web.routes_read.all_cups", lambda store: pytest.fail("the run page read the cups"))
+    assert api.get(f"/api/runs/{record_run(app).run_id}").status_code == 200
+
+
+def test_a_player_page_and_the_ladder_count_the_cups(client):
+    api, app = client
+    store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
+    record_run(app, run_id="R0", event_id="tug-of-war", user="p0")
+    assert api.get("/api/players/p0").json()["cups"] == [{"event_id": "tug-of-war", "event_title": load_event("tug-of-war").title,
+        "number": 1, "starts_at": "2026-01-02T17:00:00Z", "reached": "champion"}]
+    ladder = {row["user"]: row["points"] for row in api.get("/api/standings").json()["rows"]}
+    assert (ladder["p1"], ladder["p2"]) == (150, 100)
+
+
+def test_a_player_page_lists_its_cups_newest_first(client):
+    api, app = client
+    store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
+    store_cup(app.state.store, played_cup(6, number=2, starts_at="2026-01-09T17:00:00Z"))
+    record_run(app, run_id="R0", event_id="tug-of-war", user="p0")
+    assert [cup["number"] for cup in api.get("/api/players/p0").json()["cups"]] == [2, 1]
+
+
+def test_a_cup_that_has_not_aired_tells_nothing_to_the_profiles_the_ladder_or_the_chip(tmp_path):
+    """The routes read their own clock: a cup dated 2099 is stored, played and ordered, and none of it is told."""
+    app = create_app(ArenaConfig.from_env(store_dir=tmp_path, dev_user="p0"))
+    api = TestClient(app)
+    store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
+    record_run(app, run_id="R0", event_id="tug-of-war", user="p0")
+
+    def told():
+        return [api.get(path).json() for path in ("/api/players/p0", "/api/standings", "/api/me")]
+
+    before = told()
+    assert [cup["number"] for cup in before[0]["cups"]] == [1]
+    store_cup(app.state.store, played_cup(6, number=2, starts_at="2099-01-02T17:00:00Z"))
+    assert told() == before
+
+
+def test_the_chip_counts_cup_points(tmp_path):
+    app = create_app(ArenaConfig.from_env(store_dir=tmp_path, dev_user="p1"))
+    store_cup(app.state.store, played_cup(6, starts_at="2026-01-02T17:00:00Z"))
+    assert TestClient(app).get("/api/me").json()["points"] == 150

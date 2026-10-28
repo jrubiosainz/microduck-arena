@@ -12,11 +12,14 @@ from arena.evaluate import (
     finalists,
     mean_finish_time,
     pick_trace_seed,
+    seed_row,
 )
 from arena.golden import PLATFORM
 from arena.manifest import load_event
 from arena.policy import load_policy
 from arena.runner import run_once
+from arena.tug import BoutOutcome, reference_duck
+from tests.test_tug import bout_trace, straight
 
 
 def _results(*pairs):
@@ -79,6 +82,7 @@ def test_evaluating_the_reference_policy_scores_and_carries_the_trace_seeds_repl
     )
     np.testing.assert_array_equal(result.trace, replay.trace)
     np.testing.assert_array_equal(result.settle, replay.settle)
+    assert result.string is None and result.string_settle is None   # a race has no string
 
 
 def test_evaluate_is_deterministic():
@@ -108,12 +112,13 @@ def test_evaluate_is_deterministic():
 # fifth actuator writes joined the runner (arena/runner.py), 8.672 s at 0.50
 # since. Linux-x86_64: HF Jobs, Intel Xeon Platinum 8375C and AMD EPYC 7R13,
 # identical — 8.556 s at 0.50 on Intel before those writes and the libm
-# exp/pow (arena/golden.py), 9.404 s at 0.45 since — the Space runs x86_64. On
-# a platform with no baseline the tests that need one skip, and
+# exp/pow (arena/golden.py), 9.404 s at 0.45 since — the Space runs x86_64. At
+# version 5, the finishes clocked to the substep: 8.666 s and 9.392 s. On a
+# platform with no baseline the tests that need one skip, and
 # arena.golden.check() refuses.
 GOLDEN_BASELINES = {
-    "Darwin-arm64": (8.672, 0.50),
-    "Linux-x86_64": (9.404, 0.45),
+    "Darwin-arm64": (8.666, 0.50),
+    "Linux-x86_64": (9.392, 0.45),
 }
 GOLDEN_SCORE_S, GOLDEN_COMMAND_VX = GOLDEN_BASELINES.get(PLATFORM, (None, None))
 needs_golden = pytest.mark.skipif(
@@ -126,8 +131,9 @@ needs_golden = pytest.mark.skipif(
 # falling and counted at the 50 s limit, the other four finishing in 18.1-19.0
 # s. Before training's reset and fifth actuator writes joined the runner it was
 # 18.208 s with all five finishing — close to version 1's 18.216 s by
-# coincidence, not because the physics agreed.
-PINNED_SCORE_S = 24.856
+# coincidence, not because the physics agreed. At version 5, the finishes
+# clocked to the substep: 24.853 s.
+PINNED_SCORE_S = 24.853
 
 
 @needs_golden
@@ -326,3 +332,51 @@ def test_an_unmeasured_platform_is_a_readable_refusal(monkeypatch):
     message = str(caught.value)
     assert "'Plan9-mips'" in message
     assert "BASELINES" in message
+
+
+TUG = load_event("tug-of-war")
+
+
+def test_a_tug_is_rated_by_one_bout_a_seed_against_the_reference(monkeypatch):
+    entry, reference, played = object(), object(), []
+    bouts = {1: (1, "marker", -0.10, ()), 2: (1, "marker", -0.20, ()), 3: (1, "pit", -0.30, (1,)),
+             4: (0, "marker", 0.02, ()), 5: (0, "marker", 0.05, ())}
+    def fake(manifest, west, east, seed, model=None):
+        played.append((seed, west is entry, {id(west), id(east)} == {id(entry), id(reference)}))
+        loser, how, x, pit = bouts[seed]
+        trace = bout_trace(x, pit)
+        trace[:, :, 10] = seed   # a joint column marks the bout a trace comes from
+        return BoutOutcome(seed, loser, how, 45.0, trace, np.zeros((2, 26, 21)), straight(trace), np.full((26, 17, 3), seed))
+    monkeypatch.setattr("arena.evaluate.reference_duck", lambda manifest: reference)
+    monkeypatch.setattr("arena.evaluate.compile_tug", lambda *args: "model")
+    monkeypatch.setattr("arena.evaluate.run_bout", fake)
+    result = evaluate(TUG, entry)
+    assert played == [(1, True, True), (2, False, True), (3, True, True), (4, False, True), (5, True, True)]
+    assert [s.status for s in result.per_seed] == ["won", "lost", "pit_won", "won", "lost"]
+    assert [s.score_cm for s in result.per_seed] == pytest.approx([10.0, -20.0, 130.0, 2.0, -5.0])
+    assert (result.score, result.trace_seed, result.seeds_finished) == (pytest.approx(23.4), 4, 5)
+    assert (result.command_vx, result.scan, result.trace.shape, result.settle.shape) == (-0.3, (), (2, 1, 21), (2, 26, 21))
+    assert (result.trace[:, :, 10] == 4).all()
+    assert (result.string.shape, result.string_settle.shape) == ((1, 17, 3), (26, 17, 3))
+    assert result.string[0, 8, 0] == pytest.approx(0.02) and (result.string_settle == 4).all()   # the traced bout's
+
+
+def test_the_reference_against_itself_gains_no_ground_on_the_marker():
+    """A pit may still happen: the string's weight hanging in it can draw a stalemate into the
+    pit (spec 2026-10-21). Every bout the marker decides stays within 10 cm of the centre line."""
+    result = evaluate(TUG, reference_duck(TUG))
+    assert any(s.status in ("won", "lost") for s in result.per_seed)   # at least one bout the marker decided
+    assert all(abs(s.score_cm) < 10.0 for s in result.per_seed if not s.status.startswith("pit"))
+    assert result.trace.shape[0] == 2 and result.settle.shape == (2, 26, 21)
+
+
+def test_a_duck_that_walks_forward_drops_itself_in_and_rates_below_minus_the_bonus():
+    with pytest.raises(ValueError, match="against its reference duck"):   # a tug takes no cast
+        evaluate(TUG, object(), cast=())
+    result = evaluate(TUG, load_policy(ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"))
+    assert {s.status for s in result.per_seed} == {"pit_lost"} and result.score < -TUG.rating.pit_bonus_cm
+
+
+def test_a_seed_row_carries_centimetres_only_on_a_tug():
+    assert seed_row(SeedResult(2, "won", 45.0, 12.5)) == {"seed": 2, "status": "won", "time_s": 45.0, "score_cm": 12.5}
+    assert seed_row(SeedResult(1, "finish", 4.9)) == {"seed": 1, "status": "finish", "time_s": 4.9}

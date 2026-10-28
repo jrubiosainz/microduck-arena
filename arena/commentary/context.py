@@ -11,9 +11,10 @@ import unicodedata
 from dataclasses import dataclass
 
 from ..index import by_user, leaderboard, sort_key, standing
-from ..manifest import Manifest
+from ..manifest import Manifest, higher_wins
 from ..points import Receipt
 from ..store import RunRecord
+from ..tug import FAULT_PITS
 
 
 @dataclass(frozen=True)
@@ -45,10 +46,23 @@ def label(value, limit: int = 80) -> bool:
             and not technical_text(value))
 
 
+# A gap in centimetres under which two ratings are close, and over which a better one is a big step.
+NOTABLE_GAP_CM = 5.0
+
+
+def measure(manifest: Manifest) -> tuple[str, str]:
+    """What the board's score is called and counted in: a rating in centimetres where higher wins,
+    else a time in seconds."""
+    return ("rating", "cm") if higher_wins(manifest.id) else ("time", "s")
+
+
 def nature(manifest: Manifest) -> tuple[str, tuple[str, ...]]:
     """What kind of contest this is, in words and in tags the bible matches on."""
     if manifest.course.kind == "stage":
         return "a performance on a stage decided by the public's votes", ("vote",)
+    if manifest.course.kind == "tug":
+        return ("a pulling contest against the Arena's reference duck: the two are tied by a string "
+                "across a pit in a wrestling ring and each pulls by walking backwards"), ("tug",)
     length = f"{manifest.course.length_m:g} m"
     if manifest.lights is not None:
         return (f"a {length} game of red light, green light: walk on green, stand still on red",
@@ -83,6 +97,20 @@ def _unfinished(record: RunRecord) -> tuple[str, tuple[str, ...]]:
     return f"the duck {' and '.join(said)} of them", tags
 
 
+def _rating_result(record: RunRecord, manifest: Manifest) -> Fact:
+    bonus = manifest.rating.pit_bonus_cm
+    won = sum(1 for s in record.per_seed if s.status in ("won", "pit_won"))
+    faults = sum(1 for s in record.per_seed if s.status == "fault")
+    text = (f"The rating is {record.score:.1f} cm: the ground the duck won from the reference duck in "
+            f"{len(record.per_seed)} bouts, on average, {bonus:g} cm more for dragging it into the pit and "
+            f"{bonus:g} cm less for being dragged in; it won {won} of them.")
+    if faults:
+        text += (f" It faulted in {faults}, {FAULT_PITS * bonus:g} cm less each: the bout stopped because the duck "
+                 f"gave no valid action, or broke the simulation.")
+    traced = next(s.status for s in record.per_seed if s.seed == record.trace_seed)
+    return Fact("run#/result", text, "result", (traced,))
+
+
 def _result(record: RunRecord, manifest: Manifest) -> Fact:
     if manifest.course.kind == "stage":
         # A performance is not a race: its length is the only time it has, and
@@ -90,6 +118,8 @@ def _result(record: RunRecord, manifest: Manifest) -> Fact:
         text = (f"The performance lasts {record.score:.2f} s." if record.seeds_finished
                 else "The performance was cut short.")
         return Fact("run#/result", text, "result", ("performance",))
+    if manifest.course.kind == "tug":
+        return _rating_result(record, manifest)
     who = f"@{record.user}"
     total = len(record.per_seed)
     how, tags = _unfinished(record)
@@ -122,9 +152,10 @@ def _board(record: RunRecord, manifest: Manifest, event_runs) -> Fact:
     text = f"On the {manifest.title} board this run ranks {rank} of {size}"
     tags = ["podium"] if rank <= 3 else []
     if record.seeds_finished:
-        gap = record.score - leader.score
-        text += f", {gap:.2f} s behind the leader, @{leader.user}."
-        if gap < 0.5:
+        unit = measure(manifest)[1]
+        gap = abs(record.score - leader.score)
+        text += f", {gap:.2f} {unit} behind the leader, @{leader.user}."
+        if gap < (NOTABLE_GAP_CM if unit == "cm" else 0.5):
             tags.append("close")
         return Fact("run#/board", text, "result", tuple(tags))
     return Fact("run#/board", text + ".", "result", tuple(tags))
@@ -201,7 +232,7 @@ def result_facts(record: RunRecord, manifest: Manifest, event_runs, receipts) ->
     who = f"@{record.user}"
     policy = record.policy_name if label(record.policy_name) else None
     note = _note(record)
-    doing = "performing" if manifest.course.kind == "stage" else "racing"
+    doing = {"stage": "performing", "tug": "pulling with"}.get(manifest.course.kind, "racing")
     facts = [
         Fact("run#/event", f"The event is the {manifest.title}, {what}.", "result", tags),
         Fact("run#/participant",

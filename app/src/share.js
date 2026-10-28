@@ -2,7 +2,7 @@
 // networks that take uploads only, and the clip downloads. The row is
 // markup: every link works with no script at all.
 
-import { isStage } from "./format.js";
+import { isStage, isTug } from "./format.js";
 
 export const HASHTAG = "#MicroduckArena";
 const MENTIONS = { x: "@pollenrobotics @huggingface" };
@@ -31,7 +31,9 @@ export function postText(run, { origin, network }) {
   const total = run.seeds_total;
   const earned = run.receipts.reduce((sum, r) => sum + r.points, 0);
   const points = earned > 0 ? ` (+${earned} pts)` : "";
+  const place = run.on_board && !run.withdrawn ? `, #${run.rank} on the board` : "";
   const stage = isStage(run.event);
+  const tug = isTug(run.event);
   // A troupe is shared as the robot ducks it is.
   const troupe = stage && run.cast.length > 1;
   let result;
@@ -39,6 +41,8 @@ export function postText(run, { origin, network }) {
     result = run.seeds_finished === 0
       ? `${troupe ? "Their" : "Its"} performance on ${run.event.title} was cut short.`
       : `On ${run.event.title} ${troupe ? "they" : "it"} gave a ${run.score.toFixed(2)} s performance${points}.`;
+  } else if (tug) {
+    result = `On ${run.event.title} its rating is ${run.score.toFixed(1)} cm against the reference duck${place}${points}.`;
   } else if (run.seeds_finished === 0) {
     const fell = run.per_seed.some((s) => s.status === "fall");
     // Red light, green light ends a run that moves under a red: standing, so no fall, and early, so no clock.
@@ -46,11 +50,10 @@ export function postText(run, { origin, network }) {
     const why = fell ? "it ate the floor" : caught ? "it got caught moving on a red light" : "it ran out of time";
     result = `On ${run.event.title} it finished 0/${total} seeds on its feet — ${why}.`;
   } else {
-    const place = run.on_board && !run.withdrawn ? `, #${run.rank} on the board` : "";
     result = `On ${run.event.title} it finished ${run.seeds_finished}/${total} seeds in ${run.score.toFixed(3)} s${place}${points}.`;
   }
   const lines = [
-    `I coded ${troupe ? "robot ducks" : "a robot duck"} to ${stage ? "perform" : "walk"}. ${result}`,
+    `I coded ${troupe ? "robot ducks" : "a robot duck"} to ${stage ? "perform" : tug ? "pull" : "walk"}. ${result}`,
     `${troupe ? "Watch them" : stage ? "Watch it" : "Beat it"}: ${origin}/r/${run.run_id}`,
   ];
   if (run.policy_url) lines.push(`Weights: ${run.policy_url.replace(/^https?:\/\//, "")}`);

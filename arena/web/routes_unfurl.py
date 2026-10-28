@@ -12,7 +12,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 from ..index import standing
-from ..manifest import load_event
+from ..manifest import higher_wins, load_event
 from .routes_read import _find_run, _withdrawn, clip_url
 
 router = APIRouter()
@@ -25,6 +25,9 @@ def describe(record, place, event) -> str:
         if record.seeds_finished == 0:
             return f"@{record.user}'s duck performed on {event.title}; the performance was cut short."
         return f"@{record.user}'s duck gave a {record.score:.2f} s performance on {event.title}."
+    if higher_wins(event.id):
+        said = f"@{record.user}'s duck holds a {record.score:.1f} cm rating on the {event.title}"
+        return f"{said}, #{place.rank} on the board." if place.on_board else f"{said}."
     seeds = len(record.per_seed)
     if record.seeds_finished == 0:
         return f"@{record.user}'s duck went down on {event.title}: 0/{seeds} seeds finished."

@@ -1,18 +1,21 @@
 // One race: the stage, the entry column beside it, the standing beneath.
 
 import {
+  getCups,
   getEvents,
   getLeaderboard,
   getMe,
+  getString,
   getTrace,
   withdrawRun,
 } from "./api.js";
 import { boardsheetMarkup, podium, wireBoardsheet } from "./boardsheet.js";
 import { replayLane } from "./cast.js";
+import { cupDaysLeft } from "./cup.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { colourLanes } from "./lanes.js";
 import { MIN } from "./brightness.js";
-import { formatEventFacts, isStage } from "./format.js";
+import { formatEventFacts, isStage, isTug } from "./format.js";
 import { roundCard } from "./roundcard.js";
 import { dress, eventGuideHref, menuHref } from "./router.js";
 import { footer, settleIdentity, signage } from "./signage.js";
@@ -59,9 +62,12 @@ export function renderEventFacts(root, event) {
   caveat.textContent = isStage(event)
     ? "Performances play on this stage, with this friction and this physics build. A " +
       "policy tuned elsewhere can perform differently here."
-    : "Times are measured on this course, with this friction and this " +
-      "physics build. A policy tuned elsewhere can do worse here without " +
-      "being worse.";
+    : isTug(event)
+      ? "Ratings are measured in bouts against the reference duck, with this friction and this physics build. A " +
+        "policy tuned elsewhere can pull less here without being weaker."
+      : "Times are measured on this course, with this friction and this " +
+        "physics build. A policy tuned elsewhere can do worse here without " +
+        "being worse.";
   facts.after(caveat);
   return caveat;
 }
@@ -79,6 +85,25 @@ export function renderEventFacts(root, event) {
 export function renderVoteButton(root, event) {
   if (!event.vote) return;
   root.querySelector(".entry-col").prepend(voteButton(event));
+}
+
+/**
+ * A versus event's days left before its cup, atop the entry column, above training: the date a player trains
+ * for, and the way to the cup's page. Given the cups the page fetched, so the placement is testable without one.
+ */
+export function renderCupDaysLeft(root, event, cups, nowMs = Date.now()) {
+  const { cup, left, href } = cupDaysLeft(event.id, cups, nowMs);
+  const link = document.createElement("a");
+  link.className = "cup-left";
+  link.href = href;
+  const name = document.createElement("span");
+  name.className = "cup-left__cup";
+  name.textContent = cup;
+  const days = document.createElement("strong");
+  days.className = "cup-left__days";
+  days.textContent = left;
+  link.append(name, days);
+  root.querySelector(".entry-col").prepend(link);
 }
 
 /**
@@ -193,6 +218,12 @@ export async function renderRace(root, { event, state }) {
   });
   renderVoteButton(root, event);
   renderTrainPanel(root, event);
+  // Like the strip: the page does not wait for it, and a cup that does not answer leaves it off, named.
+  if (event.category === "versus") {
+    getCups(event.id)
+      .then((cups) => renderCupDaysLeft(root, event, cups))
+      .catch((error) => console.error("The cup's days left did not load:", error));
+  }
 
   renderEventFacts(root, event);
 
@@ -218,14 +249,25 @@ export async function renderRace(root, { event, state }) {
   const liveries = new Map(); // run id -> the colourway it raced in
   const names = new Map(); // run id -> whose run it is, for the plate over its duck
   const casts = new Map(); // run id -> every duck it put on the stage (cast.js)
+  const seeds = new Map(); // run id -> the seed its bout replays, which says the entry's end of the string
 
   async function traceFor(runId) {
     if (!traces.has(runId)) traces.set(runId, await getTrace(runId));
     return traces.get(runId);
   }
 
+  // A rated run's string beside its ducks: the page plays no settle, so its timed frames only.
+  const strings = new Map();
+  async function stringFor(runId) {
+    if (!strings.has(runId)) strings.set(runId, { trace: (await getString(runId)).trace });
+    return strings.get(runId);
+  }
+
   async function race(runIds, tiers = new Map()) {
-    const published = await Promise.all(runIds.map(traceFor));
+    const [published, strung] = await Promise.all([
+      Promise.all(runIds.map(traceFor)),
+      Promise.all(isTug(event) ? runIds.map(stringFor) : []),
+    ]);
     const lanes = runIds.map((runId, i) => replayLane(event, casts.get(runId), published[i], {
       runId,
       tier: tiers.get(runId) ?? "ghost",
@@ -233,8 +275,11 @@ export async function renderRace(root, { event, state }) {
       livery: liveries.get(runId) ?? "classic",
       // The plate over the duck: the viewer builds one for a lane with a name.
       name: names.get(runId),
-    }));
-    viewer.setLanes(arrangeLanes(board, isStage(event) ? lanes.slice(0, 1) : lanes), event);
+      traceSeed: seeds.get(runId),
+    }, strung[i]));
+    // A performance plays alone on the stage, a rated run alone against the reference duck.
+    const solo = isStage(event) || isTug(event);
+    viewer.setLanes(arrangeLanes(board, solo ? lanes.slice(0, 1) : lanes), event);
   }
 
   // The sheet keeps the lanes and the filters; the page races what is ticked.
@@ -247,6 +292,7 @@ export async function renderRace(root, { event, state }) {
         liveries.set(row.run_id, row.livery ?? "classic");
         names.set(row.run_id, row.user);
         casts.set(row.run_id, row.cast);
+        seeds.set(row.run_id, row.trace_seed);
       }
       return rows;
     },

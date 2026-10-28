@@ -259,12 +259,17 @@ export function buildGym(length, minZ, maxZ, branding, trackSpan) {
     box(left + 1.25, 0.25, side * (wallZ - 0.42), 2.1, 0.09, 0.35, timber);
     for (const dx of [-0.85, 0.85]) box(left + 1.25 + dx, 0.1, side * (wallZ - 0.42), 0.08, 0.25, 0.3, frame);
   }
-  // Painted court markings on the parquet surrounding the miniature track.
+  // Painted court markings on the parquet surrounding the miniature track. The centre line stops at
+  // the track's edges: the track hides it there, and a tug's pit opens under it.
   const linePaint = new MeshBasicMaterial({ color: 0xf4efd9 });
   const courtX = width - 2;
   const courtZ = depth - 2;
   for (const z of [-courtZ / 2, courtZ / 2]) box(centre, -0.012, z, courtX, 0.002, 0.035, linePaint);
-  for (const x of [centre - courtX / 2, centre, centre + courtX / 2]) box(x, -0.012, 0, 0.035, 0.002, courtZ, linePaint);
+  for (const x of [centre - courtX / 2, centre + courtX / 2]) box(x, -0.012, 0, 0.035, 0.002, courtZ, linePaint);
+  for (const side of [-1, 1]) {
+    const reach = courtZ / 2 + side * centreZ - trackSpan / 2;
+    box(centre, -0.012, side * (courtZ / 2 - reach / 2), 0.035, 0.002, reach, linePaint);
+  }
   const circle = new Mesh(new RingGeometry(1.05, 1.085, 64), linePaint);
   circle.rotation.x = -Math.PI / 2;
   circle.position.set(centre, -0.012, 0);

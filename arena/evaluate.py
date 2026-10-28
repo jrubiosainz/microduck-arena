@@ -25,6 +25,14 @@ A stage is not a race and none of this applies to it: it plays the entry's
 cast once (every duck of its troupe, arena/cast.py), on one seed, and every
 performance that plays to the end goes to the voters. Its score is the
 duration played, and only informs: a stage's board ranks on votes.
+
+A tug's rating is neither: the entry plays one bout a seed against the reference duck
+(arena/tug.py), west on odd seeds and east on even, on the event's own command. Nothing is
+swept: every duck walks backwards at the same command, and what is measured is the centimetres
+of ground the entry won, the marker's distance from the centre line towards its own side, plus
+the event's pit bonus when only the opponent went into the pit, minus it when only the entry
+did. The rating is the mean of those over every seed, and a higher one is better. The replay
+is the lower-median seed by score.
 """
 
 import statistics
@@ -33,10 +41,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from .constants import RUNNER_VERSION
-from .course import compile_course
+from .course import compile_course, compile_tug
 from .manifest import Manifest
 from .runner import Performer, run_once, run_stage
 from .timeline import Start, constant_timeline
+from .tug import bout_score_cm, bout_status, entry_side, reference_duck, run_bout
 
 
 @dataclass(frozen=True)
@@ -44,6 +53,17 @@ class SeedResult:
     seed: int
     status: str
     time_s: float | None
+    # The centimetres a bout won (a pit counts its bonus); only a tug's seeds carry one.
+    score_cm: float | None = None
+
+
+def seed_row(result: SeedResult) -> dict:
+    """A seed as the log and the API write it: a race's and a performance's with no centimetres,
+    a tug seed's with the centimetres it won."""
+    row = {"seed": result.seed, "status": result.status, "time_s": result.time_s}
+    if result.score_cm is not None:
+        row["score_cm"] = result.score_cm
+    return row
 
 
 @dataclass(frozen=True)
@@ -72,12 +92,20 @@ class Evaluation:
     settle: np.ndarray
     trace_seed: int
     runner_version: int
+    # A tug's traced bout's string, (frames, STRING_POINTS, 3), and its settle's, (settle + 1,
+    # STRING_POINTS, 3) (arena/tug.py); None but on a tug.
+    string: np.ndarray | None = None
+    string_settle: np.ndarray | None = None
 
 
 def mean_finish_time(per_seed: tuple[SeedResult, ...], time_limit_s: float) -> float:
     return statistics.fmean(
         r.time_s if r.time_s is not None else time_limit_s for r in per_seed
     )
+
+
+def mean_ground_cm(per_seed: tuple[SeedResult, ...], time_limit_s: float) -> float:
+    return statistics.fmean(r.score_cm for r in per_seed)
 
 
 METRICS = {
@@ -88,6 +116,7 @@ METRICS = {
     # evaluate() ran, because manifest.py accepted "votes" as a metric NAME
     # while this registry had no function behind it.
     "votes": mean_finish_time,
+    "mean_ground_cm": mean_ground_cm,
 }
 
 
@@ -189,6 +218,10 @@ def evaluate_at(manifest: Manifest, policy, command_vx: float) -> Evaluation:
 def evaluate(manifest: Manifest, policy, cast: tuple[Performer, ...] | None = None) -> Evaluation:
     if manifest.course.kind == "stage":
         return _evaluate_stage(manifest, policy, cast)
+    if manifest.course.kind == "tug":
+        if cast is not None:
+            raise ValueError(f"{manifest.id} rates the entry alone, against its reference duck")
+        return _evaluate_rating(manifest, policy)
     if cast is not None:
         raise ValueError(f"{manifest.id} is a race: it races the entry alone, on the event's command")
     model = compile_course(manifest)  # compiled once, reused for every run
@@ -248,6 +281,36 @@ def evaluate(manifest: Manifest, policy, cast: tuple[Performer, ...] | None = No
         settle=outcomes[(command_vx, trace_seed)].settle,
         trace_seed=trace_seed,
         runner_version=RUNNER_VERSION,
+    )
+
+
+def _evaluate_rating(manifest: Manifest, policy) -> Evaluation:
+    """The entry in one bout a seed against the reference duck, west on odd seeds. A bout always
+    ends with a score, so every seed counts as finished."""
+    model, reference = compile_tug(manifest), reference_duck(manifest)
+    outcomes, per_seed = {}, []
+    for seed in manifest.seeds:
+        entry = entry_side(seed)
+        west, east = (policy, reference) if entry == 0 else (reference, policy)
+        out = outcomes[seed] = run_bout(manifest, west, east, seed, model)
+        per_seed.append(SeedResult(seed, bout_status(out, entry), out.time_s,
+                                   bout_score_cm(out, entry, manifest.rating.pit_bonus_cm)))
+    per_seed = tuple(per_seed)
+    ranked = sorted(per_seed, key=lambda r: (r.score_cm, r.seed))
+    traced = outcomes[ranked[(len(ranked) - 1) // 2].seed]
+    return Evaluation(
+        event_id=manifest.id,
+        score=METRICS[manifest.metric](per_seed, manifest.time_limit_s),
+        command_vx=manifest.command[0],
+        seeds_finished=len(per_seed),
+        per_seed=per_seed,
+        scan=(),
+        trace=traced.trace,
+        settle=traced.settle,
+        trace_seed=traced.seed,
+        runner_version=RUNNER_VERSION,
+        string=traced.string,
+        string_settle=traced.string_settle,
     )
 
 

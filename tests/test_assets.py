@@ -1,3 +1,5 @@
+import hashlib
+
 import mujoco
 import pytest
 
@@ -28,3 +30,12 @@ def test_vendored_mjcf_compiles(rig, xml_name, n_body_joints):
 
 def test_reference_policy_present():
     assert (ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx").is_file()
+
+
+REFERENCE_SHA256 = "245869c02049f29f453d48619969b2ef51d73d9751813ddac2b979be6a3b2e44"
+
+
+def test_the_tug_reference_duck_is_t20_500_byte_for_byte():
+    """Every tug rating is bouts against it: an LFS pointer or another checkpoint changes them all."""
+    blob = (ASSET_ROOT / "policies" / "tug-reference-t20-500.onnx").read_bytes()
+    assert hashlib.sha256(blob).hexdigest() == REFERENCE_SHA256

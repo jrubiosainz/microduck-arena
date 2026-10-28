@@ -23,6 +23,7 @@ class FakeHub:
         self.head, self.info_delay_s, self.down = 0, info_delay_s, False
         self.infos = 0
         self.downloads: list[list[str]] = [[]]
+        self.messages: list[str] = []
 
     @property
     def sha(self):
@@ -58,7 +59,11 @@ class FakeHub:
         out.write_bytes(self.trees[revision][filename])
         return str(out)
 
+    def file_exists(self, repo_id, filename, repo_type):
+        return filename in self.files
+
     def create_commit(self, repo_id, repo_type, commit_message, operations):
+        self.messages.append(commit_message)
         for op in operations:
             self.put(op.path_in_repo, op.path_or_fileobj)
         self.commit()
@@ -170,6 +175,14 @@ def test_concurrent_readers_share_one_refresh(tmp_path):
     assert len({id(snapshot) for snapshot in got}) == 1
 
 
+def test_a_run_is_committed_with_its_score_in_seconds_or_centimetres(tmp_path):
+    hub = FakeHub(tmp_path)
+    store = HubStore("org/runs", api=hub)
+    store.append(make_record(score=21.5), b"trace")
+    store.append(make_record(event_id="tug-of-war", score=-15.24), b"trace")
+    assert hub.messages == ["sprint-2m: alice 21.500s", "tug-of-war: alice -15.2 cm"]
+
+
 def test_a_write_is_read_back_at_once(tmp_path):
     hub = FakeHub(tmp_path)
     record = make_record()
@@ -217,3 +230,42 @@ def test_a_hub_down_at_the_first_read_is_an_error(tmp_path):
     hub.down = True
     with pytest.raises(ConnectionError):
         HubStore("org/runs", api=hub).snapshot()
+
+
+def test_cup_files_are_one_commit_and_never_written_twice(tmp_path):
+    hub = FakeHub(tmp_path)
+    store = HubStore("org/runs", api=hub, snapshot_ttl_s=60)
+    store.put_cup_files("tug-of-war", 1, {"draw.json": b"{}", "bouts/m-0.npz": b"z"})
+    assert hub.head == 1
+    assert store.cup_file("tug-of-war", 1, "bouts/m-0.npz") == b"z" and store.cup_numbers("tug-of-war") == [1]
+    with pytest.raises(FileExistsError):
+        store.put_cup_files("tug-of-war", 1, {"draw.json": b"{}"})
+    assert hub.head == 1
+
+
+def test_a_bout_trace_is_fetched_when_it_is_read_not_with_the_snapshot(tmp_path):
+    """A cup of 25 entrants has some 150 bout traces: a boot would download every cup's, for a match page or a clip
+    that reads a few."""
+    hub = FakeHub(tmp_path)
+    hub.put("cups/tug-of-war/0001/draw.json", b"{}")
+    hub.put("cups/tug-of-war/0001/bouts/tug-of-war-0001-000-0.npz", b"bout")
+    hub.commit()
+    store = HubStore("org/runs", api=hub)
+    assert store.cup_numbers("tug-of-war") == [1]
+    assert hub.downloads[-1] == ["cups/tug-of-war/0001/draw.json"]
+    assert store.cup_file("tug-of-war", 1, "bouts/tug-of-war-0001-000-0.npz") == b"bout"
+    assert hub.downloads[-1][-1] == "cups/tug-of-war/0001/bouts/tug-of-war-0001-000-0.npz"
+
+
+def test_a_stale_snapshot_never_lets_a_cup_file_be_written_twice(tmp_path):
+    """A slow Hub keeps the last snapshot; the write-once check asks the Hub itself, so a second draw.json (a new
+    secret over computed matches) never lands."""
+    hub = FakeHub(tmp_path)
+    store = HubStore("org/runs", api=hub, snapshot_ttl_s=60)
+    store.snapshot()
+    hub.put("cups/tug-of-war/0001/draw.json", b"first")
+    hub.commit()
+    hub.down = True
+    with pytest.raises(FileExistsError):
+        store.put_cup_files("tug-of-war", 1, {"draw.json": b"second"})
+    assert hub.files["cups/tug-of-war/0001/draw.json"] == b"first" and hub.head == 1

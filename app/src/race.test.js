@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  arrangeLanes, otherRounds, raceHall, renderEventFacts, renderVoteButton,
+  arrangeLanes, otherRounds, raceHall, renderCupDaysLeft, renderEventFacts, renderVoteButton,
 } from "./race.js";
 
 const event = {
@@ -53,6 +53,16 @@ describe("renderEventFacts: the caveat under the facts", () => {
     expect([...root.querySelectorAll("dt")].map((n) => n.textContent)).toEqual(["stage", "performance", "rig"]);
     expect(caveat.textContent).toContain("Performances play on this stage");
   });
+
+  it("a tug's caveat speaks of ratings", () => {
+    const TUG = { id: "tug-of-war", course: "tug", rig: "legs", ring_m: 3, pit_m: 0.3, bout: { time_limit_s: 45 } };
+    const root = document.createElement("div");
+    root.innerHTML = '<dl id="facts"></dl>';
+    expect(renderEventFacts(root, TUG).textContent).toBe(
+      "Ratings are measured in bouts against the reference duck, with this friction and this physics build. A policy tuned elsewhere can " +
+      "pull less here without being weaker.",
+    );
+  });
 });
 
 
@@ -81,6 +91,20 @@ describe("renderVoteButton: the way into the booth, at the top of the entry colu
     const div = root();
     renderVoteButton(div, { id: "sprint-2m" });
     expect(div.querySelector(".vote-button")).toBeNull();
+  });
+});
+
+describe("renderCupDaysLeft: a versus page's days left, atop the entry column", () => {
+  it("tops the column, above training, as the way to the cup", () => {
+    const div = document.createElement("div");
+    div.innerHTML = '<div class="entry-col"><details class="train"></details><a class="help-link"></a></div>';
+    const cups = { next: { number: 1, close_at: "2026-10-30T15:00:00Z", premiere_at: "2026-10-30T17:00:00Z", entrants: [] }, cups: [] };
+    renderCupDaysLeft(div, { id: "tug-of-war" }, cups, Date.parse("2026-10-22T21:00:00Z"));
+    const days = div.querySelector(".entry-col").firstElementChild;
+    expect(days.className).toBe("cup-left");
+    expect(days.getAttribute("href")).toBe("#/c/tug-of-war/1");
+    expect(days.querySelector(".cup-left__cup").textContent).toBe("Cup #1");
+    expect(days.querySelector(".cup-left__days").textContent).toBe("7 days left");
   });
 });
 

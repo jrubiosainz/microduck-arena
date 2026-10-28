@@ -1,10 +1,13 @@
+import threading
+import time
+
 import pytest
 from websockets.exceptions import ConnectionClosedError
 
 from arena.commentary.tab import PlanTab
 
 PLAN = {"duration_ms": 4000, "captions": [], "notes": [], "gestures": []}
-READY = "Boolean(window.plan)"
+READY = "Boolean(window.plan && window.planCall)"
 
 
 class FakeTab:
@@ -126,6 +129,39 @@ def test_closing_closes_the_browser(monkeypatch):
     assert tab._chrome is None
 
 
+def test_closing_waits_for_an_ask_in_progress(monkeypatch):
+    """The reserve's thread may be asking the page when the app shuts down: the browser is not
+    closed under it."""
+    asking, answered = threading.Event(), threading.Event()
+
+    class Slow(FakeTab):
+        def evaluate(self, expression, await_promise=False, timeout=60.0):
+            if expression == READY:
+                return True
+            asking.set()
+            answered.wait(5)
+            return PLAN
+
+    class SlowChrome(FakeChrome):
+        def tab(self, width, height):
+            return Slow()
+
+    monkeypatch.setattr("arena.commentary.tab.Chrome", SlowChrome)
+    tab = PlanTab("http://127.0.0.1:8000", binary="/chrome")
+    reserve = threading.Thread(target=lambda: tab.prepare({"run_id": "a", "turns": []}))
+    reserve.start()
+    asking.wait(5)
+    chrome = tab._chrome
+    closing = threading.Thread(target=tab.close)
+    closing.start()
+    closing.join(0.2)
+    assert not chrome.closed
+    answered.set()
+    reserve.join(5)
+    closing.join(5)
+    assert chrome.closed and tab._chrome is None
+
+
 def test_no_chrome_on_the_machine_is_told_plainly(monkeypatch):
     monkeypatch.setattr("arena.commentary.tab.find_chrome", lambda: None)
     with pytest.raises(RuntimeError, match="no Chrome"):
@@ -194,3 +230,41 @@ def test_a_page_that_never_becomes_ready_is_recovered_from_on_a_later_turn(monke
     assert opened[0].closed
     assert plan.prepare({"run_id": "a", "turns": []}) == PLAN
     assert len(opened) == 2
+
+
+def test_a_call_is_planned_by_the_page(monkeypatch):
+    monkeypatch.setattr("arena.commentary.tab.Chrome", FakeChrome)
+    with PlanTab("http://127.0.0.1:8000", binary="/chrome") as tab:
+        assert tab.prepare_call({"id": "m", "lines": [], "duration_ms": 4000}) == PLAN
+        assert tab._tab.asked[0].startswith("window.planCall(")
+
+
+def test_two_threads_never_ask_the_page_at_once(monkeypatch):
+    inside = []
+    most = []
+
+    class Slow(FakeTab):
+        def evaluate(self, expression, await_promise=False, timeout=60.0):
+            if expression == READY:
+                return True
+            inside.append(1)
+            most.append(len(inside))
+            time.sleep(0.05)
+            inside.pop()
+            return PLAN
+
+    class SlowChrome(FakeChrome):
+        def tab(self, width, height):
+            return Slow()
+
+    monkeypatch.setattr("arena.commentary.tab.Chrome", SlowChrome)
+    with PlanTab("http://127.0.0.1:8000", binary="/chrome") as tab:
+        tab.prepare({"run_id": "warm", "turns": []})
+        most.clear()
+        reserve = threading.Thread(target=lambda: [tab.prepare({"run_id": "a", "turns": []}) for _ in range(5)])
+        worker = threading.Thread(target=lambda: [tab.prepare_call({"id": "m", "lines": [], "duration_ms": 4000}) for _ in range(5)])
+        reserve.start()
+        worker.start()
+        reserve.join()
+        worker.join()
+    assert max(most) == 1

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createChannel } from "./channel.js";
+import { PREFETCH_MS, createChannel } from "./channel.js";
 
 function segment() {
   return { prepare: vi.fn(), show: vi.fn(), play: vi.fn(), seek: vi.fn(), stop: vi.fn(), failed: false };
@@ -15,17 +15,18 @@ const slots = [
 ];
 
 describe("createChannel", () => {
-  let now, replay, booth, shutter, onState, onReload, gust, channel;
+  let now, replay, booth, desk, shutter, onState, onReload, gust, channel;
   beforeEach(() => {
     now = 0;
     replay = segment();
     booth = segment();
+    desk = segment();
     shutter = { draw: vi.fn(), hide: vi.fn() };
     onState = vi.fn();
     onReload = vi.fn();
     gust = vi.fn();
     channel = createChannel({
-      clock: { position: () => now }, segments: { replay, booth }, shutter, onState, onReload, gust,
+      clock: { position: () => now }, segments: { replay, booth, desk }, shutter, onState, onReload, gust,
     });
     channel.update({ slots });
   });
@@ -98,6 +99,16 @@ describe("createChannel", () => {
     expect(shutter.draw).toHaveBeenLastCalledWith(800, null);
   });
 
+  it("silences a segment that fails while it plays, under the panel that holds over it", () => {
+    now = 2000;
+    channel.tick();
+    expect(replay.stop).not.toHaveBeenCalled();
+    replay.failed = true;
+    channel.tick();
+    expect(replay.stop).toHaveBeenCalled();
+    expect(shutter.draw).toHaveBeenLastCalledWith(800, null);
+  });
+
   it("is off air with no slot, halts and resumes, and rejoins after a refusal", () => {
     channel.update({ slots: [] });
     channel.tick();
@@ -126,6 +137,49 @@ describe("createChannel", () => {
     now = 10500;
     channel.tick();
     expect(onReload).toHaveBeenCalledTimes(1);
+  });
+
+  it("prepares a cup match only from PREFETCH_MS before it airs, inside the 30 s its clip is served", () => {
+    const cup = [
+      { kind: "replay", at_ms: 0, duration_ms: 60000, run_id: "m0", clip: "v", media: "match" },
+      { kind: "shutter", at_ms: 60000, duration_ms: 1600, next: { match_id: "m1", title: "Final" } },
+      { kind: "replay", at_ms: 61600, duration_ms: 60000, run_id: "m1", clip: "v", media: "match" }];
+    channel.update({ slots: cup });
+    now = 61_600 - PREFETCH_MS - 1;
+    channel.tick();
+    expect(replay.prepare).not.toHaveBeenCalledWith(cup[2]);
+    now = 61_600 - PREFETCH_MS;
+    channel.tick();
+    expect(replay.prepare).toHaveBeenCalledWith(cup[2]);
+    expect(PREFETCH_MS).toBe(25_000);
+  });
+
+  it("prepares a segment no shutter stands before, within PREFETCH_MS of its start", () => {
+    // Peter and Ray at the desk straight after a match, with no shutter between.
+    const show = [
+      { kind: "replay", at_ms: 0, duration_ms: 40000, run_id: "m0", clip: "v", media: "match", call: true },
+      { kind: "desk", at_ms: 40000, duration_ms: 40000, show: { event: "tug-of-war", number: 1, segment: "intro-m1" } }];
+    channel.update({ slots: show });
+    now = 10000;
+    channel.tick();
+    expect(desk.prepare).not.toHaveBeenCalled();
+    now = 15000;
+    channel.tick();
+    expect(desk.prepare).toHaveBeenCalledWith(show[1]);
+  });
+
+  it("prepares the segment after a shutter no earlier than PREFETCH_MS before it", () => {
+    const airing = [
+      { kind: "replay", at_ms: 0, duration_ms: 40000, run_id: "A" },
+      { kind: "shutter", at_ms: 40000, duration_ms: 1600, next: null },
+      { kind: "booth", at_ms: 41600, duration_ms: 20000, run_id: "A", broadcast: "b1" }];
+    channel.update({ slots: airing });
+    now = 10000;
+    channel.tick();
+    expect(booth.prepare).not.toHaveBeenCalled();
+    now = 17000;
+    channel.tick();
+    expect(booth.prepare).toHaveBeenCalledWith(airing[2]);
   });
 
   it("says nothing before the first grid, then says a state once until it changes", () => {

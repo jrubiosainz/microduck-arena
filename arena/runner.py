@@ -50,6 +50,7 @@ from .constants import (
     JOINT_NAMES,
     NUM_JOINTS,
     OBS_SIZE,
+    TIMESTEP,
     TRACE_WIDTH,
 )
 from .course import compile_course, compile_stage, duck_prefix, ramp_dir
@@ -189,42 +190,59 @@ class _Duck:
         return DEFAULT_POSE + self.last_action * ACTION_SCALE
 
 
-def _step(model, data, ducks: Sequence[_Duck], commands: Sequence[np.ndarray]) -> None:
+def _step(model, data, ducks: Sequence[_Duck], commands: Sequence[np.ndarray], crossed=None) -> int | None:
     """One control step of the shared physics: every duck observes the same
     state and acts on its own command; then each substep drives every duck's
     servos before its one mj_step, and every duck's servos are driven once more
     after them (training's post-reset write, see the module docstring) before
-    the forward pass."""
+    the forward pass.
+
+    `crossed`, a race's finish line, is asked after each substep; the first
+    substep it holds at is returned, None when it held at none."""
     targets = [duck.act(model, data, command) for duck, command in zip(ducks, commands)]
-    for _ in range(DECIMATION):
+    first = None
+    for substep in range(DECIMATION):
         for duck, target in zip(ducks, targets):
             duck.servos.drive(data, target)
         mujoco.mj_step(model, data)
+        if first is None and crossed is not None and crossed():
+            first = substep
     for duck, target in zip(ducks, targets):
         duck.servos.drive(data, target)
     mujoco.mj_forward(model, data)
+    return first
 
 
 class _Sim:
-    """One run's simulation between control steps: the physics, and every duck on it."""
+    """One run's simulation between control steps: the physics, every duck on it, and the sites
+    whose points it reads (a tug's string; none on a lane or a stage)."""
 
-    def __init__(self, model, data, ducks: list[_Duck]):
-        self.model, self.data, self.ducks = model, data, ducks
+    def __init__(self, model, data, ducks: list[_Duck], sites=()):
+        self.model, self.data, self.ducks, self.sites = model, data, ducks, sites
 
-    def step(self, commands: Sequence[np.ndarray]) -> None:
-        _step(self.model, self.data, self.ducks, commands)
+    def step(self, commands: Sequence[np.ndarray], crossed=None) -> int | None:
+        return _step(self.model, self.data, self.ducks, commands, crossed)
 
     def record(self, frames: np.ndarray) -> None:
         """This step's frame of every duck, into `frames`, (ducks, TRACE_WIDTH)."""
         for duck, frame in zip(self.ducks, frames):
             _record(frame, self.data, duck.adr)
 
+    def points(self, out: np.ndarray) -> None:
+        """This step's position of every site, into `out`, (sites, 3). Only called with sites:
+        `site_xpos[()]` would be every site of the model."""
+        out[:] = self.data.site_xpos[self.sites]
 
-def _start(manifest: Manifest, model, policies, yaws_deg, seed: int, commands) -> tuple[_Sim, np.ndarray]:
-    """Every run's opening, lane or stage: training's reset of every duck on
+
+def _start(
+    manifest: Manifest, model, policies, yaws_deg, seed: int, commands, sites=()
+) -> tuple[_Sim, np.ndarray, np.ndarray]:
+    """Every run's opening, lane, stage or tug: training's reset of every duck on
     `model` (one policy and one yaw per duck, in duck order), then the untimed
     settle, each duck on its command. Returns the simulation where the clock
-    starts, and the settle's frames, (ducks, settle steps + 1, TRACE_WIDTH)."""
+    starts, the settle's frames, (ducks, settle steps + 1, TRACE_WIDTH), and the
+    points of `sites` beside each, (settle steps + 1, sites, 3): a lane and a
+    stage pass none and record none."""
     data = mujoco.MjData(model)
     adrs = [_Addresses.of(model, manifest.start.keyframe, duck_prefix(k)) for k in range(len(policies))]
     streams = [_streams(manifest.id, seed, k) for k in range(len(policies))]
@@ -248,16 +266,20 @@ def _start(manifest: Manifest, model, policies, yaws_deg, seed: int, commands) -
         each.drive(data, np.zeros(NUM_JOINTS))
     mujoco.mj_forward(model, data)
 
-    sim = _Sim(model, data, [_Duck(data, adr, each, policy) for adr, each, policy in zip(adrs, servos, policies)])
+    ducks = [_Duck(data, adr, each, policy) for adr, each, policy in zip(adrs, servos, policies)]
+    sim = _Sim(model, data, ducks, sites)
     # Settle with the policies running and the clock stopped: nobody is timed on
     # standing up.
     settle_steps = round(manifest.start.settle_s / CTRL_DT)
     settle = np.empty((len(policies), settle_steps + 1, TRACE_WIDTH), dtype=np.float32)
-    sim.record(settle[:, 0])
-    for step in range(settle_steps):
-        sim.step(commands)
-        sim.record(settle[:, step + 1])
-    return sim, settle
+    settle_points = np.empty((settle_steps + 1, len(sites), 3), dtype=np.float32)
+    for frame in range(settle_steps + 1):
+        if frame:
+            sim.step(commands)
+        sim.record(settle[:, frame])
+        if len(sites):
+            sim.points(settle_points[frame])
+    return sim, settle, settle_points
 
 
 @dataclass(frozen=True)
@@ -326,7 +348,7 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     if lights is not None:
         stand = command.copy()
         stand[0:3] = 0.0
-    sim, settle = _start(manifest, model, [policy], [0.0], seed, [command if stand is None else stand])
+    sim, settle, _ = _start(manifest, model, [policy], [0.0], seed, [command if stand is None else stand])
     data, adr = sim.data, sim.ducks[0].adr
 
     direction = ramp_dir(manifest.course.slope_deg)
@@ -349,6 +371,9 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
     # nor under a red light, where it is asked to stand still.
     steering = manifest.steering
 
+    def past_the_line() -> bool:
+        return float(direction @ data.qpos[0:3]) - start_progress >= manifest.course.length_m
+
     for step in range(max_steps):
         if lights is not None and schedule.red[step]:
             asked = stand
@@ -356,7 +381,10 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
             asked = _steered(steering, data, adr, command)
         else:
             asked = command
-        sim.step([asked])
+        # The line is timed to the physics step that crosses it (5 ms), not to
+        # the control step it falls in (20 ms): a five-seed mean to the
+        # millisecond rather than to 4 ms.
+        crossing = sim.step([asked], past_the_line)
         sim.record(frames[:, written])
         written += 1
 
@@ -391,9 +419,9 @@ def run_once(manifest: Manifest, policy, seed: int, model=None, command=None) ->
                 break
 
         progress = float(direction @ data.qpos[0:3]) - start_progress
-        if progress >= manifest.course.length_m:
+        if crossing is not None:
             status = "finish"
-            time_s = (step + 1) * CTRL_DT
+            time_s = (step * DECIMATION + crossing + 1) * TIMESTEP
             break
 
     return RunOutcome(
@@ -437,7 +465,7 @@ def run_stage(manifest: Manifest, cast: Sequence[Performer], seed: int) -> RunOu
     """
     model = compile_stage(manifest, [(p.rig, p.start) for p in cast])
     policies, yaws_deg = [p.policy for p in cast], [p.start.yaw_deg for p in cast]
-    sim, settle = _start(manifest, model, policies, yaws_deg, seed, _commands(cast, 0.0))
+    sim, settle, _ = _start(manifest, model, policies, yaws_deg, seed, _commands(cast, 0.0))
     steps = round(cast[0].timeline.duration_s / CTRL_DT)
     frames = np.empty((len(cast), steps, TRACE_WIDTH), dtype=np.float32)
     status, time_s, written = "finish", steps * CTRL_DT, 0

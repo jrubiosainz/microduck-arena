@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { dress, liveHref, menuHref, parseRoute, playerHref, raceHref, runHref, themeFor, voteHref } from "./router.js";
+import {
+  cupHref, dress, liveHref, matchHref, menuHref, parseRoute, playerHref, raceHref, runHref, themeFor, voteHref,
+} from "./router.js";
 
 describe("parseRoute", () => {
   it("opens guides and shareable sections without confusing them with the home page", () => {
@@ -42,6 +44,13 @@ describe("parseRoute", () => {
     expect(parseRoute("#/live")).toEqual({ view: "live" });
     expect(parseRoute("#/live/")).toEqual({ view: "live" });
     expect(parseRoute(liveHref)).toEqual({ view: "live" });
+  });
+
+  it("opens a cup and a match", () => {
+    expect(parseRoute("#/c/tug-of-war/3")).toEqual({ view: "cup", eventId: "tug-of-war", number: 3 });
+    expect(parseRoute("#/m/tug-of-war-0003-012")).toEqual({ view: "match", matchId: "tug-of-war-0003-012" });
+    expect([cupHref("tug-of-war", 3), matchHref("tug-of-war-0003-012")]).toEqual(["#/c/tug-of-war/3", "#/m/tug-of-war-0003-012"]);
+    expect([themeFor("cup"), themeFor("match")]).toEqual(["club", "race"]);
   });
 
   it("falls back to the home page for anything it does not recognise", () => {

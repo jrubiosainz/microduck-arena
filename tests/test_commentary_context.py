@@ -1,5 +1,7 @@
 """Facts are sentences with references; nothing invented, nothing technical."""
 
+import dataclasses
+
 import pytest
 
 from arena.commentary.context import label, nature, result_facts, technical_text
@@ -239,3 +241,30 @@ def test_a_name_that_is_not_a_label_is_left_out_of_the_troupe():
 
 def test_one_duck_is_told_as_it_always_was():
     assert "run#/troupe" not in facts_of(stage_run())
+
+
+RATED = (SeedResult(1, "won", 45.0, 12.0), SeedResult(2, "won", 45.0, 8.0), SeedResult(3, "lost", 45.0, -4.0),
+         SeedResult(4, "pit_won", 30.0, 130.0), SeedResult(5, "pit_lost", 4.5, -140.0))
+
+
+def test_a_rated_run_states_its_ground_its_wins_and_its_gap_in_centimetres():
+    manifest = load_event("tug-of-war")
+    leader = run("carol", 5.0, "2026-09-10T10:00:00Z", event="tug-of-war", run_id="R0", per_seed=RATED)
+    mine = run("alice", 1.2, "2026-09-11T10:00:00Z", event="tug-of-war", run_id="R1", per_seed=RATED)
+    facts = {f.ref: f for f in result_facts(mine, manifest, [leader, mine], [])}
+    assert facts["run#/event"].text == ("The event is the Tug of War, a pulling contest against the Arena's reference duck: "
+                                        "the two are tied by a string across a pit in a wrestling ring and each pulls by walking backwards.")
+    assert facts["run#/participant"].text == "The participant is @alice, pulling with a policy named alice-v1."
+    assert facts["run#/result"].text == (
+        "The rating is 1.2 cm: the ground the duck won from the reference duck in 5 bouts, on average, 100 cm more "
+        "for dragging it into the pit and 100 cm less for being dragged in; it won 3 of them.")
+    assert facts["run#/result"].tags == ("won",)   # the traced seed, 1
+    dragged = dataclasses.replace(mine, trace_seed=5)
+    assert {f.ref: f for f in result_facts(dragged, manifest, [leader, dragged], [])}["run#/result"].tags == ("pit_lost",)
+    assert facts["run#/board"].text == "On the Tug of War board this run ranks 2 of 2, 3.80 cm behind the leader, @carol."
+    broken = dataclasses.replace(mine, score=-200.0, per_seed=tuple(SeedResult(s, "fault", 0.02, -200.0) for s in range(1, 6)))
+    assert {f.ref: f for f in result_facts(broken, manifest, [leader, broken], [])}["run#/result"].text.endswith(
+        "it won 0 of them. It faulted in 5, 200 cm less each: the bout stopped because the duck gave no valid action, "
+        "or broke the simulation.")
+    assert "close" in facts["run#/board"].tags
+    assert nature(manifest)[1] == ("tug",)

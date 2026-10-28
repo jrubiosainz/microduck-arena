@@ -355,7 +355,7 @@ describe("taking your own entry off the board", () => {
   });
 });
 
-describe("a voted board shows votes, not a time", () => {
+describe("a voted board shows a rating, not a time", () => {
   const votedEvent = { id: "got-a-talent", title: "MicroDuck Got a Talent", metric: "votes" };
 
   function render(rows) {
@@ -364,19 +364,21 @@ describe("a voted board shows votes, not a time", () => {
     return container;
   }
 
-  it("heads that column votes, not time", () => {
-    const container = render([row({ votes: 5 })]);
+  it("heads that column rating, not time", () => {
+    const container = render([row({ votes: 5, shown: 20, rate: 0.25 })]);
     expect(container.querySelector("th.time")).toBeNull();
-    expect(container.querySelector("th.votes").textContent).toBe("votes");
+    expect(container.querySelector("th.rate").textContent).toBe("rating");
   });
 
-  it("shows the vote count, even when it is zero", () => {
-    const container = render([row({ votes: 0 })]);
-    expect(container.querySelector("td.votes").textContent).toBe("0");
+  it("shows the rating as a percentage, and the votes behind it on hover", () => {
+    const container = render([row({ votes: 7, shown: 11, rate: 0.387 })]);
+    const rating = container.querySelector("td.rate");
+    expect(rating.textContent).toBe("39%");
+    expect(rating.title).toBe("7 votes in 11 ballots");
   });
 
   it("never shows a finish time on a voted board -- that is the owner's explicit choice", () => {
-    const container = render([row({ votes: 12 })]);
+    const container = render([row({ votes: 12, shown: 40, rate: 0.3 })]);
     expect(container.querySelector("td.time")).toBeNull();
     expect(container.textContent).not.toContain("11.724s");
   });
@@ -388,18 +390,18 @@ describe("a stage's board has no speed and no seeds: a performance has neither",
     renderBoard(container, {
       event: { id: "got-a-talent", title: "MicroDuck Got a Talent", metric: "votes", course: "stage" },
       rows: [{ rank: 1, user: "ann", policy_name: "p", score: 20, command_vx: 0, seeds_finished: 1, seeds_total: 1,
-               run_id: "r1", submitted_at: "2026-10-01T10:00:00Z", votes: 3 }],
+               run_id: "r1", submitted_at: "2026-10-01T10:00:00Z", votes: 3, shown: 9, rate: 0.28 }],
     });
     const heads = [...container.querySelectorAll("th")].map((th) => th.textContent);
     expect(heads).not.toContain("m/s");
     expect(heads).not.toContain("seeds");
     expect(container.querySelector("td.speed")).toBeNull();
-    expect(container.querySelector("td.votes").textContent).toBe("3");
+    expect(container.querySelector("td.rate").textContent).toBe("28%");
   });
 });
 
 describe("a timed board is unaffected -- renders exactly as before", () => {
-  it("still heads the column time and shows the score, with no votes column at all", () => {
+  it("still heads the column time and shows the score, with no rating column at all", () => {
     const container = document.createElement("div");
     renderBoard(
       container,
@@ -408,8 +410,8 @@ describe("a timed board is unaffected -- renders exactly as before", () => {
     );
     expect(container.querySelector("th.time").textContent).toBe("time");
     expect(container.querySelector("td.time").textContent).toBe("11.724s");
-    expect(container.querySelector("th.votes")).toBeNull();
-    expect(container.querySelector("td.votes")).toBeNull();
+    expect(container.querySelector("th.rate")).toBeNull();
+    expect(container.querySelector("td.rate")).toBeNull();
   });
 });
 
@@ -502,5 +504,19 @@ describe("buildRows: who is on the stage", () => {
     // A Set of nothing is a choice — "clear the stage" — and not the absence
     // of one, which is the whole difference between null and empty here.
     expect(buildRows(rows, { selected: new Set() }).some((row) => row.selected)).toBe(false);
+  });
+});
+
+describe("the tug's board rates in centimetres: no speed, no seeds", () => {
+  it("heads the column rating and reads the ground", () => {
+    const container = document.createElement("div");
+    renderBoard(container, {
+      event: { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_ground_cm" },
+      rows: [row({ score: 12.34 })],
+    });
+    expect(container.querySelector("th.time").textContent).toBe("rating");
+    expect(container.querySelector("td.time").textContent).toBe("12.3 cm");
+    expect(container.querySelector("th.speed")).toBeNull();
+    expect(container.querySelector("th.seeds")).toBeNull();
   });
 });

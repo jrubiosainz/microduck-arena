@@ -4,13 +4,22 @@ import {
   clipUrl,
   getBallot,
   getBallotTrace,
+  getBoutSettle,
+  getBoutTrace,
   getBroadcast,
+  getCall,
+  getCup,
+  getCups,
   getLeaderboard,
   getLive,
+  getMatch,
   getPlayer,
   getStandings,
   getSettle,
+  getShow,
+  getString,
   getTrace,
+  matchClipUrl,
 } from "./api.js";
 
 function respondWith({ ok = true, status = 200, statusText = "OK", body, bytes, headers = {} }) {
@@ -74,6 +83,15 @@ describe("the error contract", () => {
     const settles = await getSettle("01OK");
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/runs/01OK/settle");
     expect(settles.map((duck) => [...duck])).toEqual([[0.5], [0.25]]);
+  });
+});
+
+describe("a tug's string", () => {
+  it("is cut into its settle and its timed frames at the settle's count", async () => {
+    respondWith({ bytes: new Float32Array(5 * 51).buffer, headers: { "X-Frame-Count": "3", "X-Settle-Frame-Count": "2" } });
+    const { settle, trace } = await getString("R1");
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/runs/R1/string");
+    expect([settle.length, trace.length]).toEqual([102, 153]);
   });
 });
 
@@ -169,11 +187,50 @@ describe("the channel", () => {
     expect(await getBroadcast("gone")).toBe(null);
   });
 
+  it("reads a cup's desk segment and a match's call uncached, and nothing before they are served", async () => {
+    respondWith({ body: { plan: { duration_ms: 4000 } } });
+    expect(await getShow("tug-of-war", 1, "opening")).toEqual({ plan: { duration_ms: 4000 } });
+    await getCall("tug-of-war-0001-003");
+    expect(fetch.mock.calls).toEqual([
+      ["/api/live/show/tug-of-war/1/opening", { cache: "no-store" }],
+      ["/api/live/call/tug-of-war-0001-003", { cache: "no-store" }]]);
+    respondWith({ ok: false, status: 404, body: {} });
+    expect(await getShow("tug-of-war", 1, "opening")).toBe(null);
+    expect(await getCall("tug-of-war-0001-003")).toBe(null);
+  });
+
   it("addresses a clip's files under the run, versioned by the render they belong to", () => {
     // The files are cached for a year as immutable, so a clip rendered again
     // on a new stage has to be a new URL or the old one plays for ever.
     expect(clipUrl("01ABC", "clip.mp4", "20260922T151828Z")).toBe(
       "/api/runs/01ABC/clip/clip.mp4?v=20260922T151828Z",
     );
+  });
+});
+
+describe("a cup", () => {
+  it("reads an event's cups and one cup under the event", async () => {
+    respondWith({ body: {} });
+    await getCups("tug-of-war");
+    await getCup("tug-of-war", 3);
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/api/events/tug-of-war/cups", "/api/events/tug-of-war/cups/3"]);
+  });
+});
+
+describe("a match", () => {
+  it("reads a bout as two ducks and versions a match clip's files", async () => {
+    respondWith({ bytes: new Float32Array(84).buffer, headers: { "X-Duck-Count": "2" } });
+    const ducks = await getBoutTrace("tug-of-war-0001-000", 1);
+    expect(fetch).toHaveBeenCalledWith("/api/matches/tug-of-war-0001-000/bouts/1/trace");
+    expect(ducks.map((d) => d.length)).toEqual([42, 42]);
+    expect(matchClipUrl("tug-of-war-0001-000", "landscape.mp4", "v1")).toBe("/api/matches/tug-of-war-0001-000/clip/landscape.mp4?v=v1");
+  });
+
+  it("reads a match and its bouts' settles under the match", async () => {
+    respondWith({ body: {}, bytes: new Float32Array(84).buffer, headers: { "X-Duck-Count": "2" } });
+    await getMatch("tug-of-war-0001-000");
+    await getBoutSettle("tug-of-war-0001-000", 2);
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual(["/api/matches/tug-of-war-0001-000",
+      "/api/matches/tug-of-war-0001-000/bouts/2/settle"]);
   });
 });

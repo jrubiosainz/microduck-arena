@@ -4,7 +4,7 @@
 // preselected, but a DNF never is, because a lane showing a duck that never
 // finished reads as a bug rather than a result.
 
-import { formatScore, formatSeeds, formatSpeed, isStage } from "./format.js";
+import { formatRate, formatScore, formatSeeds, formatSpeed, isStage, isTug } from "./format.js";
 import { LANE_CSS } from "./course.js";
 import { runHref } from "./router.js";
 
@@ -45,7 +45,7 @@ const ENV_ICON =
  * changing what the table lists does not silently re-pick the lanes. Without
  * it the board opens on its own first lanes, which is what a fresh page wants.
  */
-export function buildRows(rows, { me = null, selected = null } = {}) {
+export function buildRows(rows, { me = null, selected = null, metric } = {}) {
   let lanes = 0;
   // The leader is the best PUBLISHED finisher — not simply rank 1, because a
   // DNF ahead of it does not count.
@@ -61,7 +61,7 @@ export function buildRows(rows, { me = null, selected = null } = {}) {
       rank: row.rank,
       user: row.user,
       policy: row.policy_name,
-      score: formatScore(row.score, { finished: row.seeds_finished }),
+      score: formatScore(row.score, { finished: row.seeds_finished, metric }),
       // The speed the harness found for THIS policy. Two rows with similar
       // times can have reached them very differently, and that is the most
       // interesting column on the board.
@@ -80,8 +80,10 @@ export function buildRows(rows, { me = null, selected = null } = {}) {
       // be rejected — not about security, which lives server-side.
       mine: Boolean(me && row.run_id && row.user === me),
       // Only meaningful on a voted board (event.metric === "votes"); ignored
-      // by renderBoard otherwise. The server puts it on every row of one.
+      // by renderBoard otherwise. The server puts them on every row of one.
+      rate: row.rate,
       votes: row.votes,
+      shown: row.shown,
       // The server refuses anything but a few known hosts, so a link that
       // reaches here is one of those. Still opened with noopener/noreferrer.
       envUrl: row.env_url || null,
@@ -101,7 +103,7 @@ export function renderBoard(
   { event, rows },
   { onSelectionChange, onWithdraw, me = null, selected = null } = {},
 ) {
-  const built = buildRows(rows, { me, selected });
+  const built = buildRows(rows, { me, selected, metric: event.metric });
   container.innerHTML = "";
 
   if (built.length === 0) {
@@ -112,19 +114,21 @@ export function renderBoard(
     return;
   }
 
-  // A voted event is held by whoever collected the most votes, so that
-  // column reads "votes" and shows the count -- a finish time would be the
+  // A voted event is held by whoever wins its ballots most often, so that
+  // column reads "rating" and shows the rate -- a finish time would be the
   // wrong fact about it, and does not appear on this board at all.
   const voted = event.metric === "votes";
-  // A performance has no speed and is played once: on a stage, neither column means anything.
-  const stage = isStage(event);
+  // A performance has no speed and is played once, and a tug is rated by its bouts against the reference: on either,
+  // neither column means anything.
+  const stage = isStage(event) || isTug(event);
+  const rated = isTug(event);
 
   const table = document.createElement("table");
   table.className = "board";
   table.innerHTML =
     "<thead><tr><th class='tab'></th><th class='rank'>place</th><th>who</th>" +
     "<th>policy</th>" +
-    (voted ? "<th class='votes'>votes</th>" : "<th class='time'>time</th>") +
+    (voted ? "<th class='rate'>rating</th>" : `<th class='time'>${rated ? "rating" : "time"}</th>`) +
     (stage ? "" : "<th class='speed'>m/s</th><th class='seeds'>seeds</th>") +
     "<th class='record'>record</th>" +
     "<th class='env'></th><th class='grab'></th>" +
@@ -155,6 +159,12 @@ export function renderBoard(
       const td = document.createElement("td");
       td.textContent = text;
       if (className) td.className = className;
+      return td;
+    };
+
+    const rating = () => {
+      const td = cell(formatRate(row.rate), "rate");
+      td.title = `${row.votes} votes in ${row.shown} ballots`;
       return td;
     };
 
@@ -229,9 +239,7 @@ export function renderBoard(
       cell(row.rank, "rank"),
       cell(row.user),
       cell(row.policy),
-      voted
-        ? cell(String(row.votes ?? 0), "votes")
-        : cell(row.score, "time"),
+      voted ? rating() : cell(row.score, "time"),
       ...(stage ? [] : [cell(row.speed, "speed"), cell(row.seeds, "seeds")]),
       record,
       env,

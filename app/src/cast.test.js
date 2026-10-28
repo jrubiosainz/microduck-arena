@@ -4,6 +4,7 @@ import { TRACE_WIDTH, frameCount } from "./replay.js";
 
 const STAGE = { id: "got-a-talent", course: "stage", rig: "legs" };
 const SPRINT = { id: "sprint-2m", course: "lane", rig: "legs" };
+const TUG = { id: "tug-of-war", course: "tug", rig: "legs" };
 /** A borrowed policy as arena/cast.py borrowed_source records it. */
 const borrowed = (user, name) => ({
   repo_id: `${user}/microduck-${name}`, filename: "policy.onnx", revision: "a".repeat(40),
@@ -68,6 +69,12 @@ describe("replayLane", () => {
   it("races a lane's one duck, as it always has", () => {
     const trace = frames(2, 0);
     expect(replayLane(SPRINT, [{ policy: "self", rig: null, start: null, sound: null }], [trace], lane)).toEqual({ ...lane, trace });
+  });
+
+  it("puts a rated run's entry on its end of the string and the reference duck on the other, the string beside them", () => {
+    const [west, east] = [frames(2, 0), frames(2, 1)];
+    expect(replayLane(TUG, [{ policy: "self" }], [west, east], { ...lane, traceSeed: 4 }, { trace: "st" })).toEqual({ ...lane, traceSeed: 4, tug: "bout",
+      ducks: [{ trace: west, livery: "charcoal", name: "Reference" }, { trace: east, livery: "purple", name: "alice" }], string: { trace: "st" } });
   });
 });
 

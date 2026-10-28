@@ -114,6 +114,32 @@ class BallotBook:
                 self._by_token[token] = dataclasses.replace(entry, spent=True)
 
 
+class Decks:
+    """What each voter has been dealt this round (`votes.deal`), held only in memory.
+
+    Dealt when a ballot is ISSUED, not when it is cast: the booth draws the next
+    field while this one plays, before its vote. Memory, like `BallotBook` and
+    for the same reason: a restart deals everyone a fresh deck, which costs no
+    more than an entry seen twice in one round. A field that is issued and never
+    shown — the one waiting when a voter leaves — comes back next round.
+    """
+
+    def __init__(self) -> None:
+        self._dealt: dict[tuple[str, str], set[str]] = {}
+        self._lock = threading.Lock()
+
+    def deal(self, voter: str, event_id: str, candidates, ballot_min: int, ballot_max: int,
+             rng: random.Random):
+        """One ballot's field for this voter, or None when there are too few ducks."""
+        with self._lock:
+            drawn = votes.deal(candidates, self._dealt.get((voter, event_id), set()),
+                               ballot_min, ballot_max, rng)
+            if drawn is None:
+                return None
+            picked, self._dealt[(voter, event_id)] = drawn
+            return picked
+
+
 class VoteBody(BaseModel):
     ballot: str
     lane: int
@@ -182,9 +208,10 @@ def issue_ballot(event_id: str, request: Request, response: Response) -> dict:
         frozenset(w.run_id for w in store.withdrawals()),
         exclude_user=voter,
     )
-    picked = votes.draw(
+    picked = request.app.state.decks.deal(
+        voter,
+        event_id,
         field,
-        votes.impressions(kept),
         manifest.vote.ballot_min,
         manifest.vote.ballot_max,
         random.Random(),

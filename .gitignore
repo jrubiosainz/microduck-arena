@@ -9,3 +9,6 @@ app/node_modules/
 app/dist/
 arena/frontend/
 app/voice/target/
+
+# MuJoCo appends its warnings here, e.g. a tug duck whose action is not a number (tests/test_tug.py)
+MUJOCO_LOG.TXT

@@ -1,10 +1,11 @@
 /* The channel's stage, wherever it plays: the live page, where it is the whole
    window, and the front page, where it is a player framed beside the ladder.
    The clips carry their own bands and the booth its caption panel; the stage
-   adds only the LIVE bug, the shutter, an OFF AIR card and the one button a
-   browser may demand before it plays sound. Every size is taken from the
-   stage's width, set on it in pixels by live.js, so a television, a phone and
-   a card beside the ladder draw the same picture scaled. */
+   adds only the LIVE bug, the shutter, an OFF AIR card, a cup's standby and
+   the one button a browser may demand before it plays sound. Every size is
+   taken from the stage's width, set on it in pixels by live.js, so a
+   television, a phone and a card beside the ladder draw the same picture
+   scaled. */
 
 .live {
   --stage-px: 1280;
@@ -70,6 +71,17 @@
   font: 400 calc(120 * var(--u)) / 1 var(--display); letter-spacing: 0.04em; color: var(--paper);
 }
 .live-card .wordmark { font-size: calc(140 * var(--u)); line-height: 0.9; text-align: center; }
+
+/* The standby: the card's look before a cup's show, saying which show and how
+   long until it starts. Inside the stage, under the shutter that opens the show. */
+.live-standby {
+  position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: calc(16 * var(--u));
+  background: var(--deep-ink); color: var(--paper);
+}
+.live-standby .wordmark { font-size: calc(140 * var(--u)); line-height: 0.9; text-align: center; margin-bottom: calc(24 * var(--u)); }
+.live-standby .eyebrow { font-size: calc(22 * var(--u)); color: var(--sky); }
+.live-standby-title { font: 400 calc(64 * var(--u)) / 1 var(--display); text-transform: uppercase; }
+.live-standby-time { font: 400 calc(120 * var(--u)) / 1 var(--display); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
 
 /* The one button: the whole stage, until the browser lets the page play sound. */
 .live-join {

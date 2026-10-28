@@ -1,8 +1,10 @@
 import json
 import re
 
+from arena import cli
 from arena.assets import ASSET_ROOT
 from arena.cli import main
+from arena.trace import decode, decode_string
 
 REFERENCE = str(ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx")
 
@@ -39,6 +41,7 @@ def test_score_records_a_run_and_board_shows_it(tmp_path, capsys):
     assert "walker" in out
     assert seconds.group(1) in out, "board score differs from the score just run"
     assert re.search(r"^\s*1\s+alice\b", out, re.MULTILINE), f"alice not at rank 1: {out!r}"
+    assert "cmd" in out and "m/s" in out
 
 
 def test_board_on_an_empty_store_says_so(tmp_path, capsys):
@@ -275,3 +278,27 @@ def test_score_records_a_troupe_crediting_its_borrowed_ducks(tmp_path, capsys, m
     assert [duck["policy"] if duck["policy"] == "self" else duck["policy"]["repo_id"] for duck in record.cast] == [
         "self", "pollen-robotics/microduck-sitter", "pollen-robotics/microduck-sitter"]
     assert [duck["start"]["yaw"] for duck in record.cast] == [0.0, 90.0, -90.0]
+
+
+def test_score_rates_a_tug_entry_and_the_board_says_rating(tmp_path, capsys):
+    """The format the training recipe's ledger reads: five seed lines, then the rating."""
+    assert main(["score", REFERENCE, "--event", "tug-of-war", "--store", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    seed = r"^seed [1-5]: (west|east) +(won|lost|draw|pit_won|pit_lost) +[+-] *\d+\.\d cm at \d+\.\d\d s$"
+    assert len(re.findall(seed, out, re.MULTILINE)) == 5
+    assert len(re.findall(r"^rating: -?\d+\.\d cm · replay from seed [1-5]$", out, re.MULTILINE)) == 1
+    from arena.store import LocalStore
+
+    store = LocalStore(tmp_path)
+    [record] = store.runs("tug-of-war")
+    blob = store.trace(record.run_id)
+    assert decode_string(blob)[1].shape == (decode(blob).shape[1], 17, 3)   # the string, frame by frame with the ducks
+    assert main(["board", "--event", "tug-of-war", "--store", str(tmp_path)]) == 0
+    board = capsys.readouterr().out
+    assert "rating" in board and " cm" in board and "cmd" not in board and "m/s" not in board  # the tug's command is no speed
+
+
+def test_arena_clip_serves_its_page_every_match(tmp_path, monkeypatch):
+    asked = []
+    monkeypatch.setattr(cli, "_app_on_loopback", lambda store_dir, reveal_all=False: asked.append(reveal_all))
+    assert cli.main(["clip", "tug-of-war-0001-000", "--store", str(tmp_path)]) == 1 and asked == [True]

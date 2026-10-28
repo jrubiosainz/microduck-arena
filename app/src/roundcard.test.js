@@ -15,6 +15,11 @@ const TALENT = { id: "got-a-talent", title: "MicroDuck Got a Talent", category: 
   rig: "legs", time_limit_s: 20, metric: "votes", vote: { ballot_min: 2 } };
 const HELD = [{ user: "cdeplanne", policy_name: "Walk rough", score: 9.456, seeds_finished: 5 }];
 
+const TUG = {
+  id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug", metric: "mean_ground_cm", rig: "legs", vote: null,
+  ring_m: 3, pit_m: 0.3, bout: { time_limit_s: 45 },
+};
+
 const cells = (card) => [...card.querySelectorAll(".round-card__stat")].map((cell) => cell.textContent);
 
 describe("a round card", () => {
@@ -94,17 +99,17 @@ describe("a voted round's card", () => {
     expect(vote.textContent).toBe("Vote");
   });
 
-  it("counts the week's votes in one cell, and who collected the most", () => {
+  it("counts the week's votes in one cell, and who is rated best", () => {
     const card = roundCard(TALENT, [
-      { user: "cdeplanne", votes: 1180, seeds_finished: 1 },
-      { user: "ann", votes: 43, seeds_finished: 1 },
+      { user: "cdeplanne", votes: 43, rate: 0.41, seeds_finished: 1 },
+      { user: "ann", votes: 1180, rate: 0.33, seeds_finished: 1 },
     ], { number: 2 });
     expect(cells(card)).toEqual(["Votes1.2K"]);
-    expect(card.querySelector(".round-card__score").textContent).toBe("1180 votes@cdeplanne");
+    expect(card.querySelector(".round-card__score").textContent).toBe("rated 41%@cdeplanne");
   });
 
   it("says so when nothing has been voted for yet", () => {
-    const card = roundCard(TALENT, [{ user: "cdeplanne", votes: 0, seeds_finished: 1 }], { number: 2 });
+    const card = roundCard(TALENT, [{ user: "cdeplanne", votes: 0, rate: 0.25, seeds_finished: 1 }], { number: 2 });
     expect(card.querySelector(".round-card__score").textContent).toBe("no votes yet@cdeplanne");
   });
 });
@@ -150,5 +155,15 @@ describe("the card's sheet", () => {
     const frame = css.match(/\.round-card__frame \{([^}]*)\}/);
     expect(frame[1]).not.toMatch(/position\s*:/);
     expect(css).toMatch(/\.round-card__link::after \{[^}]*position: absolute;[^}]*inset: 0;/);
+  });
+});
+
+describe("the tug's round card", () => {
+  it("is lime, says Pull!, and counts in centimetres", () => {
+    const card = roundCard(TUG, [{ user: "nico", score: 12.34, seeds_finished: 5 }], { number: 5 });
+    expect(cells(card).slice(0, 3)).toEqual(["0.3 m pit", "45 s bouts", "Legs"]);
+    expect(card.querySelector(".round-card__score").textContent).toBe("12.3 cm@nico");
+    expect(card.querySelector(".round-card__cat").textContent).toBe("versus");
+    expect(card.querySelector(".round-card__cta").textContent).toBe("Pull!");
   });
 });

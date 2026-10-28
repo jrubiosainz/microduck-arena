@@ -3,8 +3,9 @@
 // function here and a name in the event's [clip] sounds.
 
 import { choirOf, voiceEvents } from "../duck-voice.js";
-import { isStage } from "../format.js";
+import { isStage, isTug } from "../format.js";
 import { CTRL_DT, frameAt } from "../replay.js";
+import { BOUT_WORDS } from "../tug.js";
 
 /** Cue gains, measured on a real render: the horn 5 dB over the crowd's surge,
  * the victory level with the crowd's cheer, and the fall — over a crowd gone
@@ -43,12 +44,28 @@ const SOURCES = {
 };
 
 /**
+ * The stamp the clip lands, and whether it lands as a pass: a race won or a DNF, a performance
+ * given or cut short, and a rated tug run as its replayed bout ended: a pass for a win.
+ */
+export function clipVerdict(run) {
+  if (isTug(run.event)) {
+    const { status } = run.per_seed.find((seed) => seed.seed === run.trace_seed);
+    return { stamp: BOUT_WORDS[status].toUpperCase(), pass: status === "won" || status === "pit_won" };
+  }
+  const pass = run.seeds_finished > 0;
+  if (isStage(run.event)) return { stamp: pass ? "WELL DONE" : "CUT SHORT", pass };
+  return { stamp: pass ? "VICTORY" : "DNF", pass };
+}
+
+/**
  * `trace` is the author's lane, settle included; `ducks` the stage's troupe in duck order (cast.js
- * stageDucks), each with how it sounds, and none for a race.
+ * stageDucks), each with how it sounds, and none for a race or a tug.
  */
 export function clipScore({ run, plan, trace, ducks }) {
   const sounds = run.event.clip.sounds;
-  const verdict = run.seeds_finished > 0 ? "pass" : "fail";
+  const verdict = clipVerdict(run).pass ? "pass" : "fail";
+  // A stage and a tug have no course to go down: their crowd answers the verdict alone.
+  const still = isStage(run.event) || isTug(run.event);
   const start = plan.intro / plan.fps;
   const end = plan.tapeEnd / plan.fps;
   const context = { start, end, verdict };
@@ -66,9 +83,20 @@ export function clipScore({ run, plan, trace, ducks }) {
     // The same run always sounds the same, whichever layout renders it.
     seed: fnv(run.run_id),
     crowd: sounds.includes("crowd")
-      // A stage has no course to go down: its crowd answers the verdict alone.
-      ? { start, end, verdict, progress: isStage(run.event) ? [] : progress(trace, plan, run.event.length_m, start) }
+      ? { start, end, verdict, progress: still ? [] : progress(trace, plan, run.event.length_m, start) }
       : null,
     cues: [...sounds.flatMap((name) => SOURCES[name]?.(context) ?? []), ...voice],
+  };
+}
+
+/** A cup's match: someone always wins it, so its crowd cheers at the outro, where the stamp lands. No course to go
+ * down, no voices. */
+export function matchScore({ match, plan }) {
+  const sounds = match.event.clip.sounds;
+  const context = { start: plan.intro / plan.fps, end: plan.tapeEnd / plan.fps, verdict: "pass" };
+  return {
+    seed: fnv(match.match_id),
+    crowd: sounds.includes("crowd") ? { ...context, progress: [] } : null,
+    cues: sounds.flatMap((name) => SOURCES[name]?.(context) ?? []),
   };
 }

@@ -1,0 +1,53 @@
+id           = "tug-of-war"
+order        = 40
+title        = "Tug of War"
+category     = "versus"
+kind         = "perpetual"
+rig          = "legs"
+time_limit_s = 45.0          # a bout's timed length, after the settle, as [bout] says
+metric       = "mean_ground_cm"
+seeds        = [1, 2, 3, 4, 5]
+
+[course]
+kind          = "tug"
+ring_m        = 3.00          # rope to rope: the field is the square inside the ring's ropes
+pit_m         = 0.30
+pit_depth_m   = 0.30
+string_m      = 1.00          # neck base to neck base, straight at the start
+
+[command]                     # every duck, every bout: walk backwards
+vel  = [-0.30, 0.0, 0.0]
+head = [0.0, 0.0, 0.0, 0.0]
+body = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+[start]
+keyframe = "STAND"
+settle_s = 0.5
+
+[start.perturbation]
+joint_rad = 0.01
+yaw_deg   = 2.0
+
+[termination]                 # summaries only: a fall never ends a bout
+fall_gravity_z = -0.5
+fall_hold_s    = 0.3
+
+[rating]                      # one bout a seed against the reference duck, the entry west on odd seeds
+reference    = "tug-reference-t20-500.onnx"   # in arena/assets/policies/
+pit_bonus_cm = 100.0          # a pit outweighs any marker margin: 65 cm at most
+
+[bout]
+time_limit_s = 45.0
+bouts_to_win = 2
+max_bouts    = 5
+
+[clip]
+tape_max_s = 45.0
+sounds     = ["crowd", "verdict"]
+
+[cup]
+first          = "2026-11-06"   # cup #1's premiere day: the owner sets it at release
+premiere       = "18:00"
+timezone       = "Europe/Paris"
+close_before_h = 2.0
+min_entrants   = 4

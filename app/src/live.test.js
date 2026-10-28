@@ -14,7 +14,7 @@ vi.mock("./live/interlude.js", () => ({
     stage.append(canvas);
     gate.last = {
       failed: false, size: null,
-      prepare() {}, show() { canvas.hidden = false; }, play() { canvas.hidden = false; }, seek() {},
+      prepare() {}, show() { canvas.hidden = false; }, play: vi.fn(() => { canvas.hidden = false; }), seek() {},
       stop() { canvas.hidden = true; }, muted() {}, resize(w, h) { this.size = [w, h]; }, dispose: vi.fn(),
     };
     return gate.last;
@@ -92,9 +92,12 @@ describe("buildStage", () => {
 });
 
 describe("renderLive", () => {
-  let hidden, reduced;
+  let hidden, reduced, context;
   beforeEach(() => {
     vi.useFakeTimers();
+    // jsdom draws no 2D canvas: the call's captions measure nothing and show each line whole, as jsdom's
+    // own null would, without its notice on every page.
+    context = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     hidden = false;
     reduced = false;
     Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
@@ -113,6 +116,7 @@ describe("renderLive", () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+    context.mockRestore();
     gate.open = Promise.resolve();
   });
   const options = (getLive, sound = fakeSound({ running: true })) => ({ api: { getLive }, synth: async () => () => new Float32Array(0), sound: () => sound });
@@ -290,6 +294,19 @@ describe("renderLive", () => {
     await vi.advanceTimersByTimeAsync(800);
     expect(panel.hidden).toBe(true);
     expect(booth.hidden).toBe(false);
+  });
+
+  it("plays a desk slot in the booth's segment, Peter and Ray at the desk", async () => {
+    const root = document.createElement("div");
+    const desk = { kind: "desk", at_ms: 4000, duration_ms: 12000, show: { event: "tug-of-war", number: 1, segment: "opening" } };
+    await renderLive(root, {}, options(vi.fn(async () => ({ ...grid, slots: [desk] }))));
+    stubMedia(root);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(gate.last.play).toHaveBeenCalledTimes(1);
+    expect(gate.last.play.mock.calls[0][0]).toBe(desk);
+    expect(gate.last.play.mock.calls[0][1]).toBeGreaterThanOrEqual(1000);
+    expect(root.querySelector("canvas.live-booth").hidden).toBe(false);
+    expect(shown(root)).toBeNull();
   });
 
   it("stops everything on a hidden tab, pauses the polls, and rejoins where the clock says on return", async () => {

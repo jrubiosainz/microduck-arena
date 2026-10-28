@@ -9,7 +9,8 @@ import time
 
 from arena.constants import TRACE_WIDTH
 from arena.workshop.evaluations import evaluate_next, next_checkpoint
-from tests.workshop.conftest import make_run, store_evaluation
+from tests.workshop.conftest import make_run, reopen, store_evaluation
+from tests.workshop.test_tickets import add_tug
 
 SPRINT_URL = "/api/workshop/challenges/sprint-2m"
 
@@ -37,6 +38,7 @@ def test_a_checkpoint_is_exported_by_a_dry_run_publish_and_raced(workshop, fakes
     assert body["cast"] is None  # a race: one duck, nothing to place or hear
     assert body["checkpoint"] == 1 and body["score"] < 50
     assert len(base64.b64decode(body["trace_b64"])) % (4 * TRACE_WIDTH) == 0
+    assert "string_b64" not in body
     assert body["ducks"] == 1  # a race is one duck
     (publish,) = fakes.calls("publish")
     assert publish[3:7] == ["--run", str(run), "--checkpoint", "1"]
@@ -150,3 +152,16 @@ def test_the_evaluator_and_its_threads_stop_with_the_app(checkout, fakes, hub):
     with TestClient(app, base_url=ADDRESS):
         assert "workshop-evaluator" in {t.name for t in threading.enumerate()}
     assert app.state.workshop.stopping.is_set()
+
+
+def test_a_tug_checkpoint_is_rated_against_the_reference(checkout, fakes, hub):
+    add_tug(checkout)
+    client = reopen(checkout, hub)
+    run = make_run(checkout, "first", checkpoints=(1,), task="Mjlab-TugOfWar-MicroDuck")
+    assert evaluate_next(state(client)) is True
+    body = client.get(f"/api/workshop/challenges/tug-of-war/jobs/{run.name}/checkpoints/1").json()
+    assert body["seeds_total"] == 5
+    assert all("score_cm" in seed for seed in body["per_seed"])
+    assert body["ducks"] == 2  # the entry's duck and the reference
+    frames = len(base64.b64decode(body["trace_b64"])) // (2 * TRACE_WIDTH * 4)
+    assert len(base64.b64decode(body["string_b64"])) == frames * 51 * 4 and body["format"] == 3

@@ -50,6 +50,11 @@ describe("createReplay", () => {
     expect(second.hidden).toBe(false);
   });
 
+  it("plays a cup match from the match's clip", () => {
+    replay.prepare({ kind: "replay", at_ms: 0, duration_ms: 8000, run_id: "tug-of-war-0001-000", clip: "v1", media: "match" });
+    expect([...stage.querySelectorAll("video")].some((v) => v.getAttribute("src") === "/api/matches/tug-of-war-0001-000/clip/landscape.mp4?v=v1")).toBe(true);
+  });
+
   it("plays a slot it was not prepared for by preparing it first", async () => {
     await replay.play(B, 100);
     const shown = [...stage.querySelectorAll("video")].find((v) => !v.hidden);
@@ -103,15 +108,15 @@ describe("createReplay", () => {
     expect(refused).not.toHaveBeenCalled();
   });
 
-  it("keeps forcing the alignment until a seek lands on buffered media", async () => {
-    replay.prepare(A);
-    const video = [...stage.querySelectorAll("video")].find((v) => v.getAttribute("src")?.includes("/A/"));
-    video.buffered = { length: 0 };
-    await replay.play(A, 500);
-    expect(video.currentTime).toBe(0);
-    video.buffered = { length: 1, start: () => 0, end: () => 30 };
-    replay.seek(600);
-    expect(video.currentTime).toBe(0.6);
+  it("joins a long clip where the clock is, past the few seconds the browser buffers ahead", async () => {
+    const final = { kind: "replay", at_ms: 0, duration_ms: 96560, run_id: "tug-of-war-0001-006", clip: "v1", media: "match" };
+    replay.prepare(final);
+    const video = [...stage.querySelectorAll("video")].find((v) => v.getAttribute("src")?.includes("0001-006"));
+    video.buffered = { length: 1, start: () => 0, end: () => 13.4 };
+    await replay.play(final, 50000);
+    expect(video.currentTime).toBe(50);
+    replay.seek(50100);
+    expect(video.currentTime).toBe(50);
     expect(video.playbackRate).toBe(1);
   });
 
@@ -130,5 +135,10 @@ describe("createReplay", () => {
     expect([...stage.querySelectorAll("video")].find((v) => !v.hidden).muted).toBe(true);
     await replay.play(B, 0);
     expect([...stage.querySelectorAll("video")].find((v) => !v.hidden).muted).toBe(true);
+  });
+
+  it("sets the volume of its clips", () => {
+    replay.volume(0.3);
+    expect([...stage.querySelectorAll("video")].map((v) => v.volume)).toEqual([0.3, 0.3]);
   });
 });

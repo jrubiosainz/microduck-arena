@@ -50,17 +50,19 @@ export function standing(settles) {
 
 /**
  * A lane from where its simulation started: its settle, then its trace, with
- * `frames` frames before the trace. A shorter settle is made up by holding its
- * first frame — the trace's, for a run stored before settles were recorded —
- * so every lane still reaches its trace in step with the others.
+ * `frames` frames of `width` floats before the trace (a duck's TRACE_WIDTH, a
+ * tug's string its own). A shorter settle is made up by holding its first
+ * frame — the trace's, for a run stored before settles were recorded — so
+ * every lane still reaches its trace in step with the others.
  */
-export function leadIn(settle, trace, frames) {
-  const lane = new Float32Array((frames + frameCount(trace)) * TRACE_WIDTH);
-  const missing = frames - frameCount(settle);
-  const first = frameAt(frameCount(settle) ? settle : trace, 0);
-  for (let f = 0; f < missing; f++) lane.set(first, f * TRACE_WIDTH);
-  lane.set(settle, missing * TRACE_WIDTH);
-  lane.set(trace, frames * TRACE_WIDTH);
+export function leadIn(settle, trace, frames, width) {
+  const count = (values) => Math.floor(values.length / width);
+  const lane = new Float32Array((frames + count(trace)) * width);
+  const missing = frames - count(settle);
+  const first = (count(settle) ? settle : trace).subarray(0, width);
+  for (let f = 0; f < missing; f++) lane.set(first, f * width);
+  lane.set(settle, missing * width);
+  lane.set(trace, frames * width);
   return lane;
 }
 

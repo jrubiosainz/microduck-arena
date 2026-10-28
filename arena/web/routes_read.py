@@ -14,15 +14,32 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 
 from .. import votes
-from ..course import wall_boxes
+from ..course import (
+    RING_POST_RADIUS_M,
+    RING_ROPE_RADIUS_M,
+    ring_posts,
+    ring_ropes,
+    wall_boxes,
+)
+from ..cup import reached
+from ..cupworker import all_cups
+from ..evaluate import seed_row
 from ..index import leaderboard, standing
 from ..manifest import Manifest, ManifestError, all_events, load_event
-from ..points import boards_by_user, receipts, standings
+from ..points import boards_by_user, receipts, revealed_final, standings
 from ..store import CLIP_MEDIA, RunRecord, clip_version
 from ..timeline import EDGE_MARGIN_M, MIN_SPACING_M
-from ..trace import decode, decode_settle
+from ..trace import decode, decode_settle, decode_string
 
 router = APIRouter(prefix="/api")
+
+
+def _boxes(boxes) -> list[dict]:
+    return [{"name": name, "pos": list(pos), "half": list(half)} for name, pos, half in boxes]
+
+
+def _capsules(capsules, radius: float) -> list[dict]:
+    return [{"name": name, "from": list(start), "to": list(end), "radius": radius} for name, start, end in capsules]
 
 
 def event_summary(manifest: Manifest) -> dict:
@@ -34,7 +51,7 @@ def event_summary(manifest: Manifest) -> dict:
         # colour. The board and the race page do not read it.
         "category": manifest.category,
         "metric": manifest.metric,
-        # "lane" or "stage": what the page draws, and how it words a result. A stage has no
+        # "lane", "stage" or "tug": what the page draws, and how it words a result. A stage has no
         # lane, no line and no speed (the lane fields below are a lane's alone).
         "course": manifest.course.kind,
         # The whole vote configuration, or null. The page reads this to decide
@@ -64,10 +81,7 @@ def event_summary(manifest: Manifest) -> dict:
             # The lane walls the PHYSICS uses, in MJCF coordinates, so the viewer can
             # draw exactly what the robot can hit rather than recomputing where the
             # walls ought to be. They are invisible unless you ask for them.
-            "walls": [
-                {"name": name, "pos": list(pos), "half": list(half)}
-                for name, pos, half in wall_boxes(manifest.course)
-            ],
+            "walls": _boxes(wall_boxes(manifest.course)),
             # The sweep, not a single command: the event no longer pins a speed,
             # it declares the range every entry is tried over.
             "sweep_lo": manifest.sweep.lo,
@@ -79,7 +93,7 @@ def event_summary(manifest: Manifest) -> dict:
             # from the event alone, in step with any replay of it.
             "lights": manifest.lights.to_dict() if manifest.lights else None,
         }
-    else:
+    elif manifest.course.kind == "stage":
         # The stage's floor and its cap, so the server's placement rules, the workshop's plan and
         # the drawn stage read the same numbers, as the walls are served for a lane.
         summary |= {
@@ -89,6 +103,22 @@ def event_summary(manifest: Manifest) -> dict:
             # turns a spot magenta with the loader's own numbers rather than copies of them.
             "edge_margin_m": EDGE_MARGIN_M,
             "min_spacing_m": MIN_SPACING_M,
+        }
+    else:
+        summary |= {
+            "ring_m": manifest.course.ring_m,
+            "string_m": manifest.course.string_m,
+            "pit_m": manifest.course.pit_m,
+            "pit_depth_m": manifest.course.pit_depth_m,
+            # The capsules the physics compiles: the page draws what the ducks bounce off, never a
+            # second arithmetic of it; the string it draws as recorded (/runs/{id}/string).
+            "ropes": _capsules(ring_ropes(manifest.course), RING_ROPE_RADIUS_M),
+            "posts": _capsules(ring_posts(manifest.course), RING_POST_RADIUS_M),
+            "bout": {
+                "time_limit_s": manifest.bout.time_limit_s,
+                "bouts_to_win": manifest.bout.bouts_to_win,
+                "max_bouts": manifest.bout.max_bouts,
+            },
         }
     return summary
 
@@ -172,6 +202,7 @@ def _board_row(row) -> dict:
         # duck's place, its rig, what the replay sings and opens its beak from, and whose policy it
         # plays. A race's row is one duck of the event's rig.
         "cast": record.cast,
+        "trace_seed": record.trace_seed,
     }
 
 
@@ -184,14 +215,13 @@ def event_leaderboard(event_id: str, request: Request) -> dict:
     records = store.runs(manifest.id)
 
     if manifest.metric == "votes":
-        # A separate function, not a parameterised leaderboard: index.sort_key
-        # means "lower is better" and is correct for five live timed events.
-        # Teaching it a second direction would put all of them at risk.
+        # Votes are not a score but a count in a window (arena/votes.py), hence their own
+        # function; index.sort_key ranks every scored event in its metric's direction.
         kept = _event_ballots(request, manifest, datetime.now(UTC))
         rows = votes.standings(votes.pool(records, withdrawn), kept)
         out = [_board_row(row) for row in rows]
         for shaped, row in zip(out, rows):
-            shaped["votes"], shaped["shown"] = row.votes, row.shown
+            shaped["votes"], shaped["shown"], shaped["rate"] = row.votes, row.shown, row.rate
         return {"event": event_summary(manifest), "rows": out}
 
     rows = leaderboard(records, entrant=config.entrant, withdrawn=withdrawn)
@@ -210,6 +240,7 @@ def player_standings(request: Request) -> dict:
             ballots=_ballots(request, rules, now),
             voted=rules,
             now=now,
+            cups=all_cups(store),
         )
     )
     return {"rows": [{"rank": c.rank, "user": c.user, "points": c.points} for c in cards]}
@@ -217,7 +248,7 @@ def player_standings(request: Request) -> dict:
 
 @router.get("/players/{user}")
 def player_page(user: str, request: Request) -> dict:
-    """A player's total, rank, and every publication they made, newest first."""
+    """A player's total, rank, every publication they made and every cup they played, newest first."""
     store = request.app.state.store
     runs, withdrawn = _all_runs(store), _withdrawn(store)
     mine = sorted((r for r in runs if r.user == user), key=lambda r: r.submitted_at, reverse=True)
@@ -225,8 +256,9 @@ def player_page(user: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail=f"{user!r} has not published yet")
     rules, now = _voted(), datetime.now(UTC)
     ballots = _ballots(request, rules, now)
+    cups = all_cups(store)
     card = next(
-        (c for c in standings(receipts(runs, withdrawn, ballots, rules, now)) if c.user == user),
+        (c for c in standings(receipts(runs, withdrawn, ballots, rules, now, cups=cups)) if c.user == user),
         None,
     )
     events = {m.id: m for m in all_events()}
@@ -234,9 +266,9 @@ def player_page(user: str, request: Request) -> dict:
     by_event: dict[str, list[RunRecord]] = defaultdict(list)
     for run in runs:
         by_event[run.event_id].append(run)
-    # A voted event ranks on votes, not on time, so its rows come off its own
+    # A voted event ranks on its rate, not on time, so its rows come off its own
     # board the way the podium does: the run in the pool holds a rank and a
-    # count, an older run of the same person holds neither.
+    # rate, an older run of the same person holds neither.
     voted_rows = {
         row.record.run_id: row
         for event_id, rows in boards_by_user(runs, withdrawn, ballots, rules, now).items()
@@ -252,6 +284,7 @@ def player_page(user: str, request: Request) -> dict:
             "run_id": run.run_id,
             "event_id": run.event_id,
             "event_title": events[run.event_id].title,
+            "metric": events[run.event_id].metric,
             "policy_name": run.policy_name,
             "score": run.score,
             "seeds_finished": run.seeds_finished,
@@ -261,17 +294,24 @@ def player_page(user: str, request: Request) -> dict:
             "withdrawn": run.run_id in withdrawn,
             "submitted_at": run.submitted_at,
             "seen": run.run_id in seen,
-            # None off a timed event, a count off a voted one — so the page
-            # can tell a reader what the rank next to it was EARNED by. A
+            # None off a timed event, a rate and a count off a voted one — so the
+            # page can tell a reader what the rank next to it was EARNED by. A
             # bare "#1 · 18.46s" reads as a time on a board actually ranked
             # by votes.
             "votes": (row.votes if row else 0) if voted else None,
+            "rate": (row.rate if row else 0.0) if voted else None,
         })
     return {
         "user": user,
         "points": card.points if card else 0,
         "rank": card.rank if card else None,
         "publications": publications,
+        "cups": [
+            {"event_id": cup.event_id, "event_title": events[cup.event_id].title, "number": cup.number,
+             "starts_at": cup.order["starts_at"], "reached": got}
+            for cup in sorted(cups, key=lambda cup: cup.premiere_at, reverse=True) if revealed_final(cup, now)
+            for entrant, got in zip(cup.entrants, reached(cup)) if entrant.user == user
+        ],
     }
 
 
@@ -300,11 +340,11 @@ def run_detail(run_id: str, request: Request) -> dict:
     rules, now = _voted(), datetime.now(UTC)
     manifest = load_event(record.event_id)
     if manifest.metric == "votes":
-        # A voted event's publication stands where its votes put it, as on the event's own board
+        # A voted event's publication stands where its rate puts it, as on the event's own board
         # and the player's page: on a stage, a time would only be the performance's length.
         rank, on_board, rows = votes.placed(store.runs(record.event_id), run_id,
                                             _event_ballots(request, manifest, now), withdrawn)
-        board = [{**_board_row(row), "votes": row.votes, "shown": row.shown,
+        board = [{**_board_row(row), "votes": row.votes, "shown": row.shown, "rate": row.rate,
                   "you": row.record.run_id == record.run_id} for row in rows]
     else:
         place = standing(store.runs(record.event_id), run_id, withdrawn=withdrawn)
@@ -322,9 +362,7 @@ def run_detail(run_id: str, request: Request) -> dict:
         "command_vx": record.command_vx,
         "seeds_finished": record.seeds_finished,
         "seeds_total": len(record.per_seed),
-        "per_seed": [
-            {"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in record.per_seed
-        ],
+        "per_seed": [seed_row(s) for s in record.per_seed],
         "trace_seed": record.trace_seed,
         "submitted_at": record.submitted_at,
         "runner_version": record.runner_version,
@@ -339,6 +377,7 @@ def run_detail(run_id: str, request: Request) -> dict:
         # Podium receipts are HELD, so this list can change between two reads.
         "receipts": [
             {"act": r.act, "points": r.points}
+            # No cup: its receipts are paid to the matches that decided them, never to a run.
             for r in receipts(runs, withdrawn, _ballots(request, rules, now), rules, now)
             if r.source_id == record.run_id
         ],
@@ -428,6 +467,33 @@ def run_settle(run_id: str, request: Request) -> Response:
     return frames_response(decode_settle(store.trace(run_id)))
 
 
+@router.get("/runs/{run_id}/string")
+def run_string(run_id: str, request: Request) -> Response:
+    """A tug's string, the settle's frames then the timed ones (`points_response`); a 404 for a run without one."""
+    store = request.app.state.store
+    _find_run(store, run_id)
+    try:
+        settle, string = decode_string(store.trace(run_id))
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"run {run_id} has no string") from None
+    return points_response(settle, string)
+
+
+def points_response(settle: np.ndarray, string: np.ndarray) -> Response:
+    """A string's (frames, 17, 3) points on the wire: little-endian float32, the settle's frames then the
+    timed ones. X-Frame-Count counts the timed frames, X-Settle-Frame-Count the settle's."""
+    return Response(
+        content=np.ascontiguousarray(np.concatenate([settle, string]), dtype="<f4").tobytes(),
+        media_type="application/octet-stream",
+        headers={
+            "X-Frame-Count": str(len(string)),
+            "X-Settle-Frame-Count": str(len(settle)),
+            "X-Point-Count": str(string.shape[1]),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 def frames_response(ducks: np.ndarray) -> Response:
     """A (ducks, frames, TRACE_WIDTH) trace on the wire: little-endian float32, duck-major, so one
     duck's bytes are what a lone duck's always were. X-Frame-Count counts one duck's frames."""
@@ -491,19 +557,24 @@ def clip_url(run_id: str, name: str, manifest: dict, origin: str = "") -> str:
 
 @router.get("/runs/{run_id}/clip/{name}")
 def run_clip_file(run_id: str, name: str, request: Request, download: int = 0) -> FileResponse:
-    """A clip's file. Streamed from here because the dataset is private; the
-    bytes behind a ready clip never change, so cached hard. `download=1` makes
-    the answer an attachment with a name worth keeping."""
+    """A clip's file; `download=1` makes the answer an attachment with a name worth keeping."""
     store = request.app.state.store
     record = _find_run(store, run_id)
-    if name not in CLIP_MEDIA or store.clip_state(run_id)[0] != "ready":
-        raise HTTPException(status_code=404, detail=f"no clip file {name!r} for run {run_id}")
+    stem = safe_stem(record.user, record.policy_name, name.removesuffix(".mp4"))
+    return clip_file_response(
+        store, run_id, name,
+        f'attachment; filename="microduck-arena-{stem}.mp4"' if download and name.endswith(".mp4") else None,
+    )
+
+
+def clip_file_response(store, clip_id: str, name: str, disposition: str | None = None) -> FileResponse:
+    """A ready clip's file. Streamed from here because the dataset is private; the
+    bytes behind a ready clip never change, so cached hard."""
+    if name not in CLIP_MEDIA or store.clip_state(clip_id)[0] != "ready":
+        raise HTTPException(status_code=404, detail=f"no clip file {name!r} for {clip_id}")
     headers = {"Cache-Control": "public, max-age=31536000, immutable"}
-    if download and name.endswith(".mp4"):
-        stem = safe_stem(record.user, record.policy_name, name.removesuffix(".mp4"))
-        headers["Content-Disposition"] = f'attachment; filename="microduck-arena-{stem}.mp4"'
+    if disposition:
+        headers["Content-Disposition"] = disposition
     return FileResponse(
-        store.clip_file(run_id, name),
-        media_type=_CLIP_TYPES[name.rsplit(".", 1)[-1]],
-        headers=headers,
+        store.clip_file(clip_id, name), media_type=_CLIP_TYPES[name.rsplit(".", 1)[-1]], headers=headers,
     )

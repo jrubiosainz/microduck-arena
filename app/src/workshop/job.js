@@ -6,9 +6,10 @@
 import { MIN } from "../brightness.js";
 import { stageDucks } from "../cast.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "../deck.js";
-import { isStage } from "../format.js";
+import { isStage, isTug } from "../format.js";
 import { eventGuideHref } from "../router.js";
 import { footer } from "../signage.js";
+import { ratingLane } from "../tug.js";
 import { createViewer } from "../viewer.js";
 import * as api from "./api.js";
 import { renderCurve } from "./curve.js";
@@ -17,7 +18,7 @@ import { accountChip, strip } from "./header.js";
 import { performancePanel } from "./performance.js";
 import { publishPanel } from "./publish.js";
 import { challengeHref, homeHref } from "./routes.js";
-import { bars, confirmStop, progress, seconds } from "./tickets.js";
+import { bars, confirmStop, measure, progress } from "./tickets.js";
 
 export const POLL_MS = 3000;
 const PLACE = { "hf-jobs": "Hugging Face Jobs · L4", local: "This machine" };
@@ -75,6 +76,7 @@ export async function mountJob(root, { status, account, route }) {
   const { event } = challenge;
   const voted = event.metric === "votes";
   const stage = isStage(event);
+  const tug = isTug(event);
   let code = await api.getCode();
   let since = job.next;
   let selected = voted ? null : job.best; // the checkpoint chosen: scored, published
@@ -109,10 +111,10 @@ export async function mountJob(root, { status, account, route }) {
   const $ = (selector) => grid.querySelector(selector);
   $(".racetitle").textContent = job.name;
   $(".ckpts .hint").textContent = stage ? "Click one to watch it perform."
-    : voted ? "Click one to watch it." : "The higher, the faster. Click one to watch it.";
+    : voted ? "Click one to watch it." : `The higher, the ${tug ? "stronger" : "faster"}. Click one to watch it.`;
   $(".score__caveat").textContent = stage
     ? "Indicative: the Arena plays your entry again, on its own computer."
-    : "Indicative: only the Arena times an entry.";
+    : `Indicative: only the Arena ${tug ? "rates" : "times"} an entry.`;
   const log = el("pre", "terminal-body");
   // Opened, the output shows its latest lines.
   $(".output").addEventListener("toggle", () => {
@@ -192,7 +194,7 @@ export async function mountJob(root, { status, account, route }) {
     const future = futureSlots(job);
     const best = voted ? null : job.best;
     const slots = [...job.checkpoints.map((c) => c.n), ...future];
-    paint($(".ckpts__bars"), [job.checkpoints, best, future], (node) => node.replaceChildren(bars(job.checkpoints, best, { future, onPick: pick })));
+    paint($(".ckpts__bars"), [job.checkpoints, best, future], (node) => node.replaceChildren(bars(job.checkpoints, best, { future, onPick: pick, metric: event.metric })));
     paint($(".ticks"), slots, (node) => node.replaceChildren(...slots.map((n) => el("span", "", String(n)))));
     // The choice is marked on the bars as drawn: a bar just picked keeps its focus.
     const [row, ticks] = [$(".ckpts__bars .bars").children, $(".ticks").children];
@@ -235,8 +237,10 @@ export async function mountJob(root, { status, account, route }) {
       value.textContent = "Failed";
       seeds.textContent = "It could not be evaluated.";
     } else {
-      value.textContent = row.seeds_finished ? seconds(row.score) : "No finish";
-      seeds.textContent = `${row.seeds_finished}/${row.seeds_total} seeds${row.seeds_finished ? ` · at ${row.command_vx.toFixed(2)} m/s` : ""}`;
+      value.textContent = row.seeds_finished ? measure(row.score, event.metric) : "No finish";
+      // A tug has no commanded speed: every duck walks back at the event's.
+      const speed = row.seeds_finished && !tug ? ` · at ${row.command_vx.toFixed(2)} m/s` : "";
+      seeds.textContent = `${row.seeds_finished}/${row.seeds_total} seeds${speed}`;
     }
     if (unplayable) seeds.textContent = unplayable;
   }
@@ -275,8 +279,10 @@ export async function mountJob(root, { status, account, route }) {
     const name = `checkpoint ${body.checkpoint}`;
     // A stage's lane is its troupe, each duck where its trace puts it. The workshop keeps no settle,
     // so nothing leads in.
+    // A tug's lane is the checkpoint's bout against the reference duck, and its string.
     viewer.setLanes([stage
       ? { name, livery: "classic", ducks: stageDucks(body.cast, body.traces, null, { livery: "classic", eventRig: event.rig, lead: 0 }) }
+      : tug ? ratingLane(body.traces, null, { trace: body.string }, { traceSeed: body.trace_seed, livery: "classic", name })
       : { trace: body.traces[0], tier: "trial", livery: "classic", name }], event);
   }
 

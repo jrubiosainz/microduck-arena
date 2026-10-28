@@ -1,3 +1,7 @@
+from datetime import timedelta
+
+import pytest
+
 from arena.constants import RUNNER_VERSION
 from arena.points import (
     RUNS_PER_DAY,
@@ -8,6 +12,8 @@ from arena.points import (
     receipts,
     standings,
 )
+from tests.test_cup_view import REVEAL, START_ISO
+from tests.test_cupworker import played_cup
 from tests.test_store import make_record
 
 
@@ -221,7 +227,7 @@ def test_a_voted_events_podium_is_paid_on_votes_not_on_time():
 
     # bob is slow but voted-for; ann is quick but unvoted. bob takes the
     # podium, ann does not — a zero-vote row is unpaid even where it ranks
-    # second only by publication-time tie-break, which is not a place held.
+    # second only on its head start, which is not a place held.
     podium = acts(
         receipts([quick, slow], frozenset(), ballots=loved, voted=rules, now=now), "podium"
     )
@@ -323,3 +329,24 @@ def test_two_votable_events_each_pay_on_their_own_window_not_the_widest():
         "ballot",
     )
     assert {r.user for r in paid} == {"bob"}
+
+
+def test_a_stronger_tug_rating_is_a_personal_best_and_the_podium_pays_the_strongest():
+    first, better, weaker = (make_record(user="alice", event_id="tug-of-war", score=s, submitted_at=f"2026-09-03T{h}:00:00Z")
+                             for s, h in ((3.0, "09"), (4.0, "10"), (2.0, "11")))
+    assert [r.source_id for r in acts(receipts([first, better, weaker], frozenset()), "own_best")] == [better.run_id]
+    runs = [make_record(user=u, event_id="tug-of-war", score=s) for u, s in (("a", 2.0), ("b", 5.0), ("c", 3.0))]
+    assert [(r.user, r.points) for r in acts(receipts(runs, frozenset()), "podium")] == [("b", 250), ("c", 150), ("a", 100)]
+
+
+def test_a_cup_pays_its_podium_from_the_finals_reveal():
+    cup = played_cup(6, starts_at=START_ISO)
+    assert receipts([], frozenset(), cups=[cup], now=REVEAL(8) - timedelta(milliseconds=1)) == []
+    paid = receipts([], frozenset(), cups=[cup], now=REVEAL(8))
+    final, (semi_a, semi_b) = cup.matches[8].match_id, (cup.matches[6].match_id, cup.matches[7].match_id)
+    assert sorted((r.user, r.act, r.points, r.source_id) for r in paid) == sorted([
+        ("p0", "cup_champion", 250, final), ("p1", "cup_final", 150, final),
+        ("p2", "cup_semi", 100, semi_a), ("p3", "cup_semi", 100, semi_b)])
+    assert {r.at for r in paid} == {"2026-10-30T17:01:44Z"}   # the final's clip ends 9 x 11.6 s into the show
+    with pytest.raises(ValueError):
+        receipts([], frozenset(), cups=[cup])

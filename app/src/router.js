@@ -6,6 +6,8 @@ const RACE = new RegExp(`^/e/${SEGMENT}/?$`);
 const PLAYER = new RegExp(`^/p/${SEGMENT}/?$`);
 const VOTE = new RegExp(`^/v/${SEGMENT}/?$`);
 const RUN = new RegExp(`^/r/${SEGMENT}/?$`);
+const CUP = new RegExp(`^/c/${SEGMENT}/(\\d+)/?$`);
+const MATCH = new RegExp(`^/m/${SEGMENT}/?$`);
 const LIVE = /^\/live\/?$/;
 const GUIDE = new RegExp(`^/guides(?:/${SEGMENT})?/?(?:\\?(.*))?$`);
 const EVENT_GUIDE = new RegExp(`^/e/${SEGMENT}/guide/?$`);
@@ -27,6 +29,10 @@ export function parseRoute(hash) {
   if (vote) return { view: "vote", eventId: vote[1] };
   const run = path.match(RUN);
   if (run) return { view: "run", runId: run[1] };
+  const cup = path.match(CUP);
+  if (cup) return { view: "cup", eventId: cup[1], number: Number(cup[2]) };
+  const match = path.match(MATCH);
+  if (match) return { view: "match", matchId: match[1] };
   if (LIVE.test(path)) return { view: "live" };
   return { view: "menu" };
 }
@@ -36,18 +42,20 @@ export const eventGuideHref = (eventId) => `#/e/${encodeURIComponent(eventId)}/g
 export const playerHref = (user) => `#/p/${user}`;
 export const voteHref = (eventId) => `#/v/${eventId}`;
 export const runHref = (runId) => `#/r/${runId}`;
+export const cupHref = (eventId, number) => `#/c/${eventId}/${number}`;
+export const matchHref = (matchId) => `#/m/${matchId}`;
 export const menuHref = "#/";
 export const liveHref = "#/live";
 export const guideHref = (id = "index", section = null) =>
   `#/guides${id === "index" ? "" : `/${encodeURIComponent(id)}`}${section ? `?section=${encodeURIComponent(section)}` : ""}`;
 
 /**
- * Which placement sheet a view wears. The club for the front and a player,
- * the trackside sheet for anything with a stage, and the channel's own for
- * the live page, which is nothing but a stage.
+ * Which placement sheet a view wears. The club for the front, a player and a
+ * cup, the trackside sheet for anything with a stage, and the channel's own
+ * for the live page, which is nothing but a stage.
  */
 export const themeFor = (view) =>
-  view === "live" ? "live" : ["race", "vote", "run"].includes(view) ? "race" : "club";
+  view === "live" ? "live" : ["race", "vote", "run", "match"].includes(view) ? "race" : "club";
 
 /**
  * Wear one view's placement sheet and take the others off.

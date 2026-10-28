@@ -8,23 +8,25 @@ Space later.
 import hashlib
 import random
 import threading
+from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..broadcasts import BroadcastBook
-from ..live import Programme, pool
+from ..live import Programme, pool, shows
 from ..manifest import all_events
 from .config import ArenaConfig
 from .routes_auth import router as auth_router
+from .routes_cups import router as cups_router
 from .routes_launcher import router as launcher_router
 from .routes_live import now_ms
 from .routes_live import router as live_router
 from .routes_read import router as read_router
 from .routes_submit import router as submit_router
 from .routes_unfurl import router as unfurl_router
-from .routes_vote import BallotBook
+from .routes_vote import BallotBook, Decks
 from .routes_vote import router as vote_router
 from .session import Sessions
 
@@ -41,6 +43,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     app.state.store = config.build_store()
     app.state.ballots = config.build_ballots()
     app.state.ballot_book = BallotBook()
+    app.state.decks = Decks()
     app.state.sessions = Sessions()
     app.state.racing = set()  # users whose entry is being raced: one at a time each
 
@@ -50,15 +53,21 @@ def create_app(config: ArenaConfig) -> FastAPI:
     # wasteful there.
     app.state.broadcasts = BroadcastBook(config.broadcast_dir)
 
-    # The programme reads the pool on every rebuild, never per request; the
-    # build hash lets a page that has run for days reload after a deploy.
-    app.state.programme = Programme(lambda: pool(app.state.store), now_ms, app.state.broadcasts)
+    # The programme reads the pool on every rebuild, never per request, and
+    # the cups as it lays; the build hash lets a page that has run for days
+    # reload after a deploy.
+    app.state.programme = Programme(lambda: pool(app.state.store, datetime.now(UTC)), now_ms, app.state.broadcasts,
+                                    cups=lambda: shows(app.state.store, datetime.now(UTC)))
+    # A cup's show.json, parsed the first time the live serves from it: it is
+    # written once, before the cup's running order, and never changed.
+    app.state.shows = {}
     index = config.frontend_dir / "index.html" if config.frontend_dir else None
     app.state.build = hashlib.sha256(index.read_bytes()).hexdigest()[:12] if index else "dev"
 
     from .. import commentary
     from ..clips import ClipJobs
     from ..commentary.lore import load
+    from ..cupworker import CupWorker, load_entrant
 
     # Why the booth is off, for the boot to say in one line, or None when it is
     # on. The bible is edited by hand and deployed without a test job, so a
@@ -97,7 +106,16 @@ def create_app(config: ArenaConfig) -> FastAPI:
             # A thread, as recovery is: the drain is Hub calls and the health
             # check cannot wait for them.
             app.state.clips.start()
+            # Only where clips render: a cup cannot premiere without its
+            # clips, and a clip job's own app (clip_worker=False) must not
+            # compute cups.
+            app.state.cups.start()
 
+        @app.on_event("shutdown")
+        def _stop_the_cups() -> None:
+            app.state.cups.stop()
+
+    from ..commentary.show import compose_show
     from ..commentary.stock import CommentaryStock
     from ..commentary.tab import PlanTab
     from ..recorder import find_chrome
@@ -108,7 +126,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
     plan_page = config.frontend_dir and (config.frontend_dir / "plan.html").is_file()
     tab = PlanTab(config.origin) if writer and plan_page and find_chrome() else None
     app.state.commentary = CommentaryStock(
-        app.state.broadcasts, tab, writer, lambda: pool(app.state.store),
+        app.state.broadcasts, tab, writer, lambda: pool(app.state.store, datetime.now(UTC)),
         landed=lambda: app.state.programme.landed(),
     )
     if app.state.commentary.available:
@@ -124,6 +142,23 @@ def create_app(config: ArenaConfig) -> FastAPI:
             # its profile directory goes with it: neither outlives the process
             # that opened them.
             app.state.commentary.stop()
+
+    # Built once the tab is: a cup's show is written by the booth and timed
+    # on its tab. With no tab, the cup airs its matches alone.
+    show = None
+    if tab is not None:
+        show_rng = random.Random()  # not the reserve's: the two write on their own threads
+
+        def show(cup, done: dict) -> dict:
+            return compose_show(
+                app.state.store, cup, lore=lore, provider=provider, model=config.commentary_model,
+                tab=tab, rng=show_rng, done=done, log=app.state.cups.log,
+            )
+
+    app.state.cups = CupWorker(
+        app.state.store, app.state.clips, events=[m for m in all_events() if m.cup],
+        load=lambda e: load_entrant(app.state.store, e), show=show,
+    )
 
     @app.on_event("shutdown")
     def _commit_owed_votes() -> None:
@@ -175,6 +210,7 @@ def create_app(config: ArenaConfig) -> FastAPI:
             threading.Thread(target=run, name="arena-recover", daemon=True).start()
 
     app.include_router(read_router)
+    app.include_router(cups_router)
     app.include_router(submit_router)
     app.include_router(auth_router)
     app.include_router(vote_router)

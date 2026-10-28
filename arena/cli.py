@@ -18,10 +18,11 @@ from .constants import CTRL_DT
 from .evaluate import evaluate
 from .hub_fetch import FetchError, fetch_references
 from .index import ENTRANTS, leaderboard
-from .manifest import ManifestError, all_events, load_event
+from .manifest import ManifestError, all_events, higher_wins, load_event
 from .policy import PolicyError, load_policy
 from .store import LocalStore, RunRecord, lone_cast, new_id
 from .timeline import TimelineError, load_troupe
+from .tug import SIDES, entry_side
 
 
 def _cmd_events(args) -> int:
@@ -45,6 +46,13 @@ def _print_sweep(result) -> None:
         print(f"seed {seed_result.seed}: {seed_result.status:<8} {timing}")
     print(f"\nscore {result.score:.3f}s · {result.seeds_finished}/"
           f"{len(result.per_seed)} finished · replay from seed {result.trace_seed}")
+
+
+def _print_rating(result) -> None:
+    """The format the training recipe's ledger reads: one line per seed, then the rating."""
+    for r in result.per_seed:
+        print(f"seed {r.seed}: {SIDES[entry_side(r.seed)]:<4} {r.status:<8} {r.score_cm:+7.1f} cm at {r.time_s:.2f} s")
+    print(f"rating: {result.score:.1f} cm · replay from seed {result.trace_seed}")
 
 
 def _print_stage(manifest, result, troupe, name: str | None) -> None:
@@ -76,8 +84,11 @@ def _cmd_score(args) -> int:
         result = evaluate(manifest, policy, cast.performers)
         _print_stage(manifest, result, troupe, Path(args.timeline).name if args.timeline else None)
     elif args.timeline:
-        print(f"{manifest.id} is a race: --timeline is for stage events", file=sys.stderr)
+        print(f"{manifest.id} is not a stage: --timeline is for stage events", file=sys.stderr)
         return 1
+    elif manifest.course.kind == "tug":
+        result = evaluate(manifest, policy)
+        _print_rating(result)
     else:
         result = evaluate(manifest, policy)
         _print_sweep(result)
@@ -102,7 +113,9 @@ def _cmd_score(args) -> int:
             cast=cast.record if cast else lone_cast(),
         )
         LocalStore(Path(args.store)).append(
-            record, trace_codec.encode(result.trace, result.settle), Path(args.onnx).read_bytes()
+            record,
+            trace_codec.encode(result.trace, result.settle, result.string, result.string_settle),
+            Path(args.onnx).read_bytes(),
         )
         print(f"recorded {record.run_id}")
     return 0
@@ -117,13 +130,17 @@ def _cmd_board(args) -> int:
         print(f"no runs recorded for {manifest.id}")
         return 0
 
+    rating = higher_wins(manifest.id)
+    # A tug's fixed command walks backwards, no speed it was scored at: no cmd column.
+    cmd = "" if rating else f"{'cmd':>10}"
     print(f"{manifest.title}\n")
-    print(f"{'#':<4}{'who':<16}{'policy':<20}{'time':>10}{'seeds':>8}{'cmd':>10}")
+    print(f"{'#':<4}{'who':<16}{'policy':<20}{'rating' if rating else 'time':>10}{'seeds':>8}{cmd}")
     for row in rows:
         r = row.record
+        score = f"{r.score:>7.1f} cm" if rating else f"{r.score:>9.3f}s"
+        speed = "" if rating else f"{r.command_vx:>8.2f}m/s"
         print(f"{row.rank:<4}{r.user:<16}{r.policy_name:<20}"
-              f"{r.score:>9.3f}s{r.seeds_finished:>5}/{len(r.per_seed)}"
-              f"{r.command_vx:>8.2f}m/s")
+              f"{score}{r.seeds_finished:>5}/{len(r.per_seed)}{speed}")
     return 0
 
 
@@ -148,13 +165,13 @@ def _cmd_recover(args) -> int:
     return 0
 
 
-def _app_on_loopback(store_dir) -> tuple | None:
+def _app_on_loopback(store_dir, reveal_all: bool = False) -> tuple | None:
     """The app on a free loopback port, answering, launching no clip jobs.
 
     The recorder's Chrome needs the clip page and the API; this process is the
-    clip job, or a render by hand, and owes nothing itself. The config, the
-    app, the running server and its origin — or None, the failure already
-    reported.
+    clip job, or a render by hand, and owes nothing itself. With `reveal_all`
+    it serves a cup's matches before they air. The config, the app, the running
+    server and its origin — or None, the failure already reported.
     """
     import socket
     import threading
@@ -169,7 +186,8 @@ def _app_on_loopback(store_dir) -> tuple | None:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     origin = f"http://127.0.0.1:{port}"
-    config = ArenaConfig.from_env(store_dir=store_dir, origin=origin, clip_worker=False)
+    config = ArenaConfig.from_env(store_dir=store_dir, origin=origin, clip_worker=False,
+                                  reveal_all=reveal_all)
     app = create_app(config)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     threading.Thread(target=server.run, daemon=True).start()
@@ -188,10 +206,11 @@ def _app_on_loopback(store_dir) -> tuple | None:
 
 
 def _cmd_clip(args) -> int:
-    """Render one run's clips into the store: what a clip job runs, or by hand."""
+    """Render one run's clips, or a match's, into the store: what a clip job runs, or by hand."""
     from .clips import ClipRenderer
 
-    started = _app_on_loopback(args.store)
+    # A match's clip is rendered before its cup's show: this app reads it before it airs.
+    started = _app_on_loopback(args.store, reveal_all=True)
     if started is None:
         return 1
     config, app, server, origin = started

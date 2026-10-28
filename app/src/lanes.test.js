@@ -7,6 +7,11 @@ describe("lanesFor", () => {
     const board = [1, 2, 3].map(rank => ({ run_id: `R${rank}`, you: rank === 2 }));
     expect(lanesFor({ board, event: { id: "got-a-talent", course: "stage" } })).toEqual([board[1]]);
   });
+  it("puts a rated run alone: its traced bout", () => {
+    const TUG = { id: "tug-of-war", course: "tug" };
+    const board = [1, 2, 3].map(rank => ({ run_id: `R${rank}`, you: rank === 2 }));
+    expect(lanesFor({ board, event: TUG })).toEqual([board[1]]);
+  });
   it("opens on this run, then up to three ranked under it", () => {
     const board = [1, 2, 3, 4, 5, 6].map((rank) => ({ rank, run_id: `R${rank}`, you: rank === 2 }));
     expect(lanesFor({ board }).map((row) => row.run_id)).toEqual(["R2", "R3", "R4", "R5"]);

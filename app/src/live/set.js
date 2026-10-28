@@ -9,6 +9,7 @@ import {
   Color,
   Group,
   Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   RepeatWrapping,
   SRGBColorSpace,
@@ -20,7 +21,12 @@ export function token(name) {
   return new Color(getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim());
 }
 
-export function booth() {
+// The back wall's centre holds the pegboard, or the cup screen in its place.
+const PEGBOARD = ["pegboard frame", "pegboard", "peg hole"];
+const CUP_SCREEN = ["cup screen frame", "cup screen"];
+
+/** The set, the `screen` canvas's cup screen standing ready, hidden, at the pegboard's place. */
+export function booth({ screen }) {
   const group = new Group();
   group.rotation.z = BOOTH_TURN;
   const materials = new Map();
@@ -47,6 +53,14 @@ export function booth() {
   for (let x = -0.19; x < 0.2; x += 0.038) {
     for (let z = 0.25; z < 0.39; z += 0.035) box("peg hole", [0.006, 0.002, 0.006], [x, 0.367, z], "ink");
   }
+  // The cup screen's glass is the -y face (index 3) of its box, toward the desk.
+  box("cup screen frame", [0.47, 0.027, 0.2], [0, 0.39, 0.31], "ink");
+  const glass = box("cup screen", [0.445, 0.008, 0.177], [0, 0.372, 0.31], "ink");
+  const map = new CanvasTexture(screen);
+  map.colorSpace = SRGBColorSpace;
+  const face = new MeshBasicMaterial({ map });
+  glass.material = [glass.material, glass.material, glass.material, face, glass.material, glass.material];
+  standScreen(group, false);
   // Low desk: knees may sit behind it, but heads and beaks stay clear.
   box("desk top", [0.61, 0.12, 0.018], [0, -0.115, 0.075], "cream");
   box("desk apron", [0.56, 0.012, 0.042], [0, -0.165, 0.043], "sky");
@@ -73,6 +87,14 @@ export function booth() {
     box("fluorescent tube", [0.27, 0.025, 0.015], [x, 0.225, 0.329], "paper");
   }
   return group;
+}
+
+/** Stands the cup screen on the back wall in place of the pegboard, or the pegboard back. */
+export function standScreen(set, shown) {
+  for (const mesh of set.children) {
+    if (PEGBOARD.includes(mesh.name)) mesh.visible = !shown;
+    if (CUP_SCREEN.includes(mesh.name)) mesh.visible = shown;
+  }
 }
 
 /** The floor's paint: two-by-two tiles of paper and warm paper, repeated. */

@@ -1,10 +1,37 @@
 import { describe, expect, it } from "vitest";
+import { matchPlan } from "./match.js";
 import { clipPlan } from "./plan.js";
-import { clipScore } from "./score.js";
+import { clipScore, clipVerdict, matchScore } from "./score.js";
 
 const event = { id: "sprint-2m", length_m: 2, clip: { sounds: ["crowd", "horn", "verdict"] } };
 const trace = new Float32Array(200 * 21);
 for (let i = 0; i < 200; i++) trace[i * 21] = i / 100; // x from 0 to 2 m
+const TUG = {
+  id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_ground_cm", ring_m: 3,
+  clip: { sounds: ["crowd", "verdict"], tape_max_s: 30 },
+};
+const tugRun = {
+  run_id: "R1", user: "nico", policy_name: "puller", event: TUG, score: 4.2134, seeds_finished: 5, seeds_total: 5,
+  trace_seed: 3, rank: 2, on_board: true, withdrawn: false, receipts: [{ act: "run", points: 10 }],
+  per_seed: [{ seed: 3, status: "won", time_s: 45, score_cm: 1 }], cast: [{ policy: "self" }],
+};
+const traced = (status) => ({ ...tugRun, per_seed: [{ seed: 1, status: "lost", time_s: 45, score_cm: -3 }, { seed: 3, status, time_s: 45, score_cm: 1 }] });
+
+describe("clipVerdict", () => {
+  it("stamps a rated run with how its replayed bout ended, a pass for a win", () => {
+    expect(["won", "lost", "draw", "pit_won", "pit_lost", "fault"].map((s) => clipVerdict(traced(s)))).toEqual([
+      { stamp: "WON THE PULL", pass: true }, { stamp: "LOST THE PULL", pass: false }, { stamp: "DRAW", pass: false },
+      { stamp: "PULLED IT IN", pass: true }, { stamp: "DRAGGED IN", pass: false }, { stamp: "FAULTED", pass: false }]);
+  });
+  it("stamps a race and a performance as it always has", () => {
+    const race = { event, seeds_finished: 5 };
+    expect(clipVerdict(race)).toEqual({ stamp: "VICTORY", pass: true });
+    expect(clipVerdict({ ...race, seeds_finished: 0 })).toEqual({ stamp: "DNF", pass: false });
+    const stage = { event: { id: "got-a-talent", course: "stage" }, seeds_finished: 1 };
+    expect(clipVerdict(stage)).toEqual({ stamp: "WELL DONE", pass: true });
+    expect(clipVerdict({ ...stage, seeds_finished: 0 })).toEqual({ stamp: "CUT SHORT", pass: false });
+  });
+});
 
 describe("clipScore", () => {
   const plan = clipPlan(200, 12, 0);
@@ -54,6 +81,12 @@ describe("clipScore", () => {
     const score = clipScore({ run, plan, trace, ducks: [{ sound: null }] });
     expect(score.crowd.progress).toEqual([]);
     expect(score.cues.map((cue) => cue.file)).not.toContain("air-horn.mp3");
+  });
+
+  it("a tug's crowd answers the verdict alone: a bout goes down no course", () => {
+    const score = clipScore({ run: tugRun, plan: clipPlan(100, 30, 26), trace, ducks: [] });
+    expect(score.crowd.progress).toEqual([]);
+    expect(score.crowd.verdict).toBe("pass");
   });
 
   it("puts the duck's quack and wheee on the tape after the settle, cut where the performance ends", () => {
@@ -109,5 +142,14 @@ describe("clipScore", () => {
     const run = { run_id: "r1", seeds_finished: 1, event };
     const cues = clipScore({ run, plan: clipPlan(250, 20, 26), trace: new Float32Array(21 * 276), ducks: [{ sound: null }, singer] }).cues;
     expect(cues.filter((cue) => cue.song).map((cue) => cue.song.part)).toEqual([{ choral: false, variant: 1 }]);
+  });
+});
+
+describe("matchScore", () => {
+  it("scores a match: the crowd answers the verdict and the stamp lands at the outro", () => {
+    const plan = matchPlan([{ k: 0, settle: 26, steps: 1000 }]);
+    const score = matchScore({ match: { match_id: "tug-of-war-0001-000", event: { clip: { sounds: ["crowd", "verdict"] } } }, plan });
+    expect(score.crowd).toEqual({ start: 3, end: plan.tapeEnd / 25, verdict: "pass", progress: [] });
+    expect(score.cues.map((cue) => cue.at)).toEqual([plan.tapeEnd / 25, plan.tapeEnd / 25 + 0.16]);
   });
 });

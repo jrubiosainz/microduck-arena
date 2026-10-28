@@ -272,3 +272,8 @@ def test_a_store_error_costs_a_turn_and_not_the_whole_reserve(tmp_path, monkeypa
     worker._work()
     assert any("OSError" in line for line in said)
     assert book.unaired("a") is not None
+
+
+def test_the_booth_never_wants_a_cup_match(tmp_path):
+    worker, _ = stock(tmp_path, entries("tug-of-war-0001-008", "a"), lambda run_id: written(run_id))
+    assert worker.wanted() == ["a"]

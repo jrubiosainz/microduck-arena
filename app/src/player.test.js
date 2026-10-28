@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { byEvent, noProfile, profile } from "./player.js";
+import { byEvent, noProfile, profile, reachedLabel } from "./player.js";
 
 const ann = {
   user: "ann",
@@ -77,7 +77,7 @@ describe("a player's profile", () => {
 });
 
 describe("a voted event's best row", () => {
-  it("says how many votes it earned, not a finish time", () => {
+  it("says how it is rated, not a finish time", () => {
     const player = {
       user: "ann",
       points: 100,
@@ -85,11 +85,11 @@ describe("a voted event's best row", () => {
       publications: [
         { event_id: "got-a-talent", event_title: "MicroDuck Got a Talent", rank: 1, score: 18.46,
           seeds_finished: 5, seeds_total: 5, policy_name: "talentbot", run_id: "r9",
-          submitted_at: "2026-09-10T10:00:00Z", votes: 43 },
+          submitted_at: "2026-09-10T10:00:00Z", votes: 43, rate: 0.392 },
       ],
     };
     const item = profile(player).querySelector(".profile-results a");
-    expect(item.textContent).toContain("#1 · 43 votes");
+    expect(item.textContent).toContain("#1 · rated 39%");
     expect(item.textContent).not.toContain("18.46");
   });
 
@@ -101,7 +101,7 @@ describe("a voted event's best row", () => {
       publications: [
         { event_id: "got-a-talent", event_title: "MicroDuck Got a Talent", rank: 2, score: 18.46,
           seeds_finished: 5, seeds_total: 5, policy_name: "talentbot", run_id: "r9",
-          submitted_at: "2026-09-10T10:00:00Z", votes: 0 },
+          submitted_at: "2026-09-10T10:00:00Z", votes: 0, rate: 0.2 },
       ],
     };
     const item = profile(player).querySelector(".profile-results a");
@@ -233,5 +233,34 @@ describe("the way out of a player's own page", () => {
     expect(profile(ann, { ...signedIn, oauth_enabled: false })
       .querySelector(".sign-out")).toBeNull();
     expect(profile(ann).querySelector(".sign-out")).toBeNull();
+  });
+});
+
+describe("the tug's best row", () => {
+  it("says the rating in centimetres", () => {
+    const player = {
+      user: "ann",
+      points: 100,
+      rank: 1,
+      publications: [
+        { event_id: "tug-of-war", event_title: "Tug of War", rank: 1, score: 12.34, seeds_finished: 5,
+          seeds_total: 5, policy_name: "puller", run_id: "r9", submitted_at: "2026-10-20T10:00:00Z",
+          votes: null, metric: "mean_ground_cm" },
+      ],
+    };
+    expect(profile(player).querySelector(".profile-results a").textContent).toContain("#1 · 12.3 cm");
+  });
+
+  it("lists the cups a player played and how far they went, each the way to its page", () => {
+    const el = profile({ ...ann, cups: [{ event_id: "tug-of-war", event_title: "Tug of War", number: 3, starts_at: "2026-11-13T17:00:00Z", reached: "semi-final" }] });
+    const cup = el.querySelector(".profile-cups a");
+    expect(cup.getAttribute("href")).toBe("#/c/tug-of-war/3");
+    expect(cup.textContent).toBe("Tug of War Cup #3Semi-finalist2026-11-13");
+    expect(profile(ann).querySelector(".profile-cups")).toBeNull();
+  });
+
+  it("words how far a cup went", () => {
+    expect(["champion", "final", "quarter-final", "round of 16", "group"].map(reachedLabel)).toEqual([
+      "Champion", "Finalist", "Quarter-finalist", "Round of 16", "Group stage"]);
   });
 });

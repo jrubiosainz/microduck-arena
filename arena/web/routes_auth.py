@@ -17,6 +17,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
+from ..cupworker import all_cups
 from ..points import receipts, standings
 from .oauth import OAuthError, authorize_url, exchange_code, userinfo
 from .routes_read import _all_runs, _ballots, _voted, _withdrawn
@@ -134,7 +135,7 @@ def me(request: Request, response: Response) -> dict:
         card = next(
             (
                 c
-                for c in standings(receipts(runs, withdrawn, ballots, rules, now))
+                for c in standings(receipts(runs, withdrawn, ballots, rules, now, cups=all_cups(store)))
                 if c.user == session.username
             ),
             None,

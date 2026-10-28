@@ -9,6 +9,7 @@ The leaderboard is never stored, only derived (see index.py).
 
 import json
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -21,7 +22,8 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
-from .evaluate import SeedResult
+from .evaluate import SeedResult, seed_row
+from .manifest import higher_wins
 
 _BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford, ULID-style
 _TAIL_BITS = 60  # 12 base32 chars
@@ -29,6 +31,8 @@ _TAIL_BITS = 60  # 12 base32 chars
 # The files a ready clip holds beside its clip.json (arena/clips.py writes them,
 # routes_read.py serves them by these exact names).
 CLIP_MEDIA = ("landscape.mp4", "vertical.mp4", "poster.png")
+# A cup's bout traces in the dataset: the Hub store reads them one by one, never in its snapshot.
+_BOUT = re.compile(r"cups/[^/]+/\d{4}/bouts/")
 
 # The longest a vote's writer waits between two tries at the Hub.
 BALLOT_RETRY_CAP_S = 60.0
@@ -150,9 +154,7 @@ class RunRecord:
             "model_sha256": self.model_sha256,
             "score": self.score,
             "seeds_finished": self.seeds_finished,
-            "per_seed": [
-                {"seed": r.seed, "status": r.status, "time_s": r.time_s} for r in self.per_seed
-            ],
+            "per_seed": [seed_row(r) for r in self.per_seed],
             "trace_seed": self.trace_seed,
             "runner_version": self.runner_version,
             "command_vx": self.command_vx,
@@ -177,7 +179,7 @@ class RunRecord:
             score=raw["score"],
             seeds_finished=raw["seeds_finished"],
             per_seed=tuple(
-                SeedResult(seed=r["seed"], status=r["status"], time_s=r["time_s"])
+                SeedResult(seed=r["seed"], status=r["status"], time_s=r["time_s"], score_cm=r.get("score_cm"))
                 for r in raw["per_seed"]
             ),
             trace_seed=raw["trace_seed"],
@@ -370,6 +372,9 @@ class Store(Protocol):
     def clip_file(self, run_id: str, name: str) -> Path: ...
     def pending_clips(self) -> list[str]: ...
     def failed_clips(self) -> list[str]: ...
+    def put_cup_files(self, event_id: str, number: int, files: dict[str, bytes]) -> None: ...
+    def cup_file(self, event_id: str, number: int, name: str) -> bytes | None: ...
+    def cup_numbers(self, event_id: str) -> list[int]: ...
     def refresh(self) -> None: ...
 
 
@@ -555,6 +560,31 @@ class LocalStore:
             if folder.is_dir() and self.clip_state(folder.name)[0] == "failed"
         )
 
+    def _cup_dir(self, event_id: str, number: int) -> Path:
+        return self.root / "cups" / event_id / f"{number:04d}"
+
+    def put_cup_files(self, event_id: str, number: int, files: dict[str, bytes]) -> None:
+        folder = self._cup_dir(event_id, number)
+        taken = [name for name in files if (folder / name).exists()]
+        if taken:
+            raise FileExistsError(f"cup {event_id} {number} already has {taken}")
+        # The .json files last: a cup is read off its draw.json, so a write that
+        # dies part-way leaves no readable state.
+        for name in sorted(files, key=lambda name: name.endswith(".json")):
+            path = folder / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(files[name])
+
+    def cup_file(self, event_id: str, number: int, name: str) -> bytes | None:
+        path = self._cup_dir(event_id, number) / name
+        return path.read_bytes() if path.is_file() else None
+
+    def cup_numbers(self, event_id: str) -> list[int]:
+        directory = self.root / "cups" / event_id
+        if not directory.is_dir():
+            return []
+        return sorted(int(folder.name) for folder in directory.iterdir() if (folder / "draw.json").is_file())
+
     def refresh(self) -> None:
         """Nothing to do: a directory is read fresh every time."""
 
@@ -612,6 +642,7 @@ class HubStore:
         from huggingface_hub import CommitOperationAdd
 
         run_path = f"runs/{record.event_id}/{record.run_id}.json"
+        score = f"{record.score:.1f} cm" if higher_wins(record.event_id) else f"{record.score:.3f}s"
         # Match LocalStore's refusal to overwrite. CommitOperationAdd would
         # otherwise apply a re-append of the same record — a retry loop in the
         # web layer, say — as a silent overwrite, which is exactly the history
@@ -628,7 +659,7 @@ class HubStore:
         self.api.create_commit(
             repo_id=self.repo_id,
             repo_type="dataset",
-            commit_message=f"{record.event_id}: {record.user} {record.score:.3f}s",
+            commit_message=f"{record.event_id}: {record.user} {score}",
             operations=[
                 CommitOperationAdd(
                     path_in_repo=run_path,
@@ -690,8 +721,10 @@ class HubStore:
         from huggingface_hub.hf_api import RepoFile
 
         # The clips' media stay out — a boot would otherwise download every video
-        # ever rendered; clip_file fetches one on demand. So do the votes: the
-        # store never reads them (HubBallots does), and each would be a download.
+        # ever rendered; clip_file fetches one on demand. So do the cups' bout
+        # traces, a hundred and more a cup, which cup_file fetches when one is
+        # read. So do the votes: the store never reads them (HubBallots does), and
+        # each would be a download.
         tree = {
             entry.path: entry.blob_id
             for entry in self.api.list_repo_tree(
@@ -699,6 +732,7 @@ class HubStore:
             )
             if isinstance(entry, RepoFile)
             and not entry.path.endswith((".mp4", ".png"))
+            and not _BOUT.match(entry.path)
             and not entry.path.startswith("votes/")
         }
         files = {
@@ -840,6 +874,38 @@ class HubStore:
 
     def failed_clips(self) -> list[str]:
         return self.snapshot().failed_clips()
+
+    def put_cup_files(self, event_id: str, number: int, files: dict[str, bytes]) -> None:
+        from huggingface_hub import CommitOperationAdd
+
+        folder = f"cups/{event_id}/{number:04d}"
+        # Asked of the Hub itself, a round trip per name: a snapshot keeps its last folder when the Hub is slow, and
+        # a stale one would let a second draw.json (a new secret over computed matches) or order.json land.
+        taken = [name for name in files if self.api.file_exists(self.repo_id, f"{folder}/{name}", repo_type="dataset")]
+        if taken:
+            raise FileExistsError(f"cup {event_id} {number} already has {taken} in {self.repo_id}")
+        self.api.create_commit(
+            repo_id=self.repo_id,
+            repo_type="dataset",
+            commit_message=f"{event_id} cup {number}",
+            operations=[
+                CommitOperationAdd(path_in_repo=f"{folder}/{name}", path_or_fileobj=blob) for name, blob in files.items()
+            ],
+        )
+        self.refresh()
+
+    def cup_file(self, event_id: str, number: int, name: str) -> bytes | None:
+        snapshot = self.snapshot()
+        path = f"cups/{event_id}/{number:04d}/{name}"
+        if not _BOUT.match(path):
+            return snapshot.cup_file(event_id, number, name)
+        # Left out of the snapshot: fetched at its head, cached by the Hub cache.
+        return Path(
+            self.api.hf_hub_download(self.repo_id, path, repo_type="dataset", revision=self._commit)
+        ).read_bytes()
+
+    def cup_numbers(self, event_id: str) -> list[int]:
+        return self.snapshot().cup_numbers(event_id)
 
     def refresh(self) -> None:
         """The next read asks the Hub again: what another process wrote — a clip

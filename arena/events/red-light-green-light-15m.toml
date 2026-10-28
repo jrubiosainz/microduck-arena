@@ -1,5 +1,5 @@
 id           = "red-light-green-light-15m"
-order        = 40
+order        = 50
 title        = "15 m Red Light, Green Light"
 category     = "race"
 kind         = "perpetual"

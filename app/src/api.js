@@ -55,6 +55,8 @@ export async function getMe() {
   }
 }
 
+const POINT_FLOATS = 17 * 3;
+
 async function frames(path) {
   const response = await fetch(path);
   // Same contract as every other call: the server's own sentence, not a status.
@@ -65,10 +67,21 @@ async function frames(path) {
   return splitDucks(new Float32Array(await response.arrayBuffer()), ducks);
 }
 
+/** A tug's string, 17 points a frame: the untimed settle's frames, then the timed ones. */
+async function points(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(await detailFrom(response));
+  const all = new Float32Array(await response.arrayBuffer());
+  const settled = Number(response.headers.get("X-Settle-Frame-Count")) * POINT_FLOATS;
+  return { settle: all.slice(0, settled), trace: all.slice(settled) };
+}
+
 /** A run's trace, one per duck, in duck order: a lane's is its one duck. */
 export function getTrace(runId) {
   return frames(`/api/runs/${runId}/trace`);
 }
+
+export const getString = (runId) => points(`/api/runs/${runId}/string`);
 
 /** The untimed settle before a run's trace, from the reset pose, one per duck; empty for a run stored before settles were recorded. */
 export function getSettle(runId) {
@@ -114,14 +127,40 @@ export const getClip = (runId) => json(`/api/runs/${runId}/clip`);
 /** The channel's grid and the server's clock. Never cached: the clock is in it. */
 export const getLive = () => json("/api/live", { cache: "no-store" });
 
-/** A booth's dialogue and the plan that plays it, or null when it is gone. */
-export async function getBroadcast(id) {
-  const response = await fetch(`/api/live/broadcast/${id}`, { cache: "no-store" });
+/** What a live slot plays, never cached: null when it is gone, or not served yet. */
+async function onAir(path) {
+  const response = await fetch(path, { cache: "no-store" });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(await detailFrom(response));
   return response.json();
 }
 
+/** A booth's dialogue and the plan that plays it, or null when it is gone. */
+export const getBroadcast = (id) => onAir(`/api/live/broadcast/${id}`);
+
+/** A desk segment of a cup's show: its dialogue, its plan and the cup screen's view, served from shortly before it airs. */
+export const getShow = (eventId, number, segment) => onAir(`/api/live/show/${eventId}/${number}/${segment}`);
+
+/** A called match's lines and the plan that voices them over its clip, served with the clip's media. */
+export const getCall = (matchId) => onAir(`/api/live/call/${matchId}`);
+
 // `version` is the render the file belongs to (a slot's `clip`): the files are
 // cached for a year as immutable, so a clip rendered again is a new URL.
 export const clipUrl = (runId, name, version) => `/api/runs/${runId}/clip/${name}?v=${version}`;
+
+/** An event's cups, newest first, and the next one: when it closes, when it premieres, who has entered. */
+export const getCups = (eventId) => json(`/api/events/${eventId}/cups`);
+
+/** One cup as far as it has aired: the field before the show, then its groups and bracket match by match. */
+export const getCup = (eventId, number) => json(`/api/events/${eventId}/cups/${number}`);
+
+/** A cup's match: its two entrants, its bouts and how it ended. */
+export const getMatch = (matchId) => json(`/api/matches/${matchId}`);
+
+/** Bout `k` of a match, both ducks, west first; and the untimed settle before it. */
+export const getBoutTrace = (matchId, k) => frames(`/api/matches/${matchId}/bouts/${k}/trace`);
+export const getBoutSettle = (matchId, k) => frames(`/api/matches/${matchId}/bouts/${k}/settle`);
+export const getBoutString = (matchId, k) => points(`/api/matches/${matchId}/bouts/${k}/string`);
+
+// Versioned by its render, as a run's clip files are (clipUrl).
+export const matchClipUrl = (matchId, name, version) => `/api/matches/${matchId}/clip/${name}?v=${version}`;

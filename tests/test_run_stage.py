@@ -140,8 +140,8 @@ def test_two_ducks_walked_into_each_other_touch(talent, walker, monkeypatch):
     """One physics: the robots' collision geoms meet like any others."""
     touched, real_step = set(), runner._step
 
-    def watching(model, data, ducks, commands):
-        real_step(model, data, ducks, commands)
+    def watching(model, data, ducks, commands, crossed):
+        real_step(model, data, ducks, commands, crossed)
         trunks = {int(model.body(f"{duck_prefix(k)}trunk_base").id): k for k in range(len(ducks))}
         for pair in zip(data.contact.geom1, data.contact.geom2):
             a, b = (trunks.get(int(model.body_rootid[model.geom_bodyid[g]])) for g in pair)

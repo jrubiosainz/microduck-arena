@@ -15,6 +15,7 @@ owes a clip to every run that predates clips.
 
 import itertools
 import json
+import math
 import queue
 import re
 import threading
@@ -24,8 +25,9 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .cup import is_match_id
 from .manifest import all_events
-from .recorder import SIZES, RenderedRun, ffmpeg_available, find_chrome, record_run
+from .recorder import SIZES, RenderedRun, budget_for, ffmpeg_available, find_chrome, record_run
 
 # Written into every clip.json. Bumping it does not re-render older clips.
 CLIP_VERSION = 1
@@ -38,6 +40,18 @@ RENDER_BUDGET_S = 900.0
 JOB_FLAVOR = "t4-small"
 # Past this a job is stuck rather than slow, and HF ends it: what one may cost.
 JOB_TIMEOUT = "30m"
+# How many jobs run at once at most (ARENA_CLIP_JOBS). A cup owes a clip for each of its matches the moment it is
+# played, 62 for 23 entrants, two hours before its premiere: at about 8 min a job, sixteen at once render them in about
+# half an hour; four took two. Each job costs the same, however many run beside it.
+JOBS_AT_ONCE = 16
+# The longest match's clip in frames: five full 45 s bouts with their settles and their 6 s holds,
+# between the title and the outro (app/src/clip/match.js matchPlan); a test ties it to the tug's
+# [bout] and [start].
+MATCH_FRAMES = 6578
+# A match's job outlives the render's own budget for the longest match by the quarter of an hour a
+# run's job has over a race's: the render's deadline comes first and writes why it failed. A job HF
+# ends writes nothing, and its clip fails with no more than the job's last word.
+MATCH_JOB_TIMEOUT = f"{math.ceil((budget_for(RENDER_BUDGET_S, MATCH_FRAMES) + 15 * 60) / 60)}m"
 # How often the Space looks at its jobs and at the list.
 POLL_S = 10.0
 # A launch the Jobs API refused is tried again this long after, the run still owed.
@@ -76,7 +90,10 @@ def clip_manifest(run_id: str, rendered: RenderedRun, rendered_at: str) -> dict:
             "crowdDirection": (
                 {k: layout.crowd[k] for k in ("start", "end", "verdict")} if layout.crowd else None
             ),
-            "timing": layout.timing,
+            # A match's clip also says where each bout's tape starts and ends: the show times
+            # its calls by them.
+            "timing": ({**layout.timing, "bouts": layout.plan["bouts"]}
+                       if "bouts" in layout.plan else layout.timing),
         }
     return {"run_id": run_id, "version": CLIP_VERSION, "rendered_at": rendered_at,
             "poster": "poster.png", "layouts": layouts}
@@ -142,7 +159,7 @@ class ClipJobs:
 
     def __init__(self, store, *, space_id: str | None, dataset: str | None, token: str | None,
                  jobs_token: str | None = None, namespace: str | None = None,
-                 flavor: str = JOB_FLAVOR, running: int = 4,
+                 flavor: str = JOB_FLAVOR, running: int = JOBS_AT_ONCE,
                  api=None, log=print, enabled: bool = True, backfill: bool = False,
                  landed=lambda run_id: None, now=time.monotonic):
         self.store = store
@@ -285,7 +302,9 @@ class ClipJobs:
                     env={"ARENA_DATASET": self.dataset, "ARENA_COMMENTARY": "0",
                          "ARENA_CLIP_GPU": "0" if self.flavor.startswith("cpu") else "1"},
                     secrets={"HF_TOKEN": self.token},
-                    flavor=self.flavor, timeout=JOB_TIMEOUT, labels={**JOB_LABEL, "run": run_id},
+                    flavor=self.flavor,
+                    timeout=MATCH_JOB_TIMEOUT if is_match_id(run_id) else JOB_TIMEOUT,
+                    labels={**JOB_LABEL, "run": run_id},
                     namespace=self.namespace,
                 )
             except Exception as exc:  # noqa: BLE001 — the run stays on the list
@@ -324,10 +343,12 @@ class ClipJobs:
             # Neither file: the machine ended the job, not the render.
             why = f"job {flight['job']} ended {stage}" + (f": {message}" if message else "")
             self._tries[run_id] += 1
-            if self._tries[run_id] < JOB_TRIES:
+            # A match's clip is failed at once and never given up on: a cup cannot premiere with
+            # a hole, and the cup worker launches a failed one again, CLIP_RETRY apart.
+            if not is_match_id(run_id) and self._tries[run_id] < JOB_TRIES:
                 self.log(f"clip: {run_id} owed again ({why})")
                 self.enqueue(run_id, flight["priority"])
             else:
                 self.store.fail_clip(run_id, _now(), why)
-                self.log(f"clip: {run_id} failed ({why}, {JOB_TRIES} jobs)")
+                self.log(f"clip: {run_id} failed ({why}, {self._tries[run_id]} jobs)")
         self.landed(run_id)

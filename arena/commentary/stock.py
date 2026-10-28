@@ -11,6 +11,7 @@ import threading
 import time
 
 from ..broadcasts import utcnow
+from ..cup import is_match_id
 from ..live import cycle
 from .generator import Rejected
 
@@ -60,13 +61,14 @@ class CommentaryStock:
 
     def wanted(self) -> list[str]:
         """The next runs to reach the screen that have no dialogue waiting and
-        were not refused in the last RETRY_S."""
+        were not refused in the last RETRY_S. A cup match is never one: the
+        writer finds runs only, and a match airs with no booth."""
         edge = self.now() - RETRY_S
         self._refused = {run_id: at for run_id, at in self._refused.items() if at > edge}
         stocked = self.book.runs_stocked()
         order = cycle(self.pool(), 0)
-        return [entry.run_id for entry in order
-                if entry.run_id not in stocked and entry.run_id not in self._refused][:self.depth]
+        return [entry.run_id for entry in order if not is_match_id(entry.run_id)
+                and entry.run_id not in stocked and entry.run_id not in self._refused][:self.depth]
 
     def turn(self) -> str | None:
         """One unit of work: at most one dialogue written. The run it wrote for,

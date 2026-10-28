@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from arena.assets import ASSET_ROOT
 from arena.hub_fetch import FetchedPolicy
 from arena.timeline import SELF, Duck, Start, Timeline, Troupe, solo
+from arena.trace import decode, decode_string
 from arena.web.app import create_app
 from arena.web.config import ArenaConfig
 
@@ -266,7 +267,7 @@ def test_the_reference_policy_scores_and_is_recorded(api):
     assert body["seeds_total"] == 5
     # v3 (MJCF position servos): 11.724 s at 0.40 m/s. v4 (BAM servos): 7.988 s
     # at 0.55 before training's reset and fifth actuator writes joined the runner; re-measured since.
-    assert body["score"] == pytest.approx(8.672, rel=0.02)
+    assert body["score"] == pytest.approx(8.666, rel=0.02)
     # The submitter is told which speed set the time, not just the time.
     assert body["command_vx"] == pytest.approx(0.50)
     assert len(body["per_seed"]) == 5
@@ -425,8 +426,8 @@ def test_publishing_honours_a_pinned_speed(api):
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["command_vx"] == pytest.approx(0.25)
-    assert body["score"] == pytest.approx(24.856, rel=0.02)
-    assert body["score"] > 8.672, "pinning must not be able to beat the sweep here"
+    assert body["score"] == pytest.approx(24.853, rel=0.02)
+    assert body["score"] > 8.666, "pinning must not be able to beat the sweep here"
 
 
 def test_publishing_without_a_speed_still_sweeps(api):
@@ -437,7 +438,7 @@ def test_publishing_without_a_speed_still_sweeps(api):
     # v3 (MJCF position servos): 0.40 m/s, 11.724 s. v4 (BAM servos): 0.55 m/s,
     # 7.988 s before training's reset and fifth actuator writes joined the runner; re-measured since.
     assert body["command_vx"] == pytest.approx(0.50)
-    assert body["score"] == pytest.approx(8.672, rel=0.02)
+    assert body["score"] == pytest.approx(8.666, rel=0.02)
 
 
 def test_a_signed_out_publish_is_refused_and_records_nothing(spaced_api, hub_users, store_dir):
@@ -470,7 +471,7 @@ def test_a_repo_id_races_without_uploading_anything(api, store_dir, monkeypatch)
     body = response.json()
     # v3 (MJCF position servos): 11.724. v4 (BAM servos): 7.988 before training's reset and fifth actuator writes joined the runner;
     # re-measured since.
-    assert body["score"] == pytest.approx(8.672, rel=0.02)
+    assert body["score"] == pytest.approx(8.666, rel=0.02)
     assert body["model_stored"] is False
     assert body["offers_download"] is True
     assert body["policy_url"] == fetched.url
@@ -665,3 +666,13 @@ def test_a_borrowed_policy_that_does_not_load_is_a_400_naming_its_duck(api, monk
     assert response.status_code == 400
     assert response.json()["detail"].startswith("ducks[1]: pollen-robotics/microduck-sitter: not a loadable ONNX model")
     assert list(store_dir.rglob("*.json")) == []
+
+
+def test_a_tug_entry_is_rated_in_bouts_against_the_reference(api):
+    body = submit(api, event="tug-of-war").json()
+    assert body["course"] == "tug" and body["seeds_total"] == 5 and all("score_cm" in s for s in body["per_seed"])
+    assert body["metric"] == "mean_ground_cm"
+    assert api.get(f"/api/runs/{body['run_id']}/trace").headers["X-Duck-Count"] == "2"
+    blob = api.app.state.store.trace(body["run_id"])
+    assert decode_string(blob)[1].shape == (decode(blob).shape[1], 17, 3)   # the string, frame by frame with the ducks
+    assert submit(api, event="sprint-2m").json()["metric"] == "mean_finish_time"

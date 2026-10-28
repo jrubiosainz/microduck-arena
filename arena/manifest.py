@@ -5,10 +5,14 @@ change. Validation is strict and loud: a broken manifest must fail at load, not
 halfway through someone's timed run.
 """
 
+import functools
 import tomllib
 from dataclasses import dataclass
+from datetime import date, time
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from .assets import ASSET_ROOT
 from .constants import CMD_SIZE, CTRL_DT
 
 EVENTS_DIR = Path(__file__).parent / "events"
@@ -16,9 +20,12 @@ EVENTS_DIR = Path(__file__).parent / "events"
 RIGS = ("legs", "rollers")
 
 # What KIND of event this is, for the front page's label. A race is timed over
-# a course, a showcase is judged by vote rather than measured at all.
-CATEGORIES = {"race", "showcase"}
-METRICS = ("mean_finish_time", "votes")
+# a course, a showcase is judged by vote rather than measured at all, a versus
+# event rates a duck in bouts against a reference duck.
+CATEGORIES = {"race", "showcase", "versus"}
+METRICS = ("mean_finish_time", "votes", "mean_ground_cm")
+# Every other metric is a time or a count of votes: lower, or the vote's own rule.
+HIGHER_WINS = frozenset({"mean_ground_cm"})
 
 # What an entry must be, in the policy manifest's own words
 # (mjlab_microduck.publish.manifest.KINDS): `perpetual` runs until told
@@ -26,7 +33,7 @@ METRICS = ("mean_finish_time", "votes")
 # manifest.json names another kind than its event's (arena/hub_fetch.py).
 KINDS = ("episodic", "perpetual")
 
-COURSE_KINDS = ("lane", "stage")
+COURSE_KINDS = ("lane", "stage", "tug")
 
 # The voting page has exactly this many colours to hand a lane: LANE_CSS (and
 # its 3D twin LANE_COLORS) in app/src/course.js. This is a second source of
@@ -60,6 +67,43 @@ class Stage:
     size_m: tuple[float, float]
     max_ducks: int
     kind: str = "stage"
+
+
+@dataclass(frozen=True)
+class Tug:
+    """A ring cut by a pit, for a duck that pulls on a string."""
+
+    ring_m: float  # rope to rope: the field is the square inside the ring's ropes, centred on the pit
+    pit_m: float  # the pit's width along x, centred on x = 0, across the whole ring
+    pit_depth_m: float
+    string_m: float  # neck base to neck base, straight at the start
+    kind: str = "tug"
+
+
+@dataclass(frozen=True)
+class Rating:
+    """How a tug rates a duck: one bout a seed against the reference duck, a pit worth `pit_bonus_cm`."""
+
+    reference: str  # a file of arena/assets/policies
+    pit_bonus_cm: float
+
+
+@dataclass(frozen=True)
+class BoutRules:
+    time_limit_s: float
+    bouts_to_win: int
+    max_bouts: int
+
+
+@dataclass(frozen=True)
+class CupRules:
+    """A versus event's weekly cup: every premiere is `premiere` local time in `timezone`."""
+
+    first: date  # cup #1's premiere day, a local date in `timezone`
+    premiere: time
+    timezone: str  # IANA, "Europe/Paris"
+    close_before_h: float  # entries close this long before the premiere
+    min_entrants: int
 
 
 @dataclass(frozen=True)
@@ -260,7 +304,7 @@ class Manifest:
     time_limit_s: float
     metric: str
     seeds: tuple[int, ...]
-    course: Course | Stage
+    course: Course | Stage | Tug
     start: Start
     termination: Termination
     # None on a stage, which plays the entry's timeline rather than a speed.
@@ -278,6 +322,11 @@ class Manifest:
     lights: Lights | None = None
     # None unless the lane holds the duck's heading for it. A lane only.
     steering: Steering | None = None
+    # Only a tug has them: the rating's reference duck, the rules of its bouts.
+    rating: Rating | None = None
+    bout: BoutRules | None = None
+    # Only a versus event has one.
+    cup: CupRules | None = None
 
     def command_at(self, vx: float) -> tuple[float, ...]:
         """This event's command, with the forward speed replaced.
@@ -445,6 +494,71 @@ def _steering(raw: dict, path: Path, command: tuple[float, ...]) -> Steering:
     return Steering(**values)
 
 
+def _tug(raw: dict) -> Tug:
+    keys = ("ring_m", "pit_m", "pit_depth_m", "string_m")
+    _refuse_unknown(raw, {"kind", *keys}, "[course]")
+    course = Tug(**{key: float(_require(raw, key, "[course]")) for key in keys})
+    if min(course.ring_m, course.pit_m, course.pit_depth_m, course.string_m) <= 0:
+        raise ManifestError(f"[course]: a tug's ring_m, pit_m, pit_depth_m and string_m must all be positive: {course}")
+    if not course.pit_m < course.string_m < course.ring_m:
+        raise ManifestError(
+            "[course]: a tug's pit must be narrower than its string and its string shorter than its ring: "
+            f"pit_m {course.pit_m}, string_m {course.string_m}, ring_m {course.ring_m}"
+        )
+    return course
+
+
+def _rating(raw: dict, path: Path) -> Rating:
+    _refuse_unknown(raw, {"reference", "pit_bonus_cm"}, "[rating]")
+    name = str(_require(raw, "reference", "[rating]"))
+    if Path(name).name != name or not (ASSET_ROOT / "policies" / name).is_file():
+        raise ManifestError(f"{path}: [rating] reference {name!r} is no policy in arena/assets/policies")
+    bonus = float(_require(raw, "pit_bonus_cm", "[rating]"))
+    if bonus <= 0:
+        raise ManifestError(f"{path}: [rating] pit_bonus_cm must be positive")
+    return Rating(name, bonus)
+
+
+def _bout(raw: dict, path: Path) -> BoutRules:
+    _refuse_unknown(raw, {"time_limit_s", "bouts_to_win", "max_bouts"}, "[bout]")
+    rules = BoutRules(
+        time_limit_s=float(_require(raw, "time_limit_s", "[bout]")),
+        bouts_to_win=int(_require(raw, "bouts_to_win", "[bout]")),
+        max_bouts=int(_require(raw, "max_bouts", "[bout]")),
+    )
+    if rules.time_limit_s < CTRL_DT:
+        raise ManifestError(f"{path}: [bout] time_limit_s must be at least one control step")
+    if rules.bouts_to_win < 1:
+        raise ManifestError(f"{path}: [bout] bouts_to_win must be at least 1")
+    if rules.max_bouts < 2 * rules.bouts_to_win - 1:
+        raise ManifestError(f"{path}: [bout] max_bouts must be at least 2 * bouts_to_win - 1")
+    return rules
+
+
+def _cup(raw: dict, path: Path) -> CupRules:
+    _refuse_unknown(raw, {"first", "premiere", "timezone", "close_before_h", "min_entrants"}, "[cup]")
+    try:
+        first = date.fromisoformat(str(_require(raw, "first", "[cup]")))
+    except ValueError:
+        raise ManifestError(f"{path}: [cup] first must be a date like 2026-10-30") from None
+    try:
+        premiere = time.fromisoformat(str(_require(raw, "premiere", "[cup]")))
+    except ValueError:
+        raise ManifestError(f"{path}: [cup] premiere must be a time like 18:00") from None
+    zone = _require(raw, "timezone", "[cup]")
+    try:
+        ZoneInfo(zone)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ManifestError(f"{path}: [cup] timezone {zone!r} is not an IANA time zone") from None
+    close = float(_require(raw, "close_before_h", "[cup]"))
+    if not 0 < close < 168:
+        raise ManifestError(f"{path}: [cup] close_before_h must be above 0 and below 168")
+    fewest = int(_require(raw, "min_entrants", "[cup]"))
+    if fewest < 3:
+        raise ManifestError(f"{path}: [cup] min_entrants must be at least 3, a group plays a round robin")
+    return CupRules(first, premiere, zone, close, fewest)
+
+
 def _sweep(raw: dict, path: Path) -> Sweep:
     sweep = Sweep(
         lo=float(_require(raw, "lo", "[sweep]")),
@@ -497,7 +611,37 @@ def load_manifest(path: Path) -> Manifest:
     perturb = _require(start_raw, "perturbation", "[start]")
     term_raw = _require(raw, "termination", str(path))
 
-    if kind == "stage":
+    if (kind == "tug") != (category == "versus") or (kind == "tug") != (metric == "mean_ground_cm"):
+        raise ManifestError(
+            f"{path}: [course] kind 'tug' goes with category 'versus' and metric 'mean_ground_cm'"
+        )
+    if kind != "tug" and ("rating" in raw or "bout" in raw):
+        raise ManifestError(f"{path}: only a tug takes [rating] and [bout]")
+
+    if (category == "versus") != ("cup" in raw):
+        raise ManifestError(
+            f"{path}: a versus event needs a [cup] section" if category == "versus"
+            else f"{path}: [cup] is for a versus event"
+        )
+
+    time_limit_s = float(_require(raw, "time_limit_s", str(path)))
+    rating = bout = None
+    if kind == "tug":
+        if rig != "legs":
+            raise ManifestError(f"{path}: a tug is for rig 'legs'")
+        for section in ("sweep", "vote", "lights", "steering"):
+            if section in raw:
+                raise ManifestError(f"{path}: a tug takes no [{section}]")
+        for section in ("rating", "bout"):
+            if section not in raw:
+                raise ManifestError(f"{path}: a tug needs [{section}]")
+        course, sweep = _tug(course_raw), None
+        rating, bout = _rating(raw["rating"], path), _bout(raw["bout"], path)
+        if bout.time_limit_s != time_limit_s:
+            raise ManifestError(
+                f"{path}: a tug's time_limit_s is its bouts': {time_limit_s} against [bout]'s {bout.time_limit_s}"
+            )
+    elif kind == "stage":
         _refuse_unknown(course_raw, {"kind", "size_m", "max_ducks"}, "[course]")
         if len(seeds) != 1:
             raise ManifestError(f"{path}: a stage plays one performance, so it declares exactly one seed")
@@ -554,7 +698,7 @@ def load_manifest(path: Path) -> Manifest:
         category=category,
         kind=policy_kind,
         order=order,
-        time_limit_s=float(_require(raw, "time_limit_s", str(path))),
+        time_limit_s=time_limit_s,
         metric=metric,
         seeds=seeds,
         course=course,
@@ -574,6 +718,9 @@ def load_manifest(path: Path) -> Manifest:
         clip=_clip(raw.get("clip"), "[clip]", stage=kind == "stage"),
         lights=_lights(raw["lights"], path) if "lights" in raw else None,
         steering=_steering(raw["steering"], path, command) if "steering" in raw else None,
+        rating=rating,
+        bout=bout,
+        cup=_cup(raw["cup"], path) if "cup" in raw else None,
     )
 
 
@@ -589,3 +736,12 @@ def all_events() -> list[Manifest]:
         (load_manifest(p) for p in EVENTS_DIR.glob("*.toml")),
         key=lambda m: m.id,
     )
+
+
+@functools.cache
+def higher_wins(event_id: str) -> bool:
+    """True when the event's metric is one a higher score wins: the event exists and says so."""
+    try:
+        return load_event(event_id).metric in HIGHER_WINS
+    except ManifestError:
+        return False

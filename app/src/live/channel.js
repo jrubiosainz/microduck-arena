@@ -1,13 +1,17 @@
 // The conductor: on every frame, where the clock says we are in the grid,
 // and what that means for the segments. It enters a slot at its offset,
 // servos the one playing, keeps the last picture under a shutter's sweep,
-// uncovers the next segment at the shutter's midpoint, prefetches one slot
-// ahead, and is the one place a reload is allowed to happen.
+// uncovers the next segment at the shutter's midpoint, prepares the next
+// segment ahead, and is the one place a reload is allowed to happen.
 
 import { slotAfter, slotAt } from "./grid.js";
 import { shutterAt } from "./shutter.js";
 
 const FRESH_MS = 40; // a shutter entered within its first frame gets its wind
+// A cup's match clips, calls and desk segments are served from 30 s before
+// they air, and asked for any earlier they would fail: every slot is prepared
+// from 25 s before, which leaves a screen's clock 5 s of slack.
+export const PREFETCH_MS = 25_000;
 
 export function createChannel({ clock, segments, shutter, onState, onReload, gust }) {
   let slots = null; // nothing to say until the first grid
@@ -20,6 +24,12 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
   let state = null; // what the page was last told, so it hears each state once
 
   const segmentFor = (slot) => (slot && slot.kind !== "shutter" ? segments[slot.kind] : null);
+
+  /** Prepare `slot`'s segment, or past a shutter the one it uncovers, from PREFETCH_MS before it starts. */
+  function prefetch(slot, ms) {
+    const ahead = slot?.kind === "shutter" ? slotAfter(slots, slot) : slot;
+    if (ahead && ahead.at_ms - ms <= PREFETCH_MS) segmentFor(ahead).prepare(ahead);
+  }
 
   function report(value) {
     if (state === value) return;
@@ -74,7 +84,7 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
       if (slot.kind === "shutter") {
         shutter.draw(offset, slot.next);
         if (!shutterAt(offset).destination) {
-          if (next) segmentFor(next)?.prepare(next);
+          prefetch(next, ms);
         } else if (!uncovered) {
           uncovered = true;
           stopPrevious();
@@ -88,15 +98,16 @@ export function createChannel({ clock, segments, shutter, onState, onReload, gus
       } else {
         const segment = segmentFor(slot);
         if (segment.failed) {
-          // A clip withdrawn between two grid reads: the panel holds, still
-          // announcing it, until the next slot's scheduled time.
+          // A clip withdrawn between two grid reads, or one that failed while
+          // it played: the panel holds, still announcing it, until the next
+          // slot's scheduled time, and nothing of the segment goes on under it.
+          segment.stop();
           shutter.draw(800, announcing);
         } else {
           shutter.hide();
           segment.seek(offset);
         }
-        const after = next && slotAfter(slots, next);
-        if (after) segmentFor(after)?.prepare(after);
+        prefetch(next, ms);
       }
       report("live");
     },

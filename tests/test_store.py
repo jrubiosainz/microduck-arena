@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from arena.constants import RUNNER_VERSION
@@ -251,3 +253,34 @@ def test_a_run_recorded_by_0_4_4_keeps_its_triggers():
     assert RunRecord.from_dict(raw).cast == ({**ALONE, "sound": {"triggers": [[0.0, 0.0, 0.0], [1.5, 1.0, 0.0]]}},)
     raw["triggers"] = None
     assert RunRecord.from_dict(raw).cast == (ALONE,)
+
+
+RACE = {"run_id": "01K7QX0000000000000000", "event_id": "sprint-2m", "submitted_at": "2026-09-03T10:00:00Z",
+        "user": "alice", "policy_name": "sprinter-v3",
+        "source": {"kind": "hub", "repo_id": "alice/sprinter", "filename": "policy.onnx", "revision": "c" * 40, "url": "u"},
+        "model_sha256": "a" * 64, "score": 21.5, "seeds_finished": 5,
+        "per_seed": [{"seed": 1, "status": "finish", "time_s": 21.5}], "trace_seed": 1, "runner_version": 4,
+        "command_vx": 0.4, "model_stored": False, "env_url": None, "livery": "classic", "description": None,
+        "timeline_sha256": None, "cast": [{"policy": "self", "rig": None, "start": None, "sound": None}]}
+
+
+def test_a_stored_race_reads_and_writes_back_to_the_same_json():
+    assert RunRecord.from_dict(json.loads(json.dumps(RACE))).to_dict() == RACE
+
+
+def test_a_rated_run_keeps_its_centimetres():
+    record = make_record(event_id="tug-of-war", per_seed=(SeedResult(1, "won", 45.0, 12.5),))
+    raw = record.to_dict()
+    assert raw["per_seed"][0]["score_cm"] == 12.5 and RunRecord.from_dict(raw) == record
+
+
+def test_a_cup_is_written_once_and_read_back(tmp_path):
+    store = LocalStore(tmp_path)
+    store.put_cup_files("tug-of-war", 2, {"bouts/x-0.npz": b"z", "draw.json": b"{}"})
+    assert store.cup_file("tug-of-war", 2, "draw.json") == b"{}"
+    assert store.cup_file("tug-of-war", 2, "bouts/x-0.npz") == b"z"
+    assert store.cup_file("tug-of-war", 2, "order.json") is None
+    assert store.cup_numbers("tug-of-war") == [2] and store.cup_numbers("sprint-2m") == []
+    with pytest.raises(FileExistsError):
+        store.put_cup_files("tug-of-war", 2, {"order.json": b"{}", "draw.json": b"{}"})
+    assert store.cup_file("tug-of-war", 2, "order.json") is None   # nothing of a refused write lands

@@ -1,11 +1,12 @@
 import contextlib
+import time
 
 import numpy as np
 import pytest
 
 from arena.assets import ASSET_ROOT
 from arena.constants import NUM_JOINTS, OBS_SIZE
-from arena.policy import MAX_MODEL_BYTES, PolicyError, _width, load_policy
+from arena.policy import ANSWER_S, MAX_MODEL_BYTES, PolicyError, _width, load_policy
 
 REFERENCE = ASSET_ROOT / "policies" / "BEST_alpha_walking.onnx"
 
@@ -119,6 +120,64 @@ def test_an_oversize_model_is_still_refused_with_its_size(tmp_path):
     fat.write_bytes(b"\0" * (MAX_MODEL_BYTES + 1))
     with pytest.raises(PolicyError, match="larger than"):
         load_policy(fat)
+
+
+def test_a_model_that_loops_for_ever_is_given_up_after_a_second(tmp_path):
+    """An ONNX Loop of 2**62 trips: an evaluation or a cup waiting on it would wait for ever."""
+    policy = load_policy(looping_onnx(tmp_path / "loop.onnx"))
+    started = time.monotonic()
+    with pytest.raises(PolicyError, match=r"^no answer within 1 s$"):
+        policy.act(np.zeros(OBS_SIZE, dtype=np.float32))
+    assert ANSWER_S == 1.0 and time.monotonic() - started < ANSWER_S + 0.5
+
+
+def test_a_model_that_fails_to_act_says_why(tmp_path):
+    """An action as wide as the observation has non-zero values, unknown at load: none of zeros."""
+    import onnx
+    from onnx import TensorProto, helper
+
+    graph = helper.make_graph(
+        [helper.make_node("NonZero", ["obs"], ["where"]), helper.make_node("Cast", ["where"], ["actions"], to=1)],
+        "nonzero",
+        [helper.make_tensor_value_info("obs", TensorProto.FLOAT, [1, OBS_SIZE])],
+        [helper.make_tensor_value_info("actions", TensorProto.FLOAT, [2, "found"])],
+    )
+    onnx.save(helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)]), str(tmp_path / "nonzero.onnx"))
+    policy = load_policy(tmp_path / "nonzero.onnx")
+    with pytest.raises(PolicyError, match=r"^no action: cannot reshape array of size 0"):
+        policy.act(np.zeros(OBS_SIZE, dtype=np.float32))
+
+
+def looping_onnx(path):
+    """A model whose every answer loops 2**62 times, adding one to the observation, before it slices
+    its action out."""
+    import onnx
+    from onnx import TensorProto, helper
+
+    body = helper.make_graph(
+        [helper.make_node("Identity", ["cond_in"], ["cond_out"]), helper.make_node("Add", ["x_in", "one"], ["x_out"])],
+        "body",
+        [helper.make_tensor_value_info("i", TensorProto.INT64, []),
+         helper.make_tensor_value_info("cond_in", TensorProto.BOOL, []),
+         helper.make_tensor_value_info("x_in", TensorProto.FLOAT, [1, OBS_SIZE])],
+        [helper.make_tensor_value_info("cond_out", TensorProto.BOOL, []),
+         helper.make_tensor_value_info("x_out", TensorProto.FLOAT, [1, OBS_SIZE])],
+        [helper.make_tensor("one", TensorProto.FLOAT, [], [1.0])],
+    )
+    graph = helper.make_graph(
+        [helper.make_node("Loop", ["trips", "cond", "obs"], ["looped"], body=body),
+         helper.make_node("Slice", ["looped", "starts", "ends", "axes"], ["actions"])],
+        "loop",
+        [helper.make_tensor_value_info("obs", TensorProto.FLOAT, [1, OBS_SIZE])],
+        [helper.make_tensor_value_info("actions", TensorProto.FLOAT, [1, NUM_JOINTS])],
+        [helper.make_tensor("trips", TensorProto.INT64, [], [2**62]),
+         helper.make_tensor("cond", TensorProto.BOOL, [], [True]),
+         helper.make_tensor("starts", TensorProto.INT64, [1], [0]),
+         helper.make_tensor("ends", TensorProto.INT64, [1], [NUM_JOINTS]),
+         helper.make_tensor("axes", TensorProto.INT64, [1], [1])],
+    )
+    onnx.save(helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)]), str(path))
+    return path
 
 
 def _make_onnx(path, obs_width, action_width, dynamic_batch=False, flat_input=False):

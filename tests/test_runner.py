@@ -152,6 +152,30 @@ def test_the_clock_starts_on_the_start_line(sprint, walker):
     assert abs(first_frame - outcome.start_progress_m) < 0.02
 
 
+@pytest.mark.parametrize("seed", [1, 2, 3])
+def test_a_finish_is_timed_to_the_physics_step_that_crosses_the_line(sprint, walker, monkeypatch, seed):
+    """The clock reads the substep the trunk first passes the line on, not the end of the
+    control step it falls in: at a control step a seed's time was a multiple of 20 ms, so a
+    five-seed mean was one of 4 ms; at a substep it is one of 5 ms, and the mean one of 1 ms."""
+    direction = ramp_dir(sprint.course.slope_deg)
+    after_each = []
+    mj_step = mujoco.mj_step
+
+    def logged(model, data):
+        mj_step(model, data)
+        after_each.append((data.time, float(direction @ data.qpos[0:3])))
+
+    monkeypatch.setattr(mujoco, "mj_step", logged)
+    outcome = run_once(sprint, walker, seed=seed, command=sprint.command_at(STEADY_VX))
+
+    clock_start = after_each[-1][0] - outcome.trace.shape[0] * CTRL_DT
+    clocked = [(t - clock_start, p - outcome.start_progress_m) for t, p in after_each if t > clock_start + TIMESTEP / 2]
+    crossing = next(k for k, (_, progress) in enumerate(clocked) if progress >= sprint.course.length_m)
+    assert outcome.status == "finish"
+    assert outcome.time_s == pytest.approx(clocked[crossing][0])
+    assert outcome.time_s == pytest.approx((crossing + 1) * TIMESTEP)
+
+
 def test_a_longer_settle_does_not_inflate_the_time(sprint, walker):
     """Settling is not timed, so extending it must not change the recorded time.
 

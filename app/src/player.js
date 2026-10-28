@@ -2,8 +2,8 @@
 // they stand, and every run they published, newest first.
 
 import { getMe, getPlayer } from "./api.js";
-import { formatScore } from "./format.js";
-import { dress, guideHref, menuHref, raceHref, runHref } from "./router.js";
+import { capitalised, formatRate, formatScore } from "./format.js";
+import { cupHref, dress, guideHref, menuHref, raceHref, runHref } from "./router.js";
 import { avatar, chequer, footer, settleIdentity, signOutButton, signage } from "./signage.js";
 
 function el(tag, className, text) {
@@ -121,7 +121,37 @@ export function profile(player, me = null) {
   }
 
   box.append(header, el("h3", "eyebrow", "Rounds entered"), rounds);
+  if (player.cups?.length) box.append(el("h3", "eyebrow", "Cups"), cupList(player.cups));
   return box;
+}
+
+const REACHED = {
+  champion: "Champion",
+  final: "Finalist",
+  "semi-final": "Semi-finalist",
+  "quarter-final": "Quarter-finalist",
+  group: "Group stage",
+};
+
+/** How far a cup went for a player, from the API's `reached`: a knockout round "round of 16" is the round they went out in. */
+export const reachedLabel = (reached) => REACHED[reached] ?? capitalised(reached);
+
+/** The cups a player played, each the way to its page. */
+function cupList(cups) {
+  const list = el("ul", "profile-results profile-cups");
+  for (const cup of cups) {
+    const link = el("a");
+    link.href = cupHref(cup.event_id, cup.number);
+    link.append(
+      el("strong", null, `${cup.event_title} Cup #${cup.number}`),
+      el("span", "mono-label", reachedLabel(cup.reached)),
+      el("span", "profile-date", cup.starts_at.slice(0, 10)),
+    );
+    const item = el("li");
+    item.append(link);
+    list.append(item);
+  }
+  return list;
 }
 
 /** One event's publications, newest first, each the way to its own page. */
@@ -134,12 +164,12 @@ function results(publications, player, me) {
     // The dot is the owner's alone: it says a result of THEIRS waits to be
     // opened.
     if (me?.user === player.user && !pub.seen) link.classList.add("unread");
-    // A voted event's rank is earned by votes, not by time — "#1 · 18.46s"
+    // A voted event's rank is earned by its rating, not by time — "#1 · 18.46s"
     // beside a MicroDuck Got a Talent entry would read as a finish time that placed it,
     // when the finish time never ranked anything there.
     const earned = pub.votes != null
-      ? (pub.votes ? `${pub.votes} votes` : "no votes yet")
-      : formatScore(pub.score, { finished: pub.seeds_finished });
+      ? (pub.votes ? `rated ${formatRate(pub.rate)}` : "no votes yet")
+      : formatScore(pub.score, { finished: pub.seeds_finished, metric: pub.metric });
     link.append(
       el("strong", null, `#${pub.rank ?? "—"} · ${earned}`),
       el("span", "mono-label", pub.withdrawn ? `${pub.policy_name} · withdrawn` : pub.policy_name),

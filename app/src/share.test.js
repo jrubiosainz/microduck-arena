@@ -70,6 +70,22 @@ describe("postText for a performance", () => {
   });
 });
 
+describe("postText for a rated tug run", () => {
+  const TUG = { id: "tug-of-war", title: "Tug of War", course: "tug", metric: "mean_ground_cm" };
+  const tugRun = {
+    run_id: "R1", user: "nico", policy_name: "puller", event: TUG, score: 12.34, seeds_finished: 5, seeds_total: 5,
+    trace_seed: 3, rank: 2, on_board: true, withdrawn: false, receipts: [{ act: "run", points: 10 }],
+    per_seed: [{ seed: 3, status: "won", time_s: 45, score_cm: 10.1 }], cast: [{ policy: "self" }],
+  };
+
+  it("shares its rating in centimetres and dares the next one to beat it", () => {
+    expect(postText(tugRun, { origin: "https://x", network: "bluesky" }).split("\n").slice(0, 2)).toEqual([
+      "I coded a robot duck to pull. On Tug of War its rating is 12.3 cm against the reference duck, #2 on the board (+10 pts).",
+      "Beat it: https://x/r/R1",
+    ]);
+  });
+});
+
 describe("intentUrl", () => {
   it("opens the two composers that take a text", () => {
     expect(intentUrl("x", "a b")).toBe("https://x.com/intent/post?text=a%20b");

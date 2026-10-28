@@ -34,4 +34,15 @@ describe("createShutter", () => {
     shutter.hide();
     expect(panel.hidden).toBe(true);
   });
+
+  it("announces a cup match by its title alone", () => {
+    const container = document.createElement("div"), shutter = createShutter(container);
+    shutter.draw(900, { match_id: "m", title: "Final · Tank vs Lean" });
+    expect(container.querySelector(".live-upnext-event").textContent).toBe("Final · Tank vs Lean");
+    expect(container.querySelector(".live-upnext-user").hidden).toBe(true);
+    expect(container.querySelector(".live-upnext-user").textContent).toBe("");
+    shutter.draw(900, { event: "2 m Sprint", user: "carol" });
+    expect(container.querySelector(".live-upnext-user").hidden).toBe(false);
+    expect(container.querySelector(".live-upnext-user").textContent).toBe("@carol");
+  });
 });

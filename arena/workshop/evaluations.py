@@ -28,7 +28,7 @@ import time
 
 from ..cast import duck_record
 from ..constants import RUNNER_VERSION
-from ..evaluate import evaluate
+from ..evaluate import evaluate, seed_row
 from ..hub_fetch import FetchError
 from ..manifest import load_event
 from ..policy import load_policy
@@ -45,8 +45,9 @@ IDLE_S = 5.0
 # How long a challenge whose troupe's Hub policy could not be fetched waits before the Hub is asked again.
 RETRY_S = 60.0
 # What a stored evaluation holds. 2: every duck's trace, duck-major, with the cast and a stage summary
-# per duck. A body of another form is measured again, as one of another runner version is.
-FORMAT = 2
+# per duck. 3: a tug's checkpoint carries its string. A body of another form is measured again, as one of
+# another runner version is.
+FORMAT = 3
 
 
 def _path(run, n: int):
@@ -120,12 +121,14 @@ def _measure(root, run, n: int, challenge, key: str | None) -> dict:
     else:
         result = evaluate(event, load_policy(onnx))
         body["cast"] = None  # a race: one duck, nothing to place or hear
+    if result.string is not None:
+        body["string_b64"] = base64.b64encode(result.string.astype("<f4").tobytes()).decode("ascii")
     return body | {
         "score": result.score,
         "command_vx": result.command_vx,
         "seeds_finished": result.seeds_finished,
         "seeds_total": len(result.per_seed),
-        "per_seed": [{"seed": s.seed, "status": s.status, "time_s": s.time_s} for s in result.per_seed],
+        "per_seed": [seed_row(s) for s in result.per_seed],
         "trace_seed": result.trace_seed,
         # Duck-major, as the Arena serves a trace: the page cuts it into `ducks` traces.
         "ducks": len(as_ducks(result.trace)),

@@ -28,8 +28,8 @@ refuses either alone — the way an event is already created without touching co
 | **The draw assigns colours, so a ballot is anonymous** | The same duck comes out orange on one ballot and lavender on the next. Judgement lands on the gait, not on the handle. Rules out showing names during voting. |
 | **The client never sees a `run_id`** | Traces are served through ballot-scoped URLs and a vote names a lane index, not an entry. Without this, one look at devtools plus `/api/runs/<id>` names every author. **It raises the cost of de-anonymising a ballot; it does not close it** — see the row below. |
 | **A ballot is anonymous by DEFAULT, not by construction** | Final review proved the gap on a running app: the voted board publishes each row's `run_id`, and `/api/runs/{id}/trace` returns bytes identical to `/api/ballots/{tok}/lanes/{i}/trace`, so a script that fetches the board's traces and byte-matches them against the ballot's lanes recovers the whole mapping before a vote is cast. Dropping `run_id` from the voted board would break the board's own replay picker and withdraw button, and it would buy little: the replay **is** the duck, and a distinctive gait is recognisable by eye. So the claim is scoped honestly rather than defended badly — the draw's shuffled colours stop the casual reader and the idle glance, which is what they are for, and a determined person can identify an entry. If that ever matters, the fix is not obfuscation but a rule change: stop publishing `run_id` on a voted board and give it its own replay affordance. |
-| **The score is a raw vote count over 7 days** | Readable without explanation — "43 votes this week" — and it needs no fitted model. Its weakness, that a count measures exposure as much as merit, is closed by the draw rather than by the arithmetic (below). Rules out Bradley-Terry (duckJam's model): a fitted strength cannot be printed next to a handle. |
-| **The draw equalises exposure** | The pool is sorted by how often each entry has been *shown* in the window, and the least-shown are drawn first. With exposure equal, a raw count measures merit again. This costs nothing to log, because a ballot records all its candidates, not only its winner. |
+| ~~**The score is a raw vote count over 7 days**~~ **SUPERSEDED 2026-10-22 — the score is a rate over 7 days** | A count needed equal exposure, and the draw below could not give it once entries kept arriving: on the Space, entries published that day had been shown 11 times against the others' 80, so they took all four lanes of every ballot until they caught up, and every voter saw the same four. The board now ranks on votes per ballot shown on, `(votes + 20 × average) / (shown + 20)`: each entry starts as if it had been on 20 ballots and won the average share (a quarter on four lanes), so two lucky ballots cannot outrank a week of judging. It prints as a percentage, "rated 35%", still readable beside a handle. The original row's reasoning: Readable without explanation — "43 votes this week" — and it needs no fitted model. Its weakness, that a count measures exposure as much as merit, is closed by the draw rather than by the arithmetic (below). Rules out Bradley-Terry (duckJam's model): a fitted strength cannot be printed next to a handle. |
+| ~~**The draw equalises exposure**~~ **SUPERSEDED 2026-10-22 — each voter is dealt the pool like a deck of cards** | A rate does not need equal exposure, only mixed opponents and enough ballots. Each voter is dealt every entry once, shuffled, then the deck is dealt again; the ballot that finishes a round tops up with entries of the next. The deck is held in memory and dealt when a ballot is issued, not cast, because the booth draws the next field before this one's vote; a restart deals everyone a fresh deck. Three draws were tried and dropped the same day: sorting on global exposure gave every voter the day's newcomers on every ballot; sorting on what each voter had seen did the same with the entries that voter had seen least, and both dealt the entries shown together together again; rebuilding the deck from the ballot log broke on uncast prefetched ballots and second-resolution stamps. The original row's reasoning: The pool is sorted by how often each entry has been *shown* in the window, and the least-shown are drawn first. With exposure equal, a raw count measures merit again. This costs nothing to log, because a ballot records all its candidates, not only its winner. |
 | **A ballot pays its voter 2 points, capped at 20 a day** | duckJam's own numbers (`ballot: 2`, twenty per round), transposed to an arena that never closes a round: the cap becomes daily, the shape `run`'s daily cap already has. 40 points a day from voting, against 100 for a first entry on an event. |
 | **The 21st ballot of the day is refused, not unpaid** | Accepting it would keep feeding the contest's own ranking, which is exactly what the cap exists to bound. |
 | **The cap is enforced at the gate AND in the points fold** | duckJam states the reason best: *"a cap only a gate holds is a cap that a row written another way walks around"*. |
@@ -157,19 +157,20 @@ The board's own filter, plus three rules:
 | --- | --- |
 | current `runner_version`, not withdrawn | the existing filter, unchanged |
 | `seeds_finished > 0` | a duck that falls at the line makes a dead lane |
-| one entry per person, their most recent by `submitted_at` | in a raw count, two entries are twice the exposure |
+| one entry per person, their most recent by `submitted_at` | the board holds one row per person |
 | never your own | you cannot be handed your own duck |
 
 ### Picking
 
 1. Shuffle the pool.
-2. Sort by exposure in the window, ascending.
+2. Put first what this voter's deck still holds: what this round has not dealt
+   them yet.
 3. Keep the first `min(ballot_max, len(pool))`, and refuse a ballot below
-   `ballot_min`.
+   `ballot_min`. They leave the deck; when it runs out, the round's spares open
+   the next one.
 4. Shuffle those, which fixes lane order and therefore colours.
 
-Deterministic under a fixed seed, so it is testable. When exposure is equal —
-the normal case — it is a uniform draw.
+Deterministic under a fixed seed, so it is testable.
 
 ## The API
 
@@ -406,7 +407,7 @@ double speed is a different gait.
 
 ## Tests
 
-**Python** — the draw (exposure equalisation, own-entries excluded, the 2–4
+**Python** — the draw (each voter shown every entry before a repeat, own-entries excluded, the 2–4
 range, refusal below `ballot_min`); the ballot table (unknown token, expired, impersonated,
 lane out of range); double-click idempotence through `FileExistsError`; the
 sliding window at its edges; the cap enforced at both the gate and the fold; the

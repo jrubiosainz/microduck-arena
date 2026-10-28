@@ -242,3 +242,20 @@ def test_a_voted_event_has_no_best(checkout, fakes, hub):
     store_evaluation(run, 0, score=12.0)
     (ticket,) = reopen(checkout, hub).get("/api/workshop/challenges/got-a-talent/jobs").json()["jobs"]
     assert ticket["best"] is None and ticket["checkpoints"][0]["status"] == "evaluated"
+
+
+def add_tug(checkout):
+    folder = checkout / "src" / "microduck_challenges" / "tug_of_war"
+    folder.mkdir()
+    (folder / "challenge.toml").write_text(SPRINT.replace('"sprint-2m"', '"tug-of-war"').replace(TASK, "Mjlab-TugOfWar-MicroDuck"))
+    git(checkout, "add", "-A")
+    git(checkout, "commit", "-q", "-m", "Tug of War")
+
+
+def test_the_best_tug_checkpoint_is_the_strongest(checkout, fakes, hub):
+    add_tug(checkout)
+    run = make_run(checkout, "first", checkpoints=(0, 1, 2), task="Mjlab-TugOfWar-MicroDuck")
+    for n, rating in ((0, 2.0), (1, 5.5), (2, 4.0)):
+        store_evaluation(run, n, score=rating)
+    (ticket,) = reopen(checkout, hub).get("/api/workshop/challenges/tug-of-war/jobs").json()["jobs"]
+    assert ticket["best"] == 1

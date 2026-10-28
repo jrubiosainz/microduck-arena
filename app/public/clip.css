@@ -16,6 +16,8 @@ html, body { margin: 0; background: var(--deep-ink); color: var(--paper); font-f
 .crt-osd b { color: var(--magenta); font-weight: inherit; }
 .osd-event { left: 18px; bottom: 14px; color: var(--yellow); }
 [data-layout="vertical"] .osd-event { display: none; }
+/* A match's score bug, top right: each side's name either side of the bouts won. */
+.osd-bug { right: 18px; top: 14px; color: var(--paper); }
 
 /* The stamp lands at the outro on the author's duck itself, centred where the
    page puts it (main.js), over the last thing the duck did. */

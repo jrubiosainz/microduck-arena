@@ -2,7 +2,7 @@
 // the next clip is buffering while this one plays; the servo is grid.js's
 // `correction`: a nudge for a small error, a seek for a large one.
 
-import { clipUrl } from "../api.js";
+import { clipUrl, matchClipUrl } from "../api.js";
 import { isMuted } from "../sound.js";
 import { correction } from "./grid.js";
 
@@ -27,7 +27,7 @@ export function createReplay(stage, { onRefused }) {
 
   function load(slot) {
     const video = videos.find((v) => v !== active?.video);
-    video.src = clipUrl(slot.run_id, "landscape.mp4", slot.clip);
+    video.src = (slot.media === "match" ? matchClipUrl : clipUrl)(slot.run_id, "landscape.mp4", slot.clip);
     video.load();
     prepared = { video, slot };
   }
@@ -38,9 +38,7 @@ export function createReplay(stage, { onRefused }) {
     const action = correction(video.currentTime, offsetMs / 1000, ranges(video.buffered), force);
     if (action.time !== undefined) video.currentTime = action.time;
     video.playbackRate = action.rate;
-    // A forced alignment that found nothing buffered is not spent: keep
-    // forcing until a seek lands.
-    aligned = !force || action.time !== undefined;
+    aligned = true;
   }
 
   /** Make `slot` the active video, loading it if nothing prepared it. */
@@ -103,6 +101,10 @@ export function createReplay(stage, { onRefused }) {
     muted(flag) {
       silent = flag;
       for (const video of videos) video.muted = flag;
+    },
+    /** The clips' own sound, at `gain` of full. */
+    volume(gain) {
+      for (const video of videos) video.volume = gain;
     },
   };
 }

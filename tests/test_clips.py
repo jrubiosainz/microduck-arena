@@ -3,7 +3,9 @@
 import base64
 import io
 import json
+import math
 import time
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,7 +16,11 @@ from fastapi.testclient import TestClient
 from arena import recorder
 from arena.clips import (
     CLIP_VERSION,
+    JOB_TIMEOUT,
     JOB_TRIES,
+    JOBS_AT_ONCE,
+    MATCH_FRAMES,
+    MATCH_JOB_TIMEOUT,
     RETRY_S,
     ClipJobs,
     ClipRenderer,
@@ -164,6 +170,15 @@ def test_the_manifest_carries_the_live_contract_per_layout():
         "timing": {"total_wall_ms": 1},
     }
     assert manifest["layouts"]["vertical"]["width"] == 1080
+
+
+def test_a_match_clip_says_where_each_bout_sits():
+    run, bouts = rendered(), [{"k": 0, "tape_start_s": 3.52, "tape_end_s": 23.52, "hold_end_s": 27.52}]
+    land = run.layouts["landscape"]
+    run.layouts["landscape"] = replace(land, plan={**land.plan, "bouts": bouts})
+    manifest = clip_manifest("tug-of-war-0001-000", run, "2026-10-30T15:20:00Z")
+    assert manifest["layouts"]["landscape"]["timing"] == {"total_wall_ms": 1, "bouts": bouts}
+    assert manifest["layouts"]["vertical"]["timing"] == {"total_wall_ms": 1}
 
 
 def test_a_clip_job_renders_its_run_and_records_a_failure(tmp_path):
@@ -336,6 +351,29 @@ def test_a_performance_is_described_as_one():
     cut = make_record(user="eve", event_id="got-a-talent", score=20.0, seeds_finished=0)
     assert describe(cut, None, talent) == "@eve's duck performed on MicroDuck Got a Talent; the performance was cut short."
 
+
+
+def test_a_rated_run_is_described_by_its_rating():
+    from arena.index import Standing
+    from arena.manifest import load_event
+    from arena.web.routes_unfurl import describe
+
+    record = make_record(user="eve", event_id="tug-of-war", score=4.2)
+    assert describe(record, Standing(2, True, []), load_event("tug-of-war")) == (
+        "@eve's duck holds a 4.2 cm rating on the Tug of War, #2 on the board.")
+
+
+def test_a_cup_s_match_clips_render_sixteen_at_once(tmp_path, monkeypatch):
+    """A 23-entrant cup owes 62 match clips two hours before it premieres: four at once took about two hours."""
+    api = FakeJobs()
+    jobs = jobs_for(LocalStore(tmp_path), api)
+    for k in range(20):
+        jobs.enqueue(f"tug-of-war-0001-{k:03d}")
+    jobs.tick()
+    assert JOBS_AT_ONCE == 16 and [job["labels"]["run"] for job in api.launched] == [
+        f"tug-of-war-0001-{k:03d}" for k in range(16)]
+    monkeypatch.delenv("ARENA_CLIP_JOBS", raising=False)
+    assert ArenaConfig.from_env(store_dir=tmp_path, dev_user="eve").clip_jobs == JOBS_AT_ONCE
 
 
 def test_the_jobs_say_where_a_clip_stands(tmp_path):
@@ -564,14 +602,10 @@ def test_a_failed_clip_is_owed_one_more_go_at_the_next_boot(tmp_path):
     assert [(item[0], item[-1]) for item in sorted(jobs.queue.queue)] == [(0, "P1"), (1, "F1")]
 
 
-def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
-    """Two tabs in one browser means one of them is always the background tab,
-    and a backgrounded renderer stops committing frames. Measured on the Space
-    over seven clips: every landscape layout — the tab that was opened first —
-    stalled once or twice on its screenshot, and no vertical one ever did.
-    Chrome's own anti-backgrounding flags did not change it; being the only tab
-    in a browser is what takes the question away."""
-    opened = []
+@pytest.fixture
+def browsers(monkeypatch):
+    """Every Chrome record_run opens, each a stand-in, and the layout each tab opens on."""
+    opened, tabs = [], []
 
     class FakeChrome:
         def __init__(self, binary, nice=10, gpu=False):
@@ -592,10 +626,20 @@ def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
     monkeypatch.setattr(recorder, "Chrome", FakeChrome)
     monkeypatch.setattr(recorder, "find_chrome", lambda: "/chrome")
     monkeypatch.setattr(recorder, "ffmpeg_available", lambda: True)
-    monkeypatch.setattr(recorder, "_open", lambda *_: FakeTab())
+    monkeypatch.setattr(recorder, "_open", lambda chrome, origin, run_id, layout: tabs.append(layout) or FakeTab())
     monkeypatch.setattr(recorder, "_soundtrack", lambda _: b"")
     monkeypatch.setattr(recorder, "_record_layout", lambda *_, **__: (made, b"png"))
+    return opened, tabs
 
+
+def test_each_layout_gets_a_browser_of_its_own(browsers):
+    """Two tabs in one browser means one of them is always the background tab,
+    and a backgrounded renderer stops committing frames. Measured on the Space
+    over seven clips: every landscape layout — the tab that was opened first —
+    stalled once or twice on its screenshot, and no vertical one ever did.
+    Chrome's own anti-backgrounding flags did not change it; being the only tab
+    in a browser is what takes the question away."""
+    opened, _ = browsers
     steps = []
     run = recorder.record_run("http://o", "R1", parallel=2,
                               on_progress=lambda stage, *_: steps.append(stage))
@@ -604,6 +648,23 @@ def test_each_layout_gets_a_browser_of_its_own(tmp_path, monkeypatch):
     assert all(chrome.closed for chrome in opened)
     assert set(run.layouts) == set(recorder.SIZES) and run.poster == b"png"
     assert steps[:2] == ["opening", "soundtrack"]
+
+
+def test_a_match_clip_is_rendered_landscape_only(browsers):
+    """Nothing plays a match's clip upright, and every match of a cup renders between the close and the premiere."""
+    opened, tabs = browsers
+    run = recorder.record_run("http://o", "tug-of-war-0001-004", parallel=2)
+    assert (len(opened), tabs, set(run.layouts)) == (1, ["landscape"], {"landscape"})
+
+
+def test_a_match_clip_opens_the_match_on_the_clip_page():
+    opened = []
+    tab = SimpleNamespace(navigate=opened.append, wait_ready=lambda: None)
+    chrome = SimpleNamespace(tab=lambda width, height: tab)
+    recorder._open(chrome, "http://o", "tug-of-war-0001-004", "landscape")
+    recorder._open(chrome, "http://o", "01M4Z4YCJ15T56BAXX1RPD", "vertical")
+    assert opened == ["http://o/clip.html?match=tug-of-war-0001-004&layout=landscape&frame=0",
+                      "http://o/clip.html?run=01M4Z4YCJ15T56BAXX1RPD&layout=vertical&frame=0"]
 
 
 def test_a_longer_clip_gets_as_much_time_per_frame_as_a_race():
@@ -696,6 +757,52 @@ def test_a_job_that_ended_without_a_clip_is_launched_again_then_failed(tmp_path)
     assert failed["reason"] == f"job J{JOB_TRIES} ended ERROR: image pull failed"
     assert landed == ["R1"] * JOB_TRIES
     assert jobs.progress("R1") is None
+
+
+def test_a_match_clip_job_outlasts_the_longest_matchs_render_budget(tmp_path):
+    """A job HF ends writes no file, and its clip fails with only the job's last word: its render's
+    own deadline must come first, so that it fails with its own reason."""
+    api = FakeJobs()
+    jobs = jobs_for(LocalStore(tmp_path), api)
+    jobs.enqueue("R1")
+    jobs.enqueue("tug-of-war-0001-000")
+    jobs.tick()
+    assert [job["timeout"] for job in api.launched] == [JOB_TIMEOUT, MATCH_JOB_TIMEOUT]
+    # Five full 45 s bouts with their holds are 6578 frames: budget_for gives them 13 127 s, and the job a run's
+    # quarter of an hour more, rounded up to the minute.
+    assert MATCH_JOB_TIMEOUT == "234m"
+
+
+def test_the_longest_match_clip_is_five_full_bouts_of_the_tug():
+    """MATCH_FRAMES through app/src/clip/match.js matchPlan: a 3 s title, each bout's settle and timed
+    steps at one frame per two and its 6 s hold (BOUT_HOLD_S), then a 2.5 s outro (Math.round: 63 frames),
+    at 25 fps."""
+    from arena.constants import CTRL_DT
+    from arena.manifest import load_event
+
+    tug = load_event("tug-of-war")
+    settle, steps = round(tug.start.settle_s / CTRL_DT) + 1, round(tug.bout.time_limit_s / CTRL_DT)
+    fps = 25
+    stride = round(1 / fps / CTRL_DT)
+    assert MATCH_FRAMES == fps * 3 + tug.bout.max_bouts * (math.ceil((settle + steps) / stride) + fps * 6) + 63
+
+
+def test_a_match_clip_job_the_machine_ends_is_failed_at_once_for_the_cup_worker_to_relaunch(tmp_path):
+    """Owed again at once, it would be launched every tick the machine ends it: failed, it is the cup worker's to
+    launch again, CLIP_RETRY apart, for as long as it takes."""
+    store, mid = LocalStore(tmp_path), "tug-of-war-0001-000"
+    store.mark_clip_pending(mid, "arena", "tug-of-war", "2026-10-30T15:01:00Z")
+    api = FakeJobs()
+    api.message["J1"] = "out of memory"
+    jobs = jobs_for(store, api)
+    jobs.enqueue(mid)
+    jobs.tick()
+    api.stage["J1"] = "ERROR"
+    jobs.tick()
+    jobs.tick()
+    state, failed = store.clip_state(mid)
+    assert len(api.launched) == 1 and state == "failed" and failed["reason"] == "job J1 ended ERROR: out of memory"
+    assert jobs.progress(mid) is None
 
 
 def test_a_boot_takes_over_the_jobs_a_previous_process_left_running(tmp_path):

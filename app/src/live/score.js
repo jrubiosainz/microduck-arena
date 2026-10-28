@@ -24,6 +24,7 @@ export const VOICES = Object.freeze({
 const TURNS = { min: 2, max: 6 };
 const CAPTION_CHARS = 84;
 const WORD_CHARS = 42;
+const LINE_PIECES = new RegExp(`.{1,${WORD_CHARS}}`, "gu");
 const FRAME_MS = 40;
 // The steps a voice walks from one chirp to the next, in semitones: small ones most often.
 const STEPS = [-4, -3, -2, -2, -1, 1, 2, 2, 3, 4];
@@ -192,6 +193,52 @@ function phrase(style, words, mark, random) {
   return out;
 }
 
+/** A linear congruential generator: the same seed, the same numbers, on every screen. */
+function lcg(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+/** One line spoken from `start`: its captions and its notes are pushed on the
+ * lists, and the time the last caption ends is returned. */
+function speak(turn, start, random, captions, notes) {
+  if (!Object.hasOwn(VOICES, turn.speaker) || typeof turn.text !== "string" || !turn.text.trim() || turn.text.length > 500) {
+    throw new Error("Invalid commentary turn");
+  }
+  const voice = VOICES[turn.speaker];
+  // A word longer than a caption line (a policy's name may be 80 characters) is broken where the line ends.
+  const words = turn.text.trim().split(/\s+/).flatMap((word) => word.match(LINE_PIECES));
+  const chunks = [];
+  for (const word of words) {
+    if (!chunks.length || `${chunks.at(-1).join(" ")} ${word}`.length > CAPTION_CHARS) chunks.push([]);
+    chunks.at(-1).push(word);
+  }
+  let cursor = start;
+  for (const chunk of chunks) {
+    const start_ms = cursor;
+    let words = [];
+    for (const [i, text] of chunk.entries()) {
+      words.push({ text, ms: Math.round(voice.word_ms + Math.min(85, text.length * 6.5) + random() * 65) });
+      const mark = /([.!?,;:])["'”’)\]]*$/.exec(text)?.[1];
+      if (!mark && i < chunk.length - 1) continue;
+      for (const { at, ms, ...sound } of phrase(voice, words, mark, random)) {
+        notes.push({
+          speaker: turn.speaker, start_ms: cursor + at, end_ms: cursor + at + ms,
+          variant: Math.floor(random() * 0x7fffffff), ...sound,
+        });
+      }
+      cursor += words.reduce((sum, word) => sum + word.ms, 0) + (/[.!?]/.test(mark) ? 160 : mark ? 85 : 0);
+      words = [];
+    }
+    cursor = Math.max(cursor, start_ms + Math.max(1300, chunk.join(" ").length * 45));
+    captions.push({ speaker: turn.speaker, name: voice.name, text: chunk.join(" "), start_ms, end_ms: cursor });
+  }
+  return cursor;
+}
+
 export function prepare(dialogue, seed = hash(dialogue?.run_id ?? "")) {
   if (
     typeof dialogue?.run_id !== "string" || !dialogue.run_id ||
@@ -201,49 +248,14 @@ export function prepare(dialogue, seed = hash(dialogue?.run_id ?? "")) {
   ) {
     throw new Error("Invalid commentary");
   }
-  let state = seed >>> 0;
-  const random = () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-    return state / 4294967296;
-  };
+  const random = lcg(seed);
   const between = (a, b) => a + (b - a) * random();
   const captions = [], notes = [], gestures = [], turns = [];
   let cursor = 800;
   for (const [index, turn] of dialogue.turns.entries()) {
-    if (
-      !Object.hasOwn(VOICES, turn.speaker) || typeof turn.text !== "string" || !turn.text.trim() ||
-      turn.text.length > 500 || (index && dialogue.turns[index - 1].speaker === turn.speaker)
-    ) {
-      throw new Error("Invalid commentary turn");
-    }
+    if (index && dialogue.turns[index - 1].speaker === turn.speaker) throw new Error("Invalid commentary turn");
     const turnStart = cursor;
-    const voice = VOICES[turn.speaker];
-    const words = turn.text.trim().split(/\s+/);
-    if (words.some((w) => w.length > WORD_CHARS)) throw new Error("Caption word is too long");
-    const chunks = [];
-    for (const word of words) {
-      if (!chunks.length || `${chunks.at(-1).join(" ")} ${word}`.length > CAPTION_CHARS) chunks.push([]);
-      chunks.at(-1).push(word);
-    }
-    for (const chunk of chunks) {
-      const start_ms = cursor;
-      let words = [];
-      for (const [i, text] of chunk.entries()) {
-        words.push({ text, ms: Math.round(voice.word_ms + Math.min(85, text.length * 6.5) + random() * 65) });
-        const mark = /([.!?,;:])["'”’)\]]*$/.exec(text)?.[1];
-        if (!mark && i < chunk.length - 1) continue;
-        for (const { at, ms, ...sound } of phrase(voice, words, mark, random)) {
-          notes.push({
-            speaker: turn.speaker, start_ms: cursor + at, end_ms: cursor + at + ms,
-            variant: Math.floor(random() * 0x7fffffff), ...sound,
-          });
-        }
-        cursor += words.reduce((sum, word) => sum + word.ms, 0) + (/[.!?]/.test(mark) ? 160 : mark ? 85 : 0);
-        words = [];
-      }
-      cursor = Math.max(cursor, start_ms + Math.max(1300, chunk.join(" ").length * 45));
-      captions.push({ speaker: turn.speaker, name: voice.name, text: chunk.join(" "), start_ms, end_ms: cursor });
-    }
+    cursor = speak(turn, cursor, random, captions, notes);
     turns.push({ speaker: turn.speaker, start_ms: turnStart, end_ms: cursor });
     cursor += 500;
   }
@@ -287,6 +299,48 @@ export function prepare(dialogue, seed = hash(dialogue?.run_id ?? "")) {
   };
 }
 
+/** A match's play-by-play as a plan: each line starts at its moment in the
+ * clip (`at_ms`), a line that would overlap the one before waits for it, and
+ * nothing runs past the clip. A line with `by_ms` (a bout's last: the clip holds
+ * the bout's end until then, and moves on) is heard whole by then: one longer
+ * than its hold starts that much early, never over the line before. The match is on screen, so
+ * nothing draws the booth. */
+export function prepareCall({ id, lines, duration_ms }, seed = hash(id ?? "")) {
+  if (
+    typeof id !== "string" || !id || !Array.isArray(lines) || !lines.length ||
+    !Number.isInteger(duration_ms) || duration_ms <= 0 || duration_ms % FRAME_MS ||
+    !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff ||
+    lines.some(({ at_ms, by_ms, speaker }, i) => !Object.hasOwn(VOICES, speaker) || !Number.isInteger(at_ms) || at_ms < 0 || at_ms >= duration_ms || (i && at_ms < lines[i - 1].at_ms) ||
+      (by_ms !== undefined && (!Number.isInteger(by_ms) || by_ms <= at_ms || by_ms > duration_ms)))
+  ) {
+    throw new Error("Invalid call");
+  }
+  const random = lcg(seed);
+  const captions = [], notes = [];
+  let free = 0;
+  for (const line of lines) {
+    // Said from 0 for its length, then moved where it starts: wherever it is said, it draws the
+    // same random numbers, so a line that keeps its moment is timed as it always was.
+    const said = { captions: [], notes: [] };
+    const length = speak(line, 0, random, said.captions, said.notes);
+    const start = Math.max(free, Math.min(line.at_ms, (line.by_ms ?? Infinity) - length));
+    for (const item of [...said.captions, ...said.notes]) {
+      item.start_ms += start;
+      item.end_ms += start;
+    }
+    captions.push(...said.captions);
+    notes.push(...said.notes);
+    free = start + length;
+  }
+  const inside = (list) => list
+    .filter((item) => item.start_ms < duration_ms)
+    .map((item) => ({ ...item, end_ms: Math.min(item.end_ms, duration_ms) }));
+  return {
+    version: 2, run_id: id, duration_ms, seed, sample_rate: SAMPLE_RATE, channels: 2,
+    captions: inside(captions), notes: inside(notes), gestures: [],
+  };
+}
+
 /** A pure pose at item time, so seeking and out-of-order drawing never drift. */
 export function poseAt(plan, speaker, ms) {
   const note = plan.notes.find((n) => n.speaker === speaker && n.start_ms <= ms && ms < n.end_ms);
@@ -310,16 +364,16 @@ export function poseAt(plan, speaker, ms) {
   return pose;
 }
 
-/** Sample-accurate stereo PCM; identical channels keep the two timbres apart
- * in mono. `sing(seed, note)` is the microduck synthesiser (voice.js). */
-export function synthesize(plan, sing) {
-  const audio = new Float32Array((plan.duration_ms * SAMPLE_RATE) / 1000 * 2);
+/** One caption's speech, sample-accurate mono PCM at 48 kHz written into `out`
+ * from the caption's start: its notes, each sung where it falls. Every note of a
+ * plan falls inside its caption, so a plan sung caption by caption is the whole
+ * plan sung, and silence between captions is nothing held in memory.
+ * `sing(seed, note)` is the microduck synthesiser (voice.js). */
+export function singCaption(plan, caption, sing, out) {
   for (const note of plan.notes) {
+    if (note.start_ms < caption.start_ms || note.start_ms >= caption.end_ms) continue;
     const samples = sing(VOICES[note.speaker].seed, note);
-    const start = note.start_ms * 48;
-    for (let i = 0; i < samples.length; i++) {
-      audio[(start + i) * 2] = audio[(start + i) * 2 + 1] = samples[i] * note.emphasis;
-    }
+    const start = ((note.start_ms - caption.start_ms) * SAMPLE_RATE) / 1000;
+    for (let i = 0; i < samples.length; i++) out[start + i] = samples[i] * note.emphasis;
   }
-  return audio;
 }

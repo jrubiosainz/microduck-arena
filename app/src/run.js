@@ -4,18 +4,19 @@
 // Two modes. Plain shows all of it at once and loops the replay. Reveal — the
 // author's first look — hides the result and plays it in beats (reveal.js).
 
-import { getClip, getMe, getRun, getTrace, markSeen } from "./api.js";
+import { getClip, getMe, getRun, getString, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { boardsheetMarkup, wireBoardsheet } from "./boardsheet.js";
 import { featured, replayLane } from "./cast.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
-import { formatSpeed, isStage } from "./format.js";
+import { formatSpeed, isStage, isTug } from "./format.js";
 import { colourLanes, lanesFor } from "./lanes.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
 import { dress, guideHref, playerHref, raceHref } from "./router.js";
 import { shareStrip, wireShare } from "./share.js";
 import { footer, signage } from "./signage.js";
 import { load as loadSounds } from "./sound.js";
+import { BOUT_WORDS, SIDES, entrySide } from "./tug.js";
 import { createViewer } from "./viewer.js";
 
 // The colour each kind of receipt wears on its edge.
@@ -33,9 +34,11 @@ function el(tag, className, text) {
   return node;
 }
 
-/** Which seed the stored replay is, and why that one; a performance is played once. */
+/** Which seed the stored replay is, and why that one; a performance is played once, a rated
+ * tug run replays the bout whose ground is its median. */
 export function replayLine(run) {
   if (isStage(run.event)) return "replay: the whole performance";
+  if (isTug(run.event)) return `replay: seed ${run.trace_seed}, the median bout`;
   const finishers = run.per_seed.filter((s) => s.status === "finish").length;
   const which =
     finishers > 1 ? "median finisher" : finishers === 1 ? "the one finisher" : "first seed";
@@ -43,11 +46,34 @@ export function replayLine(run) {
 }
 
 /** What the scoreboard says over its number, and the stamp it lands. A stage has no time and no
- * finish: its number is the performance's length, and it was performed or cut short. */
+ * finish: its number is the performance's length, and it was performed or cut short. A tug run's
+ * number is its rating, in centimetres won from the reference duck. */
 export function verdict(run) {
   const dnf = run.seeds_finished === 0;
   if (isStage(run.event)) return { label: "length", stamp: dnf ? "CUT SHORT" : "PERFORMED" };
+  if (isTug(run.event)) return { label: "rating · cm", stamp: "RATED" };
   return { label: "time", stamp: dnf ? "DNF" : `FINISHED ${run.seeds_finished}/${run.seeds_total}` };
+}
+
+/**
+ * The number the scoreboard flips: a tug's rating to the tenth of a centimetre (the label says
+ * the unit), a time to the millisecond, or DNF. Veiled, zeros of the number's own shape whatever
+ * the run did: a DNF's three tiles beside a time's six would give the verdict away before the stamp.
+ */
+export function flipScore(run, { veiled = false } = {}) {
+  const tug = isTug(run.event);
+  if (veiled) return tug ? "00.0" : "00.000";
+  if (run.seeds_finished === 0) return "DNF";
+  return run.score.toFixed(tug ? 1 : 3);
+}
+
+/** One seed's line: in a tug the ground the bout won, the entry's side and how it ended; in a race
+ * its time, or how it ended. */
+export function seedText(seed) {
+  if (seed.score_cm != null) {
+    return `${seed.score_cm >= 0 ? "+" : ""}${seed.score_cm.toFixed(1)} cm · ${SIDES[entrySide(seed.seed)]} · ${BOUT_WORDS[seed.status]}`;
+  }
+  return seed.time_s == null ? seed.status : `${seed.time_s.toFixed(3)}s`;
 }
 
 /**
@@ -178,12 +204,11 @@ export async function renderRun(root, runId, state) {
   }
 
   // `rollCounter` rolls each tile to the digit it already shows, so the number
-  // is in the DOM before any theatre. A reveal starts on a constant 00.000
-  // instead: a DNF's three tiles beside a time's six would give the verdict
-  // away before the stamp, and the time beat swaps the real number in. The
-  // tile count changes with it, but a width in this column costs no height.
-  const score = dnf ? "DNF" : run.score.toFixed(3);
-  $("flip").append(...flipTiles(revealing ? "00.000" : score));
+  // is in the DOM before any theatre. A reveal starts on constant zeros
+  // instead (flipScore), and the time beat swaps the real number in. The tile
+  // count changes with it, but a width in this column costs no height.
+  const score = flipScore(run);
+  $("flip").append(...flipTiles(flipScore(run, { veiled: revealing })));
   const said = verdict(run);
   $("score-label").textContent = said.label;
   const stamp = $("stamp");
@@ -227,9 +252,9 @@ export async function renderRun(root, runId, state) {
   }
   followClip();
 
-  // One line per seed: the time, or how it ended. Folded away by default —
-  // it is a detail you go and look up, not a step of the show. A performance
-  // is played once: there is no seed list to open.
+  // One line per seed: the time or the pull, or how it ended. Folded away by
+  // default — it is a detail you go and look up, not a step of the show. A
+  // performance is played once: there is no seed list to open.
   if (isStage(run.event)) {
     $("seedlist").remove();
   } else {
@@ -237,7 +262,7 @@ export async function renderRun(root, runId, state) {
       const row = el("li", s.seed === run.trace_seed ? "seed replayed" : "seed");
       row.append(
         el("span", "mono-label", `seed ${s.seed}`),
-        el("strong", null, s.time_s == null ? s.status : `${s.time_s.toFixed(3)}s`),
+        el("strong", null, seedText(s)),
       );
       $("seeds").append(row);
     }
@@ -270,6 +295,12 @@ export async function renderRun(root, runId, state) {
     if (!traces.has(id)) traces.set(id, await getTrace(id));
     return traces.get(id);
   };
+  // A rated run's string beside its ducks: the page plays no settle, so its timed frames only.
+  const strings = new Map();
+  const stringFor = async (id) => {
+    if (!strings.has(id)) strings.set(id, { trace: (await getString(id)).trace });
+    return strings.get(id);
+  };
   let viewer = null;
   let parked = null;
   async function race(runIds, tiers) {
@@ -277,7 +308,10 @@ export async function renderRun(root, runId, state) {
       parked = [runIds, tiers];
       return;
     }
-    const fetched = await Promise.all(runIds.map(traceFor));
+    const [fetched, strung] = await Promise.all([
+      Promise.all(runIds.map(traceFor)),
+      Promise.all(isTug(run.event) ? runIds.map(stringFor) : []),
+    ]);
     if (leaving.signal.aborted) return;
     const lanes = runIds.map((id, i) => replayLane(run.event, byId.get(id).cast, fetched[i], {
       runId: id,
@@ -285,7 +319,9 @@ export async function renderRun(root, runId, state) {
       livery: byId.get(id).livery,
       // The plate over the duck.
       name: byId.get(id).user,
-    }));
+      // The seed its bout replays, which says which end of the string the entry holds.
+      traceSeed: byId.get(id).trace_seed,
+    }, strung[i]));
     viewer.setLanes(colourLanes($("board"), lanes), run.event);
   }
   const sheet = wireBoardsheet(page, {
@@ -314,7 +350,7 @@ export async function renderRun(root, runId, state) {
   };
   // Your own time only goes up on the board once the split-flap has rolled it.
   // A voted table has no `.time` cell.
-  const yourScore = yourRow.querySelector(".time, .votes");
+  const yourScore = yourRow.querySelector(".time, .rate");
   yourScore.classList.toggle("veiled", revealing);
   if (revealing) {
     // The board as it was before this run — you at the bottom, the rows under

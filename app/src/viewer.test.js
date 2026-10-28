@@ -1,7 +1,19 @@
 import { Object3D, Spherical, Vector3 } from "three";
 import { describe, expect, it } from "vitest";
 import { CTRL_DT, TRACE_WIDTH } from "./replay.js";
-import { cameraPose, chaseAcross, dragPose, inRoom, packChase, stageCamera, stageLanes, travelPose } from "./viewer.js";
+import { tugPose } from "./tug.js";
+import {
+  cameraPose, chaseAcross, dragPose, inRoom, packChase, placeMarker, stageCamera, stageLanes, travelPose,
+} from "./viewer.js";
+
+describe("placeMarker", () => {
+  it("lays a lane's ring on the course, just over it, under the feet", () => {
+    const [ground, marker] = [new Object3D(), new Object3D()];
+    placeMarker(marker, ground, new Vector3(0.05, 0.02, 0.01), 0);
+    expect(marker.parent).toBe(ground);
+    expect(marker.position.toArray()).toEqual([0.05, 0.004, 0.01]);
+  });
+});
 
 describe("cameraPose", () => {
   it("chases the leader from behind and trackside by default, at the original close distance", () => {
@@ -171,6 +183,21 @@ describe("travelPose", () => {
     expect(start.position[0]).toBeGreaterThan(chase.target[0]);
     expect(reach(start)).toBeGreaterThan(reach(chase));
     expect(start.target).toEqual(chase.target);
+  });
+
+  it("starts a race's travel eight times the chase's height over what it looks at, as it always has", () => {
+    for (const distance of [0.7, 0.8]) {
+      const race = cameraPose({ kind: "chase", distance }, 0, 1.15, 0);
+      expect(travelPose(race, 0).position[1]).toBeCloseTo(0.12 + (0.34 * distance - 0.12) * 8, 12);
+    }
+  });
+
+  it("keeps a tug's travel under the hall's lights, however far its fit stands out", () => {
+    // The portrait clip's fit over a bout's first frame: about 2.3 m out (tug.js tugPose).
+    const tug = tugPose(cameraPose({ kind: "chase" }, 0, 1.324, 0), 1.35, 1080 / 1233, 42);
+    const start = travelPose(tug, 0).position[1];
+    expect(start).toBeLessThanOrEqual(2);
+    expect(start).toBeGreaterThan(tug.position[1]);
   });
 
   it("never comes closer to the ducks than the chase does", () => {

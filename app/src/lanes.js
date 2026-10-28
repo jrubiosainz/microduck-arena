@@ -1,7 +1,7 @@
 // Which ducks a stage shows, and in what colour.
 
 import { LANE_CSS } from "./course.js";
-import { isStage } from "./format.js";
+import { isStage, isTug } from "./format.js";
 
 /** How many of the ducks ranked just under a publication race beside it. */
 export const RIVALS = 3;
@@ -9,11 +9,12 @@ export const RIVALS = 3;
 /**
  * The lanes a publication opens on: this run first, then the ducks ranked
  * just under it. Shared by the publication page and the clip page, so the
- * video races exactly the ducks the page does.
+ * video races exactly the ducks the page does. A performance and a rated run
+ * play alone: the stage is the troupe's, the tug the entry's traced bout.
  */
 export function lanesFor(run) {
   const at = run.board.findIndex((row) => row.you);
-  if (isStage(run.event)) return [run.board[at]];
+  if (isStage(run.event) || isTug(run.event)) return [run.board[at]];
   return [run.board[at], ...run.board.slice(at + 1, at + 1 + RIVALS)];
 }
 

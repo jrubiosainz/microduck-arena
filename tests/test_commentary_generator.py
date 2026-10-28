@@ -10,6 +10,9 @@ import pytest
 from arena.commentary.context import Fact
 from arena.commentary.generator import (
     BOOTH_CONTEXT,
+    CALL_CONTEXT,
+    CALL_LIMIT,
+    CALL_STYLE,
     CALLBACK,
     DIMENSIONS,
     GROUNDING,
@@ -23,6 +26,7 @@ from arena.commentary.generator import (
     directed,
     direction,
     write,
+    write_call,
 )
 from arena.commentary.lore import load
 
@@ -269,3 +273,86 @@ def test_a_second_transport_error_is_not_retried_again(monkeypatch):
     with pytest.raises(httpx.TransportError):
         complete([], WRITE_LIMIT, model="a/model", token="t")
     assert posts == [ROUTER, ROUTER]
+
+
+def test_the_booth_is_taught_what_the_tug_is():
+    assert "a duck's rating is the ground it wins from the Arena's reference duck" in BOOTH_CONTEXT
+    assert "across a pit in a wrestling ring" in BOOTH_CONTEXT
+    assert "fell or went" not in BOOTH_CONTEXT
+
+
+MOMENTS = [{"index": 0, "second": 0.0, "what": "The bout starts."},
+           {"index": 1, "second": 6.5, "what": "The marker moves 10 cm west."},
+           {"index": 2, "second": 12.0, "what": "Alice drops into the pit."}]
+CALL = [{"speaker": "ray", "text": "Off they go."},
+        {"speaker": "peter", "text": "The marker slides west!"},
+        {"speaker": "ray", "text": "And in."}]
+
+
+def call_with(lines, first="ray"):
+    provider = provider_for(reply(lines))
+    return write_call(FACTS, MOMENTS, first, lore=LORE, provider=provider, model="fake/model",
+                      time_limit_s=45.0), provider
+
+
+def test_a_call_is_one_line_per_moment_from_the_first_speaker_given():
+    written, provider = call_with(CALL)
+    assert written["lines"] == CALL
+    assert written["model"] == "fake/model"
+    assert written["usage"] == {"prompt_tokens": 900, "completion_tokens": 120}
+    [(messages, max_tokens)] = provider.calls
+    assert max_tokens == CALL_LIMIT
+    system = messages[0]["content"]
+    assert CALL_CONTEXT.format(time_limit="45") in system and CALL_STYLE in system
+    assert "The first line is ray's." in system
+    assert "This bout has 3 moments: answer exactly 3 lines, one per moment" in system
+    assert LORE.characters["peter"]["sheet"][:60] in system
+    assert json.loads(messages[1]["content"]) == {
+        "facts": [{"index": i, "text": fact.text} for i, fact in enumerate(FACTS)],
+        "moments": MOMENTS}
+
+
+@pytest.mark.parametrize("lines, why", [
+    (CALL[:2], "the call must have one line per moment"),
+    ([CALL[1], CALL[0], CALL[1]], "lines must alternate, starting with ray"),
+    ([{**CALL[0], "fact_refs": [0]}, CALL[1], CALL[2]], "a line has other keys than speaker, text"),
+    ([{**CALL[0], "text": "x" * 81}, CALL[1], CALL[2]], "a line's text is over 80 characters"),
+    ([{**CALL[0], "text": "  "}, CALL[1], CALL[2]], "a line's text must be a non-empty string"),
+])
+def test_a_call_the_booth_cannot_play_is_rejected(lines, why):
+    with pytest.raises(Rejected, match=why):
+        call_with(lines)
+
+
+def test_the_call_prompt_carries_no_private_prop():
+    for prop in ("fog machine", "bell", "lap of honour", "trophy"):
+        assert prop not in CALL_CONTEXT + CALL_STYLE
+
+
+def test_the_call_prompt_says_only_the_pit_puts_a_duck_out():
+    assert "knocked over stays in it and can still be dragged" in CALL_CONTEXT
+
+
+def test_the_call_prompt_gives_the_event_s_own_time_limit():
+    provider = provider_for(reply(CALL))
+    write_call(FACTS, MOMENTS, "ray", lore=LORE, provider=provider, model="m", time_limit_s=30.0)
+    system = provider.calls[0][0][0]["content"]
+    assert "After 30 seconds, the duck the marker moved away from loses." in system
+    assert "45 seconds" not in system
+
+
+def test_a_call_names_a_duck_never_its_player():
+    # The profile facts print handles; a call once said "Bout to Nico."
+    assert "Name a duck exactly as the moments print its name, never by its player's handle or name" in CALL_STYLE
+
+
+def test_a_call_line_says_what_only_its_moment_has():
+    # Each bout written alone, "And we're off!" and "Time expires with the marker favoring X." came back
+    # bout after bout: 5.8 % of a rehearsal show's sentences were repeats. Asked for all of the moment's
+    # particulars at once, a line ran past 80 characters.
+    assert "so no stock line: each line says one thing only this moment has" in CALL_STYLE
+
+
+def test_a_call_starts_with_peter_or_ray():
+    with pytest.raises(ValueError, match="peter or ray"):
+        write_call(FACTS, [], "bob", lore=LORE, provider=None, model="m", time_limit_s=45.0)

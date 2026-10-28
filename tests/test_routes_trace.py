@@ -129,6 +129,29 @@ def test_a_run_stored_before_settles_were_recorded_serves_an_empty_one(client):
     assert response.content == b""
 
 
+def test_a_tugs_string_is_served_settle_first_then_timed(client):
+    api, app = client
+    record = make_record(event_id="tug-of-war")
+    string = np.arange(3 * 17 * 3, dtype=np.float32).reshape(3, 17, 3)
+    settle = -1 - np.arange(2 * 17 * 3, dtype=np.float32).reshape(2, 17, 3)
+    app.state.store.append(record, encode(a_trace(frames=3, ducks=2), a_trace(frames=2, ducks=2), string, settle))
+    response = api.get(f"/api/runs/{record.run_id}/string")
+    assert response.status_code == 200
+    assert [response.headers[h] for h in ("x-frame-count", "x-settle-frame-count", "x-point-count", "cache-control")] == ["3", "2", "17", "no-store"]
+    assert len(response.content) == 5 * 51 * 4
+    wire = np.frombuffer(response.content, dtype="<f4")
+    np.testing.assert_array_equal(wire[:102], settle.ravel())
+    np.testing.assert_array_equal(wire[102:], string.ravel())
+
+
+def test_a_run_without_a_string_has_no_string_route(client):
+    api, app = client
+    record = make_record()
+    app.state.store.append(record, encode(a_trace(frames=3)))
+    response = api.get(f"/api/runs/{record.run_id}/string")
+    assert response.status_code == 404 and record.run_id in response.json()["detail"]
+
+
 def test_the_trace_byte_length_matches_the_frame_count(client):
     api, app = client
     record = make_record()

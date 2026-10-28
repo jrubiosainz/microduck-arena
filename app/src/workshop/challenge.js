@@ -2,7 +2,7 @@
 // training, asked again every few seconds (the tickets fill in as checkpoints are saved and
 // evaluated). Only what changed is redrawn: what is typed in the form, and a focused ticket, stay.
 
-import { formatEventFacts, isStage } from "../format.js";
+import { formatEventFacts, isStage, isTug } from "../format.js";
 import { footer } from "../signage.js";
 import * as api from "./api.js";
 import { el } from "./dom.js";
@@ -49,7 +49,9 @@ function head(challenge, arena) {
     pair.append(el("dt", "", fact.label), el("dd", "", fact.value));
     facts.append(pair);
   }
-  const caveat = el("p", "racecaveat", event.metric === "votes" ? "" : "The Arena races your duck at every speed of the sweep and keeps its best. ");
+  const caveat = el("p", "racecaveat", event.metric === "votes" ? ""
+    : isTug(event) ? "The Arena rates your duck in five bouts against its reference duck: the centimetres of string it wins, a pit worth far more. "
+    : "The Arena races your duck at every speed of the sweep and keeps its best. ");
   const board = el("a", "help-link", "See the board on the Arena ↗");
   Object.assign(board, { href: `${arena}/#/e/${event.id}`, target: "_blank", rel: "noopener" });
   caveat.append(board);
@@ -120,7 +122,7 @@ export async function mountChallenge(root, { status, account, route }) {
   function drawWall(jobs) {
     const next = new Map();
     for (const ticket of jobs) {
-      const card = cards.get(ticket.id) ?? ticketCard(ticket, { event, voted, onStop });
+      const card = cards.get(ticket.id) ?? ticketCard(ticket, { event, voted, metric: challenge.event.metric, onStop });
       card.update(ticket);
       next.set(ticket.id, card);
     }

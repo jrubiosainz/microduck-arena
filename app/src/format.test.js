@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  countdown,
   formatEventFacts,
+  formatRate,
   formatScore,
   formatSeeds,
   formatSpeed,
   isStage,
+  isTug,
 } from "./format.js";
+
+const TUG = {
+  id: "tug-of-war", title: "Tug of War", category: "versus", course: "tug", metric: "mean_ground_cm", rig: "legs", vote: null,
+  ring_m: 3, pit_m: 0.3, bout: { time_limit_s: 45, bouts_to_win: 2, max_bouts: 5 },
+};
 
 describe("formatScore", () => {
   it("shows three decimals and a unit", () => {
@@ -19,6 +27,13 @@ describe("formatScore", () => {
   it("marks a policy that never finished rather than printing the cap", () => {
     // A DNF is scored at the time limit; showing "50.000s" would read as a time.
     expect(formatScore(50.0, { finished: 0 })).toBe("DNF");
+  });
+});
+
+describe("formatRate", () => {
+  it("reads as a whole percentage", () => {
+    expect(formatRate(0.387)).toBe("39%");
+    expect(formatRate(0.25)).toBe("25%");
   });
 });
 
@@ -104,5 +119,28 @@ describe("a stage's facts", () => {
     expect(isStage(STAGE)).toBe(true);
     expect(isStage({ ...STAGE, course: "lane" })).toBe(false);
     expect(isStage(undefined)).toBe(false);
+  });
+});
+
+describe("the tug of war counts in centimetres", () => {
+  it("prints the mean ground won, one decimal and the unit", () => {
+    expect(formatScore(-15.24, { finished: 5, metric: "mean_ground_cm" })).toBe("-15.2 cm");
+    expect(formatScore(12.3456, { finished: 5 })).toBe("12.346s");
+  });
+  it("knows a tug by its course", () => {
+    expect([isTug({ course: "tug" }), isTug({ course: "lane" }), isTug(undefined)]).toEqual([true, false, false]);
+  });
+  it("tells its course, its bout and its rig", () => {
+    expect(formatEventFacts(TUG)).toEqual([
+      { label: "course", value: "3 m ring, 0.3 m pit" },
+      { label: "bout", value: "up to 45 s" },
+      { label: "rig", value: "legs" },
+    ]);
+  });
+});
+
+describe("countdown", () => {
+  it("counts down in the largest units that matter", () => {
+    expect([0, 4_500, 65_000, 3_725_000, 90_061_000].map(countdown)).toEqual(["0:00", "0:05", "1:05", "1:02:05", "1d 01:01:01"]);
   });
 });

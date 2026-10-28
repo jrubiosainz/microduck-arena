@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 from .constants import RUNNER_VERSION
 from .hub_fetch import rig_of
+from .manifest import higher_wins
 
 # The tag the ecosystem searches policies by.
 TAG = "microduck-policy"
@@ -91,11 +92,13 @@ def events_for(candidate: Candidate, events) -> list:
 
     Its own if the manifest recorded one. Otherwise every event its rig can
     enter — the honest fallback for manifests written before the field existed,
-    since the alternative is discarding the entry entirely.
+    since the alternative is discarding the entry entirely. Never the tug, though:
+    entering a versus enters its cup, and that takes a policy trained to pull,
+    entered on purpose, not a walker found on the Hub.
     """
     if candidate.event_id:
         return [e for e in events if e.id == candidate.event_id]
-    return [e for e in events if e.rig == candidate.rig]
+    return [e for e in events if e.rig == candidate.rig and e.course.kind != "tug"]
 
 
 def already_recorded(records, repo_id: str, revision: str) -> bool:
@@ -242,10 +245,14 @@ def recover(store, events, all_tagged=False, reader=None, on_event=None) -> list
                 timeline_sha256=fetched.timeline_sha256,
                 cast=cast.record if cast else lone_cast(),
             )
-            store.append(record, trace_codec.encode(result.trace, result.settle))
+            store.append(
+                record,
+                trace_codec.encode(result.trace, result.settle, result.string, result.string_settle),
+            )
             restored.append(record)
             if on_event:
-                on_event(f"recovered {candidate.repo_id} on {event.id}: {result.score:.3f}s")
+                score = f"{result.score:.1f} cm" if higher_wins(event.id) else f"{result.score:.3f}s"
+                on_event(f"recovered {candidate.repo_id} on {event.id}: {score}")
         except Exception as exc:  # noqa: BLE001
             # Deliberately broad, and reported rather than hidden. A recovery
             # races arbitrary third-party ONNX files through MuJoCo; the set of

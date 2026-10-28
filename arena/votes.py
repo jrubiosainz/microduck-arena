@@ -20,19 +20,25 @@ from .store import Ballot, RunRecord
 
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 
+# Every entry starts the window as if it had already been on this many ballots and
+# won the average share of them. Two lucky ballots then cannot outrank a week of
+# judging, and an entry's own record outweighs this head start within a day or two.
+HEAD_START = 20
+
 
 @dataclass(frozen=True)
 class VotedRow:
     """A row of a voted board.
 
-    `shown` rides along beside `votes` because a raw count only means something
-    next to the exposure that produced it — and because the draw reads it.
+    `rate` is what ranks it; `votes` and `shown` ride along because a rate only
+    means something next to the ballots that produced it.
     """
 
     rank: int
     record: RunRecord
     votes: int
     shown: int
+    rate: float
 
 
 def first_day(now: datetime, days: int) -> str:
@@ -59,9 +65,9 @@ def tally(ballots) -> Counter:
 def impressions(ballots) -> Counter:
     """run id -> times SHOWN.
 
-    The draw equalises this, which is what makes a raw vote count a measure of
-    merit rather than of luck. It costs nothing to know, because a ballot
-    records every candidate and not only its winner.
+    The rate's denominator, so how often an entry was shown never decides its
+    place. It costs nothing to know, because a ballot records every candidate
+    and not only its winner.
     """
     return Counter(run_id for b in ballots for run_id in b.candidates)
 
@@ -87,8 +93,8 @@ def pool(
     """The ducks that can appear on a ballot, oldest entry first.
 
     The board's own filter, plus three rules. A duck that never finished a seed
-    makes a dead lane. One entry per person — their most recent — because in a
-    raw count two entries are simply twice the exposure. And never your own,
+    makes a dead lane. One entry per person — their most recent — because the
+    board holds one row per person. And never your own,
     which is `exclude_user`: a ballot you can recognise yourself in is not
     anonymous.
     """
@@ -109,48 +115,71 @@ def pool(
     return sorted(best.values(), key=lambda r: (r.submitted_at, r.run_id))
 
 
-def draw(
+def deal(
     candidates,
-    shown: Counter,
+    dealt: set[str],
     ballot_min: int,
     ballot_max: int,
     rng: random.Random,
-) -> list[RunRecord] | None:
-    """One ballot's field, in lane order. None when there are too few ducks.
+) -> tuple[list[RunRecord], set[str]] | None:
+    """One ballot's field, in lane order, and what the voter has been dealt
+    after it. None when there are too few ducks.
 
-    Shuffle, then sort by exposure: the least-shown go first, and the shuffle
-    breaks their ties, so the draw is uniform in the normal case where everyone
-    has been shown equally often. The second shuffle fixes lane order, which IS
-    the colour assignment — the same duck comes out orange on one ballot and
-    lavender on the next, and that is what keeps a ballot anonymous.
+    A voter is dealt the pool like a deck of cards: every entry once, then the
+    deck is gathered and dealt again. `dealt` is what this round has dealt them
+    so far; the field that finishes a round tops up with entries of the next,
+    and those open it. So a series of ballots shows a voter every entry before
+    any comes back, each round deals new groups, and an entry the voter has not
+    seen yet — a newcomer — comes once in the round. A sort on how often each
+    entry was shown, to this voter or to everyone, put the least shown on
+    ballot after ballot until they caught up, and dealt the entries shown
+    together together again; the rate does not need equal exposure.
+
+    The second shuffle fixes lane order, which IS the colour assignment — the
+    same duck comes out orange on one ballot and lavender on the next, and that
+    is what keeps a ballot anonymous.
     """
     field = list(candidates)
     if len(field) < ballot_min:
         return None
+    deck = {r.run_id for r in field}
+    dealt = dealt & deck
     rng.shuffle(field)
-    field.sort(key=lambda r: shown[r.run_id])
+    field.sort(key=lambda r: r.run_id in dealt)
     picked = field[:ballot_max]
     rng.shuffle(picked)
-    return picked
+    ids = {r.run_id for r in picked}
+    if deck <= dealt | ids:
+        # This field finished the round: what it dealt a second time opens the next one.
+        return picked, ids & dealt
+    return picked, dealt | ids
 
 
 def standings(candidates, ballots) -> list[VotedRow]:
-    """The voted board: most votes first, ties to whoever published first."""
+    """The voted board: best rate first, ties to whoever published first.
+
+    A rate, votes per ballot shown on, and not a raw count: a count measures how
+    often an entry was shown as much as how good it is.
+    """
     votes, seen = tally(ballots), impressions(ballots)
-    ranked = sorted(
-        candidates, key=lambda r: (-votes[r.run_id], r.submitted_at, r.run_id)
-    )
+    # The share of a ballot an entry wins on average: a quarter when every ballot has four lanes.
+    average = len(ballots) / max(1, sum(seen.values()))
+    rate = {
+        r.run_id: (votes[r.run_id] + HEAD_START * average) / (seen[r.run_id] + HEAD_START)
+        for r in candidates
+    }
+    ranked = sorted(candidates, key=lambda r: (-rate[r.run_id], r.submitted_at, r.run_id))
     return [
-        VotedRow(rank=i, record=r, votes=votes[r.run_id], shown=seen[r.run_id])
+        VotedRow(rank=i, record=r, votes=votes[r.run_id], shown=seen[r.run_id], rate=rate[r.run_id])
         for i, r in enumerate(ranked, 1)
     ]
 
 
 def placed(records, run_id: str, ballots, withdrawn: frozenset[str]) -> tuple[int, bool, list[VotedRow]]:
-    """Where ONE run stands on the voted board, on it or not: `index.standing`'s rule, by votes.
+    """Where ONE run stands on the voted board, on it or not: `index.standing`'s rule, by rate.
 
     The board holds each person's latest finished entry (`pool`). This run takes its author's
-    place at its rank by votes; `on_board` says whether it is the entry holding that place.
+    place at its rank by rate; `on_board` says whether it is the entry holding that place.
     """
     record = next(r for r in records if r.run_id == run_id)
     entries = pool(records, withdrawn)

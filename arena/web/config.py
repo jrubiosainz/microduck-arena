@@ -10,7 +10,7 @@ import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..clips import JOB_FLAVOR
+from ..clips import JOB_FLAVOR, JOBS_AT_ONCE
 from ..index import ENTRANTS
 from ..store import HubBallots, HubStore, LocalBallots, LocalStore
 from .oauth import OAuthSettings
@@ -110,7 +110,7 @@ class ArenaConfig:
     # once at most (ARENA_CLIP_JOBS).
     clip_flavor: str = JOB_FLAVOR
     clip_namespace: str | None = None
-    clip_jobs: int = 4
+    clip_jobs: int = JOBS_AT_ONCE
     # The token that launches them (ARENA_CLIP_TOKEN, HF_TOKEN by default): it
     # needs job permissions on that account; the jobs write with HF_TOKEN.
     clip_token: str | None = None
@@ -129,6 +129,9 @@ class ArenaConfig:
     # twenty airings later, and on a Space every store write is a dataset
     # commit — far too many of those, far too briefly needed.
     broadcast_dir: Path = DEFAULT_BROADCAST_DIR
+    # Whether a cup's matches are served before they air. Only `arena clip` sets it: the clip
+    # job's loopback app must read a match to film it before the show. The Space never does.
+    reveal_all: bool = False
 
     @classmethod
     def from_env(
@@ -139,6 +142,7 @@ class ArenaConfig:
         rank_by: str | None = None,
         origin: str | None = None,
         clip_worker: bool = True,
+        reveal_all: bool = False,
     ) -> "ArenaConfig":
         store = Path(store_dir or os.environ.get("ARENA_STORE") or DEFAULT_STORE)
         user = dev_user or os.environ.get("ARENA_DEV_USER") or DEFAULT_USER
@@ -182,7 +186,7 @@ class ArenaConfig:
             clips_enabled=(os.environ.get("ARENA_CLIPS") or "1").strip() not in {"0", "false", "no"},
             clip_flavor=(os.environ.get("ARENA_CLIP_FLAVOR") or "").strip() or JOB_FLAVOR,
             clip_namespace=(os.environ.get("ARENA_CLIP_NAMESPACE") or "").strip() or None,
-            clip_jobs=_positive("ARENA_CLIP_JOBS", 4),
+            clip_jobs=_positive("ARENA_CLIP_JOBS", JOBS_AT_ONCE),
             clip_token=(os.environ.get("ARENA_CLIP_TOKEN") or "").strip() or None,
             clip_backfill=(os.environ.get("ARENA_CLIP_BACKFILL") or "").strip() in {"1", "true", "yes"},
             commentary_enabled=(os.environ.get("ARENA_COMMENTARY") or "1").strip()
@@ -190,6 +194,7 @@ class ArenaConfig:
             commentary_model=(os.environ.get("ARENA_COMMENTARY_MODEL") or "").strip()
             or DEFAULT_COMMENTARY_MODEL,
             broadcast_dir=Path(os.environ.get("ARENA_BROADCASTS") or DEFAULT_BROADCAST_DIR),
+            reveal_all=reveal_all,
         )
 
     @property
