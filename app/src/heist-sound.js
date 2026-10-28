@@ -9,8 +9,8 @@ import { laneOut } from "./lights.js";
 import { SAMPLE_RATE } from "./live/score.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 
-/** How far the duck's own quack is slowed, and which of its variants: the giant's voice. */
-export const GIANT_RATE = 0.45;
+/** How far the duck's own quack is slowed, and which of its variants: the giant's voice, as the owner picked it by ear on 2026-10-28. */
+export const GIANT_RATE = 0.3;
 export const GIANT_CALL = 0;
 
 export const FALL_FILE = "microduck-fall.wav";
