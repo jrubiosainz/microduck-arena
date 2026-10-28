@@ -143,7 +143,7 @@ async function main() {
         colour: LANE_COLORS[i % LANE_COLORS.length],
         opacity: 1,
         name: `@${lane.user}`,
-        // A race's light keeps the race's clock, which starts after the settle (caller.js).
+        // A lane's caught frame counts after its settle lead-in (lights.js laneOut).
         ...(stage
           ? { ducks }
           : tug

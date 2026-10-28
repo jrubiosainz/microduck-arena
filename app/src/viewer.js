@@ -40,8 +40,7 @@ import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js"
 import { attachStadium } from "./stadium.js";
 import { isStage, isTug } from "./format.js";
 import { buildJudges } from "./judges.js";
-import { buildCaller } from "./caller.js";
-import { outAt } from "./lights.js";
+import { laneOut } from "./lights.js";
 import { buildTalentStage, stageCameraPose, placeStageDuck, stageCameraTarget } from "./talent-stage.js";
 import { loadGymBranding } from "./gym-branding.js";
 import { stadiumDirection } from "./clip/direction.js";
@@ -228,7 +227,7 @@ const PACK_FAR = 3;
 /**
  * What a tracking chase over several lanes follows, from each lane's duck along the course `xs` and
  * each lane's centre across it `zs`: the hindmost duck rather than the leader, so that the field
- * walks ahead of the camera toward the caller, but never one more than PACK_REACH behind the
+ * walks ahead of the camera toward the finish, but never one more than PACK_REACH behind the
  * leader, so that a duck caught or fallen far back is left behind rather than holding the field's
  * camera. `fit` is how far back a camera of `aspect` and vertical `fov` degrees stands to see every
  * lane across its picture, but no farther than PACK_FAR, nor than the room allows in front of
@@ -466,10 +465,6 @@ export async function createViewer(
   let course = null;
   let gym = null;
   let judges = null;
-  // Red light, green light's caller, on a race with lights, and how far into the replay its race
-  // clock starts: a clip's lanes lead in with their settle.
-  let caller = null;
-  let callerLead = 0;
   let stage = null;
   // While a tug plays: the string drawn, and its points, a frame each, in step with the ducks.
   let tug = null;
@@ -504,8 +499,6 @@ export async function createViewer(
     venue = null;
     judges?.dispose();
     judges = null;
-    caller?.dispose();
-    caller = null;
     gym?.dispose();
     gym = null;
     for (const lane of lanes) {
@@ -590,11 +583,6 @@ export async function createViewer(
       scene.add(gym.group);
       judges = buildJudges(reachy, courseLength, Math.max(1, laneCount) * spacing / 2, gym.sponsorMaps, roller ? 3 : 4);
       scene.add(judges.group);
-      if (event.lights) {
-        caller = buildCaller(reachy, event.lights, courseLength, Math.max(1, laneCount) * spacing / 2);
-        scene.add(caller.group);
-        callerLead = Math.max(0, ...entries.map((entry) => entry.lead ?? 0)) * CTRL_DT;
-      }
       if (!slopeDeg) {
         ground.material.dispose();
         ground.material = gym.floorMaterial(width, height);
@@ -663,9 +651,9 @@ export async function createViewer(
       // there is no legend over the picture, so the name rides the duck.
       let plate = null;
       let outPlate = null;
-      // On red light, green light, a duck that is out says so once its replay has stopped short of
-      // the line: a duck the caller caught otherwise just stands there mid-course.
-      const out = event?.lights && entry.trace ? outAt(entry.trace, courseLength) : null;
+      // On a race with lights, a duck that is out says so: a caught duck lies collapsed, out from
+      // the frame it was caught on; one that fell or ran out of time, from its last.
+      const out = event?.lights && entry.trace ? laneOut(entry, courseLength) : null;
       if (entry.name) {
         const colour = marker ? `#${marker.material.color.getHexString()}` : "#ffffff";
         const hang = (text) => {
@@ -768,7 +756,6 @@ export async function createViewer(
       lane.rig.bodies.get("trunk_base").getWorldPosition(lane.gazeTarget),
     );
     judges?.pose(seconds, subjects);
-    caller?.pose(player.time - callerLead);
     stage?.pose(seconds, subjects, mood);
     venue?.pose(seconds, subjects, mood);
 
