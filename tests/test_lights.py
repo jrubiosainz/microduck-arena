@@ -54,9 +54,9 @@ def walker():
 
 def test_the_heist_is_played_to_lights_on_a_6_m_lane(heist):
     assert (heist.title, heist.order, heist.course.kind, heist.course.length_m) == ("6 m Sock Heist", 50, "lane", 6.0)
-    # Task A6 replaces these with the ranges measured on x86.
     assert heist.lights == Lights(first_green_s=(0.6, 1.0), green_s=(1.6, 3.0), red_s=(1.4, 2.4),
                                   turn_s=0.4, tolerance_m=0.03)
+    assert heist.time_limit_s == 40.0
     assert len({heist, load_event(EVENT)}) == 1
 
 

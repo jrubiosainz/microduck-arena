@@ -46,8 +46,8 @@ command and starts again cleanly first, then make it faster.
 
 The Arena scans forward commands from **0.20 to 1.20 m/s** in 0.05 steps. It tests three shortlisted
 speeds over five starts and keeps the best average. Each fall, catch or timeout counts as
-**60 seconds**.
+**40 seconds**, the time limit.
 
-For example, four 25-second finishes and one catch score **32 seconds**.
+For example, four 24-second finishes and one catch score **27.2 seconds**.
 
 [How the workshop works, and the shell path →](../train-a-policy.md)
