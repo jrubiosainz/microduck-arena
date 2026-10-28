@@ -13,10 +13,12 @@ import pytest
 from arena.actuator import Servos
 from arena.constants import CTRL_DT, DECIMATION
 from arena.course import compile_course
+from arena.evaluate import evaluate, evaluate_at, trace_file
 from arena.lights import Red, served, timetable
 from arena.manifest import Lights, ManifestError, all_events, load_event, load_manifest
 from arena.policy import load_policy
 from arena.runner import COLLAPSE_S, _LightSteps, run_once
+from arena.trace import as_ducks, decode, decode_caught
 from tests.test_manifest import GOOD, STAGE, write_manifest
 from tests.test_runner import REFERENCE, STEADY_VX
 
@@ -291,3 +293,36 @@ def test_the_event_runs_end_to_end(heist, walker):
     assert 0 < len(outcome.trace) <= round(heist.time_limit_s / CTRL_DT) + collapse
     assert (outcome.caught_frame is not None) == (outcome.status == "caught")
     assert (outcome.time_s is not None) == (outcome.status == "finish")
+
+
+@pytest.fixture(scope="module")
+def caught_everywhere(heist, walker):
+    """Every seed of the heist cut to 3 s and judged to 1 µm: caught at the giant's first look."""
+    return evaluate_at(_short(heist, 3.0, tolerance_m=1e-6), walker, STEADY_VX)
+
+
+def test_a_heist_evaluation_keeps_every_seed_of_its_command(heist, caught_everywhere):
+    result, event = caught_everywhere, _short(heist, 3.0, tolerance_m=1e-6)
+    assert set(result.seed_traces) == set(heist.seeds)
+    np.testing.assert_array_equal(result.seed_traces[result.trace_seed].trace, result.trace)
+    np.testing.assert_array_equal(result.seed_traces[result.trace_seed].settle, result.settle)
+    assert {s: kept.caught for s, kept in result.seed_traces.items()} == {s: _first_look(event, s) for s in heist.seeds}
+
+
+def test_the_full_sweep_keeps_every_seed_of_the_scored_command(heist, walker):
+    result = evaluate(_short(heist, 3.0, tolerance_m=1e-6), walker)
+    assert set(result.seed_traces) == set(heist.seeds)
+    np.testing.assert_array_equal(result.seed_traces[result.trace_seed].trace, result.trace)
+
+
+def test_a_heist_run_is_stored_with_every_seed_and_its_catch(caught_everywhere):
+    blob = trace_file(caught_everywhere)
+    for seed, kept in caught_everywhere.seed_traces.items():
+        np.testing.assert_allclose(decode(blob, seed), as_ducks(kept.trace), atol=3e-3)
+        assert decode_caught(blob, seed) == kept.caught
+
+
+def test_a_race_without_lights_keeps_its_one_trace(walker):
+    result = evaluate_at(dataclasses.replace(load_event("sprint-2m"), time_limit_s=1.0), walker, STEADY_VX)
+    assert result.seed_traces is None
+    np.testing.assert_allclose(decode(trace_file(result)), as_ducks(result.trace), atol=3e-3)
