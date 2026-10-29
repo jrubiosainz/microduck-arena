@@ -64,10 +64,8 @@ export function laneOffsetZ(i, n, spacing = LANE_SPACING) {
  * `lanes` widens the ground so several ducks fit side by side. No walls: the
  * physics has them, but on screen they hide the robot, and the start and finish
  * lines are what actually make a race readable.
- *
- * The ground runs `beyond` past the finish line: a sock heist's runs on under its giant's nest.
  */
-export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = [] }, lanes = 1, stripes = [], beyond = OVERRUN) {
+export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = [] }, lanes = 1, stripes = []) {
   const course = new Group();
   course.name = "course";
   // Climbing toward +x is a positive rotation about z: it lifts +x into +y.
@@ -76,7 +74,7 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   const spacing = laneSpacing({ width_m, walls });
   const span = Math.max(width_m, lanes * spacing);
   const ground = new Mesh(
-    new PlaneGeometry(OVERRUN + length_m + beyond, span),
+    new PlaneGeometry(length_m + OVERRUN * 2, span),
     // Rubber track stays matte; the painted ramp has a broad satin highlight.
     new MeshStandardMaterial({
       color: slope_deg ? 0x456d7b : TRACK,
@@ -87,7 +85,7 @@ export function buildCourse({ length_m, width_m = 0.8, slope_deg = 0, walls = []
   );
   // PlaneGeometry is built in XY; lay it flat. Not a coordinate-frame fix.
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set((length_m + beyond - OVERRUN) / 2, 0, 0);
+  ground.position.set(length_m / 2, 0, 0);
   ground.name = "ground";
   course.add(ground);
 

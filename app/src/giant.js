@@ -6,7 +6,7 @@
 // are pure functions of the replay's clock, and every spread is drawn from a fixed hash of the
 // sock's index, so a clip's frames come out the same on every render.
 
-import { Box3, Euler, Group, InstancedMesh, Matrix4, Quaternion, Vector3 } from "three";
+import { Euler, Group, InstancedMesh, Matrix4, Quaternion, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { attachMeshes, buildRigTree, setJoint } from "./rig.js";
 
@@ -47,8 +47,6 @@ const SPREAD = [0.4, 1.2];
 const TURNS = [1, 2];
 const SPIN = [-3, 3];
 const GRAVITY = 9.81;
-// How far the ground runs on past the nest.
-export const FLOOR_MARGIN_M = 0.3;
 
 /** The `n`th draw of sock `k`, in [0, 1): a fixed integer hash, the same on every frame. */
 export function draw(k, n) {
@@ -62,21 +60,22 @@ const within = ([lo, hi], u) => lo + (hi - lo) * u;
 
 let venue = null;
 
-/** Plan B's nest and its sock models, `sock_0` first, fetched once. */
+/**
+ * Plan B's nest and its sock models, `sock_0` first, and the playground the race is run in, its
+ * four nodes by name (playground.js), fetched once.
+ */
 export function loadHeistVenue() {
-  venue ??= Promise.all(["sock-nest", "socks"].map((name) => new GLTFLoader().loadAsync(`/venue/${name}.glb`)))
-    .then(([nest, socks]) => ({
+  venue ??= Promise.all(["sock-nest", "socks", "playground"]
+    .map((name) => new GLTFLoader().loadAsync(`/venue/${name}.glb`)))
+    .then(([nest, socks, playground]) => ({
       nest: nest.scene.getObjectByName("nest"),
       socks: socks.scene.children
         .filter((node) => node.isMesh)
         .sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true })),
+      playground: Object.fromEntries(["yard", "left", "right", "park"]
+        .map((name) => [name, playground.scene.getObjectByName(name)])),
     }));
   return venue;
-}
-
-/** How far past the finish line the ground runs: on under the nest and FLOOR_MARGIN_M beyond. */
-export function floorBeyond({ nest }) {
-  return GIANT_BEHIND_M + new Box3().setFromObject(nest).max.x + FLOOR_MARGIN_M;
 }
 
 /**

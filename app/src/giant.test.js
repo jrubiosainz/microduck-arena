@@ -4,10 +4,7 @@ import { readFileSync } from "node:fs";
 import { Box3, Group, Matrix4, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { creasedGeometries } from "./rig.js";
-import {
-  DIVE_REACH_M, FLOOR_MARGIN_M, SOCKS_PER_M, SOCK_FIELD,
-  buildGiant, diveAt, floorBeyond, laySocks, loadHeistVenue,
-} from "./giant.js";
+import { DIVE_REACH_M, SOCKS_PER_M, SOCK_FIELD, buildGiant, diveAt, laySocks, loadHeistVenue } from "./giant.js";
 
 const LENGTH = 6;
 const EDGE = 1.9; // four lanes at 0.95 m
@@ -37,9 +34,11 @@ describe("the giant", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("loads the nest and the sock models in name order, once", async () => {
+  it("loads the nest, the sock models in name order and the playground's four nodes, once", async () => {
     expect(venue.nest.name).toBe("nest");
     expect(venue.socks.map((sock) => sock.name)).toEqual(["sock_0", "sock_1", "sock_2", "sock_3", "sock_4"]);
+    const nodes = ["yard", "left", "right", "park"];
+    expect(nodes.map((name) => venue.playground[name]?.name)).toEqual(nodes);
     expect(await loadHeistVenue()).toBe(venue);
   });
 
@@ -55,14 +54,13 @@ describe("the giant", () => {
     expect(box.max.y - box.min.y).toBeCloseTo(0.93, 3);
   });
 
-  it("seats the giant in its nest, its feet in the weave, the sock field clear and the ground past it", () => {
+  it("seats the giant in its nest, its feet in the weave, the sock field clear", () => {
     const giant = buildGiant(model, venue, LENGTH, EDGE);
     const nest = new Box3().setFromObject(giant.group.getObjectByName("nest"));
     for (const ankle of ["ankle_left", "ankle_right"]) {
       expect(nest.containsPoint(giant.group.getObjectByName(ankle).getWorldPosition(new Vector3()))).toBe(true);
     }
     expect(nest.min.x).toBeGreaterThan(LENGTH + SOCK_FIELD[1]);
-    expect(LENGTH + floorBeyond(venue) - nest.max.x).toBeCloseTo(FLOOR_MARGIN_M);
   });
 
   it("lays the socks between the line and the nest across every lane, the same every time", () => {
