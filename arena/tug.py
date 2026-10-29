@@ -26,7 +26,12 @@ A step MuJoCo had to reset ends the bout with nobody winning it, its frame left 
 explosion is not a result, and the reset pose stands the west duck over the pit. In a match it is
 nobody's; in a rating it is the entry's fault, as any fault is there: the reference duck never
 causes one on its own, and a duck that blew the physics up on purpose rated 0.0 cm, above every
-duck that pulls and loses.
+duck that pulls and loses. A step that tore the string off a neck, an end more than TORN_M from
+the duck it is tied to, is judged the same: it is an explosion MuJoCo has not caught yet, every
+number still finite. Unjudged, the string of a rating bout left both necks by about a metre on its
+last step, MuJoCo resetting 5 ms later, and its middle was read 85 cm out for a bout worth 185 cm,
+where one played out reaches 65. Found by @jrubiosainz
+(huggingface.co/spaces/pollen-robotics/microduck-arena/discussions/1).
 
 A trace frame is a runner frame: trunk position (0:3), trunk quaternion w, x, y, z (3:7), then
 the joint angles.
@@ -39,13 +44,14 @@ import numpy as np
 
 from .assets import ASSET_ROOT
 from .constants import CTRL_DT, NUM_JOINTS, TRACE_WIDTH
-from .course import STRING_SEGMENTS, compile_tug, string_sites
+from .course import STRING_SEGMENTS, STRING_SITE, compile_tug, duck_prefix, string_sites
 from .manifest import Manifest
 from .policy import PolicyError, load_policy
 from .runner import _reset_by_mujoco, _start
 
 PIT_DROP_M = 0.05  # a trunk below z = -PIT_DROP_M is in the pit
 FAULT_PITS = 2  # a fault scores this many pit bonuses: beyond any bout played out (a pit and 65 cm of marker)
+TORN_M = 0.05  # a string end this far from its neck has torn off: 235 rating bouts held within 1.1 cm
 SIDES = ("west", "east")
 STRING_POINTS = STRING_SEGMENTS + 1  # a recorded string frame: its points, west to east
 MIDDLE = STRING_SEGMENTS // 2  # the point the marker is tied at
@@ -80,7 +86,7 @@ class BoutOutcome:
     # "pit" (the first duck in the pit),
     # "marker" (both in on one control step, or the time limit),
     # "draw" (the marker exactly on the centre line),
-    # "reset" (a step MuJoCo had to reset, nobody's bout)
+    # "reset" (a step MuJoCo had to reset or that tore the string, nobody's bout)
     time_s: float  # when it was decided
     trace: np.ndarray  # (2, frames, 21), west first; stops at the deciding step
     settle: np.ndarray  # (2, settle + 1, 21)
@@ -105,6 +111,11 @@ class _OnTheClock:
         return action if self.left > 0 else np.full(NUM_JOINTS, np.nan, dtype=np.float32)
 
 
+def _torn(data, necks: np.ndarray, ends: np.ndarray) -> bool:
+    """Is a string end, `ends` west first, more than TORN_M from its duck's neck, `necks` (site ids)?"""
+    return bool((np.linalg.norm(data.site_xpos[ends] - data.site_xpos[necks], axis=1) > TORN_M).any())
+
+
 def _faults(sim) -> list[bool]:
     """Per duck, west first: are its servos driven by a command that is not a number?"""
     return [not np.isfinite(sim.data.ctrl[duck.servos.act_ids]).all() for duck in sim.ducks]
@@ -125,9 +136,11 @@ def run_bout(manifest: Manifest, west, east, seed: int, model=None) -> BoutOutco
     steps = round(limit / CTRL_DT)
     frames = np.empty((2, steps, TRACE_WIDTH), dtype=np.float32)
     string = np.empty((steps, STRING_POINTS, 3), dtype=np.float32)
+    necks = np.array([model.site(duck_prefix(k) + STRING_SITE).id for k in (0, 1)])
+    ends = string_sites(model)[[0, -1]]
     for step in range(steps):
         sim.step([command, command])
-        if _reset_by_mujoco(sim.data):
+        if _reset_by_mujoco(sim.data) or _torn(sim.data, necks, ends):
             return BoutOutcome(
                 seed, None, "reset", (step + 1) * CTRL_DT, frames[:, :step].copy(), settle,
                 string[:step].copy(), string_settle,
