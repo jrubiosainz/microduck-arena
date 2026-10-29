@@ -622,7 +622,7 @@ def test_a_run_detail_carries_its_place_its_receipts_and_its_event(client):
         (2, "coralie", True),
     ]
     # The same columns the event's board shows: the page draws the same table.
-    assert {"command_vx", "seeds_total", "offers_download", "policy_url", "env_url", "livery"} \
+    assert {"command_vx", "seeds_total", "offers_download", "policy_url", "robot_command", "env_url", "livery"} \
         <= set(body["board"][0])
     # first entry 100 + run 10 + second place 150; no own_best, a lone run beats nothing.
     assert sorted(r["act"] for r in body["receipts"]) == ["first_event", "podium", "run"]

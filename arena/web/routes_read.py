@@ -190,6 +190,7 @@ def _board_row(row) -> dict:
         # Hub-backed source. See RunRecord.offers_download.
         "offers_download": record.offers_download,
         "policy_url": (record.source or {}).get("url"),
+        "robot_command": record.robot_command,
         "seeds_finished": record.seeds_finished,
         "seeds_total": len(record.per_seed),
         "run_id": record.run_id,
@@ -364,6 +365,7 @@ def run_detail(run_id: str, request: Request) -> dict:
         "runner_version": record.runner_version,
         "offers_download": record.offers_download,
         "policy_url": (record.source or {}).get("url"),
+        "robot_command": record.robot_command,
         "env_url": record.env_url,
         "withdrawn": record.run_id in withdrawn,
         "on_board": on_board,

@@ -143,6 +143,20 @@ class RunRecord:
         """
         return bool(self.model_stored or (self.source or {}).get("kind") == "hub")
 
+    @property
+    def robot_command(self) -> str | None:
+        """The line that runs this policy on a real microduck, or None off the Hub.
+
+        The robot reads a policy's manifest.json only when it fetches it from the Hub
+        (pollen-robotics/microduck, docs/policy-manifest.md): a downloaded .onnx loads with none. So
+        a duck is handed the repo at the commit that raced, with the file named, since a repo may
+        hold two.
+        """
+        source = self.source or {}
+        if source.get("kind") != "hub":
+            return None
+        return f"sudo robotctl policy load walk {source['repo_id']}@{source['revision']}:{source['filename']}"
+
     def to_dict(self) -> dict:
         return {
             "run_id": self.run_id,

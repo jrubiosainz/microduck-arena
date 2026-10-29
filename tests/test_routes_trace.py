@@ -58,6 +58,7 @@ def test_run_detail_reports_whether_the_policy_can_be_downloaded(client):
             "kind": "hub",
             "repo_id": "alice/microduck-walker",
             "filename": "policy.onnx",
+            "revision": "rev1",
             "url": "https://huggingface.co/alice/microduck-walker/resolve/rev1/policy.onnx",
         },
     )
@@ -65,12 +66,14 @@ def test_run_detail_reports_whether_the_policy_can_be_downloaded(client):
     body = api.get(f"/api/runs/{hub_record.run_id}").json()
     assert body["offers_download"] is True
     assert body["policy_url"] == hub_record.source["url"]
+    assert body["robot_command"] == hub_record.robot_command
 
     bare_record = make_record(model_stored=False, source=None)
     app.state.store.append(bare_record, encode(a_trace()))
     body = api.get(f"/api/runs/{bare_record.run_id}").json()
     assert body["offers_download"] is False
     assert body["policy_url"] is None
+    assert body["robot_command"] is None
 
 
 def test_the_trace_round_trips_as_float32(client):

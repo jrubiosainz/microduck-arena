@@ -195,6 +195,17 @@ def test_offers_download_covers_both_hosting_paths():
     )
 
 
+def test_a_hub_policy_runs_on_a_real_duck_from_the_commit_that_raced():
+    """The robot reads a policy's manifest.json only when it fetches it from the Hub, so a duck is
+    handed the repo at the commit that raced, with the file named: a repo may hold two."""
+    record = make_record(
+        source={"kind": "hub", "repo_id": "alice/microduck-walker", "filename": "policy.onnx",
+                "revision": "c" * 40, "url": "https://x/y"},
+    )
+    assert record.robot_command == f"sudo robotctl policy load walk alice/microduck-walker@{'c' * 40}:policy.onnx"
+    assert make_record(model_stored=True).robot_command is None
+
+
 def test_every_store_implements_the_whole_protocol():
     """Shipped broken once, and this is why.
 
