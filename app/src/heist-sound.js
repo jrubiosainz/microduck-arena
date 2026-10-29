@@ -1,17 +1,19 @@
-// Sock Heist's sounds: the giant's deep quack where each red begins, and the microduck's fall where
+// Sock Heist's sounds: the giant's deep quack where each red begins, each red's own, and the microduck's fall where
 // a lane's duck goes out. `heistCues` lists them once, on the race's clock, from a timetable and the
 // lanes; the page plays them live (`createHeistSound`, as stage-voice.js plays the stage's voices)
 // and the clip's score renders them. Nothing waits on a sound: no Web Audio, a muted Arena or a
 // context the browser keeps suspended until a gesture leave the replay playing in silence.
 
-import { DUCK_SEED, ceiling, limiter } from "./duck-voice.js";
+import { DUCK_SEED, VARIANTS, ceiling, limiter } from "./duck-voice.js";
+import { draw } from "./giant.js";
 import { laneOut } from "./lights.js";
 import { SAMPLE_RATE } from "./live/score.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 
-/** How far the duck's own quack is slowed, and which of its variants: the giant's voice, as the owner picked it by ear on 2026-10-28. */
+/** How far the duck's own quack is slowed: the giant's voice, as the owner picked it by ear on 2026-10-28, now the centre of each quack's rate. */
 export const GIANT_RATE = 0.3;
-export const GIANT_CALL = 0;
+/** How far a quack's rate strays either side of GIANT_RATE, as a fraction of it. */
+export const GIANT_SPREAD = 0.1;
 
 export const FALL_FILE = "microduck-fall.wav";
 /** A step longer than this between two frames is a jump, not playback. */
@@ -21,19 +23,28 @@ const GAIN = 0.6;
 /** Each kind's level under it: the quack as the synth makes it, the fall as the clip mixes it. */
 const LEVELS = { quack: 1, fall: 0.45 };
 
-/** The giant's quack: the duck's own chirp, to be played at GIANT_RATE. */
-export function giantQuack(calls) {
-  return calls.chirp(DUCK_SEED, GIANT_CALL, {});
+/** The quack of a seed's `red`th red: one of the synth's chirps and a rate around GIANT_RATE, drawn from the seed and the index so every replay of the seed quacks alike. */
+export function quackOf(seed, red) {
+  return {
+    variant: Math.floor(draw(seed, 2 * red) * VARIANTS.chirp),
+    rate: GIANT_RATE * (1 + GIANT_SPREAD * (2 * draw(seed, 2 * red + 1) - 1)),
+  };
+}
+
+/** A giant's quack: the duck's own chirp of that variant, to be played at the quack's rate. */
+export function giantQuack(calls, variant) {
+  return calls.chirp(DUCK_SEED, variant, {});
 }
 
 /**
- * Every sound of a race in order on its clock: a quack at each red's onset (`lane: null`) and a fall
+ * Every sound of a race in order on its clock: a quack at each red's onset (`lane: null`, with the
+ * `variant` and `rate` `quackOf` draws from the seed for that red) and a fall
  * where a lane's duck goes out, at the frame it was caught on or its last when it fell. A duck that
  * crossed, or whose race frames ran to the time limit, falls for nobody. A lane's `lead` frames come
  * before the race clock starts.
  */
-export function heistCues(timetable, lanes, length, limitS) {
-  const cues = timetable.map(([onset]) => ({ at: onset, kind: "quack", lane: null }));
+export function heistCues(timetable, lanes, length, limitS, seed) {
+  const cues = timetable.map(([onset], red) => ({ at: onset, kind: "quack", lane: null, ...quackOf(seed, red) }));
   const limit = Math.round(limitS / CTRL_DT);
   lanes.forEach((lane, index) => {
     if (laneOut(lane, length) == null) return;
@@ -48,7 +59,7 @@ export function createHeistSound(loadCalls, { makeContext = () => new AudioConte
   let loaded = null;
   let context = null;
   let levels = null;
-  let quack = null;
+  const quacks = new Map();
   let fall = null;
   let parts = [];
   let version = 0;
@@ -133,16 +144,17 @@ export function createHeistSound(loadCalls, { makeContext = () => new AudioConte
         .then(async (calls) => {
           if (mine !== version) return;
           if (!context) open();
-          if (!quack) {
-            const samples = giantQuack(calls);
-            quack = context.createBuffer(1, samples.length, SAMPLE_RATE);
-            quack.copyToChannel(samples, 0);
+          for (const { kind, variant } of cues) {
+            if (kind !== "quack" || quacks.has(variant)) continue;
+            const samples = giantQuack(calls, variant);
+            const buffer = context.createBuffer(1, samples.length, SAMPLE_RATE);
+            buffer.copyToChannel(samples, 0);
+            quacks.set(variant, buffer);
           }
           if (!fall && cues.some(({ kind }) => kind === "fall")) fall = await context.decodeAudioData(await load(FALL_FILE));
           if (mine !== version) return;
-          parts = cues.map(({ at, kind }) => {
-            const rate = kind === "quack" ? GIANT_RATE : 1;
-            const buffer = kind === "quack" ? quack : fall;
+          parts = cues.map(({ at, kind, variant, rate = 1 }) => {
+            const buffer = kind === "quack" ? quacks.get(variant) : fall;
             return { kind, rate, buffer, start: at, end: at + buffer.length / SAMPLE_RATE / rate, playing: false, source: null };
           });
         })

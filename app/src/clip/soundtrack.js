@@ -56,7 +56,7 @@ export async function renderSoundtrack(score, seconds, { Context = OfflineAudioC
       buffer: cue.call
         ? synthBuffer(context, callSamples(synth, cue.call, cue.voice))
         : cue.quack
-          ? synthBuffer(context, giantQuack(synth))
+          ? synthBuffer(context, giantQuack(synth, cue.variant))
           : cue.song
           ? synthBuffer(context, songSamples(synth, cue.song.sound, cue.song.duration, cue.song.part))
           : await context.decodeAudioData(await load(cue.file)),

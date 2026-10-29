@@ -4,7 +4,7 @@
 
 import { choirOf, voiceEvents } from "../duck-voice.js";
 import { isStage, isTug } from "../format.js";
-import { FALL_FILE, GIANT_RATE, heistCues } from "../heist-sound.js";
+import { FALL_FILE, heistCues } from "../heist-sound.js";
 import { timetableOf } from "../lights.js";
 import { CTRL_DT, frameAt, frameCount } from "../replay.js";
 import { BOUT_WORDS } from "../tug.js";
@@ -45,9 +45,9 @@ const SOURCES = {
   ],
   // The giant's quack at each red and a fall where a duck goes out, on the race's clock.
   giant: ({ run, lanes, performed }) =>
-    heistCues(timetableOf(run.event, run.trace_seed), lanes, run.event.length_m, run.event.time_limit_s).map(({ at, kind }) =>
+    heistCues(timetableOf(run.event, run.trace_seed), lanes, run.event.length_m, run.event.time_limit_s, run.trace_seed).map(({ at, kind, variant, rate }) =>
       kind === "quack"
-        ? { at: performed + at, quack: true, rate: GIANT_RATE, gain: GAINS.quack }
+        ? { at: performed + at, quack: true, variant, rate, gain: GAINS.quack }
         : { at: performed + at, file: FALL_FILE, gain: GAINS.fall }),
 };
 

@@ -51,7 +51,7 @@ const GRAVITY = 9.81;
 export const FLOOR_MARGIN_M = 0.3;
 
 /** The `n`th draw of sock `k`, in [0, 1): a fixed integer hash, the same on every frame. */
-function draw(k, n) {
+export function draw(k, n) {
   let h = Math.imul(k + 1, 0x9e3779b1) ^ Math.imul(n + 1, 0x85ebca77);
   h = Math.imul(h ^ (h >>> 16), 0x7feb352d);
   h = Math.imul(h ^ (h >>> 15), 0x846ca68b);

@@ -475,6 +475,7 @@ export async function createViewer(
   // timetable and turn, on the race clock, which starts once the lanes' settle lead-in has played.
   let giant = null;
   let timetable = [];
+  let heistSeed;
   let turnS = 0;
   let heistLead = 0;
   // Where the first ducks across the line crossed it, and when, on the replay's clock: they dive
@@ -608,7 +609,8 @@ export async function createViewer(
       if (event.lights) {
         giant = buildGiant(rigs.legs, heistVenue, courseLength, Math.max(1, laneCount) * spacing / 2);
         scene.add(giant.group);
-        timetable = timetableOf(event, entries[0]?.traceSeed);
+        heistSeed = entries[0]?.traceSeed;
+        timetable = timetableOf(event, heistSeed);
         turnS = event.lights.turn_s;
         heistLead = Math.max(0, ...entries.map((entry) => entry.lead ?? 0)) * CTRL_DT;
       }
@@ -709,7 +711,7 @@ export async function createViewer(
     // Every duck on the stage sounds for as long as the troupe's traces perform: a cut-short
     // performance falls silent with them. A race makes no sound.
     voice?.set(talent ? lanes : [], player.duration);
-    heist?.set(event?.lights ? heistCues(timetable, lanes, courseLength, event.time_limit_s) : []);
+    heist?.set(event?.lights ? heistCues(timetable, lanes, courseLength, event.time_limit_s, heistSeed) : []);
     const progress = [];
     // A tug goes nowhere along its course: its crowd follows no progress.
     if (event?.length_m && lanes.length && !tugged) {

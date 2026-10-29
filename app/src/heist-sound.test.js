@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GIANT_RATE, heistCues, createHeistSound } from "./heist-sound.js";
+import { heistCues, createHeistSound, quackOf } from "./heist-sound.js";
 import { TRACE_WIDTH } from "./replay.js";
 
 /** A trace of `frames` frames, the trunk going from x 0 to `to`. */
@@ -10,16 +10,37 @@ function walk(frames, to) {
 }
 
 const T = [[0.6, 1.6], [4.2, 2.0]];
+const TWELVE = Array.from({ length: 12 }, (_, k) => [1 + 3 * k, 1.6]);
 const at2 = (cues) => cues.map(({ at, kind, lane }) => [Number(at.toFixed(2)), kind, lane]);
 
+describe("quackOf", () => {
+  it("gives every red a chirp of the synth's and a rate within a tenth of the owner's", () => {
+    for (let red = 0; red < 50; red += 1) {
+      const { variant, rate } = quackOf(3, red);
+      expect(Number.isInteger(variant) && variant >= 0 && variant < 12).toBe(true);
+      expect(rate).toBeGreaterThanOrEqual(0.27);
+      expect(rate).toBeLessThanOrEqual(0.33);
+    }
+  });
+  it("is the same for the same seed and red, and varies from red to red and seed to seed", () => {
+    expect(quackOf(3, 4)).toEqual(quackOf(3, 4));
+    expect(new Set(TWELVE.map((_, red) => quackOf(3, red).variant)).size).toBeGreaterThanOrEqual(4);
+    expect(TWELVE.map((_, red) => quackOf(3, red))).not.toEqual(TWELVE.map((_, red) => quackOf(4, red)));
+  });
+});
+
 describe("heistCues", () => {
+  it("hands each quack its red's variant and rate, on the replay's seed", () => {
+    const quacks = heistCues(TWELVE, [], 6, 60, 3);
+    expect(quacks.map(({ variant, rate }) => ({ variant, rate }))).toEqual(TWELVE.map((_, red) => quackOf(3, red)));
+  });
   it("quacks where each red begins and falls where a duck goes out, in race order", () => {
     const lanes = [
       { trace: walk(300, 6.05), caught: null }, // crossed
       { trace: walk(150, 2.0), caught: 50 }, // caught on the first red's first watched step, then collapsed
       { trace: walk(120, 1.5), caught: null }, // fell
     ];
-    expect(at2(heistCues(T, lanes, 6, 60))).toEqual([[0.6, "quack", null], [1, "fall", 1], [2.38, "fall", 2], [4.2, "quack", null]]);
+    expect(at2(heistCues(T, lanes, 6, 60, 3))).toEqual([[0.6, "quack", null], [1, "fall", 1], [2.38, "fall", 2], [4.2, "quack", null]]);
   });
   it("never falls for a duck out of time, every lane out of time included", () => {
     expect(heistCues([], [{ trace: walk(3000, 2), caught: null }, { trace: walk(3000, 0.01), caught: null }], 6, 60)).toEqual([]);
@@ -29,7 +50,7 @@ describe("heistCues", () => {
   });
 });
 
-const calls = { chirp: () => new Float32Array(4800) }; // 0.1 s
+const calls = { chirp: (seed, variant) => new Float32Array(4800 + variant) }; // 0.1 s, and a sample more per variant
 const settle = () => new Promise((done) => setTimeout(done));
 
 /** A context whose sources log their starts and stops. */
@@ -82,9 +103,16 @@ async function soundWith(cues, { muted = () => false, state = "running" } = {}) 
 
 describe("createHeistSound", () => {
   it("quacks as the clock crosses a red's onset, once, slowed to the giant's rate", async () => {
-    const { sound, log } = await soundWith([{ at: 0.6, kind: "quack", lane: null }]);
+    const { sound, log } = await soundWith([{ at: 0.6, kind: "quack", lane: null, ...quackOf(3, 0) }]);
     [0.58, 0.6, 0.62].forEach((s) => sound.follow(s));
-    expect(log.filter(([what]) => what === "start")).toEqual([["start", 4800, 0, GIANT_RATE]]);
+    expect(log.filter(([what]) => what === "start")).toEqual([["start", 4800 + quackOf(3, 0).variant, 0, quackOf(3, 0).rate]]);
+  });
+  it("gives each red's quack its own chirp and rate", async () => {
+    const [a, b] = [quackOf(3, 0), quackOf(3, 1)];
+    expect(a.variant).not.toBe(b.variant);
+    const { sound, log } = await soundWith([{ at: 0.6, kind: "quack", lane: null, ...a }, { at: 4.2, kind: "quack", lane: null, ...b }]);
+    [0.6, 4.2].forEach((s) => sound.follow(s));
+    expect(log.filter(([what]) => what === "start")).toEqual([["start", 4800 + a.variant, 0, a.rate], ["start", 4800 + b.variant, 0, b.rate]]);
   });
   it("plays the fall's recording where a duck goes out", async () => {
     const { sound, log, loaded } = await soundWith([{ at: 1, kind: "fall", lane: 1 }]);
@@ -98,19 +126,20 @@ describe("createHeistSound", () => {
     expect(log).toEqual([]);
   });
   it("waits for a gesture while the browser keeps its context suspended, then plays from where the clock is", async () => {
-    const { sound, log, context } = await soundWith([{ at: 0.6, kind: "quack", lane: null }], { state: "suspended" });
+    const { sound, log, context } = await soundWith([{ at: 0.6, kind: "quack", lane: null, ...quackOf(3, 0) }], { state: "suspended" });
     sound.follow(0.6);
     expect(log).toEqual([]);
     window.dispatchEvent(new Event("pointerdown"));
     expect(log).toEqual([["resume"]]);
     context.changeState("running");
     sound.follow(0.64);
-    expect(log.at(-1)).toEqual(["start", 4800, expect.closeTo(0.04 * GIANT_RATE, 5), GIANT_RATE]);
+    expect(log.at(-1)).toEqual(["start", 4800 + quackOf(3, 0).variant, expect.closeTo(0.04 * quackOf(3, 0).rate, 5), quackOf(3, 0).rate]);
   });
   it("starts again from where the clock lands when the replay jumps back", async () => {
-    const { sound, log } = await soundWith([{ at: 0.6, kind: "quack", lane: null }]);
+    const { rate } = quackOf(3, 0);
+    const { sound, log } = await soundWith([{ at: 0.6, kind: "quack", lane: null, ...quackOf(3, 0) }]);
     [0.6, 3, 0.65].forEach((s) => sound.follow(s));
-    expect(log.filter(([what]) => what === "start").map(([, , offset]) => offset)).toEqual([0, expect.closeTo(0.05 * GIANT_RATE, 5)]);
+    expect(log.filter(([what]) => what === "start").map(([, , offset]) => offset)).toEqual([0, expect.closeTo(0.05 * rate, 5)]);
   });
   it("makes no context and loads nothing for a replay without cues", async () => {
     const asked = [];

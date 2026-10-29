@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { matchPlan } from "./match.js";
 import { clipPlan } from "./plan.js";
-import { GIANT_RATE } from "../heist-sound.js";
+import { quackOf } from "../heist-sound.js";
 import { clipScore, clipVerdict, matchScore } from "./score.js";
 
 /** A trace of `frames` frames, the trunk going from x 0 to `to`. */
@@ -162,5 +162,6 @@ it("quacks at each red and falls where each duck goes out, on the race's clock a
   const plan = clipPlan(300, 60, 26); // the race clock starts at 3 + 26 × 0.02 = 3.52 s of tape
   const lanes = [{ trace: walk(300, 6.05), caught: null }, { trace: walk(150, 2), caught: 50 }];
   const { cues } = clipScore({ run: { run_id: "R5", event: HEIST, seeds_finished: 5, trace_seed: 3 }, plan, trace: walk(326, 6.05), ducks: [], lanes });
-  expect(cues.map((c) => [Number(c.at.toFixed(2)), c.quack ?? c.file, c.rate])).toEqual([[4.12, true, GIANT_RATE], [4.52, "microduck-fall.wav", undefined]]);
+  expect(cues.map((c) => [Number(c.at.toFixed(2)), c.quack ?? c.file, c.variant, c.rate]))
+    .toEqual([[4.12, true, quackOf(3, 0).variant, quackOf(3, 0).rate], [4.52, "microduck-fall.wav", undefined, undefined]]);
 });
