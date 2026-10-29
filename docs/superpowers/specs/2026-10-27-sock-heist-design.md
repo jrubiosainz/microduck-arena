@@ -20,8 +20,9 @@ rather than enter their walkers as they are.
 
 ## The show, as a viewer sees it
 
-1. **The start.** A 6 m lane in the Arena's stadium, with its crowd and its Reachy Mini judges, as
-   on every race. Several microducks wait on the start line, a lane each. At the far end, centred
+1. **The start.** A 6 m concrete race track in a school playground at the microducks' own scale,
+   between two crowds of microducks (see "Amendment, 2026-10-29"). Several microducks wait on the
+   start line, a lane each. At the far end, centred
    behind the finish line and facing away from the lanes, a giant microduck sits in a nest woven
    from socks. Between the finish line and the nest, socks lie scattered on the floor. The first
    shot shows every competitor and the giant.
@@ -104,7 +105,10 @@ The giant turns at random moments, different on every seed.
 | A caught duck has all its motors switched off and collapses, with a microduck fall sound | #3's caught duck that ends its trace standing. |
 | The first across the line dives into the socks and the socks fly | No effect on arrival. |
 | The replay runs until every duck has crossed or is out | A replay that stops at the winner. |
-| Reachy Mini judges and the crowd, as on the other races | An empty venue. |
+| ~~Reachy Mini judges and the crowd, as on the other races~~ (superseded 2026-10-29) | An empty venue. |
+| 2026-10-29: a venue of its own, a school playground at the microducks' scale: a concrete track, a random crowd of microducks along both edges, a building on the left, a wooden fence on the right, a park behind the giant; no Reachy Mini judges | The Arena's gym, stadium, stands, judges and sponsors on this event. |
+| 2026-10-29: the pages' default 3D view stands behind the microducks and looks at the giant | The close chase that leaves the giant out of the picture. |
+| 2026-10-29: every red's quack differs, drawn from the replayed seed and the red's index, its chirp variant and its pitch round 0.30 | One quack for every red. |
 | No giant sock | A sock to carry or a trophy. |
 | Named Sock Heist | "Red Light, Green Light". |
 | People must train real policies for this event, so the challenge ships a training folder, and we verify it by training a policy ourselves; that policy, not the walker, is the published reference | A launch with no training path, or the walker as the reference. |
@@ -127,10 +131,11 @@ The giant turns at random moments, different on every seed.
 - The trace stored float32 for arrays with a value of 4 or more: a 6 m lane has positions up to 6.
 - The scope guard: every new line behind `lights is not None` or `steering is not None`; the
   sweep, the golden run and `RUNNER_VERSION` unchanged for every other event; a stage refuses both.
-- The stadium, the gym, the judges and the crowd, as #3 already builds them on a lane.
+- The crowd's behaviour (stadium.js `crowd`), in the playground (amendment, 2026-10-29). The
+  stadium, the gym and the judges no longer stand round this event.
 - The chase camera from behind the field (`track`, `hold`, `packChase`, `chaseAcross`,
   `inRoom`), retuned so that the first shot shows every lane and the giant whole, and the last
-  shot the dive into the socks.
+  shot the dive into the socks (reframed in the playground, amendment 2026-10-29).
 - The OUT plate over a duck that is out, the booth's caught seeds, the share text, the round card,
   the guide: renamed and re-told for Sock Heist.
 
@@ -179,7 +184,7 @@ integrated in the site.
 **The sounds.**
 - The giant's quack: the microduck voice the site already synthesises (`duck-voice.js`,
   `microduck-voice.wasm`, the quack of Got a Talent), pitched far lower, at the start of each turn
-  of the head towards the lanes.
+  of the head towards the lanes, each red's quack its own (amendment, 2026-10-29).
 - A duck going out, caught or fallen: `microduck-fall.wav`, which the race clip already plays for a
   duck that does not finish.
 - On the page as in the clip.
@@ -237,6 +242,146 @@ Heist, crediting the contributor's design; merge #3 with a merge commit (not squ
 so their commits stay in `main`; bump the Arena's version (a new minor), release the wheel, relock
 and push microduck-challenges with the new folder; publish the reference.
 
+## Amendment, 2026-10-29: the playground, the page's camera, the giant's quacks
+
+The owner saw the site locally with Plans A to D done and asked for three changes, **on Sock Heist
+alone**: no other event changes in any way, and everything new runs behind `event.lights`, as the
+rest of this design does.
+
+### A venue of its own: the microducks' school playground
+
+Sock Heist leaves the Arena's gym and stadium. It races in a venue built for it, as the Tug of War
+races in its ring: a **school playground at the microducks' own scale**. Nothing of the existing
+venue is reused: no gym, no stands, no rail or cones, no Reachy Mini judges, no sponsors. The giant,
+its nest and the loose socks stay exactly as the owner approved them on 2026-10-29.
+
+Seen from behind the start, looking down the lanes at the giant:
+
+- **The track.** The lanes run on a concrete race track: grey, plain, its lines painted on it. The
+  giant in its nest and the socks before it close the far end.
+- **Behind the giant, a park:** grass and trees. The concrete stops a little past the nest and the
+  grass begins.
+- **Along both sides of the track, a crowd of microducks** at the track's edge, placed at random as
+  along a street race: no stands, no seats, a few ragged rows with gaps. They behave as every other
+  crowd of microducks in the Arena (stadium.js `crowd`): sitting, standing up and cheering as the
+  race goes on, their bubbles, their fidgets.
+- **Behind the crowd,** a school building on the left (−z, the far side from the chase camera's
+  side offset) and a wooden fence on the right (+z).
+- **Behind the start,** off camera most of the time: the concrete goes on; no crowd there.
+
+**The scale is the microducks'.** A racer stands 0.27 m, the seated giant 0.93 m. The giant stays the
+tallest thing in the scene: the building, the fence, the trees and anything else are sized for
+microducks, and none stands taller than the seated giant.
+
+**Daylight, outdoors,** under the blue sky the other races have, the sun casting the racers', the
+crowd's and the giant's shadows as on any race.
+
+**How it is made.**
+
+- **In Blender.** `scripts/sock_heist_venue.py` builds the playground alongside the nest and the
+  socks, into one more GLB, `app/public/venue/playground.glb` (Git LFS): the ground (concrete and
+  grass), the building, the fence and the trees. Low-poly, vertex-coloured like the nest, and
+  instanced: a model repeated (a tree, a fence panel) is one mesh drawn many times, never copies
+  merged into one heavy mesh.
+- **The crowd's spots** are drawn once, in the script, from a fixed seed, and exported in the GLB
+  (each spot its position and the way it faces). The site draws and animates a microduck of the
+  crowd on each spot with stadium.js `crowd`, and the renders put a microduck on the same spots, so
+  that the owner approves the crowd the site will show.
+- **The sides follow the track's edge.** A page plays from one lane (the workshop) to four (a run
+  page, its clip) and, on the event page's board sheet, as many as are ticked. As the stadium does
+  today, the site stands each side of the playground (its crowd, then the building or the fence) at
+  the edge of the lanes it draws, so that the crowd always stands at the track's edge; the park and
+  the concrete run wide enough for any of them. The Blender script builds each side in its own frame,
+  from the track's edge outwards, and its renders assemble the playground the way the site does, on
+  four lanes. The site still paints the lines (start, finish, each lane's coloured stripe) on the
+  concrete, since their number changes from page to page.
+- **Its cost.** A clip frame's cost is vertices. The playground, its crowd included, is measured
+  against the gym's version of Sock Heist on the local bench (the owner's notes, "Clip frame cost
+  under SwiftShader": CPU seconds per frame, SwiftShader, frames interleaved) and then on one
+  t4-small HF Job, on the owner's yes. Passed when a frame costs no more than the gym's and the
+  longest clip, both layouts and its soundtrack, renders in at most 20 min (the clip job times out
+  at 30). This replaces Plan C's C8.
+- **Gate: the owner sees renders before anything reaches the site** — at least the view from
+  behind the start, as the page's camera will see it, a three-quarter view of the whole playground,
+  and a close view of the crowd at the track's edge — with the triangle counts. Their notes are
+  applied in the script, never by hand in Blender.
+
+**What leaves Sock Heist's path.** Every line that only Sock Heist used and the playground replaces
+is deleted, its tests with it: the gym's longer hall past the nest, the ground run on past the nest
+(`floorBeyond`, `buildCourse`'s `beyond`) if the playground's own ground makes it pointless, and
+anything else C4 added for the heist in the gym. What other events still use stays, unchanged: the
+gym, the stadium, the judges and the room's limits on the camera (`inRoom`) are only taken off the
+heist's path.
+
+### The page's camera: behind the microducks, on the giant
+
+On the event page, the run page and the workshop, the default 3D view of a Sock Heist race stands
+behind the microducks and looks down the lanes at the giant, so that the giant is in the picture
+with the ducks for the whole replay. Today's close chase, behind the leader and looking down at it,
+leaves the giant out. The viewer still drags the camera, and the page still swings it once to show
+it can be moved, as on every race.
+
+**The clip is reframed in the playground:** its first shot holds every lane and the giant whole; its
+last shot, the dive into the socks. In the vertical clip, as Plan C had it, the first shot holds the
+author's duck and the giant whole: every lane across a portrait picture would stand the camera some
+9 m back and make the ducks specks. In the gym, C6b found two limits: the end wall behind the start
+held the camera too close to fit every lane, and packChase (PACK_REACH, 3 m) kept the camera behind
+a trailing lane, so that the dive was filmed from about 5 m. The playground has no wall behind the
+start; the second limit is the builder's to lift on a lights event (the field's camera may leave a
+trailing duck behind once the first duck nears the line, for instance), without changing how any
+other race is filmed.
+
+**Gate: the owner sees the camera's captures** — the page's default view at the start, mid-race on
+a red and at the finish; the clip's first shot, a red, a caught duck lying under its OUT plate, the
+dive and the last frame, in both layouts — before anything is committed. C6b's uncommitted retune
+of `[clip.camera]` in the gym is dropped.
+
+### The giant's quacks
+
+Each red's quack differs. For each red, the chirp's variant (any of the synth's 12) and its playback
+rate, a little either side of the 0.30 the owner chose, are drawn from the replay's seed and the
+red's index by a fixed integer hash: never `Math.random`, never the wall clock. A page and a clip
+replaying the same seed quack the same quacks, so clips stay reproducible. Every lane of a replay
+plays one seed already, so a replay has one sequence of quacks.
+
+### The owner's decisions (2026-10-29)
+
+| Decision | What it rules out |
+| --- | --- |
+| A venue of its own, modelled in Blender, script committed as `scripts/sock_heist_venue.py`, low-poly and instanced | Reusing the gym, the stadium, the stands, the judges or the sponsors |
+| A school playground at the microducks' scale: a concrete track, a park with grass and trees behind the giant, a building on the left, a wooden fence on the right | A playground at human scale; any piece taller than the giant |
+| A crowd of microducks along both edges of the track, placed at random as along a street race, behaving as every other crowd | Stands, seats, an empty track |
+| No Reachy Mini judges | — |
+| The giant, its nest and the socks as approved | Remodelling them |
+| The pages' default 3D view behind the microducks, looking at the giant | The close chase on the leader |
+| The clip: first shot every lane and the giant whole, last shot the dive | — |
+| Each red's quack varies (variant and a little pitch round 0.30), drawn from the replayed seed and the red's index | A random draw at play time; one quack for all |
+| Gates: renders before integration, camera captures, the HF Job's cost measure on the owner's yes | — |
+
+### My calls (2026-10-29)
+
+- The building is on −z, the fence on +z: −z is the viewer's left for a camera behind the start
+  looking down the lanes (+x).
+- Daylight under the races' sky; the playground's sun casts shadows as the races' does.
+- The crowd's spots come from the Blender script, so the renders and the site show one crowd; each
+  side stands at the edge of the lanes drawn, as the stadium's stands do, so no page needs a cap on
+  its lanes.
+- The crowd is about as large as the stadium's (216), fewer if the cost measure asks for it.
+- The quack's rate within ±10 % of 0.30 (0.27 to 0.33), every chirp variant allowed. A WAV of one
+  seed's quacks goes to the owner to hear; it is not a gate.
+- The vertical clip's first shot holds the author's duck and the giant, not every lane.
+- The pass mark of the cost: no dearer a frame than the gym's version, and the longest clip in
+  20 min on the t4-small job.
+
+### Left to the builder (2026-10-29)
+
+- The playground's layout and sizes within the description above: the building's and the fence's
+  shape and distance from the track, how many trees and of how many models, where the concrete
+  meets the grass, the crowd's count, rows and gaps, the triangle budget of each model.
+- How the spots ride in the GLB, and how the instancing is exported and loaded.
+- How the page's camera keeps the giant in the picture, and how the clip's camera reaches the dive.
+- The hash that draws each quack.
+
 ## My calls (the owner did not decide these)
 
 - Every seed has its own timetable, the same for every entrant.
@@ -248,7 +393,7 @@ and push microduck-challenges with the new folder; publish the reference.
 - The giant is the racers' model at 4 to 5 times their size.
 - Only the first duck across makes the socks fly.
 - The fall sound plays for any duck going out, caught or fallen.
-- The crowd and the judges behave as on any race.
+- The crowd behaves as on any race.
 - About one red per metre walked, 5 to 7 per crossing at the walker's pace.
 - The clip runs to the slowest lane at 1×, the time-lapse goes, and the time limit is kept just
   long enough for the walker so that a stalled rival does not make a long clip.
