@@ -84,6 +84,15 @@ describe("buildCourse", () => {
     expect(width(four)).toBeGreaterThan(width(one));
   });
 
+  it("runs the ground further past the finish line when asked, the lines and stripes where they were", () => {
+    const course = buildCourse({ length_m: 6, width_m: 0.8 }, 4, [], 2.5);
+    const ground = course.getObjectByName("ground");
+    expect(ground.geometry.parameters.width).toBeCloseTo(0.4 + 6 + 2.5);
+    expect(ground.position.x).toBeCloseTo((6 + 2.5 - 0.4) / 2);
+    expect(course.getObjectByName("finish").position.x).toBe(6);
+    expect(course.getObjectByName("lane-stripe-0").geometry.parameters.width).toBeCloseTo(6 + 0.8);
+  });
+
   it("paints a lane's stripe the colour its duck is given, and the charter's order otherwise", () => {
     const course = buildCourse({ length_m: 2, width_m: 0.8 }, 3, [LANE_COLORS[3], null]);
     const stripe = (i) => course.getObjectByName(`lane-stripe-${i}`).material.color.getHex();

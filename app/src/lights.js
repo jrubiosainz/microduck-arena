@@ -55,6 +55,22 @@ export function laneOut(lane, length) {
   return outAt(lane.trace, length, lane.caught == null ? null : lane.caught + (lane.lead ?? 0));
 }
 
+/**
+ * Who crossed a `length` metre race's line first: a finisher's trace ends as it crosses
+ * (arena/runner.py), so it is the finished lanes' fewest frames, `frame` the index of that last
+ * frame, and every lane that crossed on it. None when no lane finished.
+ */
+export function firstAcross(lanes, length) {
+  let first = null;
+  lanes.forEach((lane, i) => {
+    const frames = frameCount(lane.trace);
+    if (!frames || laneOut(lane, length) != null) return;
+    if (!first || frames - 1 < first.frame) first = { frame: frames - 1, lanes: [i] };
+    else if (frames - 1 === first.frame) first.lanes.push(i);
+  });
+  return first;
+}
+
 /** The served timetable of `seed`, none when the event serves none for it. */
 export function timetableOf(event, seed) {
   return event.lights.timetables[seed] ?? [];

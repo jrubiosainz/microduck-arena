@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { laneOut, lightAt, outAt, timetableOf } from "./lights.js";
+import { firstAcross, laneOut, lightAt, outAt, timetableOf } from "./lights.js";
 import { TRACE_WIDTH } from "./replay.js";
 
 // A trace whose trunk walks along x from `from` through each of `xs`, one frame each.
@@ -82,6 +82,19 @@ describe("laneOut", () => {
     expect(laneOut({ trace, caught: 2, lead: 2 }, 6)).toBe(4);
     expect(laneOut({ trace, caught: 2 }, 6)).toBe(2);
     expect(laneOut({ trace, caught: null, lead: 2 }, 6)).toBe(5);
+  });
+});
+
+describe("firstAcross", () => {
+  const lane = (trace, caught = null) => ({ trace, caught });
+  it("is the frame the first duck crossed on, and its lane", () => {
+    expect(firstAcross([lane(walk(0, 3, 6.1)), lane(walk(0, 6.05)), lane(walk(0, 1))], 6)).toEqual({ frame: 1, lanes: [1] });
+  });
+  it("names every lane that crossed on that frame", () => {
+    expect(firstAcross([lane(walk(0, 6.1)), lane(walk(0, 3, 6.1)), lane(walk(0, 6.02))], 6)).toEqual({ frame: 1, lanes: [0, 2] });
+  });
+  it("is none when no duck crossed, a caught duck collapsing over the line included", () => {
+    expect(firstAcross([lane(walk(0, 2, 3)), lane(walk(0, 5.9, 6.1), 1)], 6)).toBeNull();
   });
 });
 

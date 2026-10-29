@@ -134,7 +134,7 @@ async function main() {
     : [];
   const config = run.event.clip;
   const camera = tug ? config.camera : { ...config.camera, distance: DISTANCE[layout] };
-  const viewer = await createViewer($("stage"), { rig: run.event.rig, manual: true, camera });
+  const viewer = await createViewer($("stage"), { rig: run.event.rig, lights: Boolean(run.event.lights), manual: true, camera });
   viewer.setLanes(
     lanes
       .map((lane, i) => ({

@@ -37,12 +37,12 @@ import { createStageVoice } from "./stage-voice.js";
 import { createHeistSound, heistCues } from "./heist-sound.js";
 import { loadCalls } from "./live/voice.js";
 import { isMuted } from "./sound.js";
-import { buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
+import { OVERRUN, buildCourse, buildMarker, laneOffsetZ, laneSpacing } from "./course.js";
 import { attachStadium } from "./stadium.js";
 import { isStage, isTug } from "./format.js";
 import { buildJudges } from "./judges.js";
-import { laneOut, lightAt, timetableOf } from "./lights.js";
-import { buildGiant } from "./giant.js";
+import { firstAcross, laneOut, lightAt, timetableOf } from "./lights.js";
+import { buildGiant, floorBeyond, loadHeistVenue } from "./giant.js";
 import { buildTalentStage, stageCameraPose, placeStageDuck, stageCameraTarget } from "./talent-stage.js";
 import { loadGymBranding } from "./gym-branding.js";
 import { stadiumDirection } from "./clip/direction.js";
@@ -104,9 +104,9 @@ export function cameraSideOffset(lanes, spacing) {
   return Math.max(1.15, 0.75 + halfArena * 1.35);
 }
 
-/** Attach the visible floor and lane markings to the replay scene. */
-export function attachCourse(scene, event, lanes, stripes) {
-  const course = buildCourse(event, lanes, stripes);
+/** Attach the visible floor and lane markings to the replay scene, the floor `beyond` past the line. */
+export function attachCourse(scene, event, lanes, stripes, beyond) {
+  const course = buildCourse(event, lanes, stripes, beyond);
   scene.add(course);
   return course;
 }
@@ -366,7 +366,9 @@ export function loadAssets(rig, model = MODEL) {
 
 export async function createViewer(
   canvas,
-  { onChaseChange, rig: rigName = "legs", manual = false, camera: spec = null, hushed = () => false } = {},
+  {
+    onChaseChange, rig: rigName = "legs", manual = false, camera: spec = null, hushed = () => false, lights = false,
+  } = {},
 ) {
   // `rigName` and not `rig`, because setLanes below names each lane's built
   // tree `rig` — the two would shadow.
@@ -374,13 +376,15 @@ export async function createViewer(
   // A race's lanes all stand on `rigName`, which matches the page: one race
   // page shows one event, and an event declares one rig. A stage's troupe may
   // mix legs and rollers, each duck on its own, so both rigs are loaded. The
-  // crowd is always on foot, in its own lighter model.
-  const [legs, rollers, spectators, reachy, branding] = await Promise.all([
+  // crowd is always on foot, in its own lighter model. A sock heist's page, its `lights`, loads
+  // its giant's nest and socks too.
+  const [legs, rollers, spectators, reachy, branding, heistVenue] = await Promise.all([
     loadAssets("legs"),
     loadAssets("rollers"),
     loadAssets("legs", CROWD_MODEL),
     loadGlb("reachy-mini/reachy-mini.glb"),
     loadGymBranding(),
+    lights ? loadHeistVenue() : null,
   ]);
   const rigs = { legs, rollers };
 
@@ -473,6 +477,10 @@ export async function createViewer(
   let timetable = [];
   let turnS = 0;
   let heistLead = 0;
+  // Where the first ducks across the line crossed it, and when, on the replay's clock: they dive
+  // into the socks.
+  let divers = [];
+  let divedAt = 0;
   let stage = null;
   // While a tug plays: the string drawn, and its points, a frame each, in step with the ducks.
   let tug = null;
@@ -580,7 +588,9 @@ export async function createViewer(
         course.add(tug.rope.group);
       }
     } else if (event) {
-      course = attachCourse(scene, event, Math.max(1, laneCount), entries.map((entry) => entry.colour));
+      // A sock heist's ground and hall run on past its giant's nest.
+      const beyond = event.lights ? floorBeyond(heistVenue) : OVERRUN;
+      course = attachCourse(scene, event, Math.max(1, laneCount), entries.map((entry) => entry.colour), beyond);
       const ground = course.getObjectByName("ground");
       const { width, height } = ground.geometry.parameters;
       const roller = event.id === "roller-sprint-2m";
@@ -590,13 +600,13 @@ export async function createViewer(
         audience = attachStadium(course, spectators, clearance);
         course.updateMatrixWorld(true);
         const stadiumBounds = new Box3().setFromObject(course);
-        gym = buildGym(courseLength, stadiumBounds.min.z, stadiumBounds.max.z, branding, height);
+        gym = buildGym(courseLength + beyond - OVERRUN, stadiumBounds.min.z, stadiumBounds.max.z, branding, height);
       }
       scene.add(gym.group);
       judges = buildJudges(reachy, courseLength, Math.max(1, laneCount) * spacing / 2, gym.sponsorMaps, roller ? 3 : 4);
       scene.add(judges.group);
       if (event.lights) {
-        giant = buildGiant(rigs.legs, courseLength);
+        giant = buildGiant(rigs.legs, heistVenue, courseLength, Math.max(1, laneCount) * spacing / 2);
         scene.add(giant.group);
         timetable = timetableOf(event, entries[0]?.traceSeed);
         turnS = event.lights.turn_s;
@@ -689,6 +699,11 @@ export async function createViewer(
       }
       return { ...entry, rig, marker, plate, outPlate, out, tier, gazeTarget: new Vector3(), mouth, jaw };
     });
+    if (giant) {
+      const crossed = firstAcross(lanes, courseLength);
+      divers = crossed ? crossed.lanes.map((i) => [courseLength, lanes[i].rig.placer.position.z]) : [];
+      divedAt = crossed ? crossed.frame * CTRL_DT : 0;
+    }
     broadcast = talent ? stageCamera(lanes, stage.layout, () => lag) : null;
     player = new Player(lanes.map((lane) => lane.trace), playerOptions);
     // Every duck on the stage sounds for as long as the troupe's traces perform: a cut-short
@@ -777,6 +792,7 @@ export async function createViewer(
     );
     judges?.pose(seconds, subjects);
     giant?.pose(lightAt(timetable, turnS, player.time - heistLead).facing);
+    giant?.dive(divers, player.time - divedAt);
     stage?.pose(seconds, subjects, mood);
     venue?.pose(seconds, subjects, mood);
 

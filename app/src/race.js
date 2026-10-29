@@ -233,6 +233,7 @@ export async function renderRace(root, { event, state }) {
     // The event declares its rig, and the roller rig is a different kinematic
     // tree with its own blades, rims and tires — not a repaint of the walker.
     rig: event.rig,
+    lights: Boolean(event.lights),
     onChaseChange: followKeyFor(root),
   });
   state.viewer = viewer;

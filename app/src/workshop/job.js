@@ -261,7 +261,9 @@ export async function mountJob(root, { status, account, route }) {
 
   // The stadium, made once, a replay waiting for it; until one plays, it is empty.
   let viewer = null;
-  const stadium = createViewer(grid.querySelector("#stage"), { rig: event.rig, onChaseChange: followKeyFor(grid) }).then((made) => {
+  const stadium = createViewer(grid.querySelector("#stage"), {
+    rig: event.rig, lights: Boolean(event.lights), onChaseChange: followKeyFor(grid),
+  }).then((made) => {
     if (left) {
       made.dispose();
       return null;

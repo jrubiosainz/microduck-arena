@@ -366,6 +366,7 @@ export async function renderRun(root, runId, state) {
   // The stage.
   const created = await createViewer($("stage"), {
     rig: run.event.rig,
+    lights: Boolean(run.event.lights),
     onChaseChange: followKeyFor(page),
     hushed: () => !strip.player.paused,
   });
