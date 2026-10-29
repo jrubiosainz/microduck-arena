@@ -17,6 +17,7 @@ on top of PR #3's own spec,
 | C | `2026-10-28-sock-heist-c-site.md` | The giant, the head turn, the sounds, the dive, the replay on one seed, the clip to the slowest lane, the names |
 | D | `2026-10-28-sock-heist-d-training.md` | The training folder in microduck-challenges, up to 10 trainings, the reference |
 | E | `2026-10-28-sock-heist-e-release.md` | Push, PR, merge, version, wheel, relock, publish: each on the owner's yes |
+| F | `2026-10-29-sock-heist-f-playground.md` | The playground venue, the pages' camera on the giant, a quack per red; replaces C6b and C8 |
 
 **Order.** A1–A4 first (C reads the API they serve). B runs alongside A; its renders go to the owner,
 and C's venue task waits for the owner's yes on them. D starts once A1–A2 have fixed the rules,
@@ -372,3 +373,55 @@ pattern: muted Arena, suspended context, a jump restarts), the clip through a `g
   grant). A job that fails before its first checkpoint does not count toward the 10.
 - The guide's Train section (`docs/guides/challenges/sock-heist-6m.md`) runs `workshop.py sock-heist-6m`,
   in place of #3's pointer to the sprint's template.
+
+## Amendment, 2026-10-29 (Plan F)
+
+The owner's three changes of 2026-10-29 (spec, "Amendment, 2026-10-29"). Where this section and the
+rest of the contract disagree, this section holds.
+
+### Venue assets
+
+`app/public/venue/playground.glb`, built by `scripts/sock_heist_venue.py` with the nest and the socks,
+in glTF axes, metres, origin on the start line at the lanes' centre line. Its top-level nodes are
+`yard` (the ground, its top at y = −0.003), `left` (the school building), `right` (the wooden fence)
+and `park` (the trees). The sides are built from z = 0, the lanes' edge, outwards (−z for `left`, +z for
+`right`), each carrying crowd spots, empties `spot_<k>` at y = 0, turned about +y towards the track.
+Repeated models use `EXT_mesh_gpu_instancing`. Nothing in it stands over the seated giant (0.93 m).
+`sock-nest.glb` and `socks.glb` are unchanged, byte for byte.
+
+### `app/src/giant.js`
+
+`loadHeistVenue() -> Promise<{ nest, socks, playground: { yard, left, right, park } }>`.
+`floorBeyond` and `FLOOR_MARGIN_M` are deleted. `draw(k, n)` is exported (heist-sound.js draws the
+quacks with it).
+
+### `app/src/playground.js` (new)
+
+`buildPlayground(model, spectators, edge) -> { group, crowd, pose(seconds, mood), floorMaterial(), dispose() }`:
+clones of the model's nodes, `left` at z = −edge and `right` at +edge, stadium.js `crowd` seated on
+their spots. The viewer holds it where it holds the gym on any other race: no stadium, no judges.
+
+### `app/src/course.js`, `app/src/viewer.js`
+
+`buildCourse(event, lanes, stripes)` and `attachCourse(scene, event, lanes, stripes)`: no `beyond`.
+`packChase(xs, zs, aspect, fov, back = -Infinity, reach = PACK_REACH)`; `HEIST_REACH` on a lights race.
+
+### `app/src/cast.js`
+
+`pageCamera(event)`: `event.clip.camera` on a lights event, else `null`. The event, run and workshop
+pages pass it to `createViewer` as `camera`.
+
+### Sounds
+
+`GIANT_CALL` is deleted. `GIANT_RATE = 0.3` is the centre of a quack's rate, and `GIANT_SPREAD = 0.1`.
+`quackOf(seed, red) -> { variant, rate }` is drawn with giant.js's `draw`: the variant among the synth's
+`VARIANTS.chirp` (duck-voice.js, now exported), the rate within `GIANT_SPREAD` of `GIANT_RATE`.
+`giantQuack(calls, variant)`. `heistCues(timetable, lanes, length, limitS, seed)`, whose quack cues
+carry `variant` and `rate`. A clip quack cue is `{ at, quack: true, variant, rate, gain }`, its seed
+`run.trace_seed`.
+
+### The clip's cost
+
+Plan F Task 6 replaces C8: the local bench against the gym's version, then one t4-small HF Job on the
+owner's yes. Passed when a frame costs no more than the gym version's and the longest clip renders in
+at most 20 min.
