@@ -65,18 +65,14 @@ describe("packChase", () => {
   // How far either side of its centre a pack chase sees across, where its hindmost duck walks.
   const sees = (pack, aspect) => pack.fit * tan(aspect);
 
-  it("follows the hindmost duck, but leaves one more than three metres behind the leader", () => {
-    expect(packChase([2, 3.5, 4.2, 2.6], LANES, 16 / 9, 42).rear).toBe(2);
-    expect(packChase([5.9, 9.5, 9.1, 8.7], LANES, 16 / 9, 42).rear).toBeCloseTo(6.5, 9);
+  it("follows the hindmost duck, but leaves one more than 0.6 m behind the leader", () => {
+    expect(packChase([3.9, 3.7, 4.2, 4], LANES, 16 / 9, 42).rear).toBe(3.7);
+    expect(packChase([2, 3.5, 4.2, 2.6], LANES, 16 / 9, 42).rear).toBeCloseTo(3.6, 9);
+    expect(packChase([5.9, 9.5, 9.1, 8.7], LANES, 16 / 9, 42).rear).toBeCloseTo(8.9, 9);
     // Left behind by a pan: the leader a step farther, the camera a step farther.
     const before = packChase([5.9, 8.9, 8.6, 8.7], LANES, 16 / 9, 42).rear;
     const after = packChase([5.9, 8.91, 8.6, 8.7], LANES, 16 / 9, 42).rear;
     expect(after - before).toBeCloseTo(0.01, 9);
-  });
-
-  it("leaves a duck behind sooner when told a shorter reach", () => {
-    expect(packChase([2, 3.5, 4.2, 2.6], LANES, 16 / 9, 42, -Infinity, 1.2).rear).toBeCloseTo(3, 9);
-    expect(packChase([2, 3.5, 4.2, 2.6], LANES, 16 / 9, 42).rear).toBe(2); // PACK_REACH as before
   });
 
   it("stands back just far enough for a landscape picture to hold every lane, centred on them", () => {
@@ -93,13 +89,6 @@ describe("packChase", () => {
     expect(sees(pack, aspect)).toBeLessThan(1.275 + 0.3);
     expect(pack.across).toBeGreaterThan(0);
     expect(1.275 + 0.3 - pack.across).toBeCloseTo(sees(pack, aspect), 9);
-  });
-
-  it("comes no nearer the wall behind the start than it is told, keeping the last lane's duck in sight", () => {
-    const pack = packChase([0, 0, 0, 0], LANES, 16 / 9, 42, -1.7);
-    expect(pack.rear - pack.fit).toBeCloseTo(-1.7, 9);
-    expect(1.275 + 0.3 - pack.across).toBeCloseTo(sees(pack, 16 / 9), 9);
-    expect(packChase([1, 1, 1, 1], LANES, 16 / 9, 42, -1.7).across).toBeCloseTo(0, 9);
   });
 });
 

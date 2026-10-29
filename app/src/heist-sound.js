@@ -1,8 +1,9 @@
-// Sock Heist's sounds: the giant's deep quack where each red begins, each red's own, and the microduck's fall where
-// a lane's duck goes out. `heistCues` lists them once, on the race's clock, from a timetable and the
-// lanes; the page plays them live (`createHeistSound`, as stage-voice.js plays the stage's voices)
-// and the clip's score renders them. Nothing waits on a sound: no Web Audio, a muted Arena or a
-// context the browser keeps suspended until a gesture leave the replay playing in silence.
+// Sock Heist's sounds: the giant's deep quack where each red begins, each red's own, and the
+// microduck's fall where a lane's duck goes out. `heistCues` lists them once, on the race's clock,
+// from a timetable and the lanes; the page plays them live (`createHeistSound`, as stage-voice.js
+// plays the stage's voices) and the clip's score renders them. Nothing waits on a sound: no Web
+// Audio, a muted Arena or a context the browser keeps suspended until a gesture leave the replay
+// playing in silence.
 
 import { DUCK_SEED, VARIANTS, ceiling, limiter } from "./duck-voice.js";
 import { draw } from "./giant.js";
@@ -10,10 +11,10 @@ import { laneOut } from "./lights.js";
 import { SAMPLE_RATE } from "./live/score.js";
 import { CTRL_DT, frameCount } from "./replay.js";
 
-/** How far the duck's own quack is slowed: the giant's voice, as the owner picked it by ear on 2026-10-28, now the centre of each quack's rate. */
-export const GIANT_RATE = 0.3;
+/** The centre of a quack's playback rate: the duck's own quack slowed to the giant's voice, as the owner picked it by ear on 2026-10-28. */
+const GIANT_RATE = 0.3;
 /** How far a quack's rate strays either side of GIANT_RATE, as a fraction of it. */
-export const GIANT_SPREAD = 0.1;
+const GIANT_SPREAD = 0.1;
 
 export const FALL_FILE = "microduck-fall.wav";
 /** A step longer than this between two frames is a jump, not playback. */

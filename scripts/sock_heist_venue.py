@@ -63,11 +63,11 @@ EDGE_M = 2 * LANE_SPACING_M
 GIANT_BEHIND_M = 1.95  # app/src/giant.js
 SOCK_FIELD = (0.15, 0.95)  # giant.js
 SOCKS_PER_M = 7  # giant.js
-# The race camera at the start, as app/src/viewer.js poses it: the event's [clip.camera] (2.1 m
-# back, 0.86 m up, 0.1 m to the side, a 42° lens) looking at the start line 0.4 m up, backed off
+# The race camera at the start, as app/src/viewer.js poses it: the event's [clip.camera] (3.0 m
+# back, 1.2 m up, 0.1 m to the side, a 42° lens) looking at the start line 0.5 m up, backed off
 # and raised by packChase until the four lanes and its 0.3 m margin fit across a 16:9 picture.
-CHASE_BACK_M, CHASE_HEIGHT_M, CHASE_SIDE_M, CHASE_FOV = 2.1, 0.86, 0.1, 42
-CHASE_TARGET_M, PACK_MARGIN_M = 0.4, 0.3
+CHASE_BACK_M, CHASE_HEIGHT_M, CHASE_SIDE_M, CHASE_FOV = 3.0, 1.2, 0.1, 42
+CHASE_TARGET_M, PACK_MARGIN_M = 0.5, 0.3
 
 RACER_MODEL = ROBOT / "microduck.glb"
 CROWD_MODEL = ROBOT / "microduck-crowd.glb"  # the same parts, decimated: the site's crowd

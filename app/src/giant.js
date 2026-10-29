@@ -48,7 +48,7 @@ const TURNS = [1, 2];
 const SPIN = [-3, 3];
 const GRAVITY = 9.81;
 
-/** The `n`th draw of sock `k`, in [0, 1): a fixed integer hash, the same on every frame. */
+/** The `n`th draw of `k`, in [0, 1): the venue's fixed integer hash, for sock `k`'s throw and a seed's quacks, the same on every frame. */
 export function draw(k, n) {
   let h = Math.imul(k + 1, 0x9e3779b1) ^ Math.imul(n + 1, 0x85ebca77);
   h = Math.imul(h ^ (h >>> 16), 0x7feb352d);

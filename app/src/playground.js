@@ -49,7 +49,7 @@ export function buildPlayground(model, spectators, edge) {
   const audience = crowd(spectators.kinematics, spectators.geometries, placed);
   group.add(audience.group, audience.bubbles);
   group.traverse((node) => {
-    if (node.isMesh) Object.assign(node, { castShadow: node !== yard, receiveShadow: true });
+    if (node.isMesh) Object.assign(node, { castShadow: node !== yard });
   });
   const track = new MeshStandardMaterial({ color: TRACK_CONCRETE, roughness: 0.95, metalness: 0 });
   return {

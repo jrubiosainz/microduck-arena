@@ -74,7 +74,7 @@ sounds     = ["crowd", "horn", "giant", "verdict"]
 # The playground from behind the field, down the lanes to the giant, who stays
 # whole in the picture from the start to the dive: over several lanes it follows
 # the hindmost duck less than 0.6 m behind the leader (app/src/viewer.js
-# HEIST_REACH), backed off to show every lane a picture can hold (packChase),
+# PACK_REACH), backed off to show every lane a picture can hold (packChase),
 # and it stops 0.6 m short of the line, near the socks the first ducks across
 # dive into. The event, run and workshop pages film a heist with it too
 # (app/src/cast.js pageCamera): a page stands `back` behind its field, farther

@@ -404,7 +404,7 @@ their spots. The viewer holds it where it holds the gym on any other race: no st
 ### `app/src/course.js`, `app/src/viewer.js`
 
 `buildCourse(event, lanes, stripes)` and `attachCourse(scene, event, lanes, stripes)`: no `beyond`.
-`packChase(xs, zs, aspect, fov, back = -Infinity, reach = PACK_REACH)`; `HEIST_REACH` on a lights race.
+`packChase(xs, zs, aspect, fov)`; its one `PACK_REACH = 0.6`, the field's reach on a tracking race (only a lights race tracks).
 
 ### `app/src/cast.js`
 
