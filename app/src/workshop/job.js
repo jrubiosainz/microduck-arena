@@ -4,7 +4,7 @@
 // the focus and an open Output stay, and no button is rebuilt under the pointer.
 
 import { MIN } from "../brightness.js";
-import { stageDucks } from "../cast.js";
+import { pageCamera, stageDucks } from "../cast.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "../deck.js";
 import { isStage, isTug } from "../format.js";
 import { eventGuideHref } from "../router.js";
@@ -262,7 +262,7 @@ export async function mountJob(root, { status, account, route }) {
   // The stadium, made once, a replay waiting for it; until one plays, it is empty.
   let viewer = null;
   const stadium = createViewer(grid.querySelector("#stage"), {
-    rig: event.rig, lights: Boolean(event.lights), onChaseChange: followKeyFor(grid),
+    rig: event.rig, lights: Boolean(event.lights), camera: pageCamera(event), onChaseChange: followKeyFor(grid),
   }).then((made) => {
     if (left) {
       made.dispose();

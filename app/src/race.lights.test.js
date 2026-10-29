@@ -14,12 +14,14 @@ const viewer = vi.hoisted(() => ({ setLanes: vi.fn(), setBrightness: vi.fn(), fo
 vi.mock("./viewer.js", () => ({ createViewer: vi.fn(async () => viewer) }));
 
 import { renderRace } from "./race.js";
+import { createViewer } from "./viewer.js";
 
 const SPRINT = {
   id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null, metric: "time", rig: "legs", course: "lane",
   seeds: 5, sweep_count: 5, sweep_lo: 0.2, sweep_hi: 1.2, sweep_step: 0.05, length_m: 2, slope_deg: 0,
 };
-const HEIST = { ...SPRINT, id: "sock-heist-6m", length_m: 6, lights: { turn_s: 0.4, tolerance_m: 0.03, timetables: {} } };
+const HEIST = { ...SPRINT, id: "sock-heist-6m", length_m: 6, lights: { turn_s: 0.4, tolerance_m: 0.03, timetables: {} },
+  clip: { camera: { kind: "chase", back: 2.1, track: true, hold: 0.8 } } };
 const row = (id, rank, seed) => ({
   run_id: id, rank, trace_seed: seed, user: id.toLowerCase(), policy_name: "walker", score: 5 + rank,
   seeds_finished: 5, seeds_total: 5, command_vx: 0.5, cast: [{ policy: "self", rig: null, start: null, sound: null }],
@@ -38,6 +40,7 @@ describe("a replay's seed on the event page", () => {
       .mockResolvedValue({ rows: [row("B", 1, 4), row("C", 2, 1), row("D", 3, 5)] }); // A withdrawn
     const root = document.createElement("div");
     await renderRace(root, { event: HEIST, state: {} });
+    expect(createViewer).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ camera: HEIST.clip.camera }));
     expect(api.getTrace.mock.calls).toEqual([["A", 2], ["B", 2], ["C", 2]]);
     expect(viewer.setLanes.mock.lastCall[0].map((lane) => lane.traceSeed)).toEqual([2, 2, 2]);
     root.querySelector('.modes button[data-mode="all"]').click(); // a repaint re-reads the board
@@ -49,6 +52,7 @@ describe("a replay's seed on the event page", () => {
     api.getLeaderboard.mockResolvedValue({ rows: [row("A", 1, 2), row("B", 2, 4), row("C", 3, 1)] });
     const root = document.createElement("div");
     await renderRace(root, { event: SPRINT, state: {} });
+    expect(createViewer).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ camera: null }));
     expect(api.getTrace.mock.calls).toEqual([["A", undefined], ["B", undefined], ["C", undefined]]);
   });
 });

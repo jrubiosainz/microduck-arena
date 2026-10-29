@@ -10,7 +10,7 @@ import {
   withdrawRun,
 } from "./api.js";
 import { boardsheetMarkup, podium, wireBoardsheet } from "./boardsheet.js";
-import { replayLane, replaySeed } from "./cast.js";
+import { pageCamera, replayLane, replaySeed } from "./cast.js";
 import { cupDaysLeft } from "./cup.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { colourLanes } from "./lanes.js";
@@ -234,6 +234,7 @@ export async function renderRace(root, { event, state }) {
     // tree with its own blades, rims and tires — not a repaint of the walker.
     rig: event.rig,
     lights: Boolean(event.lights),
+    camera: pageCamera(event),
     onChaseChange: followKeyFor(root),
   });
   state.viewer = viewer;

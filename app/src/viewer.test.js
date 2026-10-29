@@ -74,6 +74,11 @@ describe("packChase", () => {
     expect(after - before).toBeCloseTo(0.01, 9);
   });
 
+  it("leaves a duck behind sooner when told a shorter reach", () => {
+    expect(packChase([2, 3.5, 4.2, 2.6], LANES, 16 / 9, 42, -Infinity, 1.2).rear).toBeCloseTo(3, 9);
+    expect(packChase([2, 3.5, 4.2, 2.6], LANES, 16 / 9, 42).rear).toBe(2); // PACK_REACH as before
+  });
+
   it("stands back just far enough for a landscape picture to hold every lane, centred on them", () => {
     const pack = packChase([4, 5, 6, 4.5], LANES, 16 / 9, 42);
     expect(pack.across).toBeCloseTo(0, 9);

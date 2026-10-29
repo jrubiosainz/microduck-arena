@@ -226,11 +226,14 @@ export function chaseAcross(lanes, seconds) {
 const PACK_REACH = 3;
 const PACK_MARGIN = 0.3;
 const PACK_FAR = 3;
+// A sock heist's reach, shorter: the field's camera leaves a trailing duck behind sooner, so that it
+// comes up to the dive into the socks rather than filming it from behind that duck, metres away.
+const HEIST_REACH = 0.6;
 
 /**
  * What a tracking chase over several lanes follows, from each lane's duck along the course `xs` and
  * each lane's centre across it `zs`: the hindmost duck rather than the leader, so that the field
- * walks ahead of the camera toward the finish, but never one more than PACK_REACH behind the
+ * walks ahead of the camera toward the finish, but never one more than `reach` behind the
  * leader, so that a duck caught or fallen far back is left behind rather than holding the field's
  * camera. `fit` is how far back a camera of `aspect` and vertical `fov` degrees stands to see every
  * lane across its picture, but no farther than PACK_FAR, nor than the room allows in front of
@@ -239,10 +242,10 @@ const PACK_FAR = 3;
  * a clip's author (clip/main.js). Continuous as its ducks move, so a duck left behind is a pan, not
  * a cut. Pure, so it is testable.
  */
-export function packChase(xs, zs, aspect, fov, back = -Infinity) {
+export function packChase(xs, zs, aspect, fov, back = -Infinity, reach = PACK_REACH) {
   const lo = Math.min(...zs);
   const hi = Math.max(...zs);
-  const rear = Math.max(Math.min(...xs), Math.max(...xs) - PACK_REACH);
+  const rear = Math.max(Math.min(...xs), Math.max(...xs) - reach);
   const tan = Math.tan((fov * Math.PI) / 360) * aspect;
   const fit = Math.min(((hi - lo) / 2 + PACK_MARGIN) / tan, PACK_FAR, rear - back);
   const kept = zs[zs.length - 1];
@@ -496,6 +499,8 @@ export async function createViewer(
   // Where the chase looks along the track with nobody on it, and where its finish line is.
   let middle = 1;
   let courseLength = 2;
+  // How far behind its leader the field's camera keeps a duck in front of it (packChase).
+  let packReach = PACK_REACH;
   let player = new Player([]);
   // The performer's voice, live: a clip renders its own soundtrack and stays silent here. It holds
   // its tongue while the Arena is muted or the page says `hushed` — the run page, while its clip
@@ -568,6 +573,7 @@ export async function createViewer(
     sideOffset = cameraSideOffset(laneCount, spacing);
     slopeDeg = event?.slope_deg ?? 0;
     courseLength = event?.length_m ?? 2;
+    packReach = event?.lights ? HEIST_REACH : PACK_REACH;
     // A tug's course is centred on its pit.
     middle = tugged ? 0 : courseLength / 2;
     // The near stand starts a stride beyond where the chase camera stands,
@@ -808,7 +814,7 @@ export async function createViewer(
       // Over several lanes a tracking chase films the field from behind it instead (packChase).
       const pack = !stage && spec?.track && lanes.length > 1
         ? packChase(frames.map((frame) => frame[0]), lanes.map((lane) => lane.rig.placer.position.z),
-          camera.aspect, camera.fov, gym?.room?.back)
+          camera.aspect, camera.fov, gym?.room?.back, packReach)
         : null;
       const followed = pack ? pack.rear : lead;
       // A chase that holds short of the line stops there and watches the field walk on to it.

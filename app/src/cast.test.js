@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { credit, featured, replayLane, replaySeed, stageDucks } from "./cast.js";
+import { credit, featured, pageCamera, replayLane, replaySeed, stageDucks } from "./cast.js";
 import { TRACE_WIDTH, frameCount } from "./replay.js";
 
 const STAGE = { id: "got-a-talent", course: "stage", rig: "legs" };
 const SPRINT = { id: "sprint-2m", course: "lane", rig: "legs" };
-const HEIST = { id: "sock-heist-6m", course: "lane", rig: "legs", lights: { turn_s: 0.4, tolerance_m: 0.03, timetables: {} } };
+const HEIST = { id: "sock-heist-6m", course: "lane", rig: "legs", lights: { turn_s: 0.4, tolerance_m: 0.03, timetables: {} },
+  clip: { camera: { kind: "chase", back: 2.1, track: true, hold: 0.8 } } };
 const TUG = { id: "tug-of-war", course: "tug", rig: "legs" };
 /** A borrowed policy as arena/cast.py borrowed_source records it. */
 const borrowed = (user, name) => ({
@@ -60,6 +61,13 @@ describe("replaySeed", () => {
     expect(replaySeed(HEIST, { trace_seed: 3 })).toBe(3);
     expect(replaySeed(HEIST, undefined)).toBeUndefined(); // an empty board
     expect(replaySeed(SPRINT, { trace_seed: 3 })).toBeUndefined();
+  });
+});
+
+describe("pageCamera", () => {
+  it("films a sock heist on its pages with its clip's camera, and any other race with the page's own chase", () => {
+    expect(pageCamera(HEIST)).toBe(HEIST.clip.camera);
+    expect(pageCamera(SPRINT)).toBeNull();
   });
 });
 

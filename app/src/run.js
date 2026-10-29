@@ -7,7 +7,7 @@
 import { getClip, getMe, getRun, getString, getTrace, markSeen } from "./api.js";
 import { flipTiles } from "./animation.js";
 import { boardsheetMarkup, wireBoardsheet } from "./boardsheet.js";
-import { featured, replayLane, replaySeed } from "./cast.js";
+import { featured, pageCamera, replayLane, replaySeed } from "./cast.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { formatSpeed, isStage, isTug } from "./format.js";
 import { colourLanes, lanesFor } from "./lanes.js";
@@ -367,6 +367,7 @@ export async function renderRun(root, runId, state) {
   const created = await createViewer($("stage"), {
     rig: run.event.rig,
     lights: Boolean(run.event.lights),
+    camera: pageCamera(run.event),
     onChaseChange: followKeyFor(page),
     hushed: () => !strip.player.paused,
   });

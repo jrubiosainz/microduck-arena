@@ -33,6 +33,14 @@ export function replaySeed(event, row) {
 }
 
 /**
+ * The camera a page films an event with: a sock heist's clip camera, from behind its ducks on the
+ * giant, so that the giant stays in the picture with them; null, the page's own close chase, elsewhere.
+ */
+export function pageCamera(event) {
+  return event.lights ? event.clip.camera : null;
+}
+
+/**
  * One run as a lane of the viewer, from its traces (api.js, one per duck): on a stage its
  * performance, every duck of its cast; on a tug its two-duck bout and its `string` (ratingLane: the
  * entry on its end of the string, the reference on the other); on a lane the one duck that raced.

@@ -17,6 +17,7 @@ vi.mock("./api.js", () => api);
 const viewer = vi.hoisted(() => ({ setLanes: vi.fn(), setBrightness: vi.fn(), dispose: vi.fn(), follow() {}, sweep() {} }));
 vi.mock("../viewer.js", () => ({ createViewer: vi.fn(async () => viewer) }));
 
+import { createViewer } from "../viewer.js";
 import { POLL_MS, futureSlots, mountJob } from "./job.js";
 
 const row = (n, score, finished = 5) => ({ n, status: "evaluated", score, seeds_finished: finished, seeds_total: 5, command_vx: 0.55 });
@@ -30,7 +31,8 @@ const JOB = {
 const CODE = { fork: null, changes: [], identity: true, commit: "abc1234", unpushed: 0 };
 const SPRINT = { id: "sprint-2m", title: "2 m Sprint", category: "race", vote: null, metric: "time", rig: "legs",
   length_m: 2, slope_deg: 0, sweep_lo: 0.2, sweep_hi: 1.2, sweep_count: 21 };
-const HEIST = { ...SPRINT, id: "sock-heist-6m", length_m: 6, lights: { turn_s: 0.4, tolerance_m: 0.03, timetables: {} } };
+const HEIST = { ...SPRINT, id: "sock-heist-6m", length_m: 6, lights: { turn_s: 0.4, tolerance_m: 0.03, timetables: {} },
+  clip: { camera: { kind: "chase", back: 2.1, track: true, hold: 0.8 } } };
 const TALENT = { id: "got-a-talent", title: "MicroDuck Got a Talent", category: "showcase", course: "stage",
   metric: "votes", rig: "legs", time_limit_s: 20, vote: { ballot_min: 2 },
   size_m: [2.6, 3.8], max_ducks: 4, edge_margin_m: 0.3, min_spacing_m: 0.3 };
@@ -72,6 +74,7 @@ describe("a training's page", () => {
     expect(root.querySelector(".score__label").textContent).toBe("Checkpoint 500 · ★ best");
     expect(root.querySelector(".score__value").textContent).toBe("5.62 s");
     expect(api.getCheckpoint).toHaveBeenCalledWith("sprint-2m", "first", 500);
+    expect(createViewer).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ camera: null }));
     expect(viewer.setLanes).toHaveBeenLastCalledWith([expect.objectContaining({ name: "checkpoint 500", tier: "trial" })], SPRINT);
     expect(root.querySelector(".output pre").textContent).toContain("uv run --no-sync train");
     expect(viewer.setLanes.mock.lastCall[0][0]).not.toHaveProperty("caught");
@@ -84,6 +87,7 @@ describe("a training's page", () => {
     const root = document.createElement("div");
     await open(root, HEIST);
     await settle();
+    expect(createViewer).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ camera: HEIST.clip.camera }));
     expect(viewer.setLanes).toHaveBeenLastCalledWith([expect.objectContaining({ traceSeed: 4, caught: 120 })], HEIST);
   });
 

@@ -71,16 +71,20 @@ max_yaw_rate = 1.0
 tape_max_s = 40.0
 sounds     = ["crowd", "horn", "giant", "verdict"]
 
-# From behind the field and above its nameplates, down the lanes to the giant:
-# over several lanes it follows the hindmost duck less than 3 m behind the
-# leader, backed off to show every lane a picture can hold (app/src/viewer.js
-# packChase), and it stops short of the line so that the giant and its nest
-# stand whole in the last shot.
+# The playground from behind the field, down the lanes to the giant, who stays
+# whole in the picture from the start to the dive: over several lanes it follows
+# the hindmost duck less than 0.6 m behind the leader (app/src/viewer.js
+# HEIST_REACH), backed off to show every lane a picture can hold (packChase),
+# and it stops 0.6 m short of the line, near the socks the first ducks across
+# dive into. The event, run and workshop pages film a heist with it too
+# (app/src/cast.js pageCamera): a page stands `back` behind its field, farther
+# than a landscape clip, which stands as far as its four lanes need (2.3 m), so
+# that a duck left behind is still in the page's picture when the first dives.
 [clip.camera]
 kind          = "chase"
-back          = 2.1
-height        = 0.86
+back          = 3.0
+height        = 1.2
 side          = 0.1
-target_height = 0.4
+target_height = 0.5
 track         = true
-hold          = 0.8
+hold          = 0.6
