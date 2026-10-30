@@ -157,7 +157,8 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
 /* A command line that wraps rather than scrolls: the panel's width is the
    entry column's, and a one-line launcher easily runs wider than it. It breaks
    at its spaces first, so `uv run` and the challenge's id stay whole. */
-.train__line {
+.train__line,
+.onduck__line {
   margin: 0;
   padding: 7px 9px;
   background: var(--paper);
@@ -167,7 +168,8 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.train__copy {
+.train__copy,
+.onduck__copy {
   align-self: flex-start;
   font: 400 0.85rem/1.15 var(--display);
   letter-spacing: var(--type-button-label-tracking);
@@ -179,9 +181,44 @@ body { font: 15px/1.55 var(--body); background: var(--warm-paper); }
   color: var(--ink);
   box-shadow: var(--shadow-sticker-min) var(--shadow-sticker-min) var(--shadow-blur) var(--cyan);
 }
-.train__copy:active {
+.train__copy:active,
+.onduck__copy:active {
   translate: var(--shadow-sticker-min) var(--shadow-sticker-min);
   box-shadow: none;
+}
+
+/* The way to a real duck (onduck.js): a popover off the board's download glyph
+   and a run's byline, taped to the wall as the train panel is, with its line
+   and copy button. It sets its own type: it opens inside a table cell or a
+   mono label, and the line must never be set in capitals. */
+.onduck {
+  inset: auto;
+  margin: 0;
+  width: 26rem;
+  padding: 14px;
+  background: var(--cream);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-sticker-max) var(--shadow-sticker-max) var(--shadow-blur) var(--ink);
+  font: 400 0.85rem/1.45 var(--body);
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+}
+.onduck:popover-open { display: flex; flex-direction: column; gap: 10px; }
+.onduck__step, .onduck__note { margin: 0; }
+.onduck__note { color: var(--ink-70); }
+.onduck__grab { align-self: flex-start; color: var(--sky-inked); }
+.run-byline .onduck-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--sky-inked);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* ── stage ────────────────────────────────────────────────────────────── */
@@ -449,7 +486,8 @@ table.board .mine {
   padding-right: 0;
   text-align: center;
 }
-table.board .grab a {
+table.board .grab > a,
+table.board .grab > button {
   /* inline-flex, so the glyph centres in the cell rather than sitting on the
      text baseline it no longer has. */
   display: inline-flex;
@@ -457,11 +495,17 @@ table.board .grab a {
   justify-content: center;
   width: 28px;
   height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--ink-70);
   text-decoration: none;
+  cursor: pointer;
 }
-table.board .grab a:hover,
-table.board .grab a:focus-visible { color: var(--ink); background: var(--yellow); }
+table.board .grab > a:hover,
+table.board .grab > button:hover,
+table.board .grab > a:focus-visible,
+table.board .grab > button:focus-visible { color: var(--ink); background: var(--yellow); }
 
 /* Take-off-the-board control. Only ever rendered on your own rows.
    It WAS transparent until the row was hovered, on the theory that a rare
@@ -578,9 +622,13 @@ table.board .env a:focus-visible { color: var(--ink); background: var(--sky); }
 .pickall-box:focus-visible,
 .train__open:focus-visible,
 .train__copy:focus-visible,
+.onduck__copy:focus-visible,
+.onduck__grab:focus-visible,
+.run-byline .onduck-open:focus-visible,
 .train__uv > summary:focus-visible,
 .signin-button:focus-visible,
-table.board .grab a:focus-visible,
+table.board .grab > a:focus-visible,
+table.board .grab > button:focus-visible,
 table.board .env a:focus-visible,
 table.board .withdraw:focus-visible,
 .votehead__back:focus-visible {

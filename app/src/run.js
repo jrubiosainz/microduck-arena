@@ -11,6 +11,7 @@ import { featured, pageCamera, replayLane, replaySeed } from "./cast.js";
 import { deckMarkup, followKeyFor, offerOrbit, wireDeck } from "./deck.js";
 import { formatSpeed, isStage, isTug } from "./format.js";
 import { colourLanes, lanesFor } from "./lanes.js";
+import { onDuckPanel, onWheels, popFrom } from "./onduck.js";
 import { climbPlan, reveal, revealFor, setRanks } from "./reveal.js";
 import { dress, guideHref, playerHref, raceHref } from "./router.js";
 import { shareStrip, wireShare } from "./share.js";
@@ -194,6 +195,14 @@ export async function renderRun(root, runId, state) {
     grab.href = run.policy_url || `/api/runs/${run.run_id}/policy`;
     grab.setAttribute("download", "");
     $("byline").append(" · ", grab);
+  }
+  if (run.robot_command) {
+    const open = el("button", "onduck-open", "Run it on my microduck");
+    open.type = "button";
+    const panel = onDuckPanel({ command: run.robot_command, wheels: onWheels(run.cast, run.event), event: run.event });
+    popFrom(open, panel);
+    $("byline").append(" · ", open);
+    page.append(panel);
   }
   if (run.env_url) {
     const env = el("a", null, "Training environment");

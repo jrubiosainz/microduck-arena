@@ -15,6 +15,7 @@ from arena.tug import (
     MIDDLE,
     SIDES,
     STRING_POINTS,
+    TORN_M,
     BoutOutcome,
     _verdict,
     bout_score_cm,
@@ -144,7 +145,7 @@ def _string_bout(manifest, west, east, seed):
 def test_a_bout_on_the_string_holds_together():
     """The reference against itself, 4 s of timed steps: no reset, ends never past 1.005 m, ties within 1 cm."""
     gaps, ties = _string_bout(SHORT, reference_duck(TUG), reference_duck(TUG), 1)   # _start + sim.step as run_bout, each step read off data
-    assert max(gaps) <= 1.005 and max(ties) <= 0.01
+    assert max(gaps) <= 1.005 and max(ties) <= 0.01 < TORN_M
 
 def test_a_duck_whose_action_is_not_a_number_loses_by_a_fault_at_once():
     """MuJoCo drives no motor while a servo's command is not a number, the other duck's included: unjudged,
@@ -205,6 +206,15 @@ def test_a_solver_explosion_ends_a_bout_for_nobody_and_its_frame_is_left_out(mon
     assert (out.loser, out.how, out.trace.shape) == (None, "reset", (2, 10, 21)) and out.time_s == pytest.approx(11 * CTRL_DT)
     assert out.string.shape == (10, 17, 3)
     np.testing.assert_array_equal(out.trace, whole.trace[:, :10])
+
+def test_a_string_torn_off_a_neck_ends_a_bout_for_nobody_and_its_frame_is_left_out():
+    """A solver explosion MuJoCo has not caught yet (the Space's discussion #1): on a rating bout's last step the
+    string left both necks by about a metre, every number finite, and its marker was read 85 cm out where a
+    bout played out reaches 65. Untied here, the string drops off the necks in the settle."""
+    model = compile_tug(SHORT)
+    model.eq_active0[:] = 0                                  # its two ties, the model's only equalities
+    out = run_bout(SHORT, _ZeroPolicy(), _ZeroPolicy(), 1, model)
+    assert (out.loser, out.how, out.trace.shape, out.string.shape) == (None, "reset", (2, 0, 21), (0, 17, 3))
 
 
 def bout_trace(x, pit=()):

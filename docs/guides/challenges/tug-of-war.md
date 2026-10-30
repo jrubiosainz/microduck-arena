@@ -18,7 +18,8 @@ marker in the middle of the string decides: the duck it moved away from loses. T
 not a number (NaN), a policy that fails to answer, an answer that takes longer than a second, or
 more thinking in all than the bout lasts (45 s, the settle included: the robot asks for an action
 every 20 ms). When both fault at once, nobody wins the bout. A bout the simulation has to stop
-(a MuJoCo reset) is won by nobody either.
+is won by nobody either: a MuJoCo reset, or a string end torn more than 5 cm off its duck's neck,
+which only a physics explosion does.
 
 ## Train
 

@@ -323,6 +323,35 @@ describe("the download control", () => {
   });
 });
 
+describe("the download control of a Hub policy", () => {
+  const COMMAND = `sudo robotctl policy load walk alice/microduck-walker@${"c".repeat(40)}:policy.onnx`;
+  const URL = `https://huggingface.co/alice/microduck-walker/resolve/${"c".repeat(40)}/policy.onnx`;
+  const grab = (over, event = { title: "2 m Sprint", rig: "legs" }) => {
+    const container = document.createElement("div");
+    renderBoard(container, {
+      event,
+      rows: [row({ offers_download: true, policy_url: URL, robot_command: COMMAND, ...over })],
+    });
+    return container.querySelector("td.grab");
+  };
+
+  it("opens a panel with the .onnx and the line that runs it on a real duck", () => {
+    const cell = grab();
+    const open = cell.querySelector(":scope > button");
+    const panel = cell.querySelector(".onduck");
+    expect(open.querySelector("svg")).not.toBeNull();
+    expect(open.popoverTargetElement).toBe(panel);
+    expect(open.getAttribute("aria-label")).toContain("alice");
+    expect(panel.querySelector(".onduck__grab").href).toBe(URL);
+    expect(panel.querySelector(".onduck__line").textContent).toBe(COMMAND);
+  });
+
+  it("asks for wheels on a roller board", () => {
+    const panel = grab({}, { title: "2 m Roller Sprint", rig: "rollers" }).querySelector(".onduck");
+    expect(panel.textContent).toContain("roller mode");
+  });
+});
+
 describe("taking your own entry off the board", () => {
   const rendered = (over, opts) => {
     const container = document.createElement("div");

@@ -6,6 +6,7 @@
 
 import { formatRate, formatScore, formatSeeds, formatSpeed, isStage, isTug } from "./format.js";
 import { LANE_CSS } from "./course.js";
+import { onDuckPanel, onWheels, popFrom } from "./onduck.js";
 import { runHref } from "./router.js";
 
 export const DEFAULT_LANES = 3;
@@ -75,6 +76,10 @@ export function buildRows(rows, { me = null, selected = null, metric } = {}) {
         row.offers_download && row.run_id
           ? row.policy_url || `/api/runs/${row.run_id}/policy`
           : null,
+      // The robot's own line for a Hub policy (RunRecord.robot_command), and the cast that says
+      // whether it raced on wheels.
+      robotCommand: row.robot_command ?? null,
+      cast: row.cast,
       // Shown only on your own published rows. The server refuses anyone
       // else's regardless, so this is about not offering a button that would
       // be rejected — not about security, which lives server-side.
@@ -179,7 +184,23 @@ export function renderBoard(
     // "save link as" for free.
     const grab = document.createElement("td");
     grab.className = "grab";
-    if (row.policyUrl) {
+    if (row.robotCommand) {
+      // The same glyph opens a panel rather than the file: the .onnx is in it, beside the line
+      // that runs the policy on a real duck, which the file alone cannot (onduck.js).
+      const open = document.createElement("button");
+      open.type = "button";
+      open.innerHTML = DOWNLOAD_ICON;
+      open.title = `Download ${row.user}'s ${row.policy}, or run it on your microduck`;
+      open.setAttribute("aria-label", open.title);
+      const panel = onDuckPanel({
+        command: row.robotCommand,
+        wheels: onWheels(row.cast, event),
+        event,
+        download: row.policyUrl,
+      });
+      popFrom(open, panel);
+      grab.append(open, panel);
+    } else if (row.policyUrl) {
       const link = document.createElement("a");
       link.href = row.policyUrl;
       // A glyph, not the word ".onnx": the column is narrow, and an arrow into
